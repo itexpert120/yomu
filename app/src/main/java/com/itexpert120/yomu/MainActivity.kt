@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
-import com.itexpert120.yomu.app.devgallery.YomuGalleryApp
+import com.itexpert120.yomu.feature.library.YomuLibraryApp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         enableYomuEdgeToEdge()
         updateYomuSystemBarIcons(YomuThemeMode.Light)
         setContent {
-            YomuGalleryApp(onThemeModeChange = ::updateYomuSystemBarIcons)
+            YomuLibraryApp(onThemeModeChange = ::updateYomuSystemBarIcons)
         }
     }
 }

@@ -31,8 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -73,8 +74,8 @@ fun YomuGalleryScreen(
     themeMode: YomuThemeMode,
     onThemeModeChange: (YomuThemeMode) -> Unit,
 ) {
-    val widthDp = LocalConfiguration.current.screenWidthDp
-    val isExpanded = widthDp >= 900
+    val containerWidthDp = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val isExpanded = containerWidthDp >= 900.dp
     YomuAppSurface {
         if (isExpanded) {
             ExpandedGalleryLayout(themeMode, onThemeModeChange)
