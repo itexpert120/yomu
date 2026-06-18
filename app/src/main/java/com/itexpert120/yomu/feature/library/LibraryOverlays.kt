@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
@@ -34,7 +35,7 @@ internal fun FloatingResumeButton(modifier: Modifier = Modifier, book: LibraryBo
         modifier = modifier
             .padding(end = 20.dp, bottom = navBottom + 20.dp)
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.textPrimary)
+            .background(YomuTheme.colors.accent)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -44,10 +45,10 @@ internal fun FloatingResumeButton(modifier: Modifier = Modifier, book: LibraryBo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = "Resume", color = YomuTheme.colors.appBackground, style = YomuTheme.type.control)
+        Text(text = "Resume", color = Color.White, style = YomuTheme.type.control)
         Text(
             text = "${(book.progress * 100).toInt()}%",
-            color = YomuTheme.colors.appBackground.copy(alpha = 0.72f),
+            color = Color.White.copy(alpha = 0.72f),
             style = YomuTheme.type.mono,
         )
     }
@@ -57,6 +58,8 @@ internal fun FloatingResumeButton(modifier: Modifier = Modifier, book: LibraryBo
 internal fun BookContextPanel(
     book: LibraryBook,
     onDismiss: () -> Unit,
+    onMarkRead: () -> Unit,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -79,7 +82,7 @@ internal fun BookContextPanel(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Book actions",
+                    text = book.author,
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.caption,
                 )
@@ -88,9 +91,8 @@ internal fun BookContextPanel(
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ContextAction("Details")
-            ContextAction("Move to group")
-            ContextAction("Mark read")
-            ContextAction("Remove")
+            ContextAction("Mark read", onClick = onMarkRead)
+            ContextAction("Remove", onClick = onRemove)
         }
     }
 }

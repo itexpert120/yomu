@@ -21,6 +21,8 @@ Acceptance criteria:
 - App launches to a Yomu-branded shell.
 - No default Android greeting/template UI remains.
 
+**Status: Complete.** Default template removed. Custom `YomuDesignTheme` with tokens, surfaces, controls, and cards is in place. Library screen with fake data launches. DevGallery activity for component validation.
+
 ## Phase 1: Design System Prototype
 
 Goal:
@@ -41,6 +43,8 @@ Acceptance criteria:
 - Reader mock does not look Material/default Android.
 - Library mock has a strong custom identity.
 - Tablet preview uses extra space intentionally.
+
+**Status: Partially complete.** Foundation tokens (colors, typography, spacing, radius), surface primitives (YomuAppSurface, YomuPanel, YomuFloatingPanel, ReaderPageSurface), and control primitives (YomuButton, YomuChip, YomuSegmentedControl, YomuRangeRow, YomuColorSwatch) are implemented. Library primitives (YomuBookCard, YomuSettingGroup) exist. Reader and remaining library primitives are pending.
 
 ## Phase 2: Static Reader Mock
 
@@ -84,6 +88,8 @@ Acceptance criteria:
 
 - Library feels closer to a polished media app than a file picker.
 - Tablet layout has sidebar, main content, and optional inspector.
+
+**Status: Partially complete.** Static library screen with fake books, continue-reading section, shelf sections, book context panel, and system bar scrim is implemented. Search, sort/group controls, adjustable grid columns, and book details are pending.
 
 ## Phase 4: Settings And Theme Model
 

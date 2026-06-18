@@ -4,16 +4,18 @@ Yomu is a native Android EPUB reader built with Kotlin and Jetpack Compose, but 
 
 ## Current Project State
 
-The repository currently contains a single Android application module at `:app` with a default Jetpack Compose template screen. The existing source should be treated as scaffolding only.
+The repository contains a single Android application module at `:app` with a custom design system and a static library screen using fake data.
 
 Current technical baseline:
 
 - Android application module: `:app`
 - Package namespace: `com.itexpert120.yomu`
 - UI toolkit: Jetpack Compose
-- Current theme: default Material 3 template theme
-- Current screen: placeholder `Greeting("Android")`
-- Existing VCS state: this folder is not currently a Git repository
+- Custom design system: `core/designsystem` (YomuDesignTheme, custom tokens, surface/control primitives)
+- Library screen: static library grid with fake books, continue-reading section, book context panel
+- DevGallery: component gallery for validating design primitives (`app/devgallery`)
+- Edge-to-edge support with theme-aware system bar icons
+- compileSdk: 37, minSdk: 24, targetSdk: 36
 
 ## Planning Documents
 

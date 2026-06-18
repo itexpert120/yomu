@@ -41,12 +41,31 @@ Start inside `:app` with package boundaries before creating many Gradle modules.
 ```text
 com.itexpert120.yomu
 |-- app
-|   |-- YomuApp.kt
-|   |-- YomuApplication.kt
-|   `-- navigation
+|   |-- EdgeToEdge.kt
+|   `-- devgallery
+|       |-- DevGalleryActivity.kt
+|       `-- YomuGalleryScreen.kt
+|-- core
+|   `-- designsystem
+|       |-- YomuTheme.kt
+|       |-- YomuSurfaces.kt
+|       |-- YomuControls.kt
+|       `-- YomuCards.kt
+`-- feature
+    `-- library
+        |-- LibraryModels.kt
+        |-- LibraryHeader.kt
+        |-- LibraryBooks.kt
+        |-- LibraryOverlays.kt
+        |-- LibraryInsets.kt
+        `-- LibraryScreen.kt
+```
+
+Planned packages (not yet created):
+
+```text
 |-- core
 |   |-- common
-|   |-- designsystem
 |   |-- model
 |   |-- storage
 |   |-- database
@@ -65,7 +84,6 @@ com.itexpert120.yomu
 |   |-- settings
 |   `-- themes
 `-- feature
-    |-- library
     |-- reader
     |-- bookdetails
     |-- search
