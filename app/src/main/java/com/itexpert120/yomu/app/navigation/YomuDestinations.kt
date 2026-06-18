@@ -10,6 +10,9 @@ object Library
 data class BookDetails(val bookId: String)
 
 @Serializable
+data class EditBook(val bookId: String)
+
+@Serializable
 object Settings
 
 @Serializable

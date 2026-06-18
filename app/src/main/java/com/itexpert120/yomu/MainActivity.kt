@@ -1,28 +1,23 @@
 package com.itexpert120.yomu
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.fragment.app.FragmentActivity
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.YomuApp
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
-import com.itexpert120.yomu.app.rememberYomuGraph
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
+import dagger.hilt.android.AndroidEntryPoint
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity (not ComponentActivity) so the Readium EpubNavigatorFragment can be hosted.
+@AndroidEntryPoint
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableYomuEdgeToEdge()
         setContent {
-            val graph = rememberYomuGraph()
-            val appViewModel: AppViewModel = viewModel(
-                factory = viewModelFactory {
-                    initializer { AppViewModel(graph.appSettingsRepository) }
-                },
-            )
+            val appViewModel: AppViewModel = hiltViewModel()
             YomuApp(
                 appViewModel = appViewModel,
                 onResolvedThemeChange = { updateYomuSystemBarIcons(it) },

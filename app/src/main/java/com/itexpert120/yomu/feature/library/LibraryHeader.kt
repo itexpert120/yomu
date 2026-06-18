@@ -43,7 +43,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
-import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.GroupMode
@@ -60,12 +59,8 @@ internal fun LibraryHeader(
     groupMode: GroupMode,
     viewMode: LibraryViewMode,
     themePreference: ThemePreference,
-    showSortSheet: Boolean,
-    showGroupSheet: Boolean,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onSortModeChange: (SortMode) -> Unit,
-    onGroupModeChange: (GroupMode) -> Unit,
     onSortSheetToggle: () -> Unit,
     onGroupSheetToggle: () -> Unit,
     onDisplaySheetToggle: () -> Unit,
@@ -153,26 +148,6 @@ internal fun LibraryHeader(
             )
         }
     }
-
-    YomuOptionSheet(
-        visible = showSortSheet,
-        onDismiss = onSortSheetToggle,
-        title = "Sort by",
-        options = SortMode.entries,
-        selectedOption = sortMode,
-        onSelect = onSortModeChange,
-        label = { it.label },
-    )
-
-    YomuOptionSheet(
-        visible = showGroupSheet,
-        onDismiss = onGroupSheetToggle,
-        title = "Group by",
-        options = GroupMode.entries,
-        selectedOption = groupMode,
-        onSelect = onGroupModeChange,
-        label = { it.label },
-    )
 }
 
 /** Icon reflects the active theme choice so the quick toggle communicates current state. */

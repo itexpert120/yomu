@@ -2,6 +2,10 @@ package com.itexpert120.yomu.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import com.itexpert120.yomu.core.model.AccentColor
+import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ThemePreference
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +18,8 @@ import com.itexpert120.yomu.data.settings.AppSettingsRepository
  * Holds app-shell theme state, persisted through [AppSettingsRepository]. The concrete
  * light/dark/OLED resolution happens in [YomuApp] where the system dark setting is observable.
  */
-class AppViewModel(
+@HiltViewModel
+class AppViewModel @Inject constructor(
     private val settings: AppSettingsRepository,
 ) : ViewModel() {
 
@@ -23,6 +28,9 @@ class AppViewModel(
 
     val oledDark: StateFlow<Boolean> = settings.oledDark
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val accentSelection: StateFlow<AccentSelection> = settings.accentSelection
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AccentSelection.Default)
 
     /** Quick toggle (library header): System → Light → Dark → System. */
     fun onCycleTheme() = viewModelScope.launch {
@@ -37,5 +45,13 @@ class AppViewModel(
 
     fun onSetOledDark(enabled: Boolean) = viewModelScope.launch {
         settings.setOledDark(enabled)
+    }
+
+    fun onSelectAccent(accent: AccentColor) = viewModelScope.launch {
+        settings.setAccentSelection(AccentSelection.Preset(accent))
+    }
+
+    fun onSelectCustomAccent(argb: Long) = viewModelScope.launch {
+        settings.setAccentSelection(AccentSelection.Custom(argb))
     }
 }

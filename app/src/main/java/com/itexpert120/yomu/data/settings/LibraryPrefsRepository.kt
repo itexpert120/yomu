@@ -12,9 +12,12 @@ import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /** Persists library view preferences (sort/group/view/columns/cover fit) via DataStore. */
-class LibraryPrefsRepository(
+@Singleton
+class LibraryPrefsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) {
     val preferences: Flow<LibraryPreferences> = dataStore.data.map { prefs ->

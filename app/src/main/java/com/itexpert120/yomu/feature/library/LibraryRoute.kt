@@ -7,11 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import com.itexpert120.yomu.app.rememberYomuGraph
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.core.model.ThemePreference
 
 /**
@@ -21,30 +17,28 @@ import com.itexpert120.yomu.core.model.ThemePreference
 @Composable
 fun LibraryRoute(
     themePreference: ThemePreference,
-    onOpenBook: (String) -> Unit,
-    onResume: (String) -> Unit,
+    onOpenReader: (String) -> Unit,
+    onOpenDetails: (String) -> Unit,
     onThemeToggle: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    val graph = rememberYomuGraph()
-    val viewModel: LibraryViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer { LibraryViewModel(graph.bookRepository, graph.libraryPrefsRepository) }
-        },
-    )
+    val viewModel: LibraryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
 
+    // The picker returns one or many EPUBs; the use case copies them immediately, so a temporary
+    // read grant is enough (no persistable permission needed).
     val safLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.data?.let { uri ->
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
+            val data = result.data
+            val uris = buildList {
+                data?.clipData?.let { clip ->
+                    for (i in 0 until clip.itemCount) add(clip.getItemAt(i).uri)
+                }
+                data?.data?.let { add(it) }
             }
+            viewModel.onImport(uris)
         }
     }
 
@@ -57,17 +51,25 @@ fun LibraryRoute(
         onGroupModeChange = viewModel::onGroupModeChange,
         onViewModeChange = viewModel::onViewModeChange,
         onGridColumnsChange = viewModel::onGridColumnsChange,
-        onMarkRead = viewModel::onMarkRead,
-        onRemove = viewModel::onRemove,
-        onBookClick = onOpenBook,
-        onResume = onResume,
+        onOpenReader = onOpenReader,
+        onOpenDetails = onOpenDetails,
         onThemeToggle = onThemeToggle,
         onOpenSettings = onOpenSettings,
+        onEnterSelection = viewModel::onEnterSelection,
+        onToggleSelect = viewModel::onToggleSelect,
+        onExitSelection = viewModel::onExitSelection,
+        onSelectAll = viewModel::onSelectAll,
+        onDeselectAll = viewModel::onDeselectAll,
+        onInvertSelection = viewModel::onInvertSelection,
+        onRemoveSelected = viewModel::onRemoveSelected,
+        onMarkSelectedRead = viewModel::onMarkSelectedRead,
+        onMarkSelectedUnread = viewModel::onMarkSelectedUnread,
         onImport = {
             safLauncher.launch(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "application/epub+zip"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                 },
             )
         },

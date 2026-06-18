@@ -14,6 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -203,7 +204,61 @@ fun YomuCircleIconButton(
     }
 }
 
+/** A custom, on-brand drag grip for [YomuBottomSheet]s. */
+@Composable
+fun YomuSheetDragHandle() {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 36.dp, height = 4.dp)
+                .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                .background(YomuTheme.colors.border),
+        )
+    }
+}
+
+/**
+ * Draggable bottom sheet that slides up (Material modal sheet, restyled with Yomu colors + a
+ * custom drag handle). Programmatic dismissals animate the slide-down before tearing it out of
+ * composition.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun YomuBottomSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
+) {
+    if (!visible) return
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    fun animatedDismiss() {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) onDismiss()
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = YomuTheme.colors.panel,
+        contentColor = YomuTheme.colors.textPrimary,
+        dragHandle = { YomuSheetDragHandle() },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            content(::animatedDismiss)
+        }
+    }
+}
+
 @Composable
 fun <T> YomuOptionSheet(
     visible: Boolean,
@@ -214,93 +269,67 @@ fun <T> YomuOptionSheet(
     onSelect: (T) -> Unit,
     label: (T) -> String = { (it as Enum<*>).name.replaceFirstChar { c -> c.titlecase() } },
 ) where T : Enum<T> {
-    if (!visible) return
-
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-
-    // Play the sheet's slide-down before tearing it out of composition; calling
-    // onDismiss directly would flip `visible` synchronously and skip the animation.
-    fun animateDismiss() {
-        scope.launch { sheetState.hide() }.invokeOnCompletion {
-            if (!sheetState.isVisible) onDismiss()
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = YomuTheme.colors.panel,
-        contentColor = YomuTheme.colors.textPrimary,
-        dragHandle = null,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = title,
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.title,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
-            options.forEach { option ->
-                val isSelected = option == selectedOption
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(YomuTheme.radius.md))
-                        .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {
-                                onSelect(option)
-                                animateDismiss()
-                            },
-                        )
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        text = label(option),
-                        color = if (isSelected) YomuTheme.colors.accent else YomuTheme.colors.textPrimary,
-                        style = YomuTheme.type.body,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = null,
-                            tint = YomuTheme.colors.accent,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-            Box(
+    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { dismiss ->
+        Text(
+            text = title,
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.title,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+        options.forEach { option ->
+            val isSelected = option == selectedOption
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
                     .clip(RoundedCornerShape(YomuTheme.radius.md))
-                    .background(YomuTheme.colors.surface)
+                    .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { animateDismiss() },
+                        onClick = {
+                            onSelect(option)
+                            dismiss()
+                        },
                     )
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "Cancel",
-                    color = YomuTheme.colors.textSecondary,
+                    text = label(option),
+                    color = if (isSelected) YomuTheme.colors.accent else YomuTheme.colors.textPrimary,
                     style = YomuTheme.type.body,
+                    modifier = Modifier.weight(1f),
                 )
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = null,
+                        tint = YomuTheme.colors.accent,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .clip(RoundedCornerShape(YomuTheme.radius.md))
+                .background(YomuTheme.colors.surface)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = dismiss,
+                )
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "Cancel",
+                color = YomuTheme.colors.textSecondary,
+                style = YomuTheme.type.body,
+            )
         }
     }
 }

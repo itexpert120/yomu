@@ -7,16 +7,22 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -25,10 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import java.io.File
 
 @Composable
 fun ContinueReadingCard(book: LibraryBook, modifier: Modifier = Modifier) {
@@ -79,6 +88,7 @@ fun GridBookCard(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
 ) {
     Column(
         modifier = modifier
@@ -90,9 +100,13 @@ fun GridBookCard(
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
-        // Reserve two lines so one- and two-line titles keep the progress line
-        // (and the cards' baselines) aligned across a row.
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Progress reads as a thin bar along the cover's bottom edge instead of a
+            // separate line under the title.
+            BookCoverImage(book = book, modifier = Modifier.fillMaxWidth(), showProgress = true)
+            SelectionMarker(selected)
+        }
+        // Reserve two lines so one- and two-line titles keep card baselines aligned across a row.
         Text(
             text = book.title,
             color = YomuTheme.colors.textPrimary,
@@ -101,9 +115,6 @@ fun GridBookCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        if (book.progress > 0f) {
-            ProgressLine(progress = book.progress)
-        }
     }
 }
 
@@ -114,18 +125,20 @@ fun BookListRow(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(YomuTheme.radius.md))
+            .background(if (selected) YomuTheme.colors.accentSoft else Color.Transparent)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
                 onLongClick = onLongPress,
             )
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -157,6 +170,51 @@ fun BookListRow(
                 }
             }
         }
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(YomuTheme.colors.accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = YomuTheme.colors.appBackground,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.SelectionMarker(selected: Boolean) {
+    if (!selected) return
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .clip(shape)
+            .background(YomuTheme.colors.accent.copy(alpha = 0.22f))
+            .border(2.dp, YomuTheme.colors.accent, shape),
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(6.dp)
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(YomuTheme.colors.accent),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Check,
+            contentDescription = null,
+            tint = YomuTheme.colors.appBackground,
+            modifier = Modifier.size(14.dp),
+        )
     }
 }
 
@@ -205,36 +263,72 @@ fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BookCoverImage(book: LibraryBook, modifier: Modifier = Modifier) {
+private fun BookCoverImage(
+    book: LibraryBook,
+    modifier: Modifier = Modifier,
+    showProgress: Boolean = false,
+) {
     Box(
         modifier = modifier
             .aspectRatio(1f / 1.6f)
             .clip(RoundedCornerShape(10.dp))
-            .background(Brush.verticalGradient(book.coverColors))
-            .padding(10.dp),
+            .background(Brush.verticalGradient(book.coverColors)),
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth(0.42f)
-                .height(2.dp)
-                .background(Color.White.copy(alpha = 0.72f))
-        )
-        Column(modifier = Modifier.align(Alignment.BottomStart), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = book.shortTitle,
-                color = Color.White,
-                style = YomuTheme.type.caption,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+        // Real extracted cover when available; otherwise the generated gradient + title placeholder.
+        if (book.coverImagePath != null) {
+            AsyncImage(
+                model = File(book.coverImagePath),
+                contentDescription = book.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
             )
-            Text(
-                text = book.authorLastName,
-                color = Color.White.copy(alpha = 0.7f),
-                style = YomuTheme.type.mono,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth(0.42f)
+                        .height(2.dp)
+                        .background(Color.White.copy(alpha = 0.72f))
+                )
+                Column(
+                    modifier = Modifier.align(Alignment.BottomStart),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = book.shortTitle,
+                        color = Color.White,
+                        style = YomuTheme.type.caption,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = book.authorLastName,
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = YomuTheme.type.mono,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        if (showProgress && book.progress > 0f) {
+            // A solid badge reads clearly over any cover, unlike a thin bar that blended in.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    text = "${(book.progress * 100).toInt()}%",
+                    color = Color.White,
+                    style = YomuTheme.type.mono,
+                )
+            }
         }
     }
 }

@@ -18,6 +18,7 @@ data class LibraryBook(
     val authorLastName: String,
     val progress: Float,
     val remaining: String,
+    val coverImagePath: String?,
     val coverColors: List<Color>,
     val lastOpenedAt: Long,
     val series: String?,
@@ -31,6 +32,7 @@ fun Book.toLibraryBook(): LibraryBook = LibraryBook(
     authorLastName = author.lastNameKey(),
     progress = progress,
     remaining = remainingLabel,
+    coverImagePath = coverImagePath,
     coverColors = coverPalette.map { Color(it) },
     lastOpenedAt = lastOpenedAt,
     series = series,
@@ -53,6 +55,10 @@ data class LibraryUiState(
     val coverCrop: Boolean = true,
     val searchActive: Boolean = false,
     val searchQuery: String = "",
+    val isImporting: Boolean = false,
+    val importNotice: String? = null,
+    val selectionMode: Boolean = false,
+    val selectedIds: Set<String> = emptySet(),
 )
 
 // region Pure query logic (unit-tested in LibraryQueryTest)

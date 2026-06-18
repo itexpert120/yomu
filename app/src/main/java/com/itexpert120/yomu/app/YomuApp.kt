@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.itexpert120.yomu.app.navigation.YomuNavHost
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -27,6 +28,7 @@ fun YomuApp(
 ) {
     val preference by appViewModel.themePreference.collectAsState()
     val oledDark by appViewModel.oledDark.collectAsState()
+    val accentSelection by appViewModel.accentSelection.collectAsState()
     val systemDark = isSystemInDarkTheme()
 
     val dark = when (preference) {
@@ -39,10 +41,11 @@ fun YomuApp(
         oledDark -> YomuThemeMode.Oled
         else -> YomuThemeMode.Dark
     }
+    val accentColor = Color(accentSelection.resolve(dark))
 
     LaunchedEffect(resolved) { onResolvedThemeChange(resolved) }
 
-    YomuDesignTheme(themeMode = resolved) {
+    YomuDesignTheme(themeMode = resolved, accent = accentColor) {
         // Opaque app-colored backing so the shared-axis transition never reveals the window
         // background (which would flash light during navigation in dark mode).
         Box(

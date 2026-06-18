@@ -19,6 +19,7 @@ import androidx.navigation.toRoute
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
+import com.itexpert120.yomu.feature.bookedit.EditBookRoute
 import com.itexpert120.yomu.feature.library.LibraryRoute
 import com.itexpert120.yomu.feature.reader.ReaderPlaceholderScreen
 import com.itexpert120.yomu.feature.settings.SettingsRoute
@@ -30,7 +31,7 @@ fun YomuNavHost(
 ) {
     val navController = rememberNavController()
     // Material "shared axis (X)" — the transition Google's own apps use for hierarchical
-    // navigation. Per MDC it is exactly SlideDistance(30dp) + FadeThrough, NOT a plain
+    // navigation. Per MDC, it is exactly SlideDistance(30dp) + FadeThrough, NOT a plain
     // slide+crossfade and NOT the 0.92 scale (that belongs to the separate "fade through"
     // pattern). FadeThrough: the outgoing screen fades out over the first 35% of the duration
     // and the incoming fades in over the remaining 65%, so they never overlap at full opacity.
@@ -66,8 +67,8 @@ fun YomuNavHost(
             val themePreference by appViewModel.themePreference.collectAsState()
             LibraryRoute(
                 themePreference = themePreference,
-                onOpenBook = { bookId -> navController.navigate(BookDetails(bookId)) },
-                onResume = { bookId -> navController.navigate(Reader(bookId)) },
+                onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
+                onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
                 onThemeToggle = appViewModel::onCycleTheme,
                 onOpenSettings = { navController.navigate(Settings) },
             )
@@ -75,10 +76,13 @@ fun YomuNavHost(
         composable<BookDetails> { entry ->
             val args = entry.toRoute<BookDetails>()
             BookDetailsRoute(
-                bookId = args.bookId,
                 onBack = navController::popBackStack,
                 onRead = { navController.navigate(Reader(args.bookId)) },
+                onEdit = { navController.navigate(EditBook(args.bookId)) },
             )
+        }
+        composable<EditBook> {
+            EditBookRoute(onBack = navController::popBackStack)
         }
         composable<Settings> {
             SettingsRoute(

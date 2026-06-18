@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.feature.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -32,6 +33,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
@@ -47,24 +49,42 @@ fun LibraryScreen(
     onGroupModeChange: (GroupMode) -> Unit,
     onViewModeChange: (LibraryViewMode) -> Unit,
     onGridColumnsChange: (Int) -> Unit,
-    onMarkRead: (String) -> Unit,
-    onRemove: (String) -> Unit,
-    onBookClick: (String) -> Unit,
-    onResume: (String) -> Unit,
+    onOpenReader: (String) -> Unit,
+    onOpenDetails: (String) -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
     onOpenSettings: () -> Unit = {},
+    onEnterSelection: (String) -> Unit = {},
+    onToggleSelect: (String) -> Unit = {},
+    onExitSelection: () -> Unit = {},
+    onSelectAll: () -> Unit = {},
+    onDeselectAll: () -> Unit = {},
+    onInvertSelection: () -> Unit = {},
+    onRemoveSelected: () -> Unit = {},
+    onMarkSelectedRead: () -> Unit = {},
+    onMarkSelectedUnread: () -> Unit = {},
 ) {
-    // Ephemeral UI state stays local to the screen; everything persistent lives in the VM.
-    var selectedBook by remember { mutableStateOf<LibraryBook?>(null) }
     var showSortSheet by remember { mutableStateOf(false) }
     var showGroupSheet by remember { mutableStateOf(false) }
     var showDisplaySheet by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val elevated = when (state.viewMode) {
         LibraryViewMode.Grid -> gridState.canScrollBackward
         LibraryViewMode.List -> listState.canScrollBackward
+    }
+
+    // Tap opens the reader; long-press starts multi-select. While selecting, both toggle.
+    val onCardClick: (LibraryBook) -> Unit = { book ->
+        if (state.selectionMode) onToggleSelect(book.id) else onOpenReader(book.id)
+    }
+    val onCardLongPress: (LibraryBook) -> Unit = { book ->
+        if (state.selectionMode) onToggleSelect(book.id) else onEnterSelection(book.id)
+    }
+
+    if (state.selectionMode) {
+        BackHandler(onBack = onExitSelection)
     }
 
     YomuAppSurface {
@@ -80,12 +100,8 @@ fun LibraryScreen(
                         sortMode = state.sortMode,
                         groupMode = state.groupMode,
                         themePreference = themePreference,
-                        showSortSheet = showSortSheet,
-                        showGroupSheet = showGroupSheet,
                         onSearchToggle = onSearchToggle,
                         onSearchQueryChange = onSearchQueryChange,
-                        onSortModeChange = onSortModeChange,
-                        onGroupModeChange = onGroupModeChange,
                         viewMode = state.viewMode,
                         onSortSheetToggle = { showSortSheet = !showSortSheet },
                         onGroupSheetToggle = { showGroupSheet = !showGroupSheet },
@@ -110,16 +126,18 @@ fun LibraryScreen(
                                     continueReading = state.continueReading,
                                     columns = state.gridColumns,
                                     groups = state.groups,
-                                    onBookClick = { onBookClick(it.id) },
-                                    onBookLongPress = { selectedBook = it },
+                                    selectedIds = state.selectedIds,
+                                    onBookClick = onCardClick,
+                                    onBookLongPress = onCardLongPress,
                                 )
 
                                 LibraryViewMode.List -> LibraryList(
                                     state = listState,
                                     continueReading = state.continueReading,
                                     groups = state.groups,
-                                    onBookClick = { onBookClick(it.id) },
-                                    onBookLongPress = { selectedBook = it },
+                                    selectedIds = state.selectedIds,
+                                    onBookClick = onCardClick,
+                                    onBookLongPress = onCardLongPress,
                                 )
                             }
                         }
@@ -127,6 +145,24 @@ fun LibraryScreen(
                 }
             }
 
+            YomuOptionSheet(
+                visible = showSortSheet,
+                onDismiss = { showSortSheet = false },
+                title = "Sort by",
+                options = SortMode.entries,
+                selectedOption = state.sortMode,
+                onSelect = onSortModeChange,
+                label = { it.label },
+            )
+            YomuOptionSheet(
+                visible = showGroupSheet,
+                onDismiss = { showGroupSheet = false },
+                title = "Group by",
+                options = GroupMode.entries,
+                selectedOption = state.groupMode,
+                onSelect = onGroupModeChange,
+                label = { it.label },
+            )
             LibraryDisplaySheet(
                 visible = showDisplaySheet,
                 viewMode = state.viewMode,
@@ -136,36 +172,54 @@ fun LibraryScreen(
                 onDismiss = { showDisplaySheet = false },
             )
 
+            val continueReading = state.continueReading
+            if (continueReading != null && !state.selectionMode) {
+                FloatingResumeButton(
+                    book = continueReading,
+                    onResume = { onOpenReader(continueReading.id) },
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
+            }
+
+            ImportNotice(
+                importing = state.isImporting,
+                notice = state.importNotice,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
             AnimatedVisibility(
-                visible = selectedBook != null,
+                visible = state.selectionMode,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
-                selectedBook?.let { book ->
-                    BookContextPanel(
-                        book = book,
-                        onDismiss = { selectedBook = null },
-                        onMarkRead = {
-                            onMarkRead(book.id)
-                            selectedBook = null
-                        },
-                        onRemove = {
-                            onRemove(book.id)
-                            selectedBook = null
-                        },
-                    )
-                }
-            }
-
-            val continueReading = state.continueReading
-            if (continueReading != null && selectedBook == null) {
-                FloatingResumeButton(
-                    book = continueReading,
-                    onResume = { onResume(continueReading.id) },
-                    modifier = Modifier.align(Alignment.BottomEnd),
+                LibrarySelectionDock(
+                    allSelected = state.selectedIds.isNotEmpty() &&
+                        state.selectedIds.size == state.totalCount,
+                    onClose = onExitSelection,
+                    onSelectAll = onSelectAll,
+                    onDeselectAll = onDeselectAll,
+                    onInvert = onInvertSelection,
+                    onMarkRead = onMarkSelectedRead,
+                    onMarkUnread = onMarkSelectedUnread,
+                    onDelete = { showDeleteConfirm = true },
+                    onOpenDetails = if (state.selectedIds.size == 1) {
+                        { onOpenDetails(state.selectedIds.first()) }
+                    } else {
+                        null
+                    },
                 )
             }
+
+            ConfirmRemoveDialog(
+                visible = showDeleteConfirm,
+                count = state.selectedIds.size,
+                onCancel = { showDeleteConfirm = false },
+                onConfirm = {
+                    showDeleteConfirm = false
+                    onRemoveSelected()
+                },
+            )
 
             SystemBarTopScrim(Modifier.align(Alignment.TopCenter))
             SystemBarBottomScrim(Modifier.align(Alignment.BottomCenter))
@@ -189,6 +243,7 @@ private fun LibraryGrid(
     continueReading: LibraryBook?,
     columns: Int,
     groups: List<LibraryGroup>,
+    selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
@@ -217,6 +272,7 @@ private fun LibraryGrid(
                     book = book,
                     onClick = { onBookClick(book) },
                     onLongPress = { onBookLongPress(book) },
+                    selected = book.id in selectedIds,
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -229,6 +285,7 @@ private fun LibraryList(
     state: LazyListState,
     continueReading: LibraryBook?,
     groups: List<LibraryGroup>,
+    selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
@@ -251,6 +308,7 @@ private fun LibraryList(
                     book = book,
                     onClick = { onBookClick(book) },
                     onLongPress = { onBookLongPress(book) },
+                    selected = book.id in selectedIds,
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -274,10 +332,8 @@ private fun LibraryScreenPreview() {
             onGroupModeChange = {},
             onViewModeChange = {},
             onGridColumnsChange = {},
-            onMarkRead = {},
-            onRemove = {},
-            onBookClick = {},
-            onResume = {},
+            onOpenReader = {},
+            onOpenDetails = {},
             onImport = {},
             onThemeToggle = {},
         )

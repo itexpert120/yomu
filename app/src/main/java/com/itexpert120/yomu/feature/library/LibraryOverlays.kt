@@ -1,12 +1,16 @@
 package com.itexpert120.yomu.feature.library
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -23,7 +27,10 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,7 +39,92 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+
+@Composable
+internal fun ConfirmRemoveDialog(
+    visible: Boolean,
+    count: Int,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    if (!visible) return
+    // A real Dialog (window-scoped) gives the standard platform dialog animation + dimming,
+    // instead of a hand-rolled fade.
+    Dialog(onDismissRequest = onCancel) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(YomuTheme.radius.panel))
+                .background(YomuTheme.colors.panel)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "Remove ${if (count == 1) "this book" else "$count books"}?",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.section,
+            )
+            Text(
+                text = "This deletes the imported file${if (count == 1) "" else "s"} and cover from " +
+                    "the device. It can't be undone.",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.body,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YomuButton(
+                    text = "Cancel",
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
+                    emphasis = YomuButtonEmphasis.Secondary,
+                )
+                YomuButton(
+                    text = "Remove",
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                    emphasis = YomuButtonEmphasis.Primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ImportNotice(
+    importing: Boolean,
+    notice: String?,
+    modifier: Modifier = Modifier,
+) {
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val text = if (importing) "Importing…" else notice
+    // Hold the last shown text so the pill doesn't go blank during its exit animation.
+    var lastText by remember { mutableStateOf("") }
+    if (text != null) lastText = text
+
+    AnimatedVisibility(
+        visible = text != null,
+        enter = fadeIn() + slideInVertically { it / 2 },
+        exit = fadeOut() + slideOutVertically { it / 2 },
+        modifier = modifier.padding(bottom = navBottom + 20.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.pill))
+                .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                .background(YomuTheme.colors.panel)
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = lastText,
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.control,
+            )
+        }
+    }
+}
 
 @Composable
 internal fun FloatingResumeButton(
@@ -82,67 +174,6 @@ internal fun FloatingResumeButton(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.width(168.dp),
         )
-    }
-}
-
-@Composable
-internal fun BookContextPanel(
-    book: LibraryBook,
-    onDismiss: () -> Unit,
-    onMarkRead: () -> Unit,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Column(
-        modifier = modifier
-            .padding(start = 20.dp, end = 20.dp, bottom = navBottom + 20.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.panel))
-            .background(YomuTheme.colors.panel)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = book.title,
-                    color = YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.section,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = book.author,
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-            }
-            ContextAction("Close", onClick = onDismiss)
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ContextAction("Details")
-            ContextAction("Mark read", onClick = onMarkRead)
-            ContextAction("Remove", onClick = onRemove)
-        }
-    }
-}
-
-@Composable
-private fun ContextAction(text: String, onClick: () -> Unit = {}) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.surface)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 13.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = text, color = YomuTheme.colors.textSecondary, style = YomuTheme.type.caption)
     }
 }
 

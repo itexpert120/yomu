@@ -7,18 +7,24 @@ value class BookId(val value: String)
 enum class ReadingState { Unread, Reading, Finished }
 
 /**
- * Domain model for a book in the library. Kept free of Compose/Android types so it can later
- * back a Room entity unchanged. Cover colors are ARGB [Long]s (the prototype renders a gradient
- * placeholder); a real cover image path replaces these once import lands.
+ * Domain model for a book in the library. Kept free of Compose/Android types so it backs a Room
+ * entity directly. [coverImagePath] points at an extracted cover file when available; otherwise
+ * the UI falls back to a gradient generated from [coverPalette].
  */
 data class Book(
     val id: BookId,
     val title: String,
     val author: String,
+    val subtitle: String? = null,
+    val description: String? = null,
+    val language: String? = null,
+    val publisher: String? = null,
     val series: String? = null,
+    val coverImagePath: String? = null,
+    val coverPalette: List<Long> = emptyList(),
     val progress: Float = 0f,
     val remainingLabel: String = "Unread",
-    val coverPalette: List<Long> = emptyList(),
+    val addedAt: Long = 0L,
     val lastOpenedAt: Long = 0L,
 ) {
     val readingState: ReadingState

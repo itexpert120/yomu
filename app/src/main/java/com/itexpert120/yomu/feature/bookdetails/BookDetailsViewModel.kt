@@ -1,12 +1,15 @@
 package com.itexpert120.yomu.feature.bookdetails
 
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingState
 import com.itexpert120.yomu.data.books.BookRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -19,16 +22,22 @@ data class BookDetailsUi(
     val title: String,
     val author: String,
     val series: String?,
+    val description: String?,
     val progress: Float,
     val remaining: String,
+    val coverImagePath: String?,
     val coverColors: List<Color>,
     val readingState: ReadingState,
 )
 
-class BookDetailsViewModel(
-    private val bookId: String,
+@HiltViewModel
+class BookDetailsViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val repository: BookRepository,
 ) : ViewModel() {
+
+    // "bookId" is the property name from the type-safe BookDetails route.
+    private val bookId: String = requireNotNull(savedStateHandle["bookId"])
 
     val state: StateFlow<BookDetailsUi?> =
         repository.observeBook(BookId(bookId))
@@ -39,8 +48,12 @@ class BookDetailsViewModel(
         viewModelScope.launch { repository.markRead(BookId(bookId)) }
     }
 
+    fun markUnread() {
+        viewModelScope.launch { repository.markUnread(BookId(bookId)) }
+    }
+
     fun remove() {
-        viewModelScope.launch { repository.remove(BookId(bookId)) }
+        viewModelScope.launch { repository.remove(listOf(BookId(bookId))) }
     }
 }
 
@@ -49,8 +62,10 @@ private fun Book.toUi(): BookDetailsUi = BookDetailsUi(
     title = title,
     author = author,
     series = series,
+    description = description,
     progress = progress,
     remaining = remainingLabel,
+    coverImagePath = coverImagePath,
     coverColors = coverPalette.map { Color(it) },
     readingState = readingState,
 )

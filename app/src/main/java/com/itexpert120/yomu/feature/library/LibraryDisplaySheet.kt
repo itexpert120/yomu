@@ -14,28 +14,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
-import kotlinx.coroutines.launch
 
-/**
- * Display options for the library grid: view mode and (grid-only) column count. Uses the same
- * hide-then-dismiss animation as [com.itexpert120.yomu.core.designsystem.YomuOptionSheet].
- */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Display options (view mode + grid columns) as a draggable slide-up sheet. */
 @Composable
 internal fun LibraryDisplaySheet(
     visible: Boolean,
@@ -45,26 +37,9 @@ internal fun LibraryDisplaySheet(
     onColumnsChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    if (!visible) return
-
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-
-    fun animateDismiss() {
-        scope.launch { sheetState.hide() }.invokeOnCompletion {
-            if (!sheetState.isVisible) onDismiss()
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = YomuTheme.colors.panel,
-        contentColor = YomuTheme.colors.textPrimary,
-        dragHandle = null,
-    ) {
+    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { dismiss ->
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(text = "Display", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.title)
@@ -104,7 +79,7 @@ internal fun LibraryDisplaySheet(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { animateDismiss() },
+                        onClick = dismiss,
                     )
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,

@@ -219,13 +219,20 @@ object YomuTheme {
 fun YomuDesignTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeMode: YomuThemeMode? = null,
+    accent: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val mode = themeMode ?: if (darkTheme) YomuThemeMode.Dark else YomuThemeMode.Light
-    val colors = when (mode) {
+    val baseColors = when (mode) {
         YomuThemeMode.Light -> LightYomuColors
         YomuThemeMode.Dark -> DarkYomuColors
         YomuThemeMode.Oled -> OledYomuColors
+    }
+    // Apply the user's accent over the theme's default accent.
+    val colors = if (accent != null) {
+        baseColors.copy(accent = accent, accentSoft = accent.copy(alpha = 0.16f))
+    } else {
+        baseColors
     }
     CompositionLocalProvider(
         LocalYomuColors provides colors,

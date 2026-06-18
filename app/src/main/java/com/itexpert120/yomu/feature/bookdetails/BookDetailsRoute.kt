@@ -3,30 +3,25 @@ package com.itexpert120.yomu.feature.bookdetails
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import com.itexpert120.yomu.app.rememberYomuGraph
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
+// The ViewModel resolves its bookId from the type-safe route via SavedStateHandle.
 @Composable
 fun BookDetailsRoute(
-    bookId: String,
     onBack: () -> Unit,
     onRead: () -> Unit,
+    onEdit: () -> Unit,
 ) {
-    val graph = rememberYomuGraph()
-    val viewModel: BookDetailsViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer { BookDetailsViewModel(bookId, graph.bookRepository) }
-        },
-    )
+    val viewModel: BookDetailsViewModel = hiltViewModel()
     val book by viewModel.state.collectAsState()
 
     BookDetailsScreen(
         book = book,
         onBack = onBack,
         onRead = onRead,
+        onEdit = onEdit,
         onMarkRead = viewModel::markRead,
+        onMarkUnread = viewModel::markUnread,
         onRemove = {
             viewModel.remove()
             onBack()
