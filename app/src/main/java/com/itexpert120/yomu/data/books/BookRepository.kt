@@ -35,4 +35,10 @@ interface BookRepository {
 
     suspend fun readingTarget(id: BookId): ReadingTarget?
     suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double)
+
+    /** Set of chapter ids the user has marked read for [id]. */
+    fun observeReadChapters(id: BookId): Flow<Set<String>>
+
+    /** Marks [chapterIds] read or unread for [id]. */
+    suspend fun setChaptersRead(id: BookId, chapterIds: List<String>, read: Boolean)
 }

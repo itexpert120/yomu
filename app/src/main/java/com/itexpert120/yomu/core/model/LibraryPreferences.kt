@@ -11,7 +11,6 @@ enum class SortMode(val label: String) {
 enum class GroupMode(val label: String) {
     None("None"),
     Author("Author"),
-    Series("Series"),
 }
 
 enum class LibraryViewMode(val label: String) {

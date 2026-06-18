@@ -82,7 +82,6 @@ fun List<Book>.sortedBy(mode: SortMode): List<Book> = when (mode) {
 fun List<Book>.groupedBy(mode: GroupMode): List<LibraryGroup> = when (mode) {
     GroupMode.None -> listOf(LibraryGroup("", map { it.toLibraryBook() }))
     GroupMode.Author -> groupToSections { it.author.lastNameKey() }
-    GroupMode.Series -> groupToSections { it.series ?: "Standalone" }
 }
 
 private inline fun List<Book>.groupToSections(key: (Book) -> String): List<LibraryGroup> =

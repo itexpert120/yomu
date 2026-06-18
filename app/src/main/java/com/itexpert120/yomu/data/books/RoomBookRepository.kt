@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.data.books
 
 import com.itexpert120.yomu.core.database.BookDao
+import com.itexpert120.yomu.core.database.ChapterReadEntity
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +29,7 @@ class RoomBookRepository @Inject constructor(
         val keys = ids.map { it.value }
         val entities = dao.getBooks(keys)
         dao.deleteByIds(keys)
+        dao.deleteAllReadChapters(keys)
         // Clean up the imported EPUB + extracted cover for each removed book.
         entities.forEach { entity ->
             runCatching { File(entity.storagePath).delete() }
@@ -65,5 +67,17 @@ class RoomBookRepository @Inject constructor(
             locatorJson = locatorJson,
             lastOpenedAt = System.currentTimeMillis(),
         )
+    }
+
+    override fun observeReadChapters(id: BookId): Flow<Set<String>> =
+        dao.observeReadChapters(id.value).map { it.toSet() }
+
+    override suspend fun setChaptersRead(id: BookId, chapterIds: List<String>, read: Boolean) {
+        if (chapterIds.isEmpty()) return
+        if (read) {
+            dao.insertReadChapters(chapterIds.map { ChapterReadEntity(id.value, it) })
+        } else {
+            dao.deleteReadChapters(id.value, chapterIds)
+        }
     }
 }

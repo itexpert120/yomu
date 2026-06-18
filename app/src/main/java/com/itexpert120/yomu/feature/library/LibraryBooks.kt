@@ -83,7 +83,8 @@ fun ContinueReadingCard(book: LibraryBook, onClick: () -> Unit, modifier: Modifi
             ProgressLine(progress = book.progress)
             Spacer(Modifier.height(1.dp))
             Text(
-                text = "${(book.progress * 100).toInt()}% · ${book.remaining}",
+                // remaining already reads as "5% read" / "Finished" — don't restate the percent.
+                text = book.remaining,
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.mono,
             )

@@ -24,6 +24,9 @@ data class Book(
     val coverPalette: List<Long> = emptyList(),
     val progress: Float = 0f,
     val remainingLabel: String = "Unread",
+    // Current reading position: the resource href being read and how far through it (0..1).
+    val currentHref: String? = null,
+    val currentChapterProgress: Float? = null,
     val addedAt: Long = 0L,
     val lastOpenedAt: Long = 0L,
 ) {

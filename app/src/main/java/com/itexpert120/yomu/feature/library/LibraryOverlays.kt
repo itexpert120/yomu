@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -172,7 +172,9 @@ internal fun FloatingResumeButton(
             style = YomuTheme.type.caption,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(168.dp),
+            // Adaptive: the pill hugs short titles and only caps long ones, instead of always
+            // reserving a fixed width.
+            modifier = Modifier.widthIn(max = 200.dp),
         )
     }
 }

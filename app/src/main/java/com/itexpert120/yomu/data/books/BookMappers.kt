@@ -4,24 +4,33 @@ import com.itexpert120.yomu.core.database.BookEntity
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingState
+import org.json.JSONObject
 import kotlin.math.absoluteValue
 
-internal fun BookEntity.toBook(): Book = Book(
-    id = BookId(id),
-    title = title,
-    author = author,
-    subtitle = subtitle,
-    description = description,
-    language = language,
-    publisher = publisher,
-    series = series,
-    coverImagePath = coverImagePath,
-    coverPalette = paletteFor(id),
-    progress = progress,
-    remainingLabel = remainingLabelFor(progress),
-    addedAt = addedAt,
-    lastOpenedAt = lastOpenedAt,
-)
+internal fun BookEntity.toBook(): Book {
+    val locator = locatorJson?.let { runCatching { JSONObject(it) }.getOrNull() }
+    val locations = locator?.optJSONObject("locations")
+    return Book(
+        id = BookId(id),
+        title = title,
+        author = author,
+        subtitle = subtitle,
+        description = description,
+        language = language,
+        publisher = publisher,
+        series = series,
+        coverImagePath = coverImagePath,
+        coverPalette = paletteFor(id),
+        progress = progress,
+        remainingLabel = remainingLabelFor(progress),
+        currentHref = locator?.optString("href")?.takeIf { it.isNotEmpty() },
+        currentChapterProgress = locations?.let {
+            if (it.has("progression")) it.optDouble("progression").toFloat() else null
+        },
+        addedAt = addedAt,
+        lastOpenedAt = lastOpenedAt,
+    )
+}
 
 internal fun ImportedBook.toEntity(): BookEntity = BookEntity(
     id = id,

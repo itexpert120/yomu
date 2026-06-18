@@ -79,6 +79,7 @@ fun YomuNavHost(
                 onBack = navController::popBackStack,
                 onRead = { navController.navigate(Reader(args.bookId)) },
                 onEdit = { navController.navigate(EditBook(args.bookId)) },
+                onOpenChapter = { locator -> navController.navigate(Reader(args.bookId, locator)) },
             )
         }
         composable<EditBook> {

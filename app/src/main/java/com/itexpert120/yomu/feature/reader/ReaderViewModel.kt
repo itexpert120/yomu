@@ -32,6 +32,13 @@ class ReaderViewModel @Inject constructor(
 
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
 
+    // A TOC jump passes the target location here; otherwise we resume the saved position.
+    private val locatorOverride: String? = savedStateHandle["locator"]
+
+    // The resource being read; a chapter is marked read only once the reader leaves it for another.
+    private var currentHref: String? = null
+    private val markedChapters = mutableSetOf<String>()
+
     private val _session = MutableStateFlow<ReaderSession?>(null)
     val session: StateFlow<ReaderSession?> = _session.asStateFlow()
 
@@ -41,7 +48,7 @@ class ReaderViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val target = repository.readingTarget(BookId(bookId))
-            val opened = target?.let { engine.open(it.storagePath, it.locatorJson) }
+            val opened = target?.let { engine.open(it.storagePath, locatorOverride ?: it.locatorJson) }
             if (opened == null) {
                 _state.update { it.copy(loading = false, failed = true) }
                 return@launch
@@ -56,6 +63,16 @@ class ReaderViewModel @Inject constructor(
                         _state.update { it.copy(progressPercent = progression?.let { p -> (p * 100).toInt() }) }
                         if (progression != null) {
                             repository.saveProgress(BookId(bookId), locator.locatorJson, progression)
+                        }
+                        // Mark a chapter read only when the reader moves on from it (A -> B), not
+                        // the moment it's opened. Write once per chapter to avoid churn.
+                        val href = locator.href
+                        if (href != currentHref) {
+                            val left = currentHref
+                            if (left != null && markedChapters.add(left)) {
+                                repository.setChaptersRead(BookId(bookId), listOf(left), read = true)
+                            }
+                            currentHref = href
                         }
                     }
                 }

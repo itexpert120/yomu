@@ -10,11 +10,29 @@ data class ReaderLocator(
     val locatorJson: String,
     val totalProgression: Double?,
     val chapterTitle: String?,
+    // Resource href of the current position; matches [ReaderTocItem.id] so the TOC can track reads.
+    val href: String?,
+)
+
+/**
+ * A single, flattened table-of-contents entry. [id] is a stable per-book key (the entry's href)
+ * used to persist read-state. [depth] is the nesting level in the source TOC (0 = top level) so the
+ * UI can indent without holding the tree. [locatorJson] is the position to open the reader at, or
+ * null when the entry has no resolvable target.
+ */
+data class ReaderTocItem(
+    val id: String,
+    val title: String,
+    val locatorJson: String?,
+    val depth: Int,
 )
 
 /** Opens books for reading. Implemented by the Readium adapter; no engine types leak out. */
 interface ReaderEngine {
     suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession?
+
+    /** Reads the book's table of contents without starting a reading session. */
+    suspend fun tableOfContents(filePath: String): List<ReaderTocItem>
 }
 
 /**

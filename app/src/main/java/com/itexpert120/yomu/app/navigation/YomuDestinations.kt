@@ -18,6 +18,9 @@ object Settings
 @Serializable
 object About
 
-/** Reader is declared now but routed to a placeholder until the reader feature lands. */
+/**
+ * Opens the reader for [bookId]. [locator] optionally overrides the restored position with a
+ * specific location (e.g. a table-of-contents jump); null resumes the last saved position.
+ */
 @Serializable
-data class Reader(val bookId: String)
+data class Reader(val bookId: String, val locator: String? = null)

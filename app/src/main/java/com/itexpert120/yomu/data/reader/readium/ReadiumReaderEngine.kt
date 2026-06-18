@@ -6,6 +6,7 @@ import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderSession
+import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
+import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -54,14 +56,53 @@ class ReadiumReaderEngine @Inject constructor(
     )
 
     override suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession? {
+        val publication = openPublication(filePath) ?: return null
+        return ReadiumReaderSession(publication, initialLocatorJson)
+    }
+
+    override suspend fun tableOfContents(filePath: String): List<ReaderTocItem> {
+        val publication = openPublication(filePath) ?: return emptyList()
+        return try {
+            buildList { flattenToc(publication, publication.tableOfContents, depth = 0, out = this) }
+        } finally {
+            runCatching { publication.close() }
+        }
+    }
+
+    private suspend fun openPublication(filePath: String): Publication? {
         val asset = assetRetriever.retrieve(File(filePath).toUrl(isDirectory = false))
             .getOrElse { return null }
-        val publication = publicationOpener.open(asset, allowUserInteraction = false)
+        return publicationOpener.open(asset, allowUserInteraction = false)
             .getOrElse {
                 asset.close()
-                return null
+                null
             }
-        return ReadiumReaderSession(publication, initialLocatorJson)
+    }
+
+    // Flatten the TOC tree depth-first, preserving reading order and recording nesting depth.
+    private fun flattenToc(
+        publication: Publication,
+        links: List<Link>,
+        depth: Int,
+        out: MutableList<ReaderTocItem>,
+    ) {
+        for (link in links) {
+            val title = link.title?.trim()?.takeIf { it.isNotEmpty() }
+            if (title != null) {
+                val locator = publication.locatorFromLink(link)
+                out += ReaderTocItem(
+                    // Key on the resource href (from the resolved locator) so it matches the
+                    // reader's ReaderLocator.href and read-state tracks as the user reads.
+                    id = locator?.href?.toString() ?: link.url().toString(),
+                    title = title,
+                    locatorJson = locator?.toJSON()?.toString(),
+                    depth = depth,
+                )
+            }
+            if (link.children.isNotEmpty()) {
+                flattenToc(publication, link.children, depth + 1, out)
+            }
+        }
     }
 }
 
@@ -105,6 +146,7 @@ private class ReadiumReaderSession(
                     locatorJson = locator.toJSON().toString(),
                     totalProgression = locator.locations.totalProgression,
                     chapterTitle = locator.title,
+                    href = locator.href.toString(),
                 )
             }
         }

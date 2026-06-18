@@ -60,4 +60,20 @@ interface BookDao {
 
     @Query("DELETE FROM books WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
+
+    // region Chapter read-state
+
+    @Query("SELECT chapterId FROM chapter_reads WHERE bookId = :bookId")
+    fun observeReadChapters(bookId: String): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertReadChapters(rows: List<ChapterReadEntity>)
+
+    @Query("DELETE FROM chapter_reads WHERE bookId = :bookId AND chapterId IN (:chapterIds)")
+    suspend fun deleteReadChapters(bookId: String, chapterIds: List<String>)
+
+    @Query("DELETE FROM chapter_reads WHERE bookId IN (:bookIds)")
+    suspend fun deleteAllReadChapters(bookIds: List<String>)
+
+    // endregion
 }
