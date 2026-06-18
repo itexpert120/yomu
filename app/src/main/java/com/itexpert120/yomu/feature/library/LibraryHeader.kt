@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -32,9 +35,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
-import com.itexpert120.yomu.core.designsystem.YomuDropdownMenu
-import com.itexpert120.yomu.core.designsystem.YomuDropdownMenuContainer
-import com.itexpert120.yomu.core.designsystem.YomuDropdownMenuItem
+import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
@@ -45,19 +46,21 @@ internal fun LibraryHeader(
     searchQuery: String,
     sortMode: SortMode,
     groupMode: GroupMode,
-    showSortMenu: Boolean,
-    showGroupMenu: Boolean,
+    showSortSheet: Boolean,
+    showGroupSheet: Boolean,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSortModeChange: (SortMode) -> Unit,
     onGroupModeChange: (GroupMode) -> Unit,
-    onSortMenuToggle: () -> Unit,
-    onGroupMenuToggle: () -> Unit,
+    onSortSheetToggle: () -> Unit,
+    onGroupSheetToggle: () -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -105,50 +108,38 @@ internal fun LibraryHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box {
-                YomuPillFilter(
-                    label = "Sort",
-                    value = sortMode.label,
-                    onClick = onSortMenuToggle,
-                )
-                YomuDropdownMenu(
-                    expanded = showSortMenu,
-                    onDismiss = onSortMenuToggle,
-                ) {
-                    YomuDropdownMenuContainer(modifier = Modifier.width(130.dp)) {
-                        SortMode.entries.forEach { mode ->
-                            YomuDropdownMenuItem(
-                                text = mode.label,
-                                selected = mode == sortMode,
-                                onClick = { onSortModeChange(mode) },
-                            )
-                        }
-                    }
-                }
-            }
-            Box {
-                YomuPillFilter(
-                    label = "Group",
-                    value = groupMode.label,
-                    onClick = onGroupMenuToggle,
-                )
-                YomuDropdownMenu(
-                    expanded = showGroupMenu,
-                    onDismiss = onGroupMenuToggle,
-                ) {
-                    YomuDropdownMenuContainer(modifier = Modifier.width(130.dp)) {
-                        GroupMode.entries.forEach { mode ->
-                            YomuDropdownMenuItem(
-                                text = mode.label,
-                                selected = mode == groupMode,
-                                onClick = { onGroupModeChange(mode) },
-                            )
-                        }
-                    }
-                }
-            }
+            YomuPillFilter(
+                label = "Sort",
+                value = sortMode.label,
+                onClick = onSortSheetToggle,
+            )
+            YomuPillFilter(
+                label = "Group",
+                value = groupMode.label,
+                onClick = onGroupSheetToggle,
+            )
         }
     }
+
+    YomuOptionSheet(
+        visible = showSortSheet,
+        onDismiss = onSortSheetToggle,
+        title = "Sort by",
+        options = SortMode.entries,
+        selectedOption = sortMode,
+        onSelect = onSortModeChange,
+        label = { it.label },
+    )
+
+    YomuOptionSheet(
+        visible = showGroupSheet,
+        onDismiss = onGroupSheetToggle,
+        title = "Group by",
+        options = GroupMode.entries,
+        selectedOption = groupMode,
+        onSelect = onGroupModeChange,
+        label = { it.label },
+    )
 }
 
 @Composable

@@ -85,8 +85,8 @@ fun LibraryScreen(
     var searchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedBook by remember { mutableStateOf<LibraryBook?>(null) }
-    var showSortMenu by remember { mutableStateOf(false) }
-    var showGroupMenu by remember { mutableStateOf(false) }
+    var showSortSheet by remember { mutableStateOf(false) }
+    var showGroupSheet by remember { mutableStateOf(false) }
 
     val lastRead = books.maxByOrNull { it.lastOpenedAt }
     val gridBooks = if (lastRead != null) {
@@ -126,17 +126,17 @@ fun LibraryScreen(
                         searchQuery = searchQuery,
                         sortMode = sortMode,
                         groupMode = groupMode,
-                        showSortMenu = showSortMenu,
-                        showGroupMenu = showGroupMenu,
+                        showSortSheet = showSortSheet,
+                        showGroupSheet = showGroupSheet,
                         onSearchToggle = {
                             searchActive = !searchActive
                             if (!searchActive) searchQuery = ""
                         },
                         onSearchQueryChange = { searchQuery = it },
-                        onSortModeChange = { sortMode = it; showSortMenu = false },
-                        onGroupModeChange = { groupMode = it; showGroupMenu = false },
-                        onSortMenuToggle = { showSortMenu = !showSortMenu; showGroupMenu = false },
-                        onGroupMenuToggle = { showGroupMenu = !showGroupMenu; showSortMenu = false },
+                        onSortModeChange = { sortMode = it; showSortSheet = false },
+                        onGroupModeChange = { groupMode = it; showGroupSheet = false },
+                        onSortSheetToggle = { showSortSheet = !showSortSheet },
+                        onGroupSheetToggle = { showGroupSheet = !showGroupSheet },
                         onImport = onImport,
                         onThemeToggle = onThemeToggle,
                     )

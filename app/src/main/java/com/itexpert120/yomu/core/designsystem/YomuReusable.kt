@@ -21,9 +21,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -194,5 +198,98 @@ fun YomuCircleIconButton(
             tint = tint,
             modifier = Modifier.size(18.dp),
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> YomuOptionSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    title: String,
+    options: List<T>,
+    selectedOption: T,
+    onSelect: (T) -> Unit,
+    label: (T) -> String = { (it as Enum<*>).name.replaceFirstChar { c -> c.titlecase() } },
+) where T : Enum<T> {
+    if (!visible) return
+
+    val sheetState = rememberModalBottomSheetState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = YomuTheme.colors.panel,
+        contentColor = YomuTheme.colors.textPrimary,
+        dragHandle = null,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = title,
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.title,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+            options.forEach { option ->
+                val isSelected = option == selectedOption
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(YomuTheme.radius.md))
+                        .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                onSelect(option)
+                                onDismiss()
+                            },
+                        )
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = label(option),
+                        color = if (isSelected) YomuTheme.colors.accent else YomuTheme.colors.textPrimary,
+                        style = YomuTheme.type.body,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = YomuTheme.colors.accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .clip(RoundedCornerShape(YomuTheme.radius.md))
+                    .background(YomuTheme.colors.surface)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    )
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = YomuTheme.colors.textSecondary,
+                    style = YomuTheme.type.body,
+                )
+            }
+        }
     }
 }
