@@ -9,33 +9,33 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
+import com.itexpert120.yomu.core.designsystem.YomuDropdownMenu
+import com.itexpert120.yomu.core.designsystem.YomuDropdownMenuContainer
+import com.itexpert120.yomu.core.designsystem.YomuDropdownMenuItem
+import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
@@ -53,15 +53,12 @@ internal fun LibraryHeader(
     onGroupModeChange: (GroupMode) -> Unit,
     onSortMenuToggle: () -> Unit,
     onGroupMenuToggle: () -> Unit,
-    onDismissMenus: () -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -76,15 +73,18 @@ internal fun LibraryHeader(
                     style = YomuTheme.type.caption,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                HeaderCircleButton(onClick = onImport) {
-                    Text("+", color = YomuTheme.colors.appBackground, style = YomuTheme.type.section)
-                }
-                HeaderCircleButton(onClick = onThemeToggle) {
-                    Text(
-                        text = "\u263E",
-                        color = YomuTheme.colors.appBackground,
-                        style = YomuTheme.type.section,
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YomuCircleIconButton(
+                    onClick = onImport,
+                    icon = Icons.Rounded.Settings,
+                    contentDescription = "Import",
+                )
+                YomuCircleIconButton(onClick = onThemeToggle) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "Theme",
+                        tint = YomuTheme.colors.appBackground,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -105,18 +105,48 @@ internal fun LibraryHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SortDropdown(
-                currentMode = sortMode,
-                expanded = showSortMenu,
-                onToggle = onSortMenuToggle,
-                onSelect = onSortModeChange,
-            )
-            GroupDropdown(
-                currentMode = groupMode,
-                expanded = showGroupMenu,
-                onToggle = onGroupMenuToggle,
-                onSelect = onGroupModeChange,
-            )
+            Box {
+                YomuPillFilter(
+                    label = "Sort",
+                    value = sortMode.label,
+                    onClick = onSortMenuToggle,
+                )
+                YomuDropdownMenu(
+                    expanded = showSortMenu,
+                    onDismiss = onSortMenuToggle,
+                ) {
+                    YomuDropdownMenuContainer(modifier = Modifier.width(130.dp)) {
+                        SortMode.entries.forEach { mode ->
+                            YomuDropdownMenuItem(
+                                text = mode.label,
+                                selected = mode == sortMode,
+                                onClick = { onSortModeChange(mode) },
+                            )
+                        }
+                    }
+                }
+            }
+            Box {
+                YomuPillFilter(
+                    label = "Group",
+                    value = groupMode.label,
+                    onClick = onGroupMenuToggle,
+                )
+                YomuDropdownMenu(
+                    expanded = showGroupMenu,
+                    onDismiss = onGroupMenuToggle,
+                ) {
+                    YomuDropdownMenuContainer(modifier = Modifier.width(130.dp)) {
+                        GroupMode.entries.forEach { mode ->
+                            YomuDropdownMenuItem(
+                                text = mode.label,
+                                selected = mode == groupMode,
+                                onClick = { onGroupModeChange(mode) },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -142,11 +172,11 @@ private fun SearchHint(onClick: () -> Unit) {
             style = YomuTheme.type.body,
             modifier = Modifier.weight(1f),
         )
-        androidx.compose.material3.Icon(
+        Icon(
             imageVector = Icons.Rounded.Search,
             contentDescription = "Search",
             tint = YomuTheme.colors.textSecondary,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -160,7 +190,7 @@ private fun SearchField(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
 
@@ -211,161 +241,12 @@ private fun SearchField(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(
+            Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = "Close",
                 tint = YomuTheme.colors.textMuted,
                 modifier = Modifier.size(16.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun SortDropdown(
-    currentMode: SortMode,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onSelect: (SortMode) -> Unit,
-) {
-    Box {
-        DropdownPill(
-            label = "Sort",
-            value = currentMode.label,
-            onClick = onToggle,
-        )
-        if (expanded) {
-            Popup(
-                onDismissRequest = onToggle,
-                properties = PopupProperties(focusable = true),
-            ) {
-                DropdownMenu(
-                    items = SortMode.entries,
-                    selectedItem = currentMode,
-                    onSelect = onSelect,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GroupDropdown(
-    currentMode: GroupMode,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onSelect: (GroupMode) -> Unit,
-) {
-    Box {
-        DropdownPill(
-            label = "Group",
-            value = currentMode.label,
-            onClick = onToggle,
-        )
-        if (expanded) {
-            Popup(
-                onDismissRequest = onToggle,
-                properties = PopupProperties(focusable = true),
-            ) {
-                DropdownMenu(
-                    items = GroupMode.entries,
-                    selectedItem = currentMode,
-                    onSelect = onSelect,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun <T> DropdownMenu(
-    items: List<T>,
-    selectedItem: T,
-    onSelect: (T) -> Unit,
-) where T : Enum<T> {
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.md))
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .background(YomuTheme.colors.panel)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
-            .padding(vertical = 4.dp),
-    ) {
-        items.forEach { item ->
-            val isSelected = item == selectedItem
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(YomuTheme.radius.sm))
-                    .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onSelect(item) },
-                    )
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = (item as Enum<*>).name.replaceFirstChar { it.titlecase() },
-                    color = if (isSelected) YomuTheme.colors.accent else YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.body,
-                    modifier = Modifier.weight(1f),
-                )
-                if (isSelected) {
-                    Text(
-                        text = "\u2713",
-                        color = YomuTheme.colors.accent,
-                        style = YomuTheme.type.body,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DropdownPill(label: String, value: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.pill))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(text = label, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        Text(text = value, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.caption)
-        androidx.compose.material3.Icon(
-            imageVector = Icons.Rounded.KeyboardArrowDown,
-            contentDescription = null,
-            tint = YomuTheme.colors.textMuted,
-            modifier = Modifier.size(14.dp),
-        )
-    }
-}
-
-@Composable
-private fun HeaderCircleButton(onClick: () -> Unit, icon: @Composable () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(19.dp))
-            .background(YomuTheme.colors.textPrimary)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        icon()
     }
 }

@@ -4,18 +4,17 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -117,61 +116,69 @@ fun LibraryScreen(
 
     YomuAppSurface {
         Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                LibraryHeader(
-                    bookCount = books.size,
-                    searchActive = searchActive,
-                    searchQuery = searchQuery,
-                    sortMode = sortMode,
-                    groupMode = groupMode,
-                    showSortMenu = showSortMenu,
-                    showGroupMenu = showGroupMenu,
-                    onSearchToggle = {
-                        searchActive = !searchActive
-                        if (!searchActive) searchQuery = ""
-                    },
-                    onSearchQueryChange = { searchQuery = it },
-                    onSortModeChange = { sortMode = it; showSortMenu = false },
-                    onGroupModeChange = { groupMode = it; showGroupMenu = false },
-                    onSortMenuToggle = { showSortMenu = !showSortMenu; showGroupMenu = false },
-                    onGroupMenuToggle = { showGroupMenu = !showGroupMenu; showSortMenu = false },
-                    onDismissMenus = { showSortMenu = false; showGroupMenu = false },
-                    onImport = onImport,
-                    onThemeToggle = onThemeToggle,
-                )
+            if (books.isEmpty()) {
+                EmptyLibrary(onImport = onImport)
+            } else {
+                Column(Modifier.fillMaxSize()) {
+                    LibraryHeader(
+                        bookCount = books.size,
+                        searchActive = searchActive,
+                        searchQuery = searchQuery,
+                        sortMode = sortMode,
+                        groupMode = groupMode,
+                        showSortMenu = showSortMenu,
+                        showGroupMenu = showGroupMenu,
+                        onSearchToggle = {
+                            searchActive = !searchActive
+                            if (!searchActive) searchQuery = ""
+                        },
+                        onSearchQueryChange = { searchQuery = it },
+                        onSortModeChange = { sortMode = it; showSortMenu = false },
+                        onGroupModeChange = { groupMode = it; showGroupMenu = false },
+                        onSortMenuToggle = { showSortMenu = !showSortMenu; showGroupMenu = false },
+                        onGroupMenuToggle = { showGroupMenu = !showGroupMenu; showSortMenu = false },
+                        onImport = onImport,
+                        onThemeToggle = onThemeToggle,
+                    )
 
-                LibraryGrid(
-                    lastRead = lastRead,
-                    groupedBooks = groupedBooks,
-                    onBookClick = { selectedBook = it },
-                    onBookLongPress = { selectedBook = it },
-                    onImport = onImport,
-                )
+                    LibraryGrid(
+                        lastRead = lastRead,
+                        groupedBooks = groupedBooks,
+                        onBookClick = { selectedBook = it },
+                        onBookLongPress = { selectedBook = it },
+                    )
+                }
             }
 
-            if (lastRead != null) {
+            AnimatedVisibility(
+                visible = selectedBook != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                selectedBook?.let { book ->
+                    BookContextPanel(
+                        book = book,
+                        onDismiss = { selectedBook = null },
+                        onMarkRead = {
+                            books = books.map {
+                                if (it.id == book.id) it.copy(progress = 1.0f, remaining = "Finished")
+                                else it
+                            }
+                            selectedBook = null
+                        },
+                        onRemove = {
+                            books = books.filter { it.id != book.id }
+                            selectedBook = null
+                        },
+                    )
+                }
+            }
+
+            if (lastRead != null && selectedBook == null) {
                 FloatingResumeButton(
                     modifier = Modifier.align(Alignment.BottomEnd),
                     book = lastRead,
-                )
-            }
-
-            selectedBook?.let { book ->
-                BookContextPanel(
-                    book = book,
-                    onDismiss = { selectedBook = null },
-                    onMarkRead = {
-                        books = books.map {
-                            if (it.id == book.id) it.copy(progress = 1.0f, remaining = "Finished")
-                            else it
-                        }
-                        selectedBook = null
-                    },
-                    onRemove = {
-                        books = books.filter { it.id != book.id }
-                        selectedBook = null
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
 
@@ -182,19 +189,28 @@ fun LibraryScreen(
 }
 
 @Composable
+private fun EmptyLibrary(onImport: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        ImportEmptyCard(onImport = onImport)
+    }
+}
+
+@Composable
 private fun LibraryGrid(
     lastRead: LibraryBook?,
     groupedBooks: Map<String, List<LibraryBook>>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    onImport: () -> Unit,
 ) {
-    val contentPadding = libraryContentPadding(horizontal = 16.dp, top = 0.dp, bottom = 100.dp)
-
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -217,10 +233,6 @@ private fun LibraryGrid(
                     onLongPress = { onBookLongPress(book) },
                 )
             }
-        }
-
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            ImportEmptyCard(onImport = onImport)
         }
     }
 }
