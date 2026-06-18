@@ -189,7 +189,7 @@ private fun LibraryGrid(
     onBookLongPress: (LibraryBook) -> Unit,
     onImport: () -> Unit,
 ) {
-    val contentPadding = libraryContentPadding(horizontal = 16.dp, top = 0.dp, bottom = 96.dp)
+    val contentPadding = libraryContentPadding(horizontal = 16.dp, top = 0.dp, bottom = 100.dp)
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),

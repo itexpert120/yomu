@@ -107,10 +107,10 @@ fun ImportEmptyCard(onImport: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f / 1.6f)
-            .clip(RoundedCornerShape(13.dp))
+            .height(80.dp)
+            .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(YomuTheme.colors.surface)
-            .border(1.5.dp, YomuTheme.colors.border, RoundedCornerShape(13.dp))
+            .border(1.5.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -118,17 +118,19 @@ fun ImportEmptyCard(onImport: () -> Unit) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 text = "+",
                 color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.display,
+                style = YomuTheme.type.title,
             )
-            Spacer(Modifier.height(6.dp))
             Text(
                 text = "Import EPUB",
                 color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
+                style = YomuTheme.type.body,
             )
         }
     }
