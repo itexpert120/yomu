@@ -28,9 +28,6 @@ data class ReaderTocItem(
     val depth: Int,
 )
 
-/** A tap on the reading area, as fractions (0..1) of the view — used to resolve L-shaped zones. */
-data class ReaderTap(val xFraction: Float, val yFraction: Float)
-
 /** Opens books for reading. Implemented by the Readium adapter; no engine types leak out. */
 interface ReaderEngine {
     suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession?
@@ -48,8 +45,8 @@ interface ReaderSession {
     val title: String
     val currentLocator: StateFlow<ReaderLocator?>
 
-    /** Emits the position of taps on the reading area (used to resolve tap zones). */
-    val tapEvents: SharedFlow<ReaderTap>
+    /** Emits when the user taps the centre of the page (used to open the controls sheet). */
+    val centerTaps: SharedFlow<Unit>
 
     val fragmentFactory: FragmentFactory
     val fragmentClassName: String

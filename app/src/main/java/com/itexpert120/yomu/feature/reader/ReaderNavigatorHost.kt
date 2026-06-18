@@ -10,6 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
@@ -32,6 +34,9 @@ fun ReaderNavigatorHost(session: ReaderSession, modifier: Modifier = Modifier) {
         factory = { context ->
             FragmentContainerView(context).apply {
                 id = View.generateViewId()
+                // Draw edge-to-edge: consume insets so the navigator's WebView doesn't pad itself
+                // for the status/nav bars (which left a solid strip). Yomu's chrome handles spacing.
+                ViewCompat.setOnApplyWindowInsetsListener(this) { _, _ -> WindowInsetsCompat.CONSUMED }
                 // Add the fragment only once the container is attached, otherwise the
                 // FragmentManager can't find the container view ("No view found for id").
                 doOnAttach {

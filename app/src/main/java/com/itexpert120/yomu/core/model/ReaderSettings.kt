@@ -37,8 +37,7 @@ data class ReaderSettings(
     val lineHeight: Float? = null,
     val useSystemBrightness: Boolean = true,
     val brightness: Float = 0.5f,
-    // Chrome visibility/appearance — let the reader be either ultra-clean or fully framed.
-    val showTopBar: Boolean = true,
+    // Chrome appearance. The top bar is always present (sleek + compact); the footer is optional.
     val showFooter: Boolean = true,
     val edgeShadows: Boolean = true,
     // Footer contents (battery on the left, reading progress on the right, clock between).
@@ -46,6 +45,29 @@ data class ReaderSettings(
     val footerShowClock: Boolean = true,
     val footerShowProgress: Boolean = true,
 ) {
+    /** Page background for the active theme (ARGB). Shared by the engine and the reader chrome
+     *  so the area behind the system bars matches the page with no seam. Dark is a soft, non-OLED grey. */
+    val backgroundArgb: Long
+        get() = when (theme) {
+            ReaderThemeMode.Light -> 0xFFFFFFFF
+            ReaderThemeMode.Sepia -> 0xFFFAF4E8
+            ReaderThemeMode.Dark -> 0xFF16181D
+            ReaderThemeMode.Black -> 0xFF000000
+            ReaderThemeMode.Custom -> customBackground ?: 0xFF16181D
+        }
+
+    /** Text colour for the active theme (ARGB). */
+    val textArgb: Long
+        get() = when (theme) {
+            ReaderThemeMode.Light -> 0xFF1A1A1A
+            ReaderThemeMode.Sepia -> 0xFF2A2520
+            ReaderThemeMode.Dark, ReaderThemeMode.Black -> 0xFFE6E6E6
+            ReaderThemeMode.Custom -> customText ?: 0xFFE6E6E6
+        }
+
+    val isLightBackground: Boolean
+        get() = theme == ReaderThemeMode.Light || theme == ReaderThemeMode.Sepia
+
     companion object {
         const val MIN_FONT_SCALE = 0.6f
         const val MAX_FONT_SCALE = 2.5f

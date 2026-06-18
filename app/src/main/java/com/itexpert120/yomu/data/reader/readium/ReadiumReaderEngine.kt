@@ -5,10 +5,10 @@ import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderSession
-import com.itexpert120.yomu.core.reader.ReaderTap
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +30,8 @@ import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
+import org.readium.r2.navigator.preferences.Color as ReadiumColor
+import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -123,8 +125,8 @@ private class ReadiumReaderSession(
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
-    private val _tapEvents = MutableSharedFlow<ReaderTap>(extraBufferCapacity = 1)
-    override val tapEvents: SharedFlow<ReaderTap> = _tapEvents.asSharedFlow()
+    private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
@@ -162,18 +164,21 @@ private class ReadiumReaderSession(
                 )
             }
         }
+        // Only the centre is handled (opens the controls sheet); edge taps fall through so Readium's
+        // default navigation (swipes) keeps working — no custom navigation tap zones.
         nav.addInputListener(object : InputListener {
             override fun onTap(event: TapEvent): Boolean {
-                val view = nav.view
-                if (view != null && view.width > 0 && view.height > 0) {
-                    _tapEvents.tryEmit(
-                        ReaderTap(
-                            xFraction = (event.point.x / view.width).coerceIn(0f, 1f),
-                            yFraction = (event.point.y / view.height).coerceIn(0f, 1f),
-                        ),
-                    )
+                val view = nav.view ?: return false
+                if (view.width <= 0 || view.height <= 0) return false
+                val x = event.point.x / view.width
+                val y = event.point.y / view.height
+                val center = x in CENTER_MIN..CENTER_MAX && y in CENTER_MIN..CENTER_MAX
+                return if (center) {
+                    _centerTaps.tryEmit(Unit)
+                    true
+                } else {
+                    false
                 }
-                return true
             }
         })
     }
@@ -219,9 +224,21 @@ private class ReadiumReaderSession(
         runCatching { publication.close() }
     }
 
-    // P1 maps layout + size; theme/font/custom colours land in P2.
+    // Layout + size + theme colours (explicit bg/text so it matches the chrome); custom fonts land in P2.
     private fun ReaderSettings.toPreferences(): EpubPreferences = EpubPreferences(
         scroll = layout == ReaderLayout.Scroll,
         fontSize = fontScale.toDouble(),
+        // Base appearance picks sensible defaults (links etc.), but the explicit bg/text colours
+        // win so the page exactly matches the Yomu chrome (no status-bar seam). A theme's own bg
+        // would otherwise override them, which is what caused the mismatch.
+        theme = if (isLightBackground) Theme.LIGHT else Theme.DARK,
+        backgroundColor = ReadiumColor(backgroundArgb.toInt()),
+        textColor = ReadiumColor(textArgb.toInt()),
+        publisherStyles = false,
     )
+
+    private companion object {
+        const val CENTER_MIN = 0.25f
+        const val CENTER_MAX = 0.75f
+    }
 }

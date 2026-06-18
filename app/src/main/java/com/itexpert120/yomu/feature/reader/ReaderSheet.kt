@@ -137,9 +137,6 @@ private fun ThemeTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
     val s = state.settings
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // Theme colours + brightness land in Phase 2; chrome visibility lives here for now.
-        YomuSettingRow(title = "Show top bar") {
-            YomuTogglePill(checked = s.showTopBar, onCheckedChange = { onUpdateSettings(s.copy(showTopBar = it)) })
-        }
         YomuSettingRow(title = "Show footer") {
             YomuTogglePill(checked = s.showFooter, onCheckedChange = { onUpdateSettings(s.copy(showFooter = it)) })
         }

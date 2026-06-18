@@ -3,11 +3,14 @@ package com.itexpert120.yomu.feature.reader
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -19,16 +22,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
-import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.reader.ReaderSession
 
 @Composable
@@ -36,6 +40,7 @@ fun ReaderScreen(
     state: ReaderUiState,
     session: ReaderSession?,
     onBack: () -> Unit,
+    onOpenSheet: () -> Unit,
     onCloseSheet: () -> Unit,
     onSeek: (Double) -> Unit,
     onNextChapter: () -> Unit,
@@ -43,64 +48,95 @@ fun ReaderScreen(
     onUpdateSettings: (ReaderSettings) -> Unit,
     onAbout: () -> Unit,
 ) {
-    // The reader owns its system bars: keep them transparent so the custom chrome (solid bar + the
-    // optional fade) defines how the status/nav areas look, instead of a system scrim.
     val view = LocalView.current
+    // Keep the system bars transparent with no enforced scrim, so the reader chrome defines their
+    // look. The top bar is always present, so the status area never sits over content.
     DisposableEffect(Unit) {
         val window = view.context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         val prevStatus = window?.statusBarColor
         val prevNav = window?.navigationBarColor
-        window?.statusBarColor = Color.Transparent.toArgb()
-        window?.navigationBarColor = Color.Transparent.toArgb()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window?.isStatusBarContrastEnforced = false
+            window?.isNavigationBarContrastEnforced = false
+        }
+        // Full-screen reading: hide the gesture/navigation bar (swipe to reveal). The permanent top
+        // bar keeps the status bar relevant, so only the nav bar is hidden.
+        controller?.let {
+            it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            it.hide(WindowInsetsCompat.Type.navigationBars())
+        }
         onDispose {
-            prevStatus?.let { window?.statusBarColor = it }
-            prevNav?.let { window?.navigationBarColor = it }
+            window?.let {
+                prevStatus?.let { c -> it.statusBarColor = c }
+                prevNav?.let { c -> it.navigationBarColor = c }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    it.isStatusBarContrastEnforced = true
+                    it.isNavigationBarContrastEnforced = true
+                }
+            }
+            controller?.show(WindowInsetsCompat.Type.navigationBars())
         }
     }
-    LaunchedEffect(state.settings.theme) {
+    // Colour the system bars to the reading background so the status area matches the page on every
+    // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).
+    LaunchedEffect(state.settings.backgroundArgb, state.settings.isLightBackground) {
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
-        val lightBars = state.settings.theme == ReaderThemeMode.Light ||
-            state.settings.theme == ReaderThemeMode.Sepia
-        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = lightBars
+        val controller = WindowCompat.getInsetsController(window, view)
+        val barColor = Color(state.settings.backgroundArgb).toArgb()
+        window.statusBarColor = barColor
+        window.navigationBarColor = barColor
+        controller.isAppearanceLightStatusBars = state.settings.isLightBackground
+        controller.isAppearanceLightNavigationBars = state.settings.isLightBackground
     }
 
     val density = LocalDensity.current
     var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    val topInset = if (state.settings.showTopBar) with(density) { topBarPx.toDp() } else 0.dp
+    // Scroll mode's webview already insets the status bar; paged mode does not. Subtract the status
+    // bar in scroll mode so the content sits right under the bar without a double-counted gap.
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val fullTop = with(density) { topBarPx.toDp() }
+    val topInset = if (state.settings.layout == ReaderLayout.Scroll) {
+        (fullTop - statusTop).coerceAtLeast(0.dp)
+    } else {
+        fullTop
+    }
+    // Footer off: content flows under a fully transparent gesture bar (no inset).
     val bottomInset = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
+    val background = Color(state.settings.backgroundArgb)
+    val onBackground = Color(state.settings.textArgb)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(YomuTheme.colors.appBackground),
+            .background(background),
     ) {
         when {
             state.loading -> CenteredMessage("Opening…")
             state.failed -> CenteredMessage("This book couldn't be opened.")
             session != null -> {
-                // Inset the content so the solid bars never sit on top of the text (esp. in paged
-                // mode); the fade strips still bleed over the content below/above the solid part.
                 ReaderNavigatorHost(
                     session = session,
                     modifier = Modifier.fillMaxSize().padding(top = topInset, bottom = bottomInset),
                 )
 
-                if (state.settings.showTopBar) {
-                    ReaderTopBar(
-                        chapter = state.chapterTitle ?: state.title,
-                        edgeShadow = state.settings.edgeShadows,
-                        onBack = onBack,
-                        onSolidHeight = { topBarPx = it },
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
-                }
+                ReaderTopBar(
+                    chapter = state.chapterTitle ?: state.title,
+                    edgeShadow = state.settings.edgeShadows,
+                    background = background,
+                    content = onBackground,
+                    onBack = onBack,
+                    onOpenSheet = onOpenSheet,
+                    onContentHeight = { topBarPx = it },
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
 
                 if (state.settings.showFooter) {
                     ReaderFooter(
                         progressPercent = state.progressPercent,
                         settings = state.settings,
-                        onSolidHeight = { footerPx = it },
+                        onContentHeight = { footerPx = it },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }

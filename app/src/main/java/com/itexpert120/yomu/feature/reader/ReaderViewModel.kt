@@ -7,15 +7,16 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderSession
-import com.itexpert120.yomu.core.reader.ReaderTap
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class ReaderUiState(
@@ -45,6 +46,11 @@ class ReaderViewModel @Inject constructor(
     private var currentHref: String? = null
     private val markedChapters = mutableSetOf<String>()
 
+    // Resource href -> chapter title, so the top bar can show the current chapter name even when
+    // the engine locator carries no title. Retains the last known title to avoid blanking out.
+    private var tocTitles: Map<String, String> = emptyMap()
+    private var lastChapterTitle: String? = null
+
     private val _session = MutableStateFlow<ReaderSession?>(null)
     val session: StateFlow<ReaderSession?> = _session.asStateFlow()
 
@@ -62,6 +68,14 @@ class ReaderViewModel @Inject constructor(
             _session.value = opened
             _state.update { it.copy(loading = false, title = opened.title) }
 
+            // Build href -> chapter-title lookup (first entry per resource wins).
+            launch {
+                val items = withContext(Dispatchers.IO) { engine.tableOfContents(target.storagePath) }
+                val map = LinkedHashMap<String, String>()
+                items.forEach { map.putIfAbsent(it.id, it.title) }
+                tocTitles = map
+            }
+
             // Resolve effective settings (per-book override or global) and keep them applied live.
             launch {
                 settingsRepository.effective(BookId(bookId)).collect { settings ->
@@ -73,9 +87,13 @@ class ReaderViewModel @Inject constructor(
                 opened.currentLocator.collect { locator ->
                     if (locator != null) {
                         val progression = locator.totalProgression
+                        // Prefer the TOC chapter title for the current resource; fall back to the
+                        // engine's locator title, then the last known one (never the book name).
+                        val resolved = locator.href?.let { tocTitles[it] } ?: locator.chapterTitle
+                        if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
                         _state.update {
                             it.copy(
-                                chapterTitle = locator.chapterTitle,
+                                chapterTitle = lastChapterTitle,
                                 totalProgression = progression ?: it.totalProgression,
                                 progressPercent = progression?.let { p -> (p * 100).toInt() },
                             )
@@ -95,25 +113,13 @@ class ReaderViewModel @Inject constructor(
                 }
             }
             launch {
-                opened.tapEvents.collect { tap -> handleTap(tap, opened) }
+                opened.centerTaps.collect { _state.update { it.copy(sheetVisible = true) } }
             }
             launch {
                 repository.observeBook(BookId(bookId)).collect { book ->
                     _state.update { it.copy(coverImagePath = book?.coverImagePath) }
                 }
             }
-        }
-    }
-
-    // L-shaped zones: the centre opens the sheet; the top-left L goes back, the bottom-right L
-    // goes forward. Identical for scroll and paged (the engine interprets forward/back per mode).
-    private fun handleTap(tap: ReaderTap, session: ReaderSession) {
-        val inCentre = tap.xFraction in CENTRE_MIN..CENTRE_MAX &&
-            tap.yFraction in CENTRE_MIN..CENTRE_MAX
-        when {
-            inCentre -> _state.update { it.copy(sheetVisible = true) }
-            tap.xFraction + tap.yFraction < 1f -> session.goBackward()
-            else -> session.goForward()
         }
     }
 
@@ -134,10 +140,5 @@ class ReaderViewModel @Inject constructor(
 
     override fun onCleared() {
         _session.value?.close()
-    }
-
-    private companion object {
-        const val CENTRE_MIN = 0.30f
-        const val CENTRE_MAX = 0.70f
     }
 }
