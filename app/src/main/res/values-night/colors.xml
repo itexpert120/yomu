@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="yomu_splash_background">#111210</color>
+    <color name="yomu_splash_icon_background">#F4F4EF</color>
+    <color name="yomu_splash_mark">#050505</color>
+</resources>
