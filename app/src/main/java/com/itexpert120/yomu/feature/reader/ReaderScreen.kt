@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -60,11 +61,11 @@ fun ReaderScreen(
             window?.isStatusBarContrastEnforced = false
             window?.isNavigationBarContrastEnforced = false
         }
-        // Full-screen reading: hide the gesture/navigation bar (swipe to reveal). The permanent top
-        // bar keeps the status bar relevant, so only the nav bar is hidden.
+        // Full-screen reading: hide both system bars (swipe to reveal). The footer already shows the
+        // time + battery, so the status bar is redundant; the permanent top bar shows the chapter.
         controller?.let {
             it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            it.hide(WindowInsetsCompat.Type.navigationBars())
+            it.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
             window?.let {
@@ -75,7 +76,7 @@ fun ReaderScreen(
                     it.isNavigationBarContrastEnforced = true
                 }
             }
-            controller?.show(WindowInsetsCompat.Type.navigationBars())
+            controller?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
     // Colour the system bars to the reading background so the status area matches the page on every
@@ -88,6 +89,17 @@ fun ReaderScreen(
         window.navigationBarColor = barColor
         controller.isAppearanceLightStatusBars = state.settings.isLightBackground
         controller.isAppearanceLightNavigationBars = state.settings.isLightBackground
+    }
+    // Drive the window screen brightness: defer to the system level, or pin it to the reader setting.
+    LaunchedEffect(state.settings.useSystemBrightness, state.settings.brightness) {
+        val window = view.context.findActivity()?.window ?: return@LaunchedEffect
+        val lp = window.attributes
+        lp.screenBrightness = if (state.settings.useSystemBrightness) {
+            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        } else {
+            state.settings.brightness.coerceIn(0f, 1f)
+        }
+        window.attributes = lp
     }
 
     val density = LocalDensity.current

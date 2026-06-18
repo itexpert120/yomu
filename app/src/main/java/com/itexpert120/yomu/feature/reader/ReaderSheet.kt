@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,12 +50,17 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuChip
+import com.itexpert120.yomu.core.designsystem.YomuColorPicker
+import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.model.ReaderThemeMode
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -136,7 +143,51 @@ private fun ControlsTab(
 private fun ThemeTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) -> Unit) {
     val s = state.settings
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        // Theme colours + brightness land in Phase 2; chrome visibility lives here for now.
+        Text(text = "Theme", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ReaderThemeMode.entries.forEach { mode ->
+                val pageColor = Color(ReaderSettings().copy(theme = mode).backgroundArgb)
+                YomuColorSwatch(
+                    name = mode.name,
+                    color = pageColor,
+                    selected = s.theme == mode,
+                    onClick = { onUpdateSettings(s.copy(theme = mode)) },
+                )
+            }
+        }
+
+        if (s.theme == ReaderThemeMode.Custom) {
+            Text(text = "Background colour", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+            YomuColorPicker(
+                color = Color(s.backgroundArgb),
+                // customBackground is an ARGB Long; toArgb() yields an Int, mask to keep it unsigned.
+                onColorChange = { color ->
+                    onUpdateSettings(s.copy(customBackground = color.toArgb().toLong() and 0xFFFFFFFFL))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Text(text = "Brightness", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        YomuSettingRow(title = "Use system brightness") {
+            YomuTogglePill(
+                checked = s.useSystemBrightness,
+                onCheckedChange = { onUpdateSettings(s.copy(useSystemBrightness = it)) },
+            )
+        }
+        if (!s.useSystemBrightness) {
+            ReaderSlider(
+                fraction = s.brightness,
+                onSeek = { onUpdateSettings(s.copy(brightness = it)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Text(text = "Chrome", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
         YomuSettingRow(title = "Show footer") {
             YomuTogglePill(checked = s.showFooter, onCheckedChange = { onUpdateSettings(s.copy(showFooter = it)) })
         }
@@ -155,11 +206,6 @@ private fun ThemeTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
                 YomuTogglePill(checked = s.footerShowProgress, onCheckedChange = { onUpdateSettings(s.copy(footerShowProgress = it)) })
             }
         }
-        Text(
-            text = "Themes & brightness coming next.",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
-        )
     }
 }
 
@@ -175,10 +221,41 @@ private fun FontsTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
             onSelected = { onUpdateSettings(s.copy(layout = modes[it])) },
             modifier = Modifier.fillMaxWidth(),
         )
-        Text(
-            text = "Font family & size coming next.",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
+
+        Text(text = "Font", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ReaderFont.entries.forEach { font ->
+                YomuChip(
+                    text = font.displayName,
+                    selected = s.font == font,
+                    onClick = { onUpdateSettings(s.copy(font = font)) },
+                )
+            }
+        }
+
+        val min = ReaderSettings.MIN_FONT_SCALE
+        val max = ReaderSettings.MAX_FONT_SCALE
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Font size",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${(s.fontScale * 100).roundToInt()}%",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.mono,
+            )
+        }
+        ReaderSlider(
+            fraction = (s.fontScale - min) / (max - min),
+            onSeek = { onUpdateSettings(s.copy(fontScale = min + it * (max - min))) },
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

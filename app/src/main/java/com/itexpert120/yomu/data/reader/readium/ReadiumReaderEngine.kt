@@ -30,7 +30,10 @@ import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
+import org.readium.r2.navigator.epub.css.FontStyle
+import org.readium.r2.navigator.epub.css.FontWeight
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
+import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
@@ -145,7 +148,94 @@ private class ReadiumReaderSession(
     }
 
     override val fragmentFactory: FragmentFactory =
-        navigatorFactory.createFragmentFactory(initialLocator = initialLocator, listener = listener)
+        navigatorFactory.createFragmentFactory(
+            initialLocator = initialLocator,
+            listener = listener,
+            configuration = EpubNavigatorFragment.Configuration {
+                // Serve the bundled .ttf files from assets/fonts/ to the EPUB engine.
+                servedAssets += "fonts/.*"
+
+                // Variable fonts: one upright + one italic face, each spanning the full weight axis.
+                addFontFamilyDeclaration(FontFamily("Lora")) {
+                    addFontFace {
+                        addSource("fonts/Lora-Regular.ttf", preload = true)
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(100..900)
+                    }
+                    addFontFace {
+                        addSource("fonts/Lora-Italic.ttf")
+                        setFontStyle(FontStyle.ITALIC)
+                        setFontWeight(100..900)
+                    }
+                }
+                addFontFamilyDeclaration(FontFamily("Karla")) {
+                    addFontFace {
+                        addSource("fonts/Karla-Regular.ttf", preload = true)
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(100..900)
+                    }
+                    addFontFace {
+                        addSource("fonts/Karla-Italic.ttf")
+                        setFontStyle(FontStyle.ITALIC)
+                        setFontWeight(100..900)
+                    }
+                }
+                addFontFamilyDeclaration(FontFamily("Rubik")) {
+                    addFontFace {
+                        addSource("fonts/Rubik-Regular.ttf", preload = true)
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(100..900)
+                    }
+                    addFontFace {
+                        addSource("fonts/Rubik-Italic.ttf")
+                        setFontStyle(FontStyle.ITALIC)
+                        setFontWeight(100..900)
+                    }
+                }
+                // Cardo ships as static faces: a regular, a bold, and an italic.
+                addFontFamilyDeclaration(FontFamily("Cardo")) {
+                    addFontFace {
+                        addSource("fonts/Cardo-Regular.ttf", preload = true)
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(FontWeight.NORMAL)
+                    }
+                    addFontFace {
+                        addSource("fonts/Cardo-Bold.ttf")
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(FontWeight.BOLD)
+                    }
+                    addFontFace {
+                        addSource("fonts/Cardo-Italic.ttf")
+                        setFontStyle(FontStyle.ITALIC)
+                        setFontWeight(FontWeight.NORMAL)
+                    }
+                }
+                addFontFamilyDeclaration(FontFamily("Nunito")) {
+                    addFontFace {
+                        addSource("fonts/Nunito-Regular.ttf", preload = true)
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(100..900)
+                    }
+                    addFontFace {
+                        addSource("fonts/Nunito-Italic.ttf")
+                        setFontStyle(FontStyle.ITALIC)
+                        setFontWeight(100..900)
+                    }
+                }
+                addFontFamilyDeclaration(FontFamily("Merriweather")) {
+                    addFontFace {
+                        addSource("fonts/Merriweather-Regular.ttf", preload = true)
+                        setFontStyle(FontStyle.NORMAL)
+                        setFontWeight(100..900)
+                    }
+                    addFontFace {
+                        addSource("fonts/Merriweather-Italic.ttf")
+                        setFontStyle(FontStyle.ITALIC)
+                        setFontWeight(100..900)
+                    }
+                }
+            },
+        )
 
     override val fragmentClassName: String = EpubNavigatorFragment::class.java.name
 
@@ -224,10 +314,13 @@ private class ReadiumReaderSession(
         runCatching { publication.close() }
     }
 
-    // Layout + size + theme colours (explicit bg/text so it matches the chrome); custom fonts land in P2.
+    // Layout + size + theme colours (explicit bg/text so it matches the chrome) + the bundled font.
     private fun ReaderSettings.toPreferences(): EpubPreferences = EpubPreferences(
         scroll = layout == ReaderLayout.Scroll,
         fontSize = fontScale.toDouble(),
+        // The family name must match a declaration registered on the navigator factory above.
+        fontFamily = FontFamily(font.cssFamily),
+        lineHeight = lineHeight?.toDouble(),
         // Base appearance picks sensible defaults (links etc.), but the explicit bg/text colours
         // win so the page exactly matches the Yomu chrome (no status-bar seam). A theme's own bg
         // would otherwise override them, which is what caused the mismatch.

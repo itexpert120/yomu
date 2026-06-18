@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -30,9 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuColorPicker
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
@@ -134,7 +136,11 @@ fun SettingsScreen(
             }
         }
 
-        NavigationRow(icon = Icons.Rounded.Info, label = "About Yomu", onClick = onOpenAbout)
+        NavigationRow(
+            icon = painterResource(R.drawable.ic_yomu_mark),
+            label = "About Yomu",
+            onClick = onOpenAbout,
+        )
     }
 
     val pickerInitial = if (accentSelection is AccentSelection.Custom) {
@@ -225,7 +231,7 @@ private fun ThemeOptionTile(
 }
 
 @Composable
-private fun NavigationRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun NavigationRow(icon: Painter, label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -241,7 +247,7 @@ private fun NavigationRow(icon: ImageVector, label: String, onClick: () -> Unit)
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = icon,
+            painter = icon,
             contentDescription = null,
             tint = YomuTheme.colors.textSecondary,
             modifier = Modifier.size(20.dp),
