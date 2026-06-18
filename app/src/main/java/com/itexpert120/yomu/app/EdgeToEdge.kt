@@ -9,6 +9,7 @@ import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 fun ComponentActivity.enableYomuEdgeToEdge() {
     enableEdgeToEdge()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        window.isStatusBarContrastEnforced = false
         window.isNavigationBarContrastEnforced = false
     }
 }

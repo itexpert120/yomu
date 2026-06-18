@@ -6,8 +6,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,12 +47,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily as ComposeFontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
-import com.itexpert120.yomu.core.designsystem.YomuChip
 import com.itexpert120.yomu.core.designsystem.YomuColorPicker
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
@@ -75,6 +80,8 @@ internal fun ReaderControlsSheet(
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    onPreviewBrightness: (Float) -> Unit,
+    onCommitBrightness: (Float) -> Unit,
     onAbout: () -> Unit,
 ) {
     var tab by remember { mutableStateOf(SheetTab.Controls) }
@@ -104,7 +111,12 @@ internal fun ReaderControlsSheet(
                         onPreviousChapter = onPreviousChapter,
                         onAbout = onAbout,
                     )
-                    SheetTab.Theme -> ThemeTab(state = state, onUpdateSettings = onUpdateSettings)
+                    SheetTab.Theme -> ThemeTab(
+                        state = state,
+                        onUpdateSettings = onUpdateSettings,
+                        onPreviewBrightness = onPreviewBrightness,
+                        onCommitBrightness = onCommitBrightness,
+                    )
                     SheetTab.Fonts -> FontsTab(state = state, onUpdateSettings = onUpdateSettings)
                 }
             }
@@ -140,7 +152,12 @@ private fun ControlsTab(
 }
 
 @Composable
-private fun ThemeTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) -> Unit) {
+private fun ThemeTab(
+    state: ReaderUiState,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    onPreviewBrightness: (Float) -> Unit,
+    onCommitBrightness: (Float) -> Unit,
+) {
     val s = state.settings
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(text = "Theme", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
@@ -170,6 +187,14 @@ private fun ThemeTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Text(text = "Text colour", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+            YomuColorPicker(
+                color = Color(s.textArgb),
+                onColorChange = { color ->
+                    onUpdateSettings(s.copy(customText = color.toArgb().toLong() and 0xFFFFFFFFL))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
         Text(text = "Brightness", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
@@ -182,7 +207,8 @@ private fun ThemeTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
         if (!s.useSystemBrightness) {
             ReaderSlider(
                 fraction = s.brightness,
-                onSeek = { onUpdateSettings(s.copy(brightness = it)) },
+                onSeek = onCommitBrightness,
+                onDrag = onPreviewBrightness,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -229,8 +255,8 @@ private fun FontsTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ReaderFont.entries.forEach { font ->
-                YomuChip(
-                    text = font.displayName,
+                FontChip(
+                    font = font,
                     selected = s.font == font,
                     onClick = { onUpdateSettings(s.copy(font = font)) },
                 )
@@ -256,6 +282,37 @@ private fun FontsTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) ->
             fraction = (s.fontScale - min) / (max - min),
             onSeek = { onUpdateSettings(s.copy(fontScale = min + it * (max - min))) },
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** Font picker chip whose label is rendered in that bundled font as a live preview. */
+@Composable
+private fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) {
+    val assets = LocalContext.current.assets
+    val family = remember(font) {
+        ComposeFontFamily(Font(path = "fonts/${font.name}-Regular.ttf", assetManager = assets))
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(YomuTheme.radius.pill))
+            .background(if (selected) YomuTheme.colors.accentSoft else YomuTheme.colors.surface)
+            .border(
+                width = 1.dp,
+                color = if (selected) YomuTheme.colors.accent else YomuTheme.colors.border,
+                shape = RoundedCornerShape(YomuTheme.radius.pill),
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+    ) {
+        Text(
+            text = font.displayName,
+            color = if (selected) YomuTheme.colors.textPrimary else YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.body.copy(fontFamily = family),
         )
     }
 }
@@ -335,29 +392,62 @@ private fun RoundIcon(
 
 /** Minimal custom slider: drag the thumb or tap the track to seek (0..1). */
 @Composable
-private fun ReaderSlider(fraction: Float, onSeek: (Float) -> Unit, modifier: Modifier = Modifier) {
+private fun ReaderSlider(
+    fraction: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onDrag: ((Float) -> Unit)? = null,
+) {
     var drag by remember { mutableStateOf<Float?>(null) }
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentOnDrag by rememberUpdatedState(onDrag)
     val shown = (drag ?: fraction).coerceIn(0f, 1f)
+    val thumb = 18.dp
     BoxWithConstraints(
         modifier = modifier
             .height(36.dp)
             .pointerInput(Unit) {
-                detectTapGestures { offset -> onSeek((offset.x / size.width).coerceIn(0f, 1f)) }
+                fun valueFor(x: Float): Float {
+                    val thumbPx = thumb.toPx()
+                    val trackWidth = (size.width - thumbPx).coerceAtLeast(1f)
+                    return ((x - thumbPx / 2f) / trackWidth).coerceIn(0f, 1f)
+                }
+                detectTapGestures { offset ->
+                    val value = valueFor(offset.x)
+                    currentOnDrag?.invoke(value)
+                    currentOnSeek(value)
+                }
             }
             .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset -> drag = (offset.x / size.width).coerceIn(0f, 1f) },
-                    onHorizontalDrag = { change, _ -> drag = (change.position.x / size.width).coerceIn(0f, 1f) },
-                    onDragEnd = { drag?.let { onSeek(it) }; drag = null },
+                fun valueFor(x: Float): Float {
+                    val thumbPx = thumb.toPx()
+                    val trackWidth = (size.width - thumbPx).coerceAtLeast(1f)
+                    return ((x - thumbPx / 2f) / trackWidth).coerceIn(0f, 1f)
+                }
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val value = valueFor(offset.x)
+                        drag = value
+                        currentOnDrag?.invoke(value)
+                    },
+                    onDrag = { change, _ ->
+                        val value = valueFor(change.position.x)
+                        drag = value
+                        currentOnDrag?.invoke(value)
+                        change.consume()
+                    },
+                    onDragEnd = { drag?.let { currentOnSeek(it) }; drag = null },
                     onDragCancel = { drag = null },
                 )
             },
         contentAlignment = Alignment.CenterStart,
     ) {
-        val widthPx = constraints.maxWidth.toFloat()
-        val thumb = 16.dp
+        val density = LocalDensity.current
+        val thumbPx = with(density) { thumb.toPx() }
+        val trackWidthPx = (constraints.maxWidth.toFloat() - thumbPx).coerceAtLeast(1f)
         Box(
             modifier = Modifier
+                .padding(horizontal = thumb / 2f)
                 .fillMaxWidth()
                 .height(4.dp)
                 .clip(CircleShape)
@@ -365,7 +455,8 @@ private fun ReaderSlider(fraction: Float, onSeek: (Float) -> Unit, modifier: Mod
         )
         Box(
             modifier = Modifier
-                .fillMaxWidth(shown)
+                .padding(start = thumb / 2f)
+                .width(with(density) { (shown * trackWidthPx).toDp() })
                 .height(4.dp)
                 .clip(CircleShape)
                 .background(YomuTheme.colors.accent),
@@ -373,7 +464,7 @@ private fun ReaderSlider(fraction: Float, onSeek: (Float) -> Unit, modifier: Mod
         Box(
             modifier = Modifier
                 .offset {
-                    IntOffset((shown * widthPx - thumb.toPx() / 2f).roundToInt(), 0)
+                    IntOffset((shown * trackWidthPx).roundToInt(), 0)
                 }
                 .size(thumb)
                 .clip(CircleShape)

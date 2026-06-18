@@ -7,16 +7,19 @@ import android.os.Build
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,6 +39,7 @@ import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderSession
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReaderScreen(
     state: ReaderUiState,
@@ -50,6 +54,7 @@ fun ReaderScreen(
     onAbout: () -> Unit,
 ) {
     val view = LocalView.current
+    var brightnessPreview by remember { mutableStateOf<Float?>(null) }
     // Keep the system bars transparent with no enforced scrim, so the reader chrome defines their
     // look. The top bar is always present, so the status area never sits over content.
     DisposableEffect(Unit) {
@@ -57,6 +62,16 @@ fun ReaderScreen(
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         val prevStatus = window?.statusBarColor
         val prevNav = window?.navigationBarColor
+        val prevStatusContrast = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window?.isStatusBarContrastEnforced
+        } else {
+            null
+        }
+        val prevNavContrast = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window?.isNavigationBarContrastEnforced
+        } else {
+            null
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window?.isStatusBarContrastEnforced = false
             window?.isNavigationBarContrastEnforced = false
@@ -72,8 +87,8 @@ fun ReaderScreen(
                 prevStatus?.let { c -> it.statusBarColor = c }
                 prevNav?.let { c -> it.navigationBarColor = c }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    it.isStatusBarContrastEnforced = true
-                    it.isNavigationBarContrastEnforced = true
+                    prevStatusContrast?.let { enforced -> it.isStatusBarContrastEnforced = enforced }
+                    prevNavContrast?.let { enforced -> it.isNavigationBarContrastEnforced = enforced }
                 }
             }
             controller?.show(WindowInsetsCompat.Type.systemBars())
@@ -90,14 +105,28 @@ fun ReaderScreen(
         controller.isAppearanceLightStatusBars = state.settings.isLightBackground
         controller.isAppearanceLightNavigationBars = state.settings.isLightBackground
     }
+    LaunchedEffect(state.settings.useSystemBrightness, state.settings.brightness, brightnessPreview) {
+        val preview = brightnessPreview
+        if (state.settings.useSystemBrightness) {
+            brightnessPreview = null
+        } else if (preview != null && kotlin.math.abs(preview - state.settings.brightness) < 0.001f) {
+            brightnessPreview = null
+        }
+    }
+
+    val effectiveBrightness = brightnessPreview ?: state.settings.brightness
+    val sheetState = brightnessPreview?.let { preview ->
+        state.copy(settings = state.settings.copy(brightness = preview))
+    } ?: state
+
     // Drive the window screen brightness: defer to the system level, or pin it to the reader setting.
-    LaunchedEffect(state.settings.useSystemBrightness, state.settings.brightness) {
+    LaunchedEffect(state.settings.useSystemBrightness, effectiveBrightness) {
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
         val lp = window.attributes
         lp.screenBrightness = if (state.settings.useSystemBrightness) {
             WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         } else {
-            state.settings.brightness.coerceIn(0f, 1f)
+            effectiveBrightness.coerceIn(0f, 1f)
         }
         window.attributes = lp
     }
@@ -105,9 +134,10 @@ fun ReaderScreen(
     val density = LocalDensity.current
     var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    // Scroll mode's webview already insets the status bar; paged mode does not. Subtract the status
-    // bar in scroll mode so the content sits right under the bar without a double-counted gap.
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Scroll mode's WebView keeps its own status-bar safe area even when the app hides system bars
+    // for immersive reading. Use the ignoring-visibility inset so that hidden bars still get
+    // subtracted; otherwise scroll mode gets one extra status-bar-sized top gap.
+    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val fullTop = with(density) { topBarPx.toDp() }
     val topInset = if (state.settings.layout == ReaderLayout.Scroll) {
         (fullTop - statusTop).coerceAtLeast(0.dp)
@@ -155,12 +185,20 @@ fun ReaderScreen(
 
                 ReaderControlsSheet(
                     visible = state.sheetVisible,
-                    state = state,
+                    state = sheetState,
                     onDismiss = onCloseSheet,
                     onSeek = onSeek,
                     onNextChapter = onNextChapter,
                     onPreviousChapter = onPreviousChapter,
                     onUpdateSettings = onUpdateSettings,
+                    onPreviewBrightness = { brightness ->
+                        brightnessPreview = brightness.coerceIn(0f, 1f)
+                    },
+                    onCommitBrightness = { brightness ->
+                        val value = brightness.coerceIn(0f, 1f)
+                        brightnessPreview = value
+                        onUpdateSettings(state.settings.copy(brightness = value))
+                    },
                     onAbout = onAbout,
                 )
             }

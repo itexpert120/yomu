@@ -188,6 +188,16 @@ class BookDetailsViewModel @Inject constructor(
         viewModelScope.launch { repository.setChaptersRead(BookId(bookId), listOf(href), read) }
     }
 
+    /** Marks every chapter up to and including the last-selected one (in reading order) as read. */
+    fun onMarkPreviousRead() {
+        val upTo = selectedUids.value.maxOrNull() ?: return
+        val hrefs = tocItems.value.take(upTo + 1)
+            .mapNotNull { if (it.locatorJson != null) it.id else null }
+            .distinct()
+        viewModelScope.launch { repository.setChaptersRead(BookId(bookId), hrefs, read = true) }
+        onExitChapterSelection()
+    }
+
     private fun allChapterHrefs(): List<String> =
         tocItems.value.mapNotNull { if (it.locatorJson != null) it.id else null }.distinct()
 

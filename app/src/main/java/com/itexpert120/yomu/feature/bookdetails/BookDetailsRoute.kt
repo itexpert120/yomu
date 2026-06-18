@@ -50,5 +50,6 @@ fun BookDetailsRoute(
         onExitChapterSelection = viewModel::onExitChapterSelection,
         onSelectAllChapters = viewModel::onSelectAllChapters,
         onMarkSelectedChapters = viewModel::onMarkSelectedChapters,
+        onMarkPreviousRead = viewModel::onMarkPreviousRead,
     )
 }

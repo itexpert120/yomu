@@ -11,11 +11,17 @@
         android:fillColor="@color/yomu_launcher_background_shadow"
         android:fillAlpha="0.28"
         android:pathData="M8,69C24,62 36,61 51,66C68,72 83,67 100,56C99,82 78,102 54,102C31,102 12,88 8,69Z" />
-    <path
-        android:fillColor="@android:color/transparent"
-        android:pathData="M26,24C30,22 35,22 39,25M23,34H40M22,44H39M23,55H40M25,66H40V79H25ZM59,22H77M68,18V34M53,38C59,35 75,35 82,38M56,48H78M59,48V61M76,48V61M55,61H80M66,61C64,72 57,80 49,84M70,61C73,73 79,80 86,83"
-        android:strokeColor="@color/yomu_launcher_mark"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:strokeWidth="6.2" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.78"
+        android:scaleY="0.78">
+        <path
+            android:fillColor="@android:color/transparent"
+            android:pathData="M26,24C30,22 35,22 39,25M23,34H40M22,44H39M23,55H40M25,66H40V79H25ZM59,22H77M68,18V34M53,38C59,35 75,35 82,38M56,48H78M59,48V61M76,48V61M55,61H80M66,61C64,72 57,80 49,84M70,61C73,73 79,80 86,83"
+            android:strokeColor="@color/yomu_launcher_mark"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:strokeWidth="6.2" />
+    </group>
 </vector>

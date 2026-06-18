@@ -3,6 +3,7 @@ package com.itexpert120.yomu.feature.bookdetails
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -47,7 +48,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.Icon
@@ -95,6 +99,7 @@ fun BookDetailsScreen(
     onExitChapterSelection: () -> Unit,
     onSelectAllChapters: () -> Unit,
     onMarkSelectedChapters: (Boolean) -> Unit,
+    onMarkPreviousRead: () -> Unit,
 ) {
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
@@ -201,6 +206,7 @@ fun BookDetailsScreen(
                     selectedCount = toc.selectedCount,
                     onMarkRead = { onMarkSelectedChapters(true) },
                     onMarkUnread = { onMarkSelectedChapters(false) },
+                    onMarkPrevious = onMarkPreviousRead,
                     onSelectAll = onSelectAllChapters,
                     onClose = onExitChapterSelection,
                     modifier = Modifier.padding(bottom = navBottom + 16.dp),
@@ -279,10 +285,58 @@ private fun BookHeader(
 
         book.description?.takeIf { it.isNotBlank() }?.let { description ->
             YomuSettingGroup(title = "About") {
+                ExpandableBookDescription(description = description)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandableBookDescription(description: String) {
+    var expanded by remember(description) { mutableStateOf(false) }
+    var expandable by remember(description) { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = description,
+            color = YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.body,
+            maxLines = if (expanded) Int.MAX_VALUE else 5,
+            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+            onTextLayout = { result ->
+                if (!expanded) expandable = result.hasVisualOverflow
+            },
+        )
+        if (expandable) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { expanded = !expanded },
+                    )
+                    .padding(horizontal = 2.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 Text(
-                    text = description,
-                    color = YomuTheme.colors.textSecondary,
-                    style = YomuTheme.type.body,
+                    text = if (expanded) "Show less" else "Show more",
+                    color = YomuTheme.colors.accent,
+                    style = YomuTheme.type.control,
+                )
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Rounded.KeyboardArrowUp
+                    } else {
+                        Icons.Rounded.KeyboardArrowDown
+                    },
+                    contentDescription = null,
+                    tint = YomuTheme.colors.accent,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -567,6 +621,7 @@ private fun ChapterSelectionBar(
     selectedCount: Int,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
+    onMarkPrevious: () -> Unit,
     onSelectAll: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -585,6 +640,8 @@ private fun ChapterSelectionBar(
         SelectionAction(Icons.Rounded.Close, "Close ($selectedCount)", onClose)
         SelectionAction(Icons.Rounded.Check, "Read", onMarkRead, enabled = selectedCount > 0)
         SelectionAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread, enabled = selectedCount > 0)
+        // Mark every chapter up to (and including) the selected one as read.
+        SelectionAction(Icons.Rounded.PlaylistAddCheck, "To here", onMarkPrevious, enabled = selectedCount > 0)
         SelectionAction(Icons.Rounded.DoneAll, "All", onSelectAll)
     }
 }
