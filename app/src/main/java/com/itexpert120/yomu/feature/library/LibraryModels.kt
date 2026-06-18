@@ -1,7 +1,15 @@
 package com.itexpert120.yomu.feature.library
 
 import androidx.compose.ui.graphics.Color
+import com.itexpert120.yomu.core.model.Book
+import com.itexpert120.yomu.core.model.GroupMode
+import com.itexpert120.yomu.core.model.LibraryViewMode
+import com.itexpert120.yomu.core.model.SortMode
 
+/**
+ * Presentation projection of a core [Book] for the library feature. Holds Compose colors and
+ * pre-derived display strings so composables stay free of mapping logic.
+ */
 data class LibraryBook(
     val id: String,
     val title: String,
@@ -11,153 +19,66 @@ data class LibraryBook(
     val progress: Float,
     val remaining: String,
     val coverColors: List<Color>,
-    val lastOpenedAt: Long = 0L,
+    val lastOpenedAt: Long,
+    val series: String?,
 )
 
-enum class SortMode(val label: String) {
-    Recent("Recent"),
-    Title("Title"),
-    Author("Author"),
-    Unread("Unread"),
-}
-
-enum class GroupMode(val label: String) {
-    None("None"),
-    Author("Author"),
-    Series("Series"),
-}
-
-val allBooks = mutableListOf(
-    LibraryBook(
-        id = "1",
-        title = "The Left Hand of Darkness",
-        shortTitle = "Left Hand\nof Darkness",
-        author = "Ursula K. Le Guin",
-        authorLastName = "LE GUIN",
-        progress = 0.42f,
-        remaining = "3h 12m left",
-        coverColors = listOf(Color(0xFF17202B), Color(0xFF53697E)),
-        lastOpenedAt = 7L,
-    ),
-    LibraryBook(
-        id = "2",
-        title = "Deep Work",
-        shortTitle = "Deep\nWork",
-        author = "Cal Newport",
-        authorLastName = "NEWPORT",
-        progress = 0.0f,
-        remaining = "Unread",
-        coverColors = listOf(Color(0xFF263A30), Color(0xFF587A5F)),
-        lastOpenedAt = 0L,
-    ),
-    LibraryBook(
-        id = "3",
-        title = "Designing Type",
-        shortTitle = "Designing\nType",
-        author = "Karen Cheng",
-        authorLastName = "CHENG",
-        progress = 0.0f,
-        remaining = "Unread",
-        coverColors = listOf(Color(0xFF35211E), Color(0xFF9B5948)),
-        lastOpenedAt = 0L,
-    ),
-    LibraryBook(
-        id = "4",
-        title = "Invisible Cities",
-        shortTitle = "Invisible\nCities",
-        author = "Italo Calvino",
-        authorLastName = "CALVINO",
-        progress = 0.0f,
-        remaining = "Unread",
-        coverColors = listOf(Color(0xFF352D46), Color(0xFF8D7BA8)),
-        lastOpenedAt = 0L,
-    ),
-    LibraryBook(
-        id = "5",
-        title = "The Dispossessed",
-        shortTitle = "The\nDispossessed",
-        author = "Ursula K. Le Guin",
-        authorLastName = "LE GUIN",
-        progress = 0.0f,
-        remaining = "Unread",
-        coverColors = listOf(Color(0xFF2E2E2E), Color(0xFF9C8B6C)),
-        lastOpenedAt = 0L,
-    ),
-    LibraryBook(
-        id = "6",
-        title = "A Philosophy of Software Design",
-        shortTitle = "Software\nDesign",
-        author = "John Ousterhout",
-        authorLastName = "OUSTERHOUT",
-        progress = 0.18f,
-        remaining = "5h left",
-        coverColors = listOf(Color(0xFF202830), Color(0xFF6A7D8E)),
-        lastOpenedAt = 5L,
-    ),
-    LibraryBook(
-        id = "7",
-        title = "The Passenger",
-        shortTitle = "The\nPassenger",
-        author = "Cormac McCarthy",
-        authorLastName = "MCCARTHY",
-        progress = 0.73f,
-        remaining = "1h left",
-        coverColors = listOf(Color(0xFF2F2621), Color(0xFFA76F55)),
-        lastOpenedAt = 3L,
-    ),
-    LibraryBook(
-        id = "8",
-        title = "Thinking in Systems",
-        shortTitle = "Thinking\nin Systems",
-        author = "Donella Meadows",
-        authorLastName = "MEADOWS",
-        progress = 0.31f,
-        remaining = "4h left",
-        coverColors = listOf(Color(0xFF24352B), Color(0xFF89A179)),
-        lastOpenedAt = 4L,
-    ),
-    LibraryBook(
-        id = "9",
-        title = "Sapiens",
-        shortTitle = "Sapiens",
-        author = "Yuval Noah Harari",
-        authorLastName = "HARARI",
-        progress = 0.55f,
-        remaining = "2h left",
-        coverColors = listOf(Color(0xFF2A1F1A), Color(0xFFB08968)),
-        lastOpenedAt = 2L,
-    ),
-    LibraryBook(
-        id = "10",
-        title = "Project Hail Mary",
-        shortTitle = "Project\nHail Mary",
-        author = "Andy Weir",
-        authorLastName = "WEIR",
-        progress = 0.88f,
-        remaining = "30m left",
-        coverColors = listOf(Color(0xFF1A1A2E), Color(0xFF6C63FF)),
-        lastOpenedAt = 1L,
-    ),
-    LibraryBook(
-        id = "11",
-        title = "Atomic Habits",
-        shortTitle = "Atomic\nHabits",
-        author = "James Clear",
-        authorLastName = "CLEAR",
-        progress = 0.0f,
-        remaining = "Unread",
-        coverColors = listOf(Color(0xFF1B3A2D), Color(0xFF4CAF50)),
-        lastOpenedAt = 0L,
-    ),
-    LibraryBook(
-        id = "12",
-        title = "The Name of the Wind",
-        shortTitle = "Name of\nthe Wind",
-        author = "Patrick Rothfuss",
-        authorLastName = "ROTHFUSS",
-        progress = 0.65f,
-        remaining = "1h 30m left",
-        coverColors = listOf(Color(0xFF2C1810), Color(0xFFC17817)),
-        lastOpenedAt = 6L,
-    ),
+fun Book.toLibraryBook(): LibraryBook = LibraryBook(
+    id = id.value,
+    title = title,
+    shortTitle = title,
+    author = author,
+    authorLastName = author.lastNameKey(),
+    progress = progress,
+    remaining = remainingLabel,
+    coverColors = coverPalette.map { Color(it) },
+    lastOpenedAt = lastOpenedAt,
+    series = series,
 )
+
+private fun String.lastNameKey(): String = trim().substringAfterLast(' ').uppercase()
+
+/** An ordered, labeled section of books for the grouped library grid. */
+data class LibraryGroup(val label: String, val books: List<LibraryBook>)
+
+data class LibraryUiState(
+    val isLoading: Boolean = true,
+    val totalCount: Int = 0,
+    val continueReading: LibraryBook? = null,
+    val groups: List<LibraryGroup> = emptyList(),
+    val sortMode: SortMode = SortMode.Recent,
+    val groupMode: GroupMode = GroupMode.None,
+    val viewMode: LibraryViewMode = LibraryViewMode.Grid,
+    val gridColumns: Int = 3,
+    val coverCrop: Boolean = true,
+    val searchActive: Boolean = false,
+    val searchQuery: String = "",
+)
+
+// region Pure query logic (unit-tested in LibraryQueryTest)
+
+fun List<Book>.matching(query: String): List<Book> {
+    if (query.isBlank()) return this
+    return filter {
+        it.title.contains(query, ignoreCase = true) || it.author.contains(query, ignoreCase = true)
+    }
+}
+
+fun List<Book>.sortedBy(mode: SortMode): List<Book> = when (mode) {
+    SortMode.Recent -> sortedByDescending { it.lastOpenedAt }
+    SortMode.Title -> sortedBy { it.title.lowercase() }
+    SortMode.Author -> sortedBy { it.author.lastNameKey().lowercase() }
+    SortMode.Unread -> sortedBy { it.progress }
+}
+
+/** Ordered grouping. [GroupMode.None] yields a single unlabeled group. */
+fun List<Book>.groupedBy(mode: GroupMode): List<LibraryGroup> = when (mode) {
+    GroupMode.None -> listOf(LibraryGroup("", map { it.toLibraryBook() }))
+    GroupMode.Author -> groupToSections { it.author.lastNameKey() }
+    GroupMode.Series -> groupToSections { it.series ?: "Standalone" }
+}
+
+private inline fun List<Book>.groupToSections(key: (Book) -> String): List<LibraryGroup> =
+    groupBy(key).map { (label, books) -> LibraryGroup(label, books.map { it.toLibraryBook() }) }
+
+// endregion

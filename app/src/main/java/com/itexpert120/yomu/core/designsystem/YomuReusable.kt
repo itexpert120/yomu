@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.launch
 
 @Composable
 fun YomuDropdownMenu(
@@ -215,6 +217,15 @@ fun <T> YomuOptionSheet(
     if (!visible) return
 
     val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+
+    // Play the sheet's slide-down before tearing it out of composition; calling
+    // onDismiss directly would flip `visible` synchronously and skip the animation.
+    fun animateDismiss() {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) onDismiss()
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -247,7 +258,7 @@ fun <T> YomuOptionSheet(
                             indication = null,
                             onClick = {
                                 onSelect(option)
-                                onDismiss()
+                                animateDismiss()
                             },
                         )
                         .padding(horizontal = 14.dp, vertical = 14.dp),
@@ -279,7 +290,7 @@ fun <T> YomuOptionSheet(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onDismiss,
+                        onClick = { animateDismiss() },
                     )
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,

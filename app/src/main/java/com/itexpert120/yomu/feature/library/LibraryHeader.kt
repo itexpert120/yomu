@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.feature.library
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,25 +20,36 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.model.GroupMode
+import com.itexpert120.yomu.core.model.LibraryViewMode
+import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.core.model.ThemePreference
 
 @Composable
 internal fun LibraryHeader(
@@ -46,6 +58,8 @@ internal fun LibraryHeader(
     searchQuery: String,
     sortMode: SortMode,
     groupMode: GroupMode,
+    viewMode: LibraryViewMode,
+    themePreference: ThemePreference,
     showSortSheet: Boolean,
     showGroupSheet: Boolean,
     onSearchToggle: () -> Unit,
@@ -54,11 +68,23 @@ internal fun LibraryHeader(
     onGroupModeChange: (GroupMode) -> Unit,
     onSortSheetToggle: () -> Unit,
     onGroupSheetToggle: () -> Unit,
+    onDisplaySheetToggle: () -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
+    onOpenSettings: () -> Unit,
+    elevated: Boolean,
 ) {
+    // Lift the header onto its own plane once the grid scrolls beneath it; the
+    // shadow defines the seam instead of fading the content under it.
+    val elevation by animateDpAsState(
+        targetValue = if (elevated) 4.dp else 0.dp,
+        label = "headerElevation",
+    )
     Column(
         modifier = Modifier
+            .fillMaxWidth()
+            .shadow(elevation)
+            .background(YomuTheme.colors.appBackground)
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -79,17 +105,19 @@ internal fun LibraryHeader(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 YomuCircleIconButton(
                     onClick = onImport,
-                    icon = Icons.Rounded.Settings,
-                    contentDescription = "Import",
+                    icon = Icons.Rounded.Add,
+                    contentDescription = "Import EPUB",
                 )
-                YomuCircleIconButton(onClick = onThemeToggle) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = "Theme",
-                        tint = YomuTheme.colors.appBackground,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
+                YomuCircleIconButton(
+                    onClick = onThemeToggle,
+                    icon = themePreference.themeIcon(),
+                    contentDescription = "Toggle theme",
+                )
+                YomuCircleIconButton(
+                    onClick = onOpenSettings,
+                    icon = Icons.Rounded.Settings,
+                    contentDescription = "Settings",
+                )
             }
         }
 
@@ -118,6 +146,11 @@ internal fun LibraryHeader(
                 value = groupMode.label,
                 onClick = onGroupSheetToggle,
             )
+            YomuPillFilter(
+                label = "View",
+                value = viewMode.label,
+                onClick = onDisplaySheetToggle,
+            )
         }
     }
 
@@ -140,6 +173,13 @@ internal fun LibraryHeader(
         onSelect = onGroupModeChange,
         label = { it.label },
     )
+}
+
+/** Icon reflects the active theme choice so the quick toggle communicates current state. */
+private fun ThemePreference.themeIcon(): ImageVector = when (this) {
+    ThemePreference.System -> Icons.Rounded.BrightnessAuto
+    ThemePreference.Light -> Icons.Rounded.LightMode
+    ThemePreference.Dark -> Icons.Rounded.DarkMode
 }
 
 @Composable

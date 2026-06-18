@@ -27,25 +27,24 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
-fun ContinueReadingCard(book: LibraryBook) {
+fun ContinueReadingCard(book: LibraryBook, modifier: Modifier = Modifier) {
+    // Laid out flush with the grid (no card inset) so the cover's left edge
+    // lines up with the book covers below it.
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.panel))
-            .background(YomuTheme.colors.surface)
-            .padding(14.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BookCoverImage(book = book, modifier = Modifier.width(68.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        BookCoverImage(book = book, modifier = Modifier.width(72.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
-                text = "Continue reading",
+                text = "CONTINUE READING",
                 color = YomuTheme.colors.accent,
-                style = YomuTheme.type.caption,
+                style = YomuTheme.type.caption.copy(letterSpacing = 1.sp),
             )
             Text(
                 text = book.title,
@@ -61,7 +60,9 @@ fun ContinueReadingCard(book: LibraryBook) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.height(3.dp))
             ProgressLine(progress = book.progress)
+            Spacer(Modifier.height(1.dp))
             Text(
                 text = "${(book.progress * 100).toInt()}% · ${book.remaining}",
                 color = YomuTheme.colors.textMuted,
@@ -77,9 +78,10 @@ fun GridBookCard(
     book: LibraryBook,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -89,15 +91,71 @@ fun GridBookCard(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
+        // Reserve two lines so one- and two-line titles keep the progress line
+        // (and the cards' baselines) aligned across a row.
         Text(
             text = book.title,
             color = YomuTheme.colors.textPrimary,
             style = YomuTheme.type.caption,
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         if (book.progress > 0f) {
             ProgressLine(progress = book.progress)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun BookListRow(
+    book: LibraryBook,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YomuTheme.radius.md))
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongPress,
+            )
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BookCoverImage(book = book, modifier = Modifier.width(54.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = book.title,
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.body,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = book.author,
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (book.progress > 0f) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { ProgressLine(progress = book.progress) }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "${(book.progress * 100).toInt()}%",
+                        color = YomuTheme.colors.textMuted,
+                        style = YomuTheme.type.mono,
+                    )
+                }
+            }
         }
     }
 }
@@ -137,12 +195,12 @@ fun ImportEmptyCard(onImport: () -> Unit) {
 }
 
 @Composable
-fun GroupSectionHeader(title: String) {
+fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
     Text(
         text = title,
         color = YomuTheme.colors.textMuted,
         style = YomuTheme.type.section,
-        modifier = Modifier.padding(top = 4.dp),
+        modifier = modifier.padding(top = 4.dp),
     )
 }
 

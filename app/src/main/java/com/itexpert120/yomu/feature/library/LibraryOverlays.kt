@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Book
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,18 +35,25 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
-internal fun FloatingResumeButton(modifier: Modifier = Modifier, book: LibraryBook) {
+internal fun FloatingResumeButton(
+    book: LibraryBook,
+    onResume: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // Foreground tracks appBackground so the label reads on the accent in every
+    // theme (the dark-theme accent is light, where white text would wash out).
+    val onAccent = YomuTheme.colors.appBackground
     Column(
         modifier = modifier
             .padding(end = 16.dp, bottom = navBottom + 16.dp)
-            .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.lg))
+            .shadow(10.dp, RoundedCornerShape(YomuTheme.radius.lg))
             .clip(RoundedCornerShape(YomuTheme.radius.lg))
             .background(YomuTheme.colors.accent)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = {},
+                onClick = onResume,
             )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -56,24 +63,24 @@ internal fun FloatingResumeButton(modifier: Modifier = Modifier, book: LibraryBo
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
-                imageVector = Icons.Rounded.Book,
+                imageVector = Icons.Rounded.PlayArrow,
                 contentDescription = null,
-                tint = Color.White,
+                tint = onAccent,
                 modifier = Modifier.size(18.dp),
             )
             Text(
                 text = "Resume",
-                color = Color.White,
+                color = onAccent,
                 style = YomuTheme.type.control,
             )
         }
         Text(
             text = book.title,
-            color = Color.White.copy(alpha = 0.72f),
+            color = onAccent.copy(alpha = 0.72f),
             style = YomuTheme.type.caption,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(180.dp),
+            modifier = Modifier.width(168.dp),
         )
     }
 }
@@ -139,6 +146,38 @@ private fun ContextAction(text: String, onClick: () -> Unit = {}) {
     }
 }
 
+/**
+ * Alpha stops sampled from a smoothstep ease-in-out curve, going from a solid
+ * [color] down to fully transparent. A 2–3 stop linear gradient reads as a hard
+ * band because the eye latches onto the constant-slope midpoint; sampling the
+ * S-curve across many stops keeps the falloff perceptually even, so the fade
+ * dissolves instead of drawing a line.
+ */
+private fun fadeOutStops(color: Color): Array<Pair<Float, Color>> = arrayOf(
+    0.00f to color,
+    0.12f to color.copy(alpha = 0.96f),
+    0.26f to color.copy(alpha = 0.85f),
+    0.40f to color.copy(alpha = 0.66f),
+    0.52f to color.copy(alpha = 0.46f),
+    0.66f to color.copy(alpha = 0.26f),
+    0.80f to color.copy(alpha = 0.11f),
+    0.92f to color.copy(alpha = 0.03f),
+    1.00f to color.copy(alpha = 0f),
+)
+
+/** Same smoothstep curve as [fadeOutStops], reversed: transparent rising to solid. */
+private fun fadeInStops(color: Color): Array<Pair<Float, Color>> = arrayOf(
+    0.00f to color.copy(alpha = 0f),
+    0.08f to color.copy(alpha = 0.03f),
+    0.20f to color.copy(alpha = 0.11f),
+    0.34f to color.copy(alpha = 0.26f),
+    0.48f to color.copy(alpha = 0.46f),
+    0.60f to color.copy(alpha = 0.66f),
+    0.74f to color.copy(alpha = 0.85f),
+    0.88f to color.copy(alpha = 0.96f),
+    1.00f to color,
+)
+
 @Composable
 internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -146,15 +185,9 @@ internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(statusTop + 10.dp)
-            .background(
-                Brush.verticalGradient(
-                    0.00f to background,
-                    0.58f to background.copy(alpha = 0.96f),
-                    0.82f to background.copy(alpha = 0.42f),
-                    1.00f to background.copy(alpha = 0f),
-                )
-            )
+            .height(statusTop + 18.dp)
+            // Full peak: status-bar content must stay legible over scrolling covers.
+            .background(Brush.verticalGradient(*fadeOutStops(background)))
     )
 }
 
@@ -165,14 +198,7 @@ internal fun SystemBarBottomScrim(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(navBottom + 12.dp)
-            .background(
-                Brush.verticalGradient(
-                    0.00f to background.copy(alpha = 0f),
-                    0.32f to background.copy(alpha = 0.30f),
-                    0.72f to background.copy(alpha = 0.92f),
-                    1.00f to background,
-                )
-            )
+            .height(navBottom + 22.dp)
+            .background(Brush.verticalGradient(*fadeInStops(background)))
     )
 }

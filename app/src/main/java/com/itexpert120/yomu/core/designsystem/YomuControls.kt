@@ -1,5 +1,9 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,11 +11,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -117,21 +123,57 @@ fun YomuSegmentedControl(
     modifier: Modifier = Modifier,
 ) {
     val colors = YomuTheme.colors
-    Row(
+    val count = options.size.coerceAtLeast(1)
+    val selected = selectedIndex.coerceIn(0, count - 1)
+    val controlHeight = 34.dp
+
+    Box(
         modifier = modifier
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
             .background(colors.surface)
             .border(1.dp, colors.border, RoundedCornerShape(YomuTheme.radius.pill))
             .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        options.forEachIndexed { index, option ->
-            YomuChip(
-                text = option,
-                selected = index == selectedIndex,
-                onClick = { onSelected(index) },
-                modifier = Modifier.weight(1f),
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val segmentWidth = maxWidth / count
+            // The selection pill slides between segments instead of snapping.
+            val indicatorOffset by animateDpAsState(
+                targetValue = segmentWidth * selected,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                label = "segmentIndicator",
             )
+            Box(
+                modifier = Modifier
+                    .offset(x = indicatorOffset)
+                    .width(segmentWidth)
+                    .height(controlHeight)
+                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                    .background(colors.textPrimary),
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, option ->
+                    val isSelected = index == selected
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) colors.appBackground else colors.textSecondary,
+                        animationSpec = tween(220),
+                        label = "segmentText",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(controlHeight)
+                            .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { onSelected(index) },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(text = option, color = textColor, style = YomuTheme.type.caption, maxLines = 1)
+                    }
+                }
+            }
         }
     }
 }

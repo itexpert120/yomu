@@ -1,24 +1,26 @@
 package com.itexpert120.yomu.feature.library
 
-import android.app.Activity
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items as lazyListItems
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,129 +28,113 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
-import com.itexpert120.yomu.core.designsystem.YomuThemeMode
-
-@Composable
-fun YomuLibraryApp(
-    onThemeModeChange: (YomuThemeMode) -> Unit = {},
-) {
-    YomuDesignTheme {
-        var themeMode by remember { mutableStateOf<YomuThemeMode?>(null) }
-        val context = LocalContext.current
-
-        val safLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                result.data?.data?.let { uri ->
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                    )
-                }
-            }
-        }
-
-        LibraryScreen(
-            onImport = {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "application/epub+zip"
-                }
-                safLauncher.launch(intent)
-            },
-            onThemeToggle = {
-                themeMode = when (themeMode) {
-                    null, YomuThemeMode.Light -> YomuThemeMode.Dark
-                    YomuThemeMode.Dark -> YomuThemeMode.Oled
-                    YomuThemeMode.Oled -> YomuThemeMode.Light
-                }
-                onThemeModeChange(themeMode ?: YomuThemeMode.Light)
-            },
-        )
-    }
-}
+import com.itexpert120.yomu.core.model.GroupMode
+import com.itexpert120.yomu.core.model.LibraryViewMode
+import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.core.model.ThemePreference
 
 @Composable
 fun LibraryScreen(
-    onImport: () -> Unit = {},
-    onThemeToggle: () -> Unit = {},
+    state: LibraryUiState,
+    themePreference: ThemePreference = ThemePreference.System,
+    onSearchToggle: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onSortModeChange: (SortMode) -> Unit,
+    onGroupModeChange: (GroupMode) -> Unit,
+    onViewModeChange: (LibraryViewMode) -> Unit,
+    onGridColumnsChange: (Int) -> Unit,
+    onMarkRead: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onBookClick: (String) -> Unit,
+    onResume: (String) -> Unit,
+    onImport: () -> Unit,
+    onThemeToggle: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
-    var books by remember { mutableStateOf(allBooks.toList()) }
-    var sortMode by remember { mutableStateOf(SortMode.Recent) }
-    var groupMode by remember { mutableStateOf(GroupMode.None) }
-    var searchActive by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
+    // Ephemeral UI state stays local to the screen; everything persistent lives in the VM.
     var selectedBook by remember { mutableStateOf<LibraryBook?>(null) }
     var showSortSheet by remember { mutableStateOf(false) }
     var showGroupSheet by remember { mutableStateOf(false) }
-
-    val lastRead = books.maxByOrNull { it.lastOpenedAt }
-    val gridBooks = if (lastRead != null) {
-        books.filter { it.id != lastRead.id }
-    } else {
-        books
-    }
-
-    val filteredBooks = gridBooks.filter { book ->
-        if (searchQuery.isBlank()) true
-        else book.title.contains(searchQuery, ignoreCase = true) ||
-            book.author.contains(searchQuery, ignoreCase = true)
-    }
-
-    val sortedBooks = when (sortMode) {
-        SortMode.Recent -> filteredBooks.sortedByDescending { it.lastOpenedAt }
-        SortMode.Title -> filteredBooks.sortedBy { it.title.lowercase() }
-        SortMode.Author -> filteredBooks.sortedBy { it.authorLastName.lowercase() }
-        SortMode.Unread -> filteredBooks.sortedBy { it.progress }
-    }
-
-    val groupedBooks: Map<String, List<LibraryBook>> = when (groupMode) {
-        GroupMode.None -> mapOf("" to sortedBooks)
-        GroupMode.Author -> sortedBooks.groupBy { it.authorLastName }
-        GroupMode.Series -> sortedBooks.groupBy { it.authorLastName }
+    var showDisplaySheet by remember { mutableStateOf(false) }
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+    val elevated = when (state.viewMode) {
+        LibraryViewMode.Grid -> gridState.canScrollBackward
+        LibraryViewMode.List -> listState.canScrollBackward
     }
 
     YomuAppSurface {
         Box(Modifier.fillMaxSize()) {
-            if (books.isEmpty()) {
+            if (!state.isLoading && state.totalCount == 0) {
                 EmptyLibrary(onImport = onImport)
             } else {
                 Column(Modifier.fillMaxSize()) {
                     LibraryHeader(
-                        bookCount = books.size,
-                        searchActive = searchActive,
-                        searchQuery = searchQuery,
-                        sortMode = sortMode,
-                        groupMode = groupMode,
+                        bookCount = state.totalCount,
+                        searchActive = state.searchActive,
+                        searchQuery = state.searchQuery,
+                        sortMode = state.sortMode,
+                        groupMode = state.groupMode,
+                        themePreference = themePreference,
                         showSortSheet = showSortSheet,
                         showGroupSheet = showGroupSheet,
-                        onSearchToggle = {
-                            searchActive = !searchActive
-                            if (!searchActive) searchQuery = ""
-                        },
-                        onSearchQueryChange = { searchQuery = it },
-                        onSortModeChange = { sortMode = it; showSortSheet = false },
-                        onGroupModeChange = { groupMode = it; showGroupSheet = false },
+                        onSearchToggle = onSearchToggle,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onSortModeChange = onSortModeChange,
+                        onGroupModeChange = onGroupModeChange,
+                        viewMode = state.viewMode,
                         onSortSheetToggle = { showSortSheet = !showSortSheet },
                         onGroupSheetToggle = { showGroupSheet = !showGroupSheet },
+                        onDisplaySheetToggle = { showDisplaySheet = !showDisplaySheet },
                         onImport = onImport,
                         onThemeToggle = onThemeToggle,
+                        onOpenSettings = onOpenSettings,
+                        elevated = elevated,
                     )
 
-                    LibraryGrid(
-                        lastRead = lastRead,
-                        groupedBooks = groupedBooks,
-                        onBookClick = { selectedBook = it },
-                        onBookLongPress = { selectedBook = it },
-                    )
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        // Crossfade grid<->list; within each, items animate placement on
+                        // sort/group changes (see animateItem in LibraryGrid/LibraryList).
+                        Crossfade(
+                            targetState = state.viewMode,
+                            animationSpec = tween(300),
+                            label = "libraryViewMode",
+                        ) { mode ->
+                            when (mode) {
+                                LibraryViewMode.Grid -> LibraryGrid(
+                                    state = gridState,
+                                    continueReading = state.continueReading,
+                                    columns = state.gridColumns,
+                                    groups = state.groups,
+                                    onBookClick = { onBookClick(it.id) },
+                                    onBookLongPress = { selectedBook = it },
+                                )
+
+                                LibraryViewMode.List -> LibraryList(
+                                    state = listState,
+                                    continueReading = state.continueReading,
+                                    groups = state.groups,
+                                    onBookClick = { onBookClick(it.id) },
+                                    onBookLongPress = { selectedBook = it },
+                                )
+                            }
+                        }
+                    }
                 }
             }
+
+            LibraryDisplaySheet(
+                visible = showDisplaySheet,
+                viewMode = state.viewMode,
+                columns = state.gridColumns,
+                onViewModeChange = onViewModeChange,
+                onColumnsChange = onGridColumnsChange,
+                onDismiss = { showDisplaySheet = false },
+            )
 
             AnimatedVisibility(
                 visible = selectedBook != null,
@@ -161,24 +147,23 @@ fun LibraryScreen(
                         book = book,
                         onDismiss = { selectedBook = null },
                         onMarkRead = {
-                            books = books.map {
-                                if (it.id == book.id) it.copy(progress = 1.0f, remaining = "Finished")
-                                else it
-                            }
+                            onMarkRead(book.id)
                             selectedBook = null
                         },
                         onRemove = {
-                            books = books.filter { it.id != book.id }
+                            onRemove(book.id)
                             selectedBook = null
                         },
                     )
                 }
             }
 
-            if (lastRead != null && selectedBook == null) {
+            val continueReading = state.continueReading
+            if (continueReading != null && selectedBook == null) {
                 FloatingResumeButton(
+                    book = continueReading,
+                    onResume = { onResume(continueReading.id) },
                     modifier = Modifier.align(Alignment.BottomEnd),
-                    book = lastRead,
                 )
             }
 
@@ -200,37 +185,73 @@ private fun EmptyLibrary(onImport: () -> Unit) {
 
 @Composable
 private fun LibraryGrid(
-    lastRead: LibraryBook?,
-    groupedBooks: Map<String, List<LibraryBook>>,
+    state: LazyGridState,
+    continueReading: LibraryBook?,
+    columns: Int,
+    groups: List<LibraryGroup>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        state = state,
+        columns = GridCells.Fixed(columns),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp,
-        ),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (lastRead != null) {
+        if (continueReading != null) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                ContinueReadingCard(book = lastRead)
+                ContinueReadingCard(book = continueReading, modifier = Modifier.animateItem())
             }
         }
 
-        groupedBooks.forEach { (groupLabel, groupBooks) ->
-            if (groupLabel.isNotEmpty()) {
+        groups.forEach { group ->
+            if (group.label.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    GroupSectionHeader(title = groupLabel)
+                    GroupSectionHeader(title = group.label, modifier = Modifier.animateItem())
                 }
             }
-            items(groupBooks, key = { it.id }) { book ->
+            items(group.books, key = { it.id }) { book ->
                 GridBookCard(
                     book = book,
                     onClick = { onBookClick(book) },
                     onLongPress = { onBookLongPress(book) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryList(
+    state: LazyListState,
+    continueReading: LibraryBook?,
+    groups: List<LibraryGroup>,
+    onBookClick: (LibraryBook) -> Unit,
+    onBookLongPress: (LibraryBook) -> Unit,
+) {
+    LazyColumn(
+        state = state,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (continueReading != null) {
+            item { ContinueReadingCard(book = continueReading, modifier = Modifier.animateItem()) }
+        }
+
+        groups.forEach { group ->
+            if (group.label.isNotEmpty()) {
+                item { GroupSectionHeader(title = group.label, modifier = Modifier.animateItem()) }
+            }
+            lazyListItems(group.books, key = { it.id }) { book ->
+                BookListRow(
+                    book = book,
+                    onClick = { onBookClick(book) },
+                    onLongPress = { onBookLongPress(book) },
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
@@ -241,6 +262,24 @@ private fun LibraryGrid(
 @Composable
 private fun LibraryScreenPreview() {
     YomuDesignTheme {
-        LibraryScreen()
+        LibraryScreen(
+            state = LibraryUiState(
+                isLoading = false,
+                totalCount = 6,
+                groups = listOf(LibraryGroup("", emptyList())),
+            ),
+            onSearchToggle = {},
+            onSearchQueryChange = {},
+            onSortModeChange = {},
+            onGroupModeChange = {},
+            onViewModeChange = {},
+            onGridColumnsChange = {},
+            onMarkRead = {},
+            onRemove = {},
+            onBookClick = {},
+            onResume = {},
+            onImport = {},
+            onThemeToggle = {},
+        )
     }
 }
