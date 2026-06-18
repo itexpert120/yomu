@@ -14,11 +14,11 @@
 
     <style name="Theme.Yomu.Starting" parent="Theme.SplashScreen.IconBackground">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/yomu_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_yomu_mark</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/yomu_splash_icon_background</item>
         <item name="postSplashScreenTheme">@style/Theme.Yomu</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar">@bool/yomu_splash_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/yomu_splash_light_system_bars</item>
         <item name="android:statusBarColor">@color/yomu_splash_background</item>
         <item name="android:navigationBarColor">@color/yomu_splash_background</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>

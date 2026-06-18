@@ -11,15 +11,16 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -91,13 +92,14 @@ internal fun ConfirmRemoveDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ImportNotice(
     importing: Boolean,
     notice: String?,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val text = if (importing) "Importing…" else notice
     // Hold the last shown text so the pill doesn't go blank during its exit animation.
     var lastText by remember { mutableStateOf("") }
@@ -126,13 +128,14 @@ internal fun ImportNotice(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun FloatingResumeButton(
     book: LibraryBook,
     onResume: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     // Foreground tracks appBackground so the label reads on the accent in every
     // theme (the dark-theme accent is light, where white text would wash out).
     val onAccent = YomuTheme.colors.appBackground
@@ -211,9 +214,10 @@ private fun fadeInStops(color: Color): Array<Pair<Float, Color>> = arrayOf(
     1.00f to color,
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val background = YomuTheme.colors.appBackground
     Box(
         modifier = modifier
@@ -224,9 +228,10 @@ internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SystemBarBottomScrim(modifier: Modifier = Modifier) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val background = YomuTheme.colors.appBackground
     Box(
         modifier = modifier

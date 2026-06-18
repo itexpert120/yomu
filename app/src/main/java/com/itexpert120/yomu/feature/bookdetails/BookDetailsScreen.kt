@@ -19,6 +19,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -29,7 +30,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,6 +81,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.ReadingState
 import java.io.File
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BookDetailsScreen(
     book: BookDetailsUi?,
@@ -101,7 +103,7 @@ fun BookDetailsScreen(
     onMarkSelectedChapters: (Boolean) -> Unit,
     onMarkPreviousRead: () -> Unit,
 ) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
     var showCover by remember { mutableStateOf(false) }
     // Reveal the title in the bar only once the in-content header (item 0) has scrolled away, so

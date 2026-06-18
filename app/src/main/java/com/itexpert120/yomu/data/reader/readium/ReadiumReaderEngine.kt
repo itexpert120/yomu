@@ -66,9 +66,13 @@ class ReadiumReaderEngine @Inject constructor(
         ),
     )
 
-    override suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession? {
+    override suspend fun open(
+        filePath: String,
+        initialLocatorJson: String?,
+        initialSettings: ReaderSettings,
+    ): ReaderSession? {
         val publication = openPublication(filePath) ?: return null
-        return ReadiumReaderSession(publication, initialLocatorJson)
+        return ReadiumReaderSession(publication, initialLocatorJson, initialSettings)
     }
 
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem> {
@@ -121,6 +125,7 @@ class ReadiumReaderEngine @Inject constructor(
 private class ReadiumReaderSession(
     private val publication: Publication,
     initialLocatorJson: String?,
+    initialSettings: ReaderSettings,
 ) : ReaderSession {
 
     override val title: String = publication.metadata.title ?: "Reading"
@@ -136,7 +141,7 @@ private class ReadiumReaderSession(
     // Latest engine locator, used for reading-order (chapter) navigation.
     private var lastLocator: Locator? = null
     // Settings requested before the navigator exists; applied once it is hosted.
-    private var pendingSettings: ReaderSettings? = null
+    private var pendingSettings: ReaderSettings? = initialSettings
 
     private val initialLocator: Locator? = initialLocatorJson
         ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
@@ -150,6 +155,7 @@ private class ReadiumReaderSession(
     override val fragmentFactory: FragmentFactory =
         navigatorFactory.createFragmentFactory(
             initialLocator = initialLocator,
+            initialPreferences = initialSettings.toPreferences(),
             listener = listener,
             configuration = EpubNavigatorFragment.Configuration {
                 // Serve the bundled .ttf files from assets/fonts/ to the EPUB engine.

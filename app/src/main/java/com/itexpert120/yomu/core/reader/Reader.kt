@@ -30,7 +30,11 @@ data class ReaderTocItem(
 
 /** Opens books for reading. Implemented by the Readium adapter; no engine types leak out. */
 interface ReaderEngine {
-    suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession?
+    suspend fun open(
+        filePath: String,
+        initialLocatorJson: String?,
+        initialSettings: ReaderSettings = ReaderSettings(),
+    ): ReaderSession?
 
     /** Reads the book's table of contents without starting a reading session. */
     suspend fun tableOfContents(filePath: String): List<ReaderTocItem>

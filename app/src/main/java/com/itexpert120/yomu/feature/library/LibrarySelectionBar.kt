@@ -7,10 +7,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 /** Floating bottom dock with labeled multi-select actions; the top library bar stays unchanged. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LibrarySelectionDock(
     allSelected: Boolean,
@@ -53,7 +55,7 @@ internal fun LibrarySelectionDock(
     onOpenDetails: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val panel = YomuTheme.colors.panel
     Box(
         modifier = modifier

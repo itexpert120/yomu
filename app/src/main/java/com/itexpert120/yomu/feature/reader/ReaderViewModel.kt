@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,7 +61,16 @@ class ReaderViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val target = repository.readingTarget(BookId(bookId))
-            val opened = target?.let { engine.open(it.storagePath, locatorOverride ?: it.locatorJson) }
+            val initialSettings = target?.let { settingsRepository.effective(BookId(bookId)).first() }
+                ?: ReaderSettings()
+            _state.update { it.copy(settings = initialSettings) }
+            val opened = target?.let {
+                engine.open(
+                    filePath = it.storagePath,
+                    initialLocatorJson = locatorOverride ?: it.locatorJson,
+                    initialSettings = initialSettings,
+                )
+            }
             if (opened == null) {
                 _state.update { it.copy(loading = false, failed = true) }
                 return@launch

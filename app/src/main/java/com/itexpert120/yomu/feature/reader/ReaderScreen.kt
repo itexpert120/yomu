@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -144,8 +143,16 @@ fun ReaderScreen(
     } else {
         fullTop
     }
-    // Footer off: content flows under a fully transparent gesture bar (no inset).
-    val bottomInset = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
+    val footerHeight = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
+    val scrollEndPadding = if (state.settings.layout == ReaderLayout.Scroll && state.settings.showFooter) {
+        val footerFade = if (state.settings.edgeShadows) 12.dp else 0.dp
+        footerFade + 28.dp
+    } else {
+        0.dp
+    }
+    // Footer off: content flows under a fully transparent gesture bar. In scroll mode, reserve a
+    // little extra end space so the last lines of a chapter don't sit tight against the footer.
+    val bottomInset = footerHeight + scrollEndPadding
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
 
@@ -160,6 +167,7 @@ fun ReaderScreen(
             session != null -> {
                 ReaderNavigatorHost(
                     session = session,
+                    backgroundArgb = state.settings.backgroundArgb,
                     modifier = Modifier.fillMaxSize().padding(top = topInset, bottom = bottomInset),
                 )
 

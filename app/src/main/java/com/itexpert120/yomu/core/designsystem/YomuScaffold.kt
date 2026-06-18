@@ -13,16 +13,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
  * optional subtitle, and trailing actions. Deliberately not a Material `TopAppBar`
  * (docs/design-language.md "Anti-Material Rules").
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun YomuScreenHeader(
     title: String,
@@ -70,7 +72,7 @@ fun YomuScreenHeader(
             .fillMaxWidth()
             .shadow(elevation)
             .background(YomuTheme.colors.appBackground)
-            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -136,6 +138,7 @@ private fun YomuBackButton(onBack: () -> Unit) {
  * content column padded for the page gutter and bottom system bar. Content arrives as a
  * [ColumnScope] so callers stack [YomuSettingGroup]s / panels directly.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun YomuScreenScaffold(
     title: String,
@@ -145,7 +148,7 @@ fun YomuScreenScaffold(
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val scrollState = rememberScrollState()
     YomuAppSurface(modifier = modifier) {
         Column(Modifier.fillMaxSize()) {

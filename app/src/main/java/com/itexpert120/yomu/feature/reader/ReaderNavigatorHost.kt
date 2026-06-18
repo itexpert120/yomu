@@ -24,7 +24,11 @@ import com.itexpert120.yomu.core.reader.ReaderSession
  * type never appears here. Yomu chrome is drawn over this by [ReaderScreen].
  */
 @Composable
-fun ReaderNavigatorHost(session: ReaderSession, modifier: Modifier = Modifier) {
+fun ReaderNavigatorHost(
+    session: ReaderSession,
+    backgroundArgb: Long,
+    modifier: Modifier = Modifier,
+) {
     val activity = LocalContext.current.findFragmentActivity()
     val fragmentManager = activity.supportFragmentManager
     val tag = remember(session) { "reader-navigator" }
@@ -34,6 +38,7 @@ fun ReaderNavigatorHost(session: ReaderSession, modifier: Modifier = Modifier) {
         factory = { context ->
             FragmentContainerView(context).apply {
                 id = View.generateViewId()
+                setBackgroundColor(backgroundArgb.toInt())
                 // Draw edge-to-edge: consume insets so the navigator's WebView doesn't pad itself
                 // for the status/nav bars (which left a solid strip). Yomu's chrome handles spacing.
                 ViewCompat.setOnApplyWindowInsetsListener(this) { _, _ -> WindowInsetsCompat.CONSUMED }
@@ -54,6 +59,7 @@ fun ReaderNavigatorHost(session: ReaderSession, modifier: Modifier = Modifier) {
                 }
             }
         },
+        update = { it.setBackgroundColor(backgroundArgb.toInt()) },
     )
 
     DisposableEffect(session) {
