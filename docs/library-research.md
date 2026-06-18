@@ -4,6 +4,22 @@ Last researched: 2026-06-18
 
 This document records the initial library choices for a native Android EPUB reader. The goal is to move fast without locking the product UI to a third-party reader UI.
 
+## Implementation status (current)
+
+The recommended stack has been ADOPTED. Pinned versions in use:
+
+- Readium 3.3.0 — EPUB engine, hidden behind a Yomu-owned `ReaderEngine` boundary (`core/reader/Reader.kt`; the only Readium-importing package is `data/reader/readium`). Modules used: `readium-shared`, `readium-streamer`, `readium-navigator`.
+- Room 2.8.4 — library database (books, per-chapter read state, reader settings); schema export to `app/schemas`.
+- Hilt 2.59.2 — dependency injection (modules in `app/di/`).
+- Coil 3.5.0 — covers and images (`coil-compose`).
+- DataStore Preferences 1.2.1 — app/reader settings.
+- Navigation Compose 2.9.8 — type-safe routes.
+- kotlinx.serialization — routes and serialized data.
+- SAF — book import with sha256 dedup.
+- Six bundled reading fonts (Lora, Karla, Rubik, Cardo, Nunito, Merriweather) in `app/src/main/assets/fonts/`, registered with Readium.
+
+NOT yet adopted: Room FTS for search, in-book search, WorkManager-based import (import is currently in-process), Paging 3, EPUBCheck, jsoup, Okio, baseline profiles / macrobenchmark, and any TTS / OPDS / PDF / LCP modules. The per-library sections below keep these as forward-looking options.
+
 ## Summary Recommendation
 
 Use Readium Kotlin Toolkit as the EPUB engine, but hide it behind our own `ReaderEngine` interface. Use Jetpack Compose for the app chrome, library, panels, settings, and custom design system. Use Room for structured library data, DataStore for lightweight preferences, SAF for importing books, Coil for covers/background images, Hilt for dependency injection, and Kotlin coroutines/Flow for state.
@@ -12,13 +28,13 @@ The key architectural decision is that Yomu owns the UI. Readium should open, pa
 
 ## EPUB Engine
 
-### Recommended: Readium Kotlin Toolkit
+### Adopted: Readium Kotlin Toolkit (3.3.0)
 
 Source links:
 
-- https://readium.org/kotlin-toolkit/3.2.0/
-- https://readium.org/kotlin-toolkit/3.2.0/guides/getting-started/
-- https://readium.org/kotlin-toolkit/3.2.0/guides/navigator/navigator/
+- https://readium.org/kotlin-toolkit/3.3.0/
+- https://readium.org/kotlin-toolkit/3.3.0/guides/getting-started/
+- https://readium.org/kotlin-toolkit/3.3.0/guides/navigator/navigator/
 - https://github.com/readium/kotlin-toolkit
 
 Why:
@@ -31,7 +47,7 @@ Why:
 - Provides EPUB navigator preferences such as font, color, scrolling/paging, and layout behavior.
 - Supports custom EPUB font families through served assets.
 - Supports Android/ChromeOS, which fits tablet optimization.
-- Latest researched stable docs show Readium Kotlin Toolkit 3.2.0.
+- Adopted at version 3.3.0, hosted behind the Yomu `ReaderEngine` boundary.
 
 Important constraints:
 
@@ -387,12 +403,10 @@ Use case:
 
 ## Initial Dependency Spike
 
-Before implementation, run a short spike that answers:
+This spike is complete — Readium 3.3.0 is integrated and shipping. The questions it answered, for the record:
 
-- Can current project Kotlin/AGP consume Readium 3.2.0 from Maven Central without metadata/compiler issues?
-- Can `EpubNavigatorFragment` be hosted cleanly inside a Compose reader screen?
-- Can we observe `currentLocator` and persist/restore it?
-- Can we submit typography/theme preferences without fighting Readium?
-- Can edge taps and scrolling behavior be fully controlled by Yomu chrome?
-
-If Readium 3.2.0 conflicts with the current Kotlin setup, either update Kotlin/AGP deliberately or pin to the latest compatible Readium release after testing.
+- Kotlin 2.4.0 / AGP 9.2.1 consume Readium 3.3.0 from Maven Central (the relevant build wrinkle was Hilt aggregation under Kotlin 2.4.0 metadata, resolved with `enableAggregatingTask = false`, not Readium itself).
+- The Readium navigator Fragment is hosted inside the Compose reader screen via `ReaderNavigatorHost`.
+- The reader observes the current locator and persists/restores reading position.
+- Typography/theme preferences are submitted through a Yomu settings layer mapped onto Readium preferences.
+- Edge taps and scroll/paged behavior are driven by Yomu chrome.

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Yomu is a native Android EPUB reader (Kotlin + Jetpack Compose). The product intent is a polished, reader-first, tablet-optimized app that deliberately does **not** look like a default Material app. See `docs/` for the full product/design/architecture specs — `docs/README.md` is the entry point.
 
-Current state: an early static prototype. There is one `:app` module containing a custom design system and a static library screen backed by fake data. **Readium, Room, DataStore, Hilt, and Navigation are planned but not yet present** — `docs/` describes the target architecture, not the current code. Treat package/module layouts in the docs as the destination, not what exists today.
+Current state: a **working EPUB reader**. One `:app` module contains the custom design system, a real Room-backed library (SAF import, Coil covers), a book-details screen, and a Readium-backed reader with themes/fonts/brightness. **Hilt, Room, DataStore, Navigation Compose, Coil, and Readium are all present and wired.** Built but **not yet done**: bookmarks, highlights, in-book search, advanced typography. The `docs/` describe the product/design intent; each doc has an "Implementation status (current)" note where the build has caught up to or diverged from the plan.
 
 ## Commands
 
@@ -27,19 +27,33 @@ Use the Gradle wrapper. On this Windows/PowerShell environment use `./gradlew` (
 
 There is no separate "run tests" vs "lint" toolchain beyond Gradle. All external dependency versions live in `gradle/libs.versions.toml` (version catalog) — add dependencies there, referenced as `libs.*`, never inline in `build.gradle.kts`.
 
-Toolchain: AGP 9.2.1, Kotlin 2.4.0, Compose BOM 2026.06.00, Java 11. `compileSdk 37 / minSdk 24 / targetSdk 36`.
+Toolchain: AGP 9.2.1, Kotlin 2.4.0, Compose BOM 2026.06.00, **Java 17** (+ core-library desugaring), KSP. `compileSdk 37 / minSdk 24 / targetSdk 36`. DI is Hilt (with `hilt { enableAggregatingTask = false }` — a workaround for Kotlin 2.4.0 metadata vs Hilt's javac aggregator); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment.
 
 ## Architecture
 
 ### Package layout (inside the single `:app` module)
 ```
 com.itexpert120.yomu
-├── MainActivity.kt              # entry point; sets edge-to-edge, hosts YomuLibraryApp
-├── app/                         # app shell: EdgeToEdge, devgallery (component preview harness)
-├── core/designsystem/           # the custom design system (Yomu* primitives)
-└── feature/library/             # the library screen + its models/overlays
+├── MainActivity.kt              # @AndroidEntryPoint, extends FragmentActivity (hosts the Readium
+│                                #   navigator); edge-to-edge; hosts the nav host
+├── YomuApplication.kt           # @HiltAndroidApp
+├── app/                         # shell: navigation/{YomuNavHost, YomuDestinations}, di/*, AppViewModel,
+│                                #   EdgeToEdge, devgallery
+├── core/
+│   ├── designsystem/            # custom design system (Yomu* primitives, CompositionLocals)
+│   ├── model/                   # Book, ReaderSettings, LibraryPreferences, AccentColor, …
+│   ├── database/                # Room: YomuDatabase (v3), BookEntity, ChapterReadEntity,
+│   │                            #   ReaderSettingsEntity, BookDao, migrations
+│   ├── datastore/ · storage/    # DataStore prefs ; FileStorage (app-private epubs/covers)
+│   └── reader/                  # ReaderEngine/ReaderSession/ReaderLocator/ReaderTocItem (no Readium types)
+├── data/
+│   ├── books/                   # BookRepository + RoomBookRepository + mappers
+│   ├── reader/readium/          # ReadiumReaderEngine — the ONLY package that imports Readium
+│   └── settings/                # AppSettingsRepository, LibraryPrefsRepository, ReaderSettingsRepository
+├── domain/imports/              # ImportBooksUseCase (SAF import pipeline)
+└── feature/                     # library, bookdetails, bookedit, reader, settings, about
 ```
-Planned but absent: `core/{model,database,datastore,storage,reader}`, `data/*`, `domain/*`, `feature/{reader,settings,appearance,bookdetails,search}`. Create these as features land, following `docs/app-architecture.md`.
+Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`, `Settings`, `About`, `Reader(bookId, locator?)`. Still unbuilt feature areas (bookmarks, in-book search) can be added following `docs/app-architecture.md`.
 
 ### Design system is the foundation — use it, don't reach for Material
 `core/designsystem` defines the visual language. Theming is delivered through **CompositionLocals**, not `MaterialTheme`:
@@ -50,10 +64,10 @@ Planned but absent: `core/{model,database,datastore,storage,reader}`, `data/*`, 
 - The design system package must not depend on `feature/*`.
 
 ### Theme ↔ system bars
-`MainActivity` owns the window insets controller and flips status/nav bar icon appearance via the `onThemeModeChange` callback threaded down through `YomuLibraryApp`. When theme mode changes, that callback must fire so bar icons stay legible.
+`MainActivity` owns the window insets controller and flips status/nav bar icon appearance on theme-mode change so bar icons stay legible. The **reader** additionally takes over the system bars while open (`ReaderScreen`): it hides both bars for full-screen reading, colours them to the reading theme, and restores them on exit.
 
-### Reader engine boundary (when it lands)
-The EPUB engine will be Readium, but Readium types must **not** leak. All reader access goes through Yomu-owned interfaces (`ReaderEngine`, `ReaderSession`, `ReaderLocator`, etc.); only a future `data/reader/readium` package may import Readium directly. Readium navigators are Fragments hosted inside Compose behind a thin interop host. See `docs/app-architecture.md` and `docs/reader-feature-spec.md`.
+### Reader engine boundary
+The EPUB engine is Readium, but Readium types must **not** leak. All reader access goes through Yomu-owned interfaces in `core/reader` (`ReaderEngine`, `ReaderSession`, `ReaderLocator`, `ReaderTocItem`); only `data/reader/readium/ReadiumReaderEngine` imports Readium directly. The Readium navigator is an `EpubNavigatorFragment` hosted inside Compose by `feature/reader/ReaderNavigatorHost` (commits the fragment on attach, consumes window insets for edge-to-edge). `ReaderSettings` → `EpubPreferences` mapping (scroll, fontSize, theme, bg/text colour, fontFamily, lineHeight, `publisherStyles = false`) and navigation live in the engine. Reader settings resolve as a **global default (DataStore) ⊕ per-book override (Room `reader_settings`)**, written per-book-on-edit. Bundled reading fonts are in `app/src/main/assets/fonts/` and registered with Readium. See `docs/app-architecture.md` and `docs/reader-feature-spec.md`.
 
 ## Conventions
 

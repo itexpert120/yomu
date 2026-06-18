@@ -16,10 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.R
 import com.itexpert120.yomu.BuildConfig
+import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -41,15 +42,19 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .size(74.dp)
                     .clip(RoundedCornerShape(YomuTheme.radius.lg))
-                    .background(YomuTheme.colors.accent)
-                    .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg)),
+                    .background(Color(0xFF050505))
+                    .border(
+                        1.dp,
+                        YomuTheme.colors.border.copy(alpha = 0.6f),
+                        RoundedCornerShape(YomuTheme.radius.lg),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_yomu_mark),
                     contentDescription = null,
-                    tint = YomuTheme.colors.appBackground,
-                    modifier = Modifier.size(46.dp),
+                    tint = Color.White,
+                    modifier = Modifier.size(54.dp),
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {

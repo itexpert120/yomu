@@ -2,16 +2,28 @@
 
 Yomu should use native Android architecture, but the app architecture must protect the product design from both Material defaults and third-party reader engine constraints.
 
+## Implementation status (current)
+
+The core of this architecture is now built, not just planned. Inside the single `:app` module:
+
+- Built: Hilt DI, Room (schema v3, exported schemas, tested migrations), Preferences DataStore, type-safe Navigation Compose (with Material shared-axis X transitions), Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
+- Built features: `library`, `bookdetails`, `bookedit`, `reader`, `settings`, `about`.
+- Built layers: `core/{model, database, datastore, reader, storage, designsystem}`, `data/{books, reader/readium, settings}`, and `domain/imports`.
+- Settings resolution is implemented as a two-layer merge (global default in DataStore, optional per-book override in Room) rather than the full multi-layer resolver described below.
+- Pending: bookmarks, highlights, in-book search, advanced typography/page layout, reading statistics/sessions, nested groups and series/author grouping beyond a flat author group, multi-Gradle-module split, and the richer settings-layering resolver. Sections describing these remain forward-looking specs.
+
+The package and Gradle-module layouts further down still describe the eventual destination; the "Current package structure" block below reflects what exists today.
+
 ## Core Decisions
 
-- UI toolkit: Jetpack Compose for app UI, panels, library, settings, and reader chrome.
-- EPUB engine: Readium Kotlin Toolkit behind a Yomu-owned interface.
-- Visual reader host: Compose screen containing a Readium navigator fragment where required.
-- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate.
-- State: Kotlin coroutines, Flow, StateFlow, and immutable UI state.
-- DI: Hilt once real data/engine dependencies are introduced.
-- Navigation: type-safe Navigation Compose routes.
-- Import: Android Storage Access Framework, then copy imported files into app-private storage.
+- UI toolkit: Jetpack Compose for app UI, panels, library, settings, and reader chrome. (Built.)
+- EPUB engine: Readium Kotlin Toolkit (3.x) behind a Yomu-owned interface. (Built — `core/reader` interfaces, `data/reader/readium` adapter.)
+- Visual reader host: Compose screen containing a Readium navigator fragment where required. (Built — `feature/reader/ReaderNavigatorHost`.)
+- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v3, Preferences DataStore.)
+- State: Kotlin coroutines, Flow, StateFlow, and immutable UI state. (Built.)
+- DI: Hilt. (Built — `YomuApplication`, `MainActivity`, and the `app/di` modules.)
+- Navigation: type-safe Navigation Compose routes. (Built — `app/navigation`.)
+- Import: Android Storage Access Framework, then copy imported files into app-private storage. (Built — `domain/imports/ImportBooksUseCase` + `core/storage/FileStorage`.)
 
 ## Architecture Style
 
@@ -34,61 +46,66 @@ Dependencies should point inward or downward:
 - Design system depends only on Compose foundation/runtime and minimal Android resources.
 - Reader feature depends on the reader engine abstraction, not Readium directly except in the engine adapter package/module.
 
-## Initial Package Structure
+## Current Package Structure
 
-Start inside `:app` with package boundaries before creating many Gradle modules. This keeps early iteration fast.
+Everything lives inside `:app` with enforced package boundaries; no Gradle-module split yet. This keeps iteration fast. The structure below reflects what exists today.
 
 ```text
 com.itexpert120.yomu
+|-- MainActivity.kt              # @AndroidEntryPoint, extends FragmentActivity, edge-to-edge
+|-- YomuApplication.kt           # @HiltAndroidApp
 |-- app
+|   |-- YomuApp.kt
+|   |-- AppViewModel.kt
 |   |-- EdgeToEdge.kt
+|   |-- navigation
+|   |   |-- YomuDestinations.kt  # @Serializable routes: Library, BookDetails, EditBook, Settings, About, Reader
+|   |   `-- YomuNavHost.kt       # shared-axis (X) transitions
+|   |-- di
+|   |   |-- DataStoreModule.kt
+|   |   |-- DatabaseModule.kt
+|   |   |-- ReaderModule.kt
+|   |   `-- RepositoryModule.kt
 |   `-- devgallery
 |       |-- DevGalleryActivity.kt
 |       `-- YomuGalleryScreen.kt
 |-- core
-|   `-- designsystem
-|       |-- YomuTheme.kt
-|       |-- YomuSurfaces.kt
-|       |-- YomuControls.kt
-|       `-- YomuCards.kt
+|   |-- model                    # Book/BookId, ReadingState, LibraryPreferences, ReaderSettings, AccentColor, ThemePreference
+|   |-- database                 # YomuDatabase (v3), BookEntity, ChapterReadEntity, ReaderSettingsEntity, BookDao
+|   |-- datastore                # YomuPreferences
+|   |-- reader                   # ReaderEngine/ReaderSession/ReaderLocator/ReaderTocItem (no Readium types)
+|   |-- storage                  # FileStorage
+|   `-- designsystem             # Yomu* primitives + theme tokens
+|-- data
+|   |-- books                    # BookRepository + RoomBookRepository + mappers + ImportedBook
+|   |-- reader
+|   |   `-- readium              # ReadiumReaderEngine + ReadiumMetadataExtractor (the only Readium importers)
+|   `-- settings                 # AppSettingsRepository, LibraryPrefsRepository, ReaderSettingsRepository
+|-- domain
+|   `-- imports                  # ImportBooksUseCase
 `-- feature
-    `-- library
-        |-- LibraryModels.kt
-        |-- LibraryHeader.kt
-        |-- LibraryBooks.kt
-        |-- LibraryOverlays.kt
-        |-- LibraryInsets.kt
-        `-- LibraryScreen.kt
+    |-- library
+    |-- bookdetails
+    |-- bookedit
+    |-- reader
+    |-- settings
+    `-- about
 ```
 
 Planned packages (not yet created):
 
 ```text
 |-- core
-|   |-- common
-|   |-- model
-|   |-- storage
-|   |-- database
-|   |-- datastore
-|   `-- reader
+|   `-- common
 |-- data
-|   |-- books
-|   |-- import
-|   |-- reading
-|   |-- settings
-|   `-- themes
+|   `-- themes                   # custom theme persistence (built-in themes are code-defined today)
 |-- domain
 |   |-- books
-|   |-- import
-|   |-- reader
-|   |-- settings
-|   `-- themes
+|   |-- reader                   # session/settings-resolution use cases (logic is in repositories/VMs today)
+|   `-- settings
 `-- feature
-    |-- reader
-    |-- bookdetails
-    |-- search
-    |-- settings
-    `-- appearance
+    |-- search                   # in-book / library search
+    `-- appearance               # dedicated appearance feature (reader settings live in feature/reader today)
 ```
 
 ## Future Gradle Module Structure
@@ -125,9 +142,9 @@ Split into Gradle modules when package boundaries are stable or build times beco
 
 Recommended timing:
 
-- Phase 1: keep single `:app` module but enforce packages.
+- Phase 1 (current): keep single `:app` module but enforce packages. The Room schema, `:data:*`-equivalent packages, and most feature packages already exist here; the module split has intentionally not happened yet.
 - Phase 2: extract `:core:designsystem` once custom primitives stabilize.
-- Phase 3: extract `:core:model`, `:core:database`, and `:data:*` once Room schema lands.
+- Phase 3: extract `:core:model`, `:core:database`, and `:data:*`.
 - Phase 4: extract feature modules if screen ownership becomes large.
 
 ## Feature Ownership
@@ -193,6 +210,31 @@ Reader engine owns:
 
 Do not let Readium types leak everywhere. Create Yomu-owned interfaces and map to Readium internally.
 
+This boundary is built. The actual interfaces live in `core/reader/Reader.kt`; `data/reader/readium/ReadiumReaderEngine` is the only package that imports Readium. The implemented shape is leaner than the illustrative target below (no separate publication/progression/search types yet), opening by file path rather than `BookId` and exposing the navigator as a `FragmentFactory` so the Compose host can place it without referencing engine types:
+
+```kotlin
+interface ReaderEngine {
+    suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession?
+    suspend fun tableOfContents(filePath: String): List<ReaderTocItem>
+}
+
+interface ReaderSession {
+    val title: String
+    val currentLocator: StateFlow<ReaderLocator?>
+    val centerTaps: SharedFlow<Unit>
+    val fragmentFactory: FragmentFactory
+    val fragmentClassName: String
+    fun onFragmentHosted(fragmentManager: FragmentManager, tag: String)
+    fun applySettings(settings: ReaderSettings)
+    fun goForward(); fun goBackward()
+    fun nextChapter(); fun previousChapter()
+    fun goToProgression(totalProgression: Double)
+    fun close()
+}
+```
+
+The illustrative target shape (some of this is still planned):
+
 ```kotlin
 interface ReaderEngine {
     suspend fun openBook(bookId: BookId): ReaderSession
@@ -212,31 +254,34 @@ interface ReaderSession {
 
 Yomu model types:
 
-- `ReaderPublication`
-- `ReaderLocator`
-- `ReaderProgression`
-- `ReaderTocItem`
-- `ReaderSearchResult`
-- `ResolvedReaderSettings`
-- `ReaderDecoration`
+- `ReaderLocator` — built (`locatorJson` + `totalProgression` + `chapterTitle` + `href`).
+- `ReaderTocItem` — built (flattened `id`/`title`/`locatorJson`/`depth`).
+- `ReaderPublication` — planned (publication is held internally by the session today).
+- `ReaderProgression` — planned (progression is read off `ReaderLocator.totalProgression`).
+- `ReaderSearchResult` — planned (in-book search not built).
+- `ResolvedReaderSettings` — planned (the engine consumes `ReaderSettings` directly today).
+- `ReaderDecoration` — planned (no bookmarks/highlights yet).
 
-Readium adapter maps:
+Readium adapter maps (built where noted):
 
-- Readium `Publication` to `ReaderPublication`.
-- Readium `Locator` JSON to `ReaderLocator`.
-- Readium preferences to `ResolvedReaderSettings`.
-- Bookmarks/highlights to Readium decorations.
+- Readium `Publication` opened internally from the EPUB file path. (Built.)
+- Readium `Locator` JSON to/from `ReaderLocator`. (Built.)
+- `ReaderSettings` to Readium `EpubPreferences` — scroll, fontSize, fontFamily, lineHeight, theme, backgroundColor, textColor, `publisherStyles = false`. (Built.)
+- Custom bundled fonts registered via `EpubNavigatorFragment.Configuration` font-family declarations (TTFs in `app/src/main/assets/fonts`). (Built.)
+- Bookmarks/highlights to Readium decorations. (Planned.)
 
 ## Reader Fragment Interop
 
 Readium visual navigators are fragments. Compose reader screens should host the fragment behind a controlled boundary.
 
-Structure:
+Structure (built):
 
 - `ReaderRoute`: Compose route and ViewModel binding.
-- `ReaderScreen`: Compose layout, chrome, panels, settings.
-- `ReaderNavigatorHost`: interop container that hosts Readium fragment.
-- `ReadiumReaderController`: adapter between ViewModel events and navigator APIs.
+- `ReaderScreen`: Compose layout, chrome (`ReaderChrome`), and the controls sheet (`ReaderSheet`).
+- `ReaderNavigatorHost`: interop container that hosts the Readium `EpubNavigatorFragment` (commits the fragment on attach and consumes window insets for edge-to-edge).
+- `ReaderViewModel`: owns session state, locator persistence, and settings submission.
+
+The adapter between events and navigator APIs lives inside `ReadiumReaderEngine`'s session (driven by `ReaderViewModel`) rather than a separate `ReadiumReaderController`. `MainActivity` extends `FragmentActivity` (with an AppCompat DayNight theme) so the navigator fragment can be hosted.
 
 Rules:
 
@@ -287,7 +332,9 @@ Rules:
 
 ## Settings Resolution
 
-Reader settings must be layered:
+Current implementation (`data/settings/ReaderSettingsRepository`): a two-layer merge — a global default `ReaderSettings` in DataStore, plus an optional per-book override stored as a JSON blob in Room (`reader_settings` table). When a book has an override it **fully supersedes** the global default (`per-book ?: global`), set on-edit; there is no field-by-field merge or unsupported-setting reasoning yet.
+
+The fuller layering below is still the target. Reader settings should eventually layer:
 
 1. Built-in defaults.
 2. App defaults.
@@ -296,7 +343,7 @@ Reader settings must be layered:
 5. Mode-specific overrides.
 6. Temporary session adjustments.
 
-Create a resolver:
+Planned resolver:
 
 ```kotlin
 class ResolveReaderSettingsUseCase(
@@ -316,30 +363,29 @@ This matters because some settings are not valid for fixed-layout books, some ar
 
 ## Data Flow Examples
 
-Opening a book:
+Opening a book (built; the dedicated `OpenReaderSessionUseCase` is not extracted — `ReaderViewModel` calls the repository and engine directly):
 
 ```text
 ReaderRoute(bookId)
 -> ReaderViewModel.open(bookId)
--> OpenReaderSessionUseCase
--> BookRepository resolves file
--> ReaderEngine opens publication
--> ReaderViewModel emits ReaderUiState
+-> BookRepository resolves file path
+-> ReaderEngine.open(filePath, initialLocatorJson)
+-> ReaderViewModel emits reader state
 -> ReaderNavigatorHost displays content
--> currentLocator Flow updates Room progress
+-> currentLocator StateFlow updates Room progress
 ```
 
-Importing a book:
+Importing a book (built — note metadata only; no separate authors/series/file tables yet):
 
 ```text
 LibraryScreen import action
 -> SAF picker returns Uri
 -> ImportBooksUseCase
--> FileStorage copies file
--> hash duplicate check
--> Reader metadata extractor opens publication
--> cover extracted
--> Room transaction inserts book/authors/series/file
+-> FileStorage copies file into app storage
+-> sha256 hash duplicate check
+-> ReadiumMetadataExtractor opens publication
+-> cover extracted + saved
+-> Room inserts a single `books` row
 -> LibraryUiState updates
 ```
 

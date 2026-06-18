@@ -2,6 +2,8 @@
 
 This roadmap keeps Yomu from starting with EPUB complexity before the product language is clear.
 
+**Overall status (current):** Phases 0–6 are complete — design system, real Room-backed library with SAF import, settings models, and the Readium integration are all done. Phase 7 (core reader) is largely done (themes, fonts, brightness, scroll/paged, chrome, persistent chapter read-state) with **bookmarks, highlights, in-book search, and an in-reader Contents panel still pending**. Phases 8–12 (advanced typography, library depth beyond author grouping, advanced reading modes, performance, optional expansion) are mostly not started.
+
 ## Phase 0: Project Baseline
 
 Goal:
@@ -44,7 +46,7 @@ Acceptance criteria:
 - Library mock has a strong custom identity.
 - Tablet preview uses extra space intentionally.
 
-**Status: Partially complete.** Foundation tokens (colors, typography, spacing, radius), surface primitives (YomuAppSurface, YomuPanel, YomuFloatingPanel, ReaderPageSurface), and control primitives (YomuButton, YomuChip, YomuSegmentedControl, YomuRangeRow, YomuColorSwatch) are implemented. Library primitives (YomuBookCard, YomuSettingGroup) exist. Reader and remaining library primitives are pending.
+**Status: Complete.** Foundation tokens (colors, typography, spacing, radius), surface primitives, control primitives (YomuButton, YomuChip, YomuSegmentedControl, YomuTogglePill, YomuColorSwatch, YomuColorPicker), cards (YomuCard, YomuSettingGroup), scaffold/header (YomuScreenHeader, YomuScreenScaffold), and the bottom sheet are implemented and used across the real library, book-details, reader, settings, and about screens — not just previews.
 
 ## Phase 2: Static Reader Mock
 
@@ -68,6 +70,8 @@ Acceptance criteria:
 - Font/theme/page/status settings visibly affect fake reader.
 - Reader chrome motion feels clean and non-intrusive.
 
+**Status: Superseded — done with the real engine.** Rather than a fake reader, the reader was built directly on Readium (Phase 6). Paged/scrolled modes switch, font/theme/brightness/chrome settings visibly affect real content, and the custom chrome (permanent top bar, optional footer, controls sheet) is in place.
+
 ## Phase 3: Static Library Mock
 
 Goal:
@@ -89,7 +93,7 @@ Acceptance criteria:
 - Library feels closer to a polished media app than a file picker.
 - Tablet layout has sidebar, main content, and optional inspector.
 
-**Status: Partially complete.** Static library screen with fake books, continue-reading section, shelf sections, book context panel, and system bar scrim is implemented. Search, sort/group controls, adjustable grid columns, and book details are pending.
+**Status: Complete (now backed by real data).** Library grid/list, continue-reading hero, search, sort (Recent/Title/Author/Unread), group (None/Author), adaptive grid columns (Auto + manual override), multi-select with bulk actions, and a full book-details screen are all implemented and backed by Room rather than fake data.
 
 ## Phase 4: Settings And Theme Model
 
@@ -109,6 +113,8 @@ Acceptance criteria:
 
 - Settings resolution supports global, theme, book, mode, and session layers.
 - UI can show inactive/unsupported setting states.
+
+**Status: Complete (simplified layering).** `ReaderSettings` (+ `ReaderLayout`/`ReaderThemeMode`/`ReaderFont`), `LibraryPreferences`, and app theme/accent models exist. Reader settings resolve as global default (DataStore) ⊕ per-book override (Room `reader_settings`), per-book-on-edit. Theme presets (Light/Dark/Sepia/Black/Custom with custom bg/text). The full global→theme→book→mode→session stack is collapsed to global + per-book for now.
 
 ## Phase 5: Data Layer And Import
 
@@ -130,6 +136,8 @@ Acceptance criteria:
 - User can import an EPUB file into local library storage.
 - Imported book appears in library with metadata/cover if available.
 - Duplicate imports are detected.
+
+**Status: Complete.** Room schema (`books`, `chapter_reads`, `reader_settings`) with migrations and schema export; `RoomBookRepository`; SAF multi-file import via `domain/imports/ImportBooksUseCase` copying into app-private storage with sha256 dedup; cover/metadata extraction through Readium; covers rendered with Coil.
 
 ## Phase 6: Readium Integration Spike
 
@@ -156,6 +164,8 @@ Acceptance criteria:
 - Progress persists after closing/reopening.
 - TOC navigation works.
 
+**Status: Complete.** `ReaderEngine`/`ReaderSession` interfaces with a Readium implementation (`data/reader/readium`, the only Readium importer); `EpubNavigatorFragment` hosted in Compose (`ReaderNavigatorHost`); locator persisted/restored; TOC extraction + jump-to-chapter; progression seek. Chrome is fully custom/Compose-owned.
+
 ## Phase 7: Core Reader Features
 
 Goal:
@@ -176,6 +186,8 @@ Acceptance criteria:
 
 - User can read, bookmark, highlight, resume, search, and customize appearance.
 - Settings persist correctly.
+
+**Status: Partial.** Done: font settings (6 bundled fonts with live previews + size), theme settings (Light/Dark/Sepia/Black/Custom bg+text), scrolled/paged, header/footer status options (clock + battery + progress, toggleable), resume, full-screen chrome. Also: persistent per-chapter read-state on the book-details TOC. **Pending: bookmarks, highlights, in-book search, and an in-reader Contents/Bookmarks panel.**
 
 ## Phase 8: Advanced Layout And Themes
 
@@ -205,6 +217,8 @@ Acceptance criteria:
 - Unsupported settings show clear inactive state.
 - Tablet multi-column reading is comfortable.
 
+**Status: Mostly pending.** Custom themes and bundled fonts are done (custom user-supplied fonts are not). Advanced typography — line/word/letter spacing, text indent, justification, hyphenation, margins, multi-column, dark-mode image inversion — is not yet built.
+
 ## Phase 9: Library Management Depth
 
 Goal:
@@ -225,6 +239,8 @@ Acceptance criteria:
 
 - User can manage a large local EPUB collection without feeling like they are managing files manually.
 
+**Status: Partial.** Author grouping, sort/filter, search, and multi-select bulk actions are done. Nested groups, series grouping (intentionally removed for now), bulk group assignment, and optional Room FTS indexing are pending.
+
 ## Phase 10: Advanced Reading Modes
 
 Goal:
@@ -243,6 +259,8 @@ Acceptance criteria:
 
 - Paragraph/speed modes are reliable and resumable.
 - Switching modes does not lose reading position.
+
+**Status: Not started.**
 
 ## Phase 11: Performance And Polish
 
@@ -265,6 +283,8 @@ Acceptance criteria:
 - Library scrolling is smooth.
 - Reader opens quickly enough for daily use.
 - Settings/theme changes do not visibly jank.
+
+**Status: Not started.**
 
 ## Phase 12: Optional Expansion
 

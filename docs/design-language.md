@@ -2,6 +2,25 @@
 
 Yomu should be a native Android app that does not look like a default Android app. The UI should be built from custom Compose primitives and guided by a reader-first product identity.
 
+## Implementation status (current)
+
+The custom design system is built and is the foundation of every product surface — it is no longer just a gallery prototype. It is applied across the real library, book-details, reader, settings, and about screens.
+
+What exists in `core/designsystem`:
+
+- Theming is delivered through CompositionLocals, not `MaterialTheme`. `YomuDesignTheme { }` provides colours/type/spacing/radius, accessed via the `YomuTheme` object (`YomuTheme.colors/type/space/radius`).
+- Token data classes `YomuColors`, `YomuType`, `YomuSpacing`, `YomuRadius` (all `@Immutable`). Theme variants live in `YomuThemeMode { Light, Dark, Oled }`. (Note: the actual token sets differ in naming/coverage from the aspirational `YomuColor.*` / `YomuType.*` lists further down this doc — treat those lists as direction, the code as source of truth.)
+- Built primitives: `YomuAppSurface` / `YomuPanel` / `YomuFloatingPanel` (`YomuSurfaces.kt`); `YomuButton` / `YomuChip` / `YomuSegmentedControl` / `YomuTogglePill` (`YomuControls.kt`, `YomuSettingsControls.kt`); `YomuCard` / `YomuSettingGroup` (`YomuCards.kt`); `YomuScreenHeader` / `YomuScreenScaffold` (`YomuScaffold.kt`); `YomuColorPicker` (HSV), `YomuColorSwatch`, `YomuBottomSheet`, plus reusable bits in `YomuReusable.kt`.
+- `MainActivity` owns the window insets controller and flips status/nav-bar icon appearance on theme change.
+- An `app/devgallery` harness validates primitives in isolation.
+- There is now a real app launcher icon (`ic_yomu_mark` / adaptive icon).
+
+The anti-Material rules below still hold: no Material `Scaffold`/`TopAppBar`/bottom sheet as product surfaces; `material3` is only a building block.
+
+Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
+
+Still pending design work: bookmarks, highlights, in-book search, and advanced typography. Many of the aspirational primitive names listed below (e.g. `ReaderSurface`, `GlassPanel`, `SidePanel`, `HighlightMenu`, `AppearanceStudioPanel`, the full theme-preset families, and the named motion tokens) are not yet built — keep them as planned targets, not current API.
+
 ## Visual Direction
 
 The target look is clean, restrained, responsive, and serious. It should feel closer to a premium reading/media tool than a generic utility app.
@@ -47,7 +66,7 @@ Allowed:
 
 ## Foundation Tokens
 
-Create Yomu-owned tokens before building feature UI.
+Yomu-owned tokens are built and in use (see Implementation status — the shipped token shapes are `YomuColors` / `YomuType` / `YomuSpacing` / `YomuRadius`). The lists below are the original aspirational naming; the implemented tokens cover the same intent but differ in names and exact coverage.
 
 Color:
 
@@ -117,9 +136,9 @@ Motion:
 
 ## Surface Primitives
 
-Build these as Compose primitives in `designsystem` before feature screens stabilize.
+A core subset is built (`YomuAppSurface`, `YomuPanel`, `YomuFloatingPanel`); the remaining entries below are still planned.
 
-- `YomuAppSurface`: root app surface with theme-aware background.
+- `YomuAppSurface`: root app surface with theme-aware background. (built)
 - `ReaderSurface`: book reading canvas; supports color, image, noise, paper, and pattern backgrounds.
 - `LibrarySurface`: browsing area with richer cover-forward treatment.
 - `PanelSurface`: opaque settings/details panel.
@@ -240,14 +259,11 @@ Reader content:
 - Favor high readability and long-session comfort.
 - Provide preview cards with real paragraph samples.
 
-Recommended bundled fonts to evaluate later:
+Bundled reader fonts (shipped):
 
-- Literata for serif reading.
-- Atkinson Hyperlegible for accessibility.
-- IBM Plex Sans or similar for UI/chrome.
-- JetBrains Mono or similar for monospace.
+- Six families live in `app/src/main/assets/fonts/` and are registered with Readium: Lora, Karla, Rubik, Cardo, Nunito, and Merriweather. Each is exposed in the reader with a live preview.
 
-Licensing must be checked before bundling fonts.
+The original evaluation shortlist (Literata, Atkinson Hyperlegible, IBM Plex Sans, JetBrains Mono) was not adopted; revisit only if the reader needs accessibility/mono coverage beyond the current set. Licensing must be checked before bundling any additional fonts.
 
 ## Layout Behavior
 

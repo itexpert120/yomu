@@ -1,27 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="@color/yomu_launcher_background"
-        android:pathData="M22,8H86C93.7,8 100,14.3 100,22V86C100,93.7 93.7,100 86,100H22C14.3,100 8,93.7 8,86V22C8,14.3 14.3,8 22,8Z" />
-    <path
-        android:fillColor="@color/yomu_launcher_background_shadow"
-        android:fillAlpha="0.28"
-        android:pathData="M8,74C23,64 36,62 51,67C67,72 82,68 100,55V86C100,93.7 93.7,100 86,100H22C14.3,100 8,93.7 8,86Z" />
-    <group
-        android:pivotX="54"
-        android:pivotY="54"
-        android:scaleX="0.78"
-        android:scaleY="0.78">
-        <path
-            android:fillColor="@android:color/transparent"
-            android:pathData="M26,24C30,22 35,22 39,25M23,34H40M22,44H39M23,55H40M25,66H40V79H25ZM59,22H77M68,18V34M53,38C59,35 75,35 82,38M56,48H78M59,48V61M76,48V61M55,61H80M66,61C64,72 57,80 49,84M70,61C73,73 79,80 86,83"
-            android:strokeColor="@color/yomu_launcher_mark"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round"
-            android:strokeWidth="6.2" />
-    </group>
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="@color/yomu_launcher_background" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/ic_launcher_foreground" />
+</layer-list>

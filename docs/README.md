@@ -1,21 +1,25 @@
 # Yomu Planning Docs
 
-Yomu is a native Android EPUB reader built with Kotlin and Jetpack Compose, but it should not look like a default Material Android app. These docs define the product, design language, architecture, build patterns, reader model, data model, and implementation phases before feature work begins.
+Yomu is a native Android EPUB reader built with Kotlin and Jetpack Compose, but it should not look like a default Material Android app. These docs define the product, design language, architecture, build patterns, reader model, data model, and implementation phases. They began as a pre-build plan; several sections describe a destination that is now substantially built — each doc carries an "Implementation status (current)" note where it has diverged from the plan.
 
 ## Current Project State
 
-The repository contains a single Android application module at `:app` with a custom design system and a static library screen using fake data.
+Yomu is now a **working EPUB reader**, not a static prototype. A single `:app` module contains the custom design system plus a real, persisted library and a Readium-backed reader.
 
 Current technical baseline:
 
-- Android application module: `:app`
-- Package namespace: `com.itexpert120.yomu`
-- UI toolkit: Jetpack Compose
-- Custom design system: `core/designsystem` (YomuDesignTheme, custom tokens, surface/control primitives)
-- Library screen: static library grid with fake books, continue-reading section, book context panel
-- DevGallery: component gallery for validating design primitives (`app/devgallery`)
-- Edge-to-edge support with theme-aware system bar icons
-- compileSdk: 37, minSdk: 24, targetSdk: 36
+- Android application module: `:app`, namespace `com.itexpert120.yomu`, Jetpack Compose UI
+- Toolchain: AGP 9.2.1, Kotlin 2.4.0, Java 17 (+ core-library desugaring), Compose BOM 2026.06.00, KSP; compileSdk 37 / minSdk 24 / targetSdk 36
+- DI: **Hilt** (`@HiltAndroidApp`, `@HiltViewModel`, modules in `app/di/`)
+- Persistence: **Room** (`books`, `chapter_reads`, `reader_settings`; migrations 1→3) and **DataStore** (app + library + global reader settings)
+- Navigation: **Navigation Compose** with type-safe `@Serializable` routes and Material shared-axis (X) transitions
+- Reader engine: **Readium 3.3.0** behind a Yomu `ReaderEngine` boundary (only `data/reader/readium` imports Readium); `EpubNavigatorFragment` hosted in Compose
+- Images: **Coil 3** for covers; **SAF** import with sha256 dedup
+- Custom design system: `core/designsystem` (`YomuDesignTheme`, tokens, surface/control/card primitives) applied across every screen
+- Features: library (grid/list, search, sort, group, adaptive columns, multi-select, import), book details (TOC + persistent per-chapter read-state, multi-select, cover viewer + save-to-gallery, edit), reader (themes, six bundled fonts, brightness, scroll/paged, full-screen chrome, global + per-book settings), settings, about
+- DevGallery component harness (`app/devgallery`); edge-to-edge with theme-aware system bar icons; real app launcher icon
+
+**Not yet built:** bookmarks, highlights, in-book search, advanced typography (line/word/letter spacing, margins, justification, hyphenation, columns), Room FTS, performance profiling, reading stats. See the [Roadmap](roadmap.md) for status per phase.
 
 ## Planning Documents
 
@@ -39,13 +43,13 @@ The app should feel like a polished custom-native reading product:
 - Fast library browsing inspired by media apps.
 - Deep typography and theme controls for serious readers.
 
-## Non-Goals For The First Build
+## Non-Goals
 
-- Do not build a custom EPUB renderer from scratch before validating Readium.
+- Do not build a custom EPUB renderer from scratch — Readium is validated and in use.
 - Do not implement every advanced setting before the reading surface is stable.
-- Do not over-modularize the Gradle project before the first working reader prototype.
+- Do not over-modularize the Gradle project; the single `:app` module is intentional for now.
 - Do not let Material components define the visible product identity.
 
-## First Engineering Goal
+## Next Engineering Goal
 
-Build a static Compose prototype using fake books and fake chapter text, backed by the custom design primitives. EPUB parsing/rendering should come after the app language and reader interaction model are visible.
+With the library, book details, and a themeable Readium-backed reader working, the next focus is finishing the core reader for daily use: an in-reader Contents/Bookmarks panel, bookmarks, highlights, and in-book search (Roadmap Phase 7), followed by advanced typography (Phase 8).
