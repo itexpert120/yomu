@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -111,16 +112,25 @@ fun YomuScreenScaffold(
     YomuAppSurface(modifier = modifier) {
         Column(Modifier.fillMaxSize()) {
             YomuScreenHeader(title = title, onBack = onBack, subtitle = subtitle, trailing = trailing)
+            // Content is centered and capped so detail screens read intentionally on tablets
+            // rather than stretching edge-to-edge; on phones it just fills the width.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 4.dp, bottom = navBottom + 28.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                content = content,
-            )
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 640.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 4.dp, bottom = navBottom + 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    content = content,
+                )
+            }
         }
     }
 }

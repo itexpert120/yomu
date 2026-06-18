@@ -47,4 +47,23 @@ class RoomBookRepository @Inject constructor(
     override suspend fun isDuplicate(sha256: String): Boolean = dao.existsByHash(sha256)
 
     override suspend fun insert(book: ImportedBook) = dao.insert(book.toEntity())
+
+    override suspend fun readingTarget(id: BookId): ReadingTarget? {
+        val entity = dao.getBook(id.value) ?: return null
+        return ReadingTarget(
+            storagePath = entity.storagePath,
+            locatorJson = entity.locatorJson,
+            title = entity.title,
+        )
+    }
+
+    override suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double) {
+        dao.updateProgress(
+            id = id.value,
+            progress = totalProgression.toFloat(),
+            totalProgression = totalProgression,
+            locatorJson = locatorJson,
+            lastOpenedAt = System.currentTimeMillis(),
+        )
+    }
 }

@@ -21,7 +21,7 @@ import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
 import com.itexpert120.yomu.feature.library.LibraryRoute
-import com.itexpert120.yomu.feature.reader.ReaderPlaceholderScreen
+import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
 
 @Composable
@@ -94,9 +94,8 @@ fun YomuNavHost(
         composable<About> {
             AboutRoute(onBack = navController::popBackStack)
         }
-        composable<Reader> { entry ->
-            val args = entry.toRoute<Reader>()
-            ReaderPlaceholderScreen(bookId = args.bookId, onBack = navController::popBackStack)
+        composable<Reader> {
+            ReaderRoute(onBack = navController::popBackStack)
         }
     }
 }

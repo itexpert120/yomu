@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,12 +40,21 @@ import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import java.io.File
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ContinueReadingCard(book: LibraryBook, modifier: Modifier = Modifier) {
-    // Laid out flush with the grid (no card inset) so the cover's left edge
-    // lines up with the book covers below it.
+fun ContinueReadingCard(book: LibraryBook, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // Laid out flush with the grid (no card inset) so the cover's left edge lines up with the
+    // book covers below it. Capped so the hero doesn't stretch across a wide tablet.
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .widthIn(max = 560.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YomuTheme.radius.md))
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -3,6 +3,7 @@ package com.itexpert120.yomu.feature.library
 import androidx.compose.ui.graphics.Color
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.GroupMode
+import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 
@@ -51,7 +52,7 @@ data class LibraryUiState(
     val sortMode: SortMode = SortMode.Recent,
     val groupMode: GroupMode = GroupMode.None,
     val viewMode: LibraryViewMode = LibraryViewMode.Grid,
-    val gridColumns: Int = 3,
+    val gridColumns: Int = LibraryPreferences.AUTO_COLUMNS,
     val coverCrop: Boolean = true,
     val searchActive: Boolean = false,
     val searchQuery: String = "",

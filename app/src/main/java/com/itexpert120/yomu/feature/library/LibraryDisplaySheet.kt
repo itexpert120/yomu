@@ -61,11 +61,13 @@ internal fun LibraryDisplaySheet(
                 exit = shrinkVertically() + fadeOut(),
             ) {
                 SheetSection(label = "Columns") {
-                    val options = (LibraryPreferences.MIN_COLUMNS..LibraryPreferences.MAX_COLUMNS).toList()
+                    // "Auto" sizes columns to the screen width; the numbers force a fixed count.
+                    val values = listOf(LibraryPreferences.AUTO_COLUMNS) +
+                        (LibraryPreferences.MIN_COLUMNS..LibraryPreferences.MAX_COLUMNS)
                     YomuSegmentedControl(
-                        options = options.map { it.toString() },
-                        selectedIndex = options.indexOf(columns).coerceAtLeast(0),
-                        onSelected = { onColumnsChange(options[it]) },
+                        options = values.map { if (it == LibraryPreferences.AUTO_COLUMNS) "Auto" else it.toString() },
+                        selectedIndex = values.indexOf(columns).coerceAtLeast(0),
+                        onSelected = { onColumnsChange(values[it]) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

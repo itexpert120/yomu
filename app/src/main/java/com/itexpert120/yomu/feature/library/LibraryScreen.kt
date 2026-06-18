@@ -35,6 +35,7 @@ import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.model.GroupMode
+import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.core.model.ThemePreference
@@ -75,9 +76,9 @@ fun LibraryScreen(
         LibraryViewMode.List -> listState.canScrollBackward
     }
 
-    // Tap opens the reader; long-press starts multi-select. While selecting, both toggle.
+    // Tap opens book details; long-press starts multi-select. While selecting, both toggle.
     val onCardClick: (LibraryBook) -> Unit = { book ->
-        if (state.selectionMode) onToggleSelect(book.id) else onOpenReader(book.id)
+        if (state.selectionMode) onToggleSelect(book.id) else onOpenDetails(book.id)
     }
     val onCardLongPress: (LibraryBook) -> Unit = { book ->
         if (state.selectionMode) onToggleSelect(book.id) else onEnterSelection(book.id)
@@ -85,6 +86,35 @@ fun LibraryScreen(
 
     if (state.selectionMode) {
         BackHandler(onBack = onExitSelection)
+    }
+
+    val libraryContent: @Composable () -> Unit = {
+        Crossfade(
+            targetState = state.viewMode,
+            animationSpec = tween(300),
+            label = "libraryViewMode",
+        ) { mode ->
+            when (mode) {
+                LibraryViewMode.Grid -> LibraryGrid(
+                    state = gridState,
+                    continueReading = state.continueReading,
+                    columns = state.gridColumns,
+                    groups = state.groups,
+                    selectedIds = state.selectedIds,
+                    onBookClick = onCardClick,
+                    onBookLongPress = onCardLongPress,
+                )
+
+                LibraryViewMode.List -> LibraryList(
+                    state = listState,
+                    continueReading = state.continueReading,
+                    groups = state.groups,
+                    selectedIds = state.selectedIds,
+                    onBookClick = onCardClick,
+                    onBookLongPress = onCardLongPress,
+                )
+            }
+        }
     }
 
     YomuAppSurface {
@@ -111,37 +141,7 @@ fun LibraryScreen(
                         onOpenSettings = onOpenSettings,
                         elevated = elevated,
                     )
-
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        // Crossfade grid<->list; within each, items animate placement on
-                        // sort/group changes (see animateItem in LibraryGrid/LibraryList).
-                        Crossfade(
-                            targetState = state.viewMode,
-                            animationSpec = tween(300),
-                            label = "libraryViewMode",
-                        ) { mode ->
-                            when (mode) {
-                                LibraryViewMode.Grid -> LibraryGrid(
-                                    state = gridState,
-                                    continueReading = state.continueReading,
-                                    columns = state.gridColumns,
-                                    groups = state.groups,
-                                    selectedIds = state.selectedIds,
-                                    onBookClick = onCardClick,
-                                    onBookLongPress = onCardLongPress,
-                                )
-
-                                LibraryViewMode.List -> LibraryList(
-                                    state = listState,
-                                    continueReading = state.continueReading,
-                                    groups = state.groups,
-                                    selectedIds = state.selectedIds,
-                                    onBookClick = onCardClick,
-                                    onBookLongPress = onCardLongPress,
-                                )
-                            }
-                        }
-                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) { libraryContent() }
                 }
             }
 
@@ -249,7 +249,13 @@ private fun LibraryGrid(
 ) {
     LazyVerticalGrid(
         state = state,
-        columns = GridCells.Fixed(columns),
+        // Auto (0): adaptive so covers stay a comfortable size — ~3 columns on a phone, more on a
+        // tablet. A positive value forces that exact column count.
+        columns = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
+            GridCells.Adaptive(minSize = 118.dp)
+        } else {
+            GridCells.Fixed(columns)
+        },
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -257,7 +263,11 @@ private fun LibraryGrid(
     ) {
         if (continueReading != null) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                ContinueReadingCard(book = continueReading, modifier = Modifier.animateItem())
+                ContinueReadingCard(
+                    book = continueReading,
+                    onClick = { onBookClick(continueReading) },
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
 
@@ -296,7 +306,13 @@ private fun LibraryList(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (continueReading != null) {
-            item { ContinueReadingCard(book = continueReading, modifier = Modifier.animateItem()) }
+            item {
+                ContinueReadingCard(
+                    book = continueReading,
+                    onClick = { onBookClick(continueReading) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
         }
 
         groups.forEach { group ->

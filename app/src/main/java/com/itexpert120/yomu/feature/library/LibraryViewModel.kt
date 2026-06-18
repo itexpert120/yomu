@@ -144,7 +144,8 @@ class LibraryViewModel @Inject constructor(
         } else {
             null
         }
-        val gridBooks = books.filterNot { it.id == continueBook?.id }
+        // The continue-reading book stays in the grid too, so it's openable from there as well.
+        val gridBooks = books
             .matching(query)
             .sortedBy(prefs.sortMode)
         return LibraryUiState(

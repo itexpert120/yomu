@@ -26,7 +26,7 @@ class LibraryPrefsRepository @Inject constructor(
             groupMode = prefs[KeyGroup].toEnum(GroupMode.entries, GroupMode.None),
             viewMode = prefs[KeyView].toEnum(LibraryViewMode.entries, LibraryViewMode.Grid),
             gridColumns = (prefs[KeyColumns] ?: LibraryPreferences().gridColumns)
-                .coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS),
+                .coerceColumns(),
             coverCrop = prefs[KeyCoverCrop] ?: true,
         )
     }
@@ -36,8 +36,7 @@ class LibraryPrefsRepository @Inject constructor(
     suspend fun setViewMode(mode: LibraryViewMode) = edit(KeyView, mode.name)
 
     suspend fun setGridColumns(columns: Int) {
-        val clamped = columns.coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS)
-        dataStore.edit { it[KeyColumns] = clamped }
+        dataStore.edit { it[KeyColumns] = columns.coerceColumns() }
     }
 
     suspend fun setCoverCrop(crop: Boolean) {
@@ -59,3 +58,11 @@ class LibraryPrefsRepository @Inject constructor(
 
 private fun <E : Enum<E>> String?.toEnum(entries: List<E>, default: E): E =
     this?.let { name -> entries.firstOrNull { it.name == name } } ?: default
+
+/** Keep Auto (0) as-is; clamp any explicit count into the supported range. */
+private fun Int.coerceColumns(): Int =
+    if (this <= LibraryPreferences.AUTO_COLUMNS) {
+        LibraryPreferences.AUTO_COLUMNS
+    } else {
+        coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS)
+    }
