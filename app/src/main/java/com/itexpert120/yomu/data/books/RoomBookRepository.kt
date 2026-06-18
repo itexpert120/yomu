@@ -30,6 +30,7 @@ class RoomBookRepository @Inject constructor(
         val entities = dao.getBooks(keys)
         dao.deleteByIds(keys)
         dao.deleteAllReadChapters(keys)
+        dao.deleteReaderSettingsForBooks(keys)
         // Clean up the imported EPUB + extracted cover for each removed book.
         entities.forEach { entity ->
             runCatching { File(entity.storagePath).delete() }

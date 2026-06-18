@@ -95,8 +95,17 @@ fun YomuNavHost(
         composable<About> {
             AboutRoute(onBack = navController::popBackStack)
         }
-        composable<Reader> {
-            ReaderRoute(onBack = navController::popBackStack)
+        composable<Reader> { entry ->
+            val args = entry.toRoute<Reader>()
+            ReaderRoute(
+                onBack = navController::popBackStack,
+                onAbout = {
+                    navController.navigate(BookDetails(args.bookId)) {
+                        // Reuse the existing details entry if it's already on the stack.
+                        launchSingleTop = true
+                    }
+                },
+            )
         }
     }
 }

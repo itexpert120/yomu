@@ -19,7 +19,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): YomuDatabase =
         Room.databaseBuilder(context, YomuDatabase::class.java, "yomu.db")
-            .addMigrations(YomuDatabase.MIGRATION_1_2)
+            .addMigrations(YomuDatabase.MIGRATION_1_2, YomuDatabase.MIGRATION_2_3)
             .build()
 
     @Provides

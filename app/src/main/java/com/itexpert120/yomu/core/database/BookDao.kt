@@ -76,4 +76,20 @@ interface BookDao {
     suspend fun deleteAllReadChapters(bookIds: List<String>)
 
     // endregion
+
+    // region Per-book reader settings
+
+    @Query("SELECT * FROM reader_settings WHERE bookId = :bookId")
+    fun observeReaderSettings(bookId: String): Flow<ReaderSettingsEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReaderSettings(entity: ReaderSettingsEntity)
+
+    @Query("DELETE FROM reader_settings WHERE bookId = :bookId")
+    suspend fun deleteReaderSettings(bookId: String)
+
+    @Query("DELETE FROM reader_settings WHERE bookId IN (:bookIds)")
+    suspend fun deleteReaderSettingsForBooks(bookIds: List<String>)
+
+    // endregion
 }

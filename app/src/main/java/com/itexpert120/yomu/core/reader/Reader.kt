@@ -2,6 +2,7 @@ package com.itexpert120.yomu.core.reader
 
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
+import com.itexpert120.yomu.core.model.ReaderSettings
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -27,6 +28,9 @@ data class ReaderTocItem(
     val depth: Int,
 )
 
+/** A tap on the reading area, as fractions (0..1) of the view — used to resolve L-shaped zones. */
+data class ReaderTap(val xFraction: Float, val yFraction: Float)
+
 /** Opens books for reading. Implemented by the Readium adapter; no engine types leak out. */
 interface ReaderEngine {
     suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession?
@@ -44,12 +48,23 @@ interface ReaderSession {
     val title: String
     val currentLocator: StateFlow<ReaderLocator?>
 
-    /** Emits when the user taps the reading area (used to toggle chrome). */
-    val tapEvents: SharedFlow<Unit>
+    /** Emits the position of taps on the reading area (used to resolve tap zones). */
+    val tapEvents: SharedFlow<ReaderTap>
 
     val fragmentFactory: FragmentFactory
     val fragmentClassName: String
 
     fun onFragmentHosted(fragmentManager: FragmentManager, tag: String)
+
+    /** Applies reading preferences (layout/theme/font/size). Safe to call before/after hosting. */
+    fun applySettings(settings: ReaderSettings)
+
+    // Navigation, driven by the custom chrome (tap zones, slider arrows, progress slider).
+    fun goForward()
+    fun goBackward()
+    fun nextChapter()
+    fun previousChapter()
+    fun goToProgression(totalProgression: Double)
+
     fun close()
 }

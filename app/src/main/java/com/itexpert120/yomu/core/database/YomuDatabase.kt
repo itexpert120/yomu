@@ -6,8 +6,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [BookEntity::class, ChapterReadEntity::class],
-    version = 2,
+    entities = [BookEntity::class, ChapterReadEntity::class, ReaderSettingsEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
@@ -21,6 +21,17 @@ abstract class YomuDatabase : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS `chapter_reads` (" +
                         "`bookId` TEXT NOT NULL, `chapterId` TEXT NOT NULL, " +
                         "PRIMARY KEY(`bookId`, `chapterId`))",
+                )
+            }
+        }
+
+        /** v3 adds per-book reader settings overrides. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `reader_settings` (" +
+                        "`bookId` TEXT NOT NULL, `json` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`bookId`))",
                 )
             }
         }

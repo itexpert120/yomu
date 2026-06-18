@@ -3,9 +3,12 @@ package com.itexpert120.yomu.data.reader.readium
 import android.content.Context
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
+import com.itexpert120.yomu.core.model.ReaderLayout
+import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderSession
+import com.itexpert120.yomu.core.reader.ReaderTap
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -21,13 +24,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.navigator.OverflowableNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
+import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.getOrElse
@@ -117,11 +123,15 @@ private class ReadiumReaderSession(
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
-    private val _tapEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val tapEvents: SharedFlow<Unit> = _tapEvents.asSharedFlow()
+    private val _tapEvents = MutableSharedFlow<ReaderTap>(extraBufferCapacity = 1)
+    override val tapEvents: SharedFlow<ReaderTap> = _tapEvents.asSharedFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
+    // Latest engine locator, used for reading-order (chapter) navigation.
+    private var lastLocator: Locator? = null
+    // Settings requested before the navigator exists; applied once it is hosted.
+    private var pendingSettings: ReaderSettings? = null
 
     private val initialLocator: Locator? = initialLocatorJson
         ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
@@ -140,8 +150,10 @@ private class ReadiumReaderSession(
     override fun onFragmentHosted(fragmentManager: FragmentManager, tag: String) {
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
         navigator = nav
+        pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
         scope.launch {
             nav.currentLocator.collect { locator ->
+                lastLocator = locator
                 _currentLocator.value = ReaderLocator(
                     locatorJson = locator.toJSON().toString(),
                     totalProgression = locator.locations.totalProgression,
@@ -152,14 +164,64 @@ private class ReadiumReaderSession(
         }
         nav.addInputListener(object : InputListener {
             override fun onTap(event: TapEvent): Boolean {
-                _tapEvents.tryEmit(Unit)
+                val view = nav.view
+                if (view != null && view.width > 0 && view.height > 0) {
+                    _tapEvents.tryEmit(
+                        ReaderTap(
+                            xFraction = (event.point.x / view.width).coerceIn(0f, 1f),
+                            yFraction = (event.point.y / view.height).coerceIn(0f, 1f),
+                        ),
+                    )
+                }
                 return true
             }
         })
+    }
+
+    override fun applySettings(settings: ReaderSettings) {
+        pendingSettings = settings
+        navigator?.submitPreferences(settings.toPreferences())
+    }
+
+    override fun goForward() {
+        (navigator as? OverflowableNavigator)?.goForward()
+    }
+
+    override fun goBackward() {
+        (navigator as? OverflowableNavigator)?.goBackward()
+    }
+
+    override fun nextChapter() = goToReadingOrderOffset(+1)
+
+    override fun previousChapter() = goToReadingOrderOffset(-1)
+
+    private fun goToReadingOrderOffset(delta: Int) {
+        val hrefStr = lastLocator?.href?.toString() ?: return
+        val order = publication.readingOrder
+        val index = order.indexOfFirst { it.url().toString() == hrefStr }
+        val target = order.getOrNull(index + delta) ?: return
+        scope.launch { navigator?.go(target, animated = false) }
+    }
+
+    override fun goToProgression(totalProgression: Double) {
+        scope.launch {
+            // Map the requested whole-book progression to the nearest known position.
+            val positions = publication.positions()
+            val target = positions.minByOrNull {
+                kotlin.math.abs((it.locations.totalProgression ?: 0.0) - totalProgression)
+            } ?: return@launch
+            navigator?.go(target, animated = false)
+        }
     }
 
     override fun close() {
         scope.cancel()
         runCatching { publication.close() }
     }
+
+    // P1 maps layout + size; theme/font/custom colours land in P2.
+    private fun ReaderSettings.toPreferences(): EpubPreferences = EpubPreferences(
+        scroll = layout == ReaderLayout.Scroll,
+        fontSize = fontScale.toDouble(),
+    )
 }
