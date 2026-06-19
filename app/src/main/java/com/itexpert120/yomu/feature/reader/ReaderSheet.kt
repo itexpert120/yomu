@@ -299,7 +299,7 @@ internal fun AutoSlider(
             )
             // "Auto" when at the engine default; tap a concrete value to reset back to Auto.
             Text(
-                text = if (auto) "Auto" else valueText(value!!),
+                text = if (auto) "Auto" else valueText(value),
                 color = if (auto) YomuTheme.colors.textMuted else YomuTheme.colors.accent,
                 style = YomuTheme.type.mono,
                 modifier = Modifier

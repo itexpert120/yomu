@@ -43,6 +43,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /** Full-screen, dismissable cover viewer with close + save-to-gallery affordances. */
+// Tints the dialogue's system bars transparent via the (deprecated) window setters so the backdrop
+// bleeds edge-to-edge; the replacement API doesn't apply to a Dialogue window the same way.
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CoverViewerDialog(

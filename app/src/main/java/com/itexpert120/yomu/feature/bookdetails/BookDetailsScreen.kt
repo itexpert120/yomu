@@ -51,8 +51,8 @@ import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.Icon
@@ -670,7 +670,7 @@ private fun ChapterSelectionBar(
         )
         // Mark every chapter up to (and including) the selected one as read.
         SelectionAction(
-            Icons.Rounded.PlaylistAddCheck,
+            Icons.AutoMirrored.Rounded.PlaylistAddCheck,
             "To here",
             onMarkPrevious,
             enabled = selectedCount > 0

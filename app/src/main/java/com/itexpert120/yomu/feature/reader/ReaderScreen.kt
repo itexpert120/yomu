@@ -42,6 +42,9 @@ import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderSession
 
+// Intentionally colours the system bars to the reading theme via the (now-deprecated) window
+// setters — the only way to keep the bars seamless with the page without a system scrim.
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReaderScreen(
