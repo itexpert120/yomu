@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.feature.library
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
@@ -8,13 +9,11 @@ import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
-import android.net.Uri
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.settings.LibraryPrefsRepository
 import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /** Transient search state — intentionally not persisted across launches. */
 private data class SearchState(val active: Boolean = false, val query: String = "")
@@ -98,8 +98,9 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { ids.forEach { repository.markUnread(it) } }
     }
 
+    // The continue-reading hero isn't a selectable grid item, so it's excluded here to keep
+    // select-all consistent with totalCount.
     private fun visibleBookIds(): Set<String> = buildSet {
-        state.value.continueReading?.id?.let { add(it) }
         state.value.groups.forEach { group -> group.books.forEach { add(it.id) } }
     }
 
@@ -144,13 +145,16 @@ class LibraryViewModel @Inject constructor(
         } else {
             null
         }
-        // The continue-reading book stays in the grid too, so it's openable from there as well.
+        // The continue-reading book is surfaced as the hero, so hide it from the grid to avoid
+        // showing the same cover twice.
         val gridBooks = books
+            .filterNot { it.id == continueBook?.id }
             .matching(query)
             .sortedBy(prefs.sortMode)
         return LibraryUiState(
             isLoading = false,
             totalCount = books.size,
+            selectableCount = gridBooks.size,
             continueReading = continueBook?.toLibraryBook(),
             groups = gridBooks.groupedBy(prefs.groupMode),
             sortMode = prefs.sortMode,

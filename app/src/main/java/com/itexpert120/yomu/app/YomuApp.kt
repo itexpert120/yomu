@@ -46,8 +46,8 @@ fun YomuApp(
     LaunchedEffect(resolved) { onResolvedThemeChange(resolved) }
 
     YomuDesignTheme(themeMode = resolved, accent = accentColor) {
-        // Opaque app-colored backing so the shared-axis transition never reveals the window
-        // background (which would flash light during navigation in dark mode).
+        // Opaque app-coloured backing so the shared-axis transition never reveals the window
+        // background (which would torch during navigation in dark mode).
         Box(
             modifier = Modifier
                 .fillMaxSize()

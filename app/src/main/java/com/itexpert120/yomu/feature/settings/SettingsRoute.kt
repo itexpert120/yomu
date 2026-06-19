@@ -11,6 +11,8 @@ import com.itexpert120.yomu.core.model.ThemePreference
 fun SettingsRoute(
     appViewModel: AppViewModel,
     onBack: () -> Unit,
+    onOpenStats: () -> Unit,
+    onOpenReaderDefaults: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     val preference by appViewModel.themePreference.collectAsState()
@@ -35,6 +37,8 @@ fun SettingsRoute(
         onSelectAccent = appViewModel::onSelectAccent,
         onSelectCustomAccent = appViewModel::onSelectCustomAccent,
         onBack = onBack,
+        onOpenStats = onOpenStats,
+        onOpenReaderDefaults = onOpenReaderDefaults,
         onOpenAbout = onOpenAbout,
     )
 }

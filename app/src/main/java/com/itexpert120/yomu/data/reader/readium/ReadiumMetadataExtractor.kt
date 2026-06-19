@@ -44,7 +44,8 @@ class ReadiumMetadataExtractor @Inject constructor(
 
     /** Returns extracted metadata, or null if the file can't be opened as a publication. */
     suspend fun extract(file: File): ExtractedMetadata? {
-        val asset = assetRetriever.retrieve(file.toUrl(isDirectory = false)).getOrElse { return null }
+        val asset =
+            assetRetriever.retrieve(file.toUrl(isDirectory = false)).getOrElse { return null }
         val publication = publicationOpener.open(asset, allowUserInteraction = false)
             .getOrElse {
                 asset.close()
@@ -54,7 +55,8 @@ class ReadiumMetadataExtractor @Inject constructor(
             val metadata = publication.metadata
             ExtractedMetadata(
                 title = metadata.title,
-                author = metadata.authors.mapNotNull { it.name }.joinToString(", ").ifBlank { null },
+                author = metadata.authors.mapNotNull { it.name }.joinToString(", ")
+                    .ifBlank { null },
                 description = metadata.description,
                 language = metadata.languages.firstOrNull(),
                 publisher = metadata.publishers.mapNotNull { it.name }.firstOrNull(),

@@ -2,17 +2,17 @@ package com.itexpert120.yomu.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import com.itexpert120.yomu.core.model.AccentColor
 import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ThemePreference
+import com.itexpert120.yomu.data.settings.AppSettingsRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import com.itexpert120.yomu.data.settings.AppSettingsRepository
+import javax.inject.Inject
 
 /**
  * Holds app-shell theme state, persisted through [AppSettingsRepository]. The concrete

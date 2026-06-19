@@ -40,7 +40,11 @@ fun YomuBookCard(
                 .aspectRatio(BookCoverAspectRatio)
                 .clip(RoundedCornerShape(YomuTheme.radius.md))
                 .background(Brush.verticalGradient(coverColors))
-                .border(1.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(YomuTheme.radius.md))
+                .border(
+                    1.dp,
+                    colors.border.copy(alpha = 0.35f),
+                    RoundedCornerShape(YomuTheme.radius.md)
+                )
                 .padding(14.dp),
         ) {
             Box(

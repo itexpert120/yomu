@@ -1,11 +1,15 @@
 package com.itexpert120.yomu.data.books
 
 import com.itexpert120.yomu.core.database.BookDao
+import com.itexpert120.yomu.core.database.BookTocEntity
 import com.itexpert120.yomu.core.database.ChapterReadEntity
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.reader.ReaderEngine
+import com.itexpert120.yomu.core.reader.ReaderTocItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,7 +17,14 @@ import javax.inject.Singleton
 @Singleton
 class RoomBookRepository @Inject constructor(
     private val dao: BookDao,
+    private val readerEngine: ReaderEngine,
 ) : BookRepository {
+
+    private val tocJson = Json { ignoreUnknownKeys = true }
+
+    // Process-lifetime cache of parsed TOCs, so navigating details <-> reader <-> details doesn't
+    // re-read or reparse from disk. The TOC is immutable per book, so entries never go stale.
+    private val tocMemory = java.util.concurrent.ConcurrentHashMap<String, List<ReaderTocItem>>()
 
     override fun observeBooks(): Flow<List<Book>> =
         dao.observeBooks().map { list -> list.map { it.toBook() } }
@@ -31,6 +42,9 @@ class RoomBookRepository @Inject constructor(
         dao.deleteByIds(keys)
         dao.deleteAllReadChapters(keys)
         dao.deleteReaderSettingsForBooks(keys)
+        dao.deleteTocForBooks(keys)
+        dao.deleteSessionsForBooks(keys)
+        keys.forEach { tocMemory.remove(it) }
         // Clean up the imported EPUB + extracted cover for each removed book.
         entities.forEach { entity ->
             runCatching { File(entity.storagePath).delete() }
@@ -68,6 +82,27 @@ class RoomBookRepository @Inject constructor(
             locatorJson = locatorJson,
             lastOpenedAt = System.currentTimeMillis(),
         )
+    }
+
+    override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = tocMemory[id.value]
+
+    override suspend fun tableOfContents(id: BookId): List<ReaderTocItem> {
+        tocMemory[id.value]?.let { return it }
+        dao.getCachedToc(id.value)?.let { cached ->
+            runCatching { tocJson.decodeFromString<List<ReaderTocItem>>(cached) }
+                .getOrNull()
+                ?.let {
+                    tocMemory[id.value] = it
+                    return it
+                }
+        }
+        val entity = dao.getBook(id.value) ?: return emptyList()
+        val items = readerEngine.tableOfContents(entity.storagePath)
+        if (items.isNotEmpty()) {
+            tocMemory[id.value] = items
+            runCatching { dao.upsertToc(BookTocEntity(id.value, tocJson.encodeToString(items))) }
+        }
+        return items
     }
 
     override fun observeReadChapters(id: BookId): Flow<Set<String>> =

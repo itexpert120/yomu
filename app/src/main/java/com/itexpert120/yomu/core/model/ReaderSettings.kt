@@ -10,6 +10,10 @@ enum class ReaderLayout { Scroll, Paged }
 @Serializable
 enum class ReaderThemeMode { Light, Dark, Sepia, Black, Custom }
 
+/** Text alignment. [Default] leaves it to the engine; the rest force a concrete alignment. */
+@Serializable
+enum class ReaderTextAlign(val label: String) { Default("Auto"), Left("Left"), Justify("Justify") }
+
 /** Bundled reading fonts (custom user fonts are out of scope for now). [Lora] is the default. */
 @Serializable
 enum class ReaderFont(val displayName: String, val cssFamily: String) {
@@ -34,12 +38,21 @@ data class ReaderSettings(
     val customText: Long? = null,
     val font: ReaderFont = ReaderFont.Lora,
     val fontScale: Float = 1.0f,
+    // Advanced typography. null means "leave to the engine" (Auto); a value forces the setting.
     val lineHeight: Float? = null,
+    val pageMargins: Float? = null,
+    val paragraphSpacing: Float? = null,
+    val textAlign: ReaderTextAlign = ReaderTextAlign.Default,
     val useSystemBrightness: Boolean = true,
     val brightness: Float = 0.5f,
+    // Extra dimming below the device minimum: a black overlay (0 = off .. 1 = darkest allowed).
+    val dimLevel: Float = 0f,
+    // Tapping the centre of the page opens the controls sheet (the top-bar button always does too).
+    val centerTapOpensSheet: Boolean = true,
+    // Tapping the left/right edge turns the page (and crosses chapters at the edges).
+    val tapNavigation: Boolean = true,
     // Chrome appearance. The top bar is always present (sleek + compact); the footer is optional.
     val showFooter: Boolean = true,
-    val edgeShadows: Boolean = true,
     // Footer contents (battery on the left, reading progress on the right, clock between).
     val footerShowBattery: Boolean = true,
     val footerShowClock: Boolean = true,
@@ -71,5 +84,26 @@ data class ReaderSettings(
     companion object {
         const val MIN_FONT_SCALE = 0.6f
         const val MAX_FONT_SCALE = 2.5f
+        const val FONT_SCALE_STEP = 0.05f
+        const val DEFAULT_FONT_SCALE = 1.0f
+
+        // Advanced typography ranges (min, max, the "Auto" fallback shown on the slider, step).
+        const val MIN_LINE_HEIGHT = 1.0f
+        const val MAX_LINE_HEIGHT = 2.4f
+        const val DEFAULT_LINE_HEIGHT = 1.5f
+        const val LINE_HEIGHT_STEP = 0.05f
+
+        const val MIN_PAGE_MARGINS = 0.5f
+        const val MAX_PAGE_MARGINS = 3.0f
+        const val DEFAULT_PAGE_MARGINS = 1.0f
+        const val PAGE_MARGINS_STEP = 0.1f
+
+        const val MIN_PARAGRAPH_SPACING = 0.0f
+        const val MAX_PARAGRAPH_SPACING = 2.0f
+        const val DEFAULT_PARAGRAPH_SPACING = 0.5f
+        const val PARAGRAPH_SPACING_STEP = 0.1f
+
+        // The darkest the extra-dim overlay may get; kept under 1.0 so the screen never goes fully black.
+        const val MAX_DIM_ALPHA = 0.85f
     }
 }

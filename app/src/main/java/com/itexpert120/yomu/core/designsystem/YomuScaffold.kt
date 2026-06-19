@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -148,15 +149,18 @@ fun YomuScreenScaffold(
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val scrollState = rememberScrollState()
+    // derivedStateOf so the header only recomposes when crossing the top, not on every scroll px.
+    val elevated by remember { derivedStateOf { scrollState.value > 0 } }
     YomuAppSurface(modifier = modifier) {
         Column(Modifier.fillMaxSize()) {
             YomuScreenHeader(
                 title = title,
                 onBack = onBack,
                 subtitle = subtitle,
-                elevated = scrollState.value > 0,
+                elevated = elevated,
                 trailing = trailing,
             )
             // Content is centered and capped so detail screens read intentionally on tablets

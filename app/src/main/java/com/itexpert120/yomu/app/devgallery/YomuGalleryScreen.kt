@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -21,11 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,7 +74,8 @@ fun YomuGalleryScreen(
     themeMode: YomuThemeMode,
     onThemeModeChange: (YomuThemeMode) -> Unit,
 ) {
-    val containerWidthDp = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val containerWidthDp =
+        with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val isExpanded = containerWidthDp >= 900.dp
     YomuAppSurface {
         if (isExpanded) {
@@ -146,7 +147,13 @@ private fun ExpandedGalleryLayout(
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.caption,
                 )
-                listOf("Controls", "Reader", "Library", "Themes", "Settings").forEachIndexed { index, label ->
+                listOf(
+                    "Controls",
+                    "Reader",
+                    "Library",
+                    "Themes",
+                    "Settings"
+                ).forEachIndexed { index, label ->
                     YomuChip(label, selected = index == 0, onClick = {})
                 }
             }
@@ -206,7 +213,10 @@ private fun ControlGallery() {
     YomuPanel {
         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
             SectionTitle("Controls")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 YomuButton("Read", onClick = {})
                 YomuButton("Library", onClick = {}, emphasis = YomuButtonEmphasis.Secondary)
                 YomuButton("Ghost", onClick = {}, emphasis = YomuButtonEmphasis.Ghost)
@@ -216,9 +226,21 @@ private fun ControlGallery() {
                 selectedIndex = selectedMode,
                 onSelected = { selectedMode = it },
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("TOC", "Brightness", "Font", "Bookmark", "Highlight").forEachIndexed { index, label ->
-                    YomuChip(label, selected = selectedChip == index, onClick = { selectedChip = index })
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    "TOC",
+                    "Brightness",
+                    "Font",
+                    "Bookmark",
+                    "Highlight"
+                ).forEachIndexed { index, label ->
+                    YomuChip(
+                        label,
+                        selected = selectedChip == index,
+                        onClick = { selectedChip = index })
                 }
             }
             YomuRangeRow(
@@ -260,8 +282,16 @@ private fun ReaderGallery() {
                         style = YomuTheme.type.reader,
                     )
                     YomuFloatingPanel(modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("42%", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.mono, modifier = Modifier.align(Alignment.CenterVertically))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "42%",
+                                color = YomuTheme.colors.textPrimary,
+                                style = YomuTheme.type.mono,
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            )
                             YomuChip("TOC", selected = false, onClick = {})
                             YomuChip("Aa", selected = true, onClick = {})
                             YomuChip("Mark", selected = false, onClick = {})
@@ -276,14 +306,32 @@ private fun ReaderGallery() {
 @Composable
 private fun BookGallery() {
     val books = listOf(
-        GalleryBook("Deep Work", "Cal Newport", 0.64f, listOf(Color(0xFF263A30), Color(0xFF587A5F))),
-        GalleryBook("The Left Hand", "Ursula K. Le Guin", 0.28f, listOf(Color(0xFF1A2736), Color(0xFF526982))),
-        GalleryBook("Designing Type", "Karen Cheng", 0.83f, listOf(Color(0xFF35211E), Color(0xFF9B5948))),
+        GalleryBook(
+            "Deep Work",
+            "Cal Newport",
+            0.64f,
+            listOf(Color(0xFF263A30), Color(0xFF587A5F))
+        ),
+        GalleryBook(
+            "The Left Hand",
+            "Ursula K. Le Gun",
+            0.28f,
+            listOf(Color(0xFF1A2736), Color(0xFF526982))
+        ),
+        GalleryBook(
+            "Designing Type",
+            "Karen Cheng",
+            0.83f,
+            listOf(Color(0xFF35211E), Color(0xFF9B5948))
+        ),
     )
     YomuPanel {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SectionTitle("Library Cards")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
                 books.forEach { book ->
                     YomuBookCard(
                         title = book.title,
@@ -313,7 +361,10 @@ private fun ThemeGallery() {
     YomuPanel {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SectionTitle("Theme Swatches")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 swatches.forEach { (name, color) ->
                     YomuColorSwatch(
                         name = name,
@@ -336,7 +387,11 @@ private fun ThemeGallery() {
                             style = YomuTheme.type.body,
                             modifier = Modifier.weight(1f),
                         )
-                        Text("Ready", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+                        Text(
+                            "Ready",
+                            color = YomuTheme.colors.textMuted,
+                            style = YomuTheme.type.caption
+                        )
                     }
                 }
             }

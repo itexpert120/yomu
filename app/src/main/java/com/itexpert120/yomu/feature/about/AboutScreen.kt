@@ -21,8 +21,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.R
-import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
+import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
@@ -34,13 +34,15 @@ fun AboutRoute(onBack: () -> Unit) {
 fun AboutScreen(onBack: () -> Unit) {
     YomuScreenScaffold(title = "About", onBack = onBack) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(74.dp)
+                    .size(96.dp)
                     .clip(RoundedCornerShape(YomuTheme.radius.lg))
                     .background(Color(0xFF050505))
                     .border(
@@ -54,11 +56,15 @@ fun AboutScreen(onBack: () -> Unit) {
                     painter = painterResource(R.drawable.ic_yomu_mark),
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(54.dp),
+                    modifier = Modifier.size(72.dp),
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(text = "Yomu", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.display)
+                Text(
+                    text = "Yomu",
+                    color = YomuTheme.colors.textPrimary,
+                    style = YomuTheme.type.display
+                )
                 Text(
                     text = "読む · EPUB reader",
                     color = YomuTheme.colors.textSecondary,
@@ -75,7 +81,7 @@ fun AboutScreen(onBack: () -> Unit) {
         YomuSettingGroup(title = "About") {
             Text(
                 text = "Yomu is a native Android EPUB reader focused on a calm, reader-first " +
-                    "experience with deep typography and theme control.",
+                        "experience with deep typography and theme control.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )

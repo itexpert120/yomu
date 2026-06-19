@@ -17,7 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
@@ -59,6 +62,8 @@ fun SettingsScreen(
     onSelectAccent: (AccentColor) -> Unit,
     onSelectCustomAccent: (Long) -> Unit,
     onBack: () -> Unit,
+    onOpenStats: () -> Unit,
+    onOpenReaderDefaults: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     var showCustomPicker by remember { mutableStateOf(false) }
@@ -112,7 +117,7 @@ fun SettingsScreen(
                                         if (accentIsDark) choice.accent.dark else choice.accent.light,
                                     ),
                                     selected = accentSelection is AccentSelection.Preset &&
-                                        accentSelection.accent == choice.accent,
+                                            accentSelection.accent == choice.accent,
                                     onClick = { onSelectAccent(choice.accent) },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -137,6 +142,18 @@ fun SettingsScreen(
         }
 
         NavigationRow(
+            icon = rememberVectorPainter(Icons.Rounded.Tune),
+            label = "Reading defaults",
+            onClick = onOpenReaderDefaults,
+        )
+
+        NavigationRow(
+            icon = rememberVectorPainter(Icons.Rounded.Insights),
+            label = "Statistics",
+            onClick = onOpenStats,
+        )
+
+        NavigationRow(
             icon = painterResource(R.drawable.ic_yomu_mark),
             label = "About Yomu",
             onClick = onOpenAbout,
@@ -148,7 +165,12 @@ fun SettingsScreen(
     } else {
         Color(accentSelection.resolve(accentIsDark))
     }
-    YomuBottomSheet(visible = showCustomPicker, onDismiss = { showCustomPicker = false }) { dismiss ->
+    // scrollable=false: the colour picker owns its vertical drag gesture (would fight a parent scroll).
+    YomuBottomSheet(
+        visible = showCustomPicker,
+        onDismiss = { showCustomPicker = false },
+        scrollable = false
+    ) { dismiss ->
         Text(
             text = "Custom accent",
             color = YomuTheme.colors.textPrimary,

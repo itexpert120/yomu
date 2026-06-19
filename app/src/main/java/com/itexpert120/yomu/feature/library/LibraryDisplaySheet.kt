@@ -42,7 +42,11 @@ internal fun LibraryDisplaySheet(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(text = "Display", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.title)
+            Text(
+                text = "Display",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.title
+            )
 
             SheetSection(label = "View") {
                 val modes = LibraryViewMode.entries
@@ -63,7 +67,7 @@ internal fun LibraryDisplaySheet(
                 SheetSection(label = "Columns") {
                     // "Auto" sizes columns to the screen width; the numbers force a fixed count.
                     val values = listOf(LibraryPreferences.AUTO_COLUMNS) +
-                        (LibraryPreferences.MIN_COLUMNS..LibraryPreferences.MAX_COLUMNS)
+                            (LibraryPreferences.MIN_COLUMNS..LibraryPreferences.MAX_COLUMNS)
                     YomuSegmentedControl(
                         options = values.map { if (it == LibraryPreferences.AUTO_COLUMNS) "Auto" else it.toString() },
                         selectedIndex = values.indexOf(columns).coerceAtLeast(0),
@@ -86,7 +90,11 @@ internal fun LibraryDisplaySheet(
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "Done", color = YomuTheme.colors.textSecondary, style = YomuTheme.type.body)
+                Text(
+                    text = "Done",
+                    color = YomuTheme.colors.textSecondary,
+                    style = YomuTheme.type.body
+                )
             }
         }
     }

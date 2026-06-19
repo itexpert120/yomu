@@ -10,7 +10,7 @@ Current state: an early static prototype. There is one `:app` module containing 
 
 ## Commands
 
-Use the Gradle wrapper. On this Windows/PowerShell environment use `./gradlew` (Bash tool) or `.\gradlew.bat` (PowerShell).
+Use the Gradle wrapper. On these Windows/PowerShell environment use `./gradlew` (Bash tool) or `.\gradlew.bat` (PowerShell).
 
 ```bash
 ./gradlew assembleDebug          # build debug APK

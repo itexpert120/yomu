@@ -21,8 +21,10 @@ import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
 import com.itexpert120.yomu.feature.library.LibraryRoute
+import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
+import com.itexpert120.yomu.feature.stats.StatsRoute
 
 @Composable
 fun YomuNavHost(
@@ -70,6 +72,7 @@ fun YomuNavHost(
                 onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
                 onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
                 onThemeToggle = appViewModel::onCycleTheme,
+                onOpenStats = { navController.navigate(Stats) },
                 onOpenSettings = { navController.navigate(Settings) },
             )
         }
@@ -89,23 +92,22 @@ fun YomuNavHost(
             SettingsRoute(
                 appViewModel = appViewModel,
                 onBack = navController::popBackStack,
+                onOpenStats = { navController.navigate(Stats) },
+                onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
                 onOpenAbout = { navController.navigate(About) },
             )
+        }
+        composable<ReaderDefaults> {
+            ReaderDefaultsRoute(onBack = navController::popBackStack)
+        }
+        composable<Stats> {
+            StatsRoute(onBack = navController::popBackStack)
         }
         composable<About> {
             AboutRoute(onBack = navController::popBackStack)
         }
-        composable<Reader> { entry ->
-            val args = entry.toRoute<Reader>()
-            ReaderRoute(
-                onBack = navController::popBackStack,
-                onAbout = {
-                    navController.navigate(BookDetails(args.bookId)) {
-                        // Reuse the existing details entry if it's already on the stack.
-                        launchSingleTop = true
-                    }
-                },
-            )
+        composable<Reader> {
+            ReaderRoute(onBack = navController::popBackStack)
         }
     }
 }

@@ -66,7 +66,13 @@ class FileStorage @Inject constructor(
 
     /** The original display name from the SAF document, used as a title fallback. */
     fun displayName(uri: Uri): String? {
-        return context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        return context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )
             ?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }

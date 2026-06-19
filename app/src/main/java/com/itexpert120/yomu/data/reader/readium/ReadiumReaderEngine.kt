@@ -5,9 +5,11 @@ import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
-import com.itexpert120.yomu.core.model.ReaderThemeMode
+import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderLocator
+import com.itexpert120.yomu.core.reader.ReaderRect
+import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,26 +17,29 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.navigator.OverflowableNavigator
+import org.readium.r2.navigator.SelectableNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
-import org.readium.r2.navigator.input.InputListener
-import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.epub.css.FontStyle
 import org.readium.r2.navigator.epub.css.FontWeight
-import org.readium.r2.navigator.preferences.Color as ReadiumColor
+import org.readium.r2.navigator.input.DragEvent
+import org.readium.r2.navigator.input.InputListener
+import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Theme
+import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -49,6 +54,9 @@ import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.milliseconds
+import org.readium.r2.navigator.preferences.Color as ReadiumColor
+import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 
 @Singleton
 class ReadiumReaderEngine @Inject constructor(
@@ -78,7 +86,14 @@ class ReadiumReaderEngine @Inject constructor(
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem> {
         val publication = openPublication(filePath) ?: return emptyList()
         return try {
-            buildList { flattenToc(publication, publication.tableOfContents, depth = 0, out = this) }
+            buildList {
+                flattenToc(
+                    publication,
+                    publication.tableOfContents,
+                    depth = 0,
+                    out = this
+                )
+            }
         } finally {
             runCatching { publication.close() }
         }
@@ -136,12 +151,24 @@ private class ReadiumReaderSession(
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
+    private val _selection = MutableStateFlow<ReaderSelection?>(null)
+    override val selection: StateFlow<ReaderSelection?> = _selection.asStateFlow()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
+
     // Latest engine locator, used for reading-order (chapter) navigation.
     private var lastLocator: Locator? = null
+
     // Settings requested before the navigator exists; applied once it is hosted.
     private var pendingSettings: ReaderSettings? = initialSettings
+
+    // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
+    private var currentSettings: ReaderSettings = initialSettings
+
+    // The selection text we just cleared; polls matching it are ignored until the WebView drops it
+    // (so the bar doesn't flicker back), but a *different* fresh selection is reported normally.
+    private var clearedSelectionText: String? = null
 
     private val initialLocator: Locator? = initialLocatorJson
         ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
@@ -252,35 +279,91 @@ private class ReadiumReaderSession(
         scope.launch {
             nav.currentLocator.collect { locator ->
                 lastLocator = locator
+                val hrefStr = locator.href.toString()
+                val order = publication.readingOrder
+                val index = order.indexOfFirst { it.url().toString() == hrefStr }
                 _currentLocator.value = ReaderLocator(
                     locatorJson = locator.toJSON().toString(),
                     totalProgression = locator.locations.totalProgression,
                     chapterTitle = locator.title,
-                    href = locator.href.toString(),
+                    href = hrefStr,
+                    chapterProgression = locator.locations.progression,
+                    hasPreviousChapter = index > 0,
+                    hasNextChapter = index in 0 until order.lastIndex,
                 )
             }
         }
-        // Only the centre is handled (opens the controls sheet); edge taps fall through so Readium's
-        // default navigation (swipes) keeps working — no custom navigation tap zones.
+        // Tap-zone navigation: in PAGED mode, the left/right thirds turn pages; the centre opens the
+        // controls sheet (any mode). In SCROLL mode edge taps do nothing — the user scrolls. We
+        // deliberately don't handle drags, so there's no swipe/drag-to-change-chapter. Unhandled
+        // taps return false so Readium can still activate in-page links.
         nav.addInputListener(object : InputListener {
             override fun onTap(event: TapEvent): Boolean {
                 val view = nav.view ?: return false
-                if (view.width <= 0 || view.height <= 0) return false
+                if (view.width <= 0) return false
                 val x = event.point.x / view.width
-                val y = event.point.y / view.height
-                val center = x in CENTER_MIN..CENTER_MAX && y in CENTER_MIN..CENTER_MAX
-                return if (center) {
+                if (currentSettings.tapNavigation && currentSettings.layout == ReaderLayout.Paged) {
+                    if (x <= TAP_LEFT) {
+                        goBackward(); return true
+                    }
+                    if (x >= TAP_RIGHT) {
+                        goForward(); return true
+                    }
+                }
+                if (x > TAP_LEFT && x < TAP_RIGHT && currentSettings.centerTapOpensSheet) {
                     _centerTaps.tryEmit(Unit)
-                    true
-                } else {
-                    false
+                    return true
+                }
+                return false
+            }
+
+            // In scroll mode a horizontal swipe to change chapter makes no sense, so swallow
+            // horizontal drags there (vertical scrolling still works). Paged mode keeps its
+            // natural left/right page swipe. Never swallow while a selection is active, so dragging
+            // to extend a selection isn't blocked.
+            override fun onDrag(event: DragEvent): Boolean =
+                currentSettings.layout == ReaderLayout.Scroll &&
+                        _selection.value == null &&
+                        kotlin.math.abs(event.offset.x) > kotlin.math.abs(event.offset.y)
+        })
+
+        // Track the active text selection (for word lookup). Readium exposes it as a one-shot
+        // suspend call, so poll lightly while the reader is open. After we clear a selection, keep
+        // reporting null until Readium's WebView actually drops it, so the bar doesn't flicker back.
+        (nav as? SelectableNavigator)?.let { selectable ->
+            scope.launch {
+                while (isActive) {
+                    val current = runCatching { selectable.currentSelection() }.getOrNull()
+                    val text = current?.locator?.text?.highlight?.trim()?.takeIf { it.isNotBlank() }
+                    if (text == null || text == clearedSelectionText) {
+                        // No selection, or the same one we just cleared (still settling): hide it.
+                        _selection.value = null
+                    } else {
+                        clearedSelectionText = null
+                        val rect = current.rect?.let {
+                            ReaderRect(
+                                topPx = it.top,
+                                bottomPx = it.bottom,
+                                centerXPx = it.centerX()
+                            )
+                        }
+                        _selection.value = ReaderSelection(text = text, anchor = rect)
+                    }
+                    delay(SELECTION_POLL_MS.milliseconds)
                 }
             }
-        })
+        }
+    }
+
+    override fun clearSelection() {
+        clearedSelectionText = _selection.value?.text
+        (navigator as? SelectableNavigator)?.clearSelection()
+        _selection.value = null
     }
 
     override fun applySettings(settings: ReaderSettings) {
         pendingSettings = settings
+        currentSettings = settings
         navigator?.submitPreferences(settings.toPreferences())
     }
 
@@ -315,6 +398,12 @@ private class ReadiumReaderSession(
         }
     }
 
+    override fun goToLocator(locatorJson: String) {
+        val locator =
+            runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
+        scope.launch { navigator?.go(locator, animated = false) }
+    }
+
     override fun close() {
         scope.cancel()
         runCatching { publication.close() }
@@ -326,7 +415,15 @@ private class ReadiumReaderSession(
         fontSize = fontScale.toDouble(),
         // The family name must match a declaration registered on the navigator factory above.
         fontFamily = FontFamily(font.cssFamily),
+        // Advanced typography (active because publisherStyles is disabled). null = engine default.
         lineHeight = lineHeight?.toDouble(),
+        pageMargins = pageMargins?.toDouble(),
+        paragraphSpacing = paragraphSpacing?.toDouble(),
+        textAlign = when (textAlign) {
+            ReaderTextAlign.Default -> null
+            ReaderTextAlign.Left -> ReadiumTextAlign.LEFT
+            ReaderTextAlign.Justify -> ReadiumTextAlign.JUSTIFY
+        },
         // Base appearance picks sensible defaults (links etc.), but the explicit bg/text colours
         // win so the page exactly matches the Yomu chrome (no status-bar seam). A theme's own bg
         // would otherwise override them, which is what caused the mismatch.
@@ -337,7 +434,9 @@ private class ReadiumReaderSession(
     )
 
     private companion object {
-        const val CENTER_MIN = 0.25f
-        const val CENTER_MAX = 0.75f
+        // Tap-zone boundaries as fractions of the page width.
+        const val TAP_LEFT = 0.33f
+        const val TAP_RIGHT = 0.67f
+        const val SELECTION_POLL_MS = 400L
     }
 }

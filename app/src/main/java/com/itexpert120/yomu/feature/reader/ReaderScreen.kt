@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -29,11 +30,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Text
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderSession
@@ -50,10 +54,43 @@ fun ReaderScreen(
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
-    onAbout: () -> Unit,
+    onResetSettings: () -> Unit,
+    onOpenCustomTheme: () -> Unit,
+    onCloseCustomTheme: () -> Unit,
+    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+    onSaveCustomTheme: (String) -> Unit,
+    onDeleteCustomTheme: (String) -> Unit,
+    onOpenToc: () -> Unit,
+    onCloseToc: () -> Unit,
+    onJumpToLocator: (String) -> Unit,
+    onLookUpSelection: () -> Unit,
+    onDismissSelection: () -> Unit,
+    onCloseLookup: () -> Unit,
+    onReadingResumed: () -> Unit,
+    onReadingPaused: () -> Unit,
 ) {
     val view = LocalView.current
     var brightnessPreview by remember { mutableStateOf<Float?>(null) }
+    var dimPreview by remember { mutableStateOf<Float?>(null) }
+
+    // Count foreground reading time toward statistics: accumulate between resume and pause.
+    DisposableEffect(Unit) {
+        val lifecycle = (view.context.findActivity() as? LifecycleOwner)?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> onReadingResumed()
+                Lifecycle.Event.ON_PAUSE -> onReadingPaused()
+                else -> Unit
+            }
+        }
+        lifecycle?.addObserver(observer)
+        // Start immediately: the screen is on-screen now (don't rely on a future resume event).
+        onReadingResumed()
+        onDispose {
+            lifecycle?.removeObserver(observer)
+            onReadingPaused()
+        }
+    }
     // Keep the system bars transparent with no enforced scrim, so the reader chrome defines their
     // look. The top bar is always present, so the status area never sits over content.
     DisposableEffect(Unit) {
@@ -61,6 +98,10 @@ fun ReaderScreen(
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         val prevStatus = window?.statusBarColor
         val prevNav = window?.navigationBarColor
+        // Capture the app's bar-icon appearance so leaving the reader restores legible icons for the
+        // app theme (the reader flips these to match the reading page).
+        val prevLightStatus = controller?.isAppearanceLightStatusBars
+        val prevLightNav = controller?.isAppearanceLightNavigationBars
         val prevStatusContrast = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window?.isStatusBarContrastEnforced
         } else {
@@ -78,7 +119,8 @@ fun ReaderScreen(
         // Full-screen reading: hide both system bars (swipe to reveal). The footer already shows the
         // time + battery, so the status bar is redundant; the permanent top bar shows the chapter.
         controller?.let {
-            it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            it.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             it.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
@@ -86,11 +128,19 @@ fun ReaderScreen(
                 prevStatus?.let { c -> it.statusBarColor = c }
                 prevNav?.let { c -> it.navigationBarColor = c }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    prevStatusContrast?.let { enforced -> it.isStatusBarContrastEnforced = enforced }
-                    prevNavContrast?.let { enforced -> it.isNavigationBarContrastEnforced = enforced }
+                    prevStatusContrast?.let { enforced ->
+                        it.isStatusBarContrastEnforced = enforced
+                    }
+                    prevNavContrast?.let { enforced ->
+                        it.isNavigationBarContrastEnforced = enforced
+                    }
                 }
             }
-            controller?.show(WindowInsetsCompat.Type.systemBars())
+            controller?.let { c ->
+                prevLightStatus?.let { c.isAppearanceLightStatusBars = it }
+                prevLightNav?.let { c.isAppearanceLightNavigationBars = it }
+                c.show(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
     // Colour the system bars to the reading background so the status area matches the page on every
@@ -104,7 +154,11 @@ fun ReaderScreen(
         controller.isAppearanceLightStatusBars = state.settings.isLightBackground
         controller.isAppearanceLightNavigationBars = state.settings.isLightBackground
     }
-    LaunchedEffect(state.settings.useSystemBrightness, state.settings.brightness, brightnessPreview) {
+    LaunchedEffect(
+        state.settings.useSystemBrightness,
+        state.settings.brightness,
+        brightnessPreview
+    ) {
         val preview = brightnessPreview
         if (state.settings.useSystemBrightness) {
             brightnessPreview = null
@@ -113,10 +167,25 @@ fun ReaderScreen(
         }
     }
 
+    LaunchedEffect(state.settings.dimLevel, dimPreview) {
+        val preview = dimPreview
+        if (preview != null && kotlin.math.abs(preview - state.settings.dimLevel) < 0.001f) {
+            dimPreview = null
+        }
+    }
+
     val effectiveBrightness = brightnessPreview ?: state.settings.brightness
-    val sheetState = brightnessPreview?.let { preview ->
-        state.copy(settings = state.settings.copy(brightness = preview))
-    } ?: state
+    val effectiveDim = (dimPreview ?: state.settings.dimLevel).coerceIn(0f, 1f)
+    val sheetState = if (brightnessPreview != null || dimPreview != null) {
+        state.copy(
+            settings = state.settings.copy(
+                brightness = effectiveBrightness,
+                dimLevel = effectiveDim,
+            ),
+        )
+    } else {
+        state
+    }
 
     // Drive the window screen brightness: defer to the system level, or pin it to the reader setting.
     LaunchedEffect(state.settings.useSystemBrightness, effectiveBrightness) {
@@ -136,7 +205,8 @@ fun ReaderScreen(
     // Scroll mode's WebView keeps its own status-bar safe area even when the app hides system bars
     // for immersive reading. Use the ignoring-visibility inset so that hidden bars still get
     // subtracted; otherwise scroll mode gets one extra status-bar-sized top gap.
-    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    val statusTop =
+        WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val fullTop = with(density) { topBarPx.toDp() }
     val topInset = if (state.settings.layout == ReaderLayout.Scroll) {
         (fullTop - statusTop).coerceAtLeast(0.dp)
@@ -144,12 +214,14 @@ fun ReaderScreen(
         fullTop
     }
     val footerHeight = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
-    val scrollEndPadding = if (state.settings.layout == ReaderLayout.Scroll && state.settings.showFooter) {
-        val footerFade = if (state.settings.edgeShadows) 12.dp else 0.dp
-        footerFade + 28.dp
-    } else {
-        0.dp
-    }
+    val scrollEndPadding =
+        if (state.settings.layout == ReaderLayout.Scroll && state.settings.showFooter) {
+            // Just enough breathing room so the last line doesn't sit tight under the footer; the footer
+            // height itself is already reserved below.
+            4.dp
+        } else {
+            0.dp
+        }
     // Footer off: content flows under a fully transparent gesture bar. In scroll mode, reserve a
     // little extra end space so the last lines of a chapter don't sit tight against the footer.
     val bottomInset = footerHeight + scrollEndPadding
@@ -168,12 +240,13 @@ fun ReaderScreen(
                 ReaderNavigatorHost(
                     session = session,
                     backgroundArgb = state.settings.backgroundArgb,
-                    modifier = Modifier.fillMaxSize().padding(top = topInset, bottom = bottomInset),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = topInset, bottom = bottomInset),
                 )
 
                 ReaderTopBar(
                     chapter = state.chapterTitle ?: state.title,
-                    edgeShadow = state.settings.edgeShadows,
                     background = background,
                     content = onBackground,
                     onBack = onBack,
@@ -191,6 +264,44 @@ fun ReaderScreen(
                     )
                 }
 
+                // Extra-dim scrim over the whole reading surface (content + chrome) for going darker
+                // than the device minimum. Decorative only — no pointerInput, so taps pass through.
+                if (effectiveDim > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Color.Black.copy(alpha = effectiveDim * ReaderSettings.MAX_DIM_ALPHA),
+                            ),
+                    )
+                }
+
+                // Next-chapter button at the chapter end (above the dim scrim so it stays legible).
+                // Hidden while selecting / looking up so it doesn't collide with the bottom bar.
+                val selection = state.selection
+                if (selection == null && state.lookup == null) {
+                    ReaderChapterButtons(
+                        chapterProgression = state.chapterProgression,
+                        hasNext = state.hasNextChapter,
+                        bottomInset = bottomInset,
+                        background = background,
+                        content = onBackground,
+                        onNext = onNextChapter,
+                    )
+                }
+
+                // Always-visible "Look up" bar while text is selected.
+                if (selection != null && state.lookup == null) {
+                    ReaderSelectionBar(
+                        word = selection.text,
+                        background = background,
+                        content = onBackground,
+                        bottomInset = bottomInset,
+                        onLookUp = onLookUpSelection,
+                        onDismiss = onDismissSelection,
+                    )
+                }
+
                 ReaderControlsSheet(
                     visible = state.sheetVisible,
                     state = sheetState,
@@ -199,6 +310,10 @@ fun ReaderScreen(
                     onNextChapter = onNextChapter,
                     onPreviousChapter = onPreviousChapter,
                     onUpdateSettings = onUpdateSettings,
+                    onResetSettings = onResetSettings,
+                    onOpenCustomTheme = onOpenCustomTheme,
+                    onApplyCustomTheme = onApplyCustomTheme,
+                    onOpenToc = onOpenToc,
                     onPreviewBrightness = { brightness ->
                         brightnessPreview = brightness.coerceIn(0f, 1f)
                     },
@@ -207,8 +322,34 @@ fun ReaderScreen(
                         brightnessPreview = value
                         onUpdateSettings(state.settings.copy(brightness = value))
                     },
-                    onAbout = onAbout,
+                    onPreviewDim = { dim -> dimPreview = dim.coerceIn(0f, 1f) },
+                    onCommitDim = { dim ->
+                        val value = dim.coerceIn(0f, 1f)
+                        dimPreview = value
+                        onUpdateSettings(state.settings.copy(dimLevel = value))
+                    },
                 )
+
+                CustomThemeSheet(
+                    visible = state.customSheetVisible,
+                    settings = sheetState.settings,
+                    customThemes = state.customThemes,
+                    onDismiss = onCloseCustomTheme,
+                    onUpdateSettings = onUpdateSettings,
+                    onSave = onSaveCustomTheme,
+                    onApply = onApplyCustomTheme,
+                    onDelete = onDeleteCustomTheme,
+                )
+
+                ReaderTocSheet(
+                    visible = state.tocSheetVisible,
+                    toc = state.toc,
+                    currentHref = state.currentHref,
+                    onDismiss = onCloseToc,
+                    onJump = onJumpToLocator,
+                )
+
+                WordLookupSheet(state = state.lookup, onDismiss = onCloseLookup)
             }
         }
     }

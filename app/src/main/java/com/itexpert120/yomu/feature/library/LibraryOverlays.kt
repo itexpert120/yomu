@@ -70,7 +70,7 @@ internal fun ConfirmRemoveDialog(
             )
             Text(
                 text = "This deletes the imported file${if (count == 1) "" else "s"} and cover from " +
-                    "the device. It can't be undone.",
+                        "the device. It can't be undone.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.body,
             )
@@ -99,7 +99,8 @@ internal fun ImportNotice(
     notice: String?,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val text = if (importing) "Importing…" else notice
     // Hold the last shown text so the pill doesn't go blank during its exit animation.
     var lastText by remember { mutableStateOf("") }
@@ -135,7 +136,8 @@ internal fun FloatingResumeButton(
     onResume: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     // Foreground tracks appBackground so the label reads on the accent in every
     // theme (the dark-theme accent is light, where white text would wash out).
     val onAccent = YomuTheme.colors.appBackground
@@ -217,7 +219,8 @@ private fun fadeInStops(color: Color): Array<Pair<Float, Color>> = arrayOf(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
-    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    val statusTop =
+        WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val background = YomuTheme.colors.appBackground
     Box(
         modifier = modifier
@@ -231,7 +234,8 @@ internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SystemBarBottomScrim(modifier: Modifier = Modifier) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val background = YomuTheme.colors.appBackground
     Box(
         modifier = modifier

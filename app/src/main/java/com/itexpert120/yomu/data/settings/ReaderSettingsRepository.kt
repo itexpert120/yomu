@@ -7,10 +7,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.ReaderSettingsEntity
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,10 +56,41 @@ class ReaderSettingsRepository @Inject constructor(
         dao.deleteReaderSettings(id.value)
     }
 
+    // region Saved custom themes (app-global)
+
+    private val customThemeSerializer = ListSerializer(CustomReaderTheme.serializer())
+
+    val customThemes: Flow<List<CustomReaderTheme>> = dataStore.data.map { prefs ->
+        prefs[KeyCustomThemes]?.let { decodeThemes(it) } ?: emptyList()
+    }
+
+    /** Adds a new theme or replaces an existing one with the same id. */
+    suspend fun saveCustomTheme(theme: CustomReaderTheme) {
+        dataStore.edit { prefs ->
+            val current = prefs[KeyCustomThemes]?.let { decodeThemes(it) } ?: emptyList()
+            val updated = current.filterNot { it.id == theme.id } + theme
+            prefs[KeyCustomThemes] = json.encodeToString(customThemeSerializer, updated)
+        }
+    }
+
+    suspend fun deleteCustomTheme(id: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[KeyCustomThemes]?.let { decodeThemes(it) } ?: emptyList()
+            prefs[KeyCustomThemes] =
+                json.encodeToString(customThemeSerializer, current.filterNot { it.id == id })
+        }
+    }
+
+    private fun decodeThemes(raw: String): List<CustomReaderTheme> =
+        runCatching { json.decodeFromString(customThemeSerializer, raw) }.getOrDefault(emptyList())
+
+    // endregion
+
     private fun decode(raw: String): ReaderSettings =
         runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrDefault(ReaderSettings())
 
     private companion object {
         val KeyGlobal = stringPreferencesKey("reader_settings_global")
+        val KeyCustomThemes = stringPreferencesKey("reader_custom_themes")
     }
 }

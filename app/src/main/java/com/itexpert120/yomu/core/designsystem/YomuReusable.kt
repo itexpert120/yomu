@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -38,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -208,7 +212,9 @@ fun YomuCircleIconButton(
 @Composable
 fun YomuSheetDragHandle() {
     Box(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -230,15 +236,23 @@ fun YomuSheetDragHandle() {
 fun YomuBottomSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
+    // Sheets with their own scroll container (e.g. a LazyColumn) should pass false.
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
 ) {
     if (!visible) return
-    val sheetState = rememberModalBottomSheetState()
+    // Open at the height the content needs rather than a half-expanded stop; tall content is then
+    // capped to a reasonable height and scrolls internally instead of filling the whole screen.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     fun animatedDismiss() {
         scope.launch { sheetState.hide() }.invokeOnCompletion {
             if (!sheetState.isVisible) onDismiss()
         }
+    }
+    // Cap tall sheets at 85% of the actual window height (containerSize, not Configuration).
+    val maxHeight = with(LocalDensity.current) {
+        (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -250,6 +264,15 @@ fun YomuBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(
+                    if (scrollable) {
+                        Modifier
+                            .heightIn(max = maxHeight)
+                            .verticalScroll(rememberScrollState())
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),

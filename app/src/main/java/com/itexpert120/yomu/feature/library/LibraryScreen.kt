@@ -6,22 +6,30 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items as lazyListItems
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,16 +37,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
+import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.core.model.ThemePreference
+import androidx.compose.foundation.lazy.items as lazyListItems
 
 @Composable
 fun LibraryScreen(
@@ -54,6 +70,7 @@ fun LibraryScreen(
     onOpenDetails: (String) -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
+    onOpenStats: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onEnterSelection: (String) -> Unit = {},
     onToggleSelect: (String) -> Unit = {},
@@ -94,10 +111,13 @@ fun LibraryScreen(
             animationSpec = tween(300),
             label = "libraryViewMode",
         ) { mode ->
+            // The continue-reading hero isn't a selectable item (it's excluded from select-all and
+            // counts), so hide it while selecting to avoid an invisible, inconsistent toggle.
+            val hero = state.continueReading?.takeIf { !state.selectionMode }
             when (mode) {
                 LibraryViewMode.Grid -> LibraryGrid(
                     state = gridState,
-                    continueReading = state.continueReading,
+                    continueReading = hero,
                     columns = state.gridColumns,
                     groups = state.groups,
                     selectedIds = state.selectedIds,
@@ -107,7 +127,7 @@ fun LibraryScreen(
 
                 LibraryViewMode.List -> LibraryList(
                     state = listState,
-                    continueReading = state.continueReading,
+                    continueReading = hero,
                     groups = state.groups,
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
@@ -138,10 +158,13 @@ fun LibraryScreen(
                         onDisplaySheetToggle = { showDisplaySheet = !showDisplaySheet },
                         onImport = onImport,
                         onThemeToggle = onThemeToggle,
+                        onOpenStats = onOpenStats,
                         onOpenSettings = onOpenSettings,
                         elevated = elevated,
                     )
-                    Box(Modifier.weight(1f).fillMaxWidth()) { libraryContent() }
+                    Box(Modifier
+                        .weight(1f)
+                        .fillMaxWidth()) { libraryContent() }
                 }
             }
 
@@ -195,7 +218,7 @@ fun LibraryScreen(
             ) {
                 LibrarySelectionDock(
                     allSelected = state.selectedIds.isNotEmpty() &&
-                        state.selectedIds.size == state.totalCount,
+                            state.selectedIds.size == state.selectableCount,
                     onClose = onExitSelection,
                     onSelectAll = onSelectAll,
                     onDeselectAll = onDeselectAll,
@@ -229,11 +252,60 @@ fun LibraryScreen(
 
 @Composable
 private fun EmptyLibrary(onImport: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ImportEmptyCard(onImport = onImport)
+        Box(
+            modifier = Modifier
+                .size(92.dp)
+                .clip(RoundedCornerShape(YomuTheme.radius.lg))
+                .background(Color(0xFF050505))
+                .border(
+                    1.dp,
+                    YomuTheme.colors.border.copy(alpha = 0.6f),
+                    RoundedCornerShape(YomuTheme.radius.lg)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_yomu_mark),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(64.dp),
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = "Welcome to Yomu",
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.display,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "A calm, reader-first EPUB library. Import a book to begin — your themes, fonts, " +
+                    "reading position and stats all live here.",
+            color = YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.body,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(28.dp))
+        YomuButton(
+            text = "Import EPUB",
+            onClick = onImport,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "EPUB files only · kept privately on your device",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

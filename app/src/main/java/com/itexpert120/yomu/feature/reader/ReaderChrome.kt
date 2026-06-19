@@ -4,12 +4,18 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
@@ -18,7 +24,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -29,9 +34,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,11 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import kotlinx.coroutines.delay
@@ -59,7 +67,6 @@ import java.util.Locale
 @Composable
 internal fun ReaderTopBar(
     chapter: String,
-    edgeShadow: Boolean,
     background: Color,
     content: Color,
     onBack: () -> Unit,
@@ -71,7 +78,9 @@ internal fun ReaderTopBar(
     Column(modifier = modifier.fillMaxWidth()) {
         // The navigator draws edge-to-edge, so inset content by the full solid bar (status backdrop
         // + the controls row); the fade below is excluded so it bleeds over the page.
-        Column(modifier = Modifier.fillMaxWidth().onSizeChanged { onContentHeight(it.height) }) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .onSizeChanged { onContentHeight(it.height) }) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -103,15 +112,6 @@ internal fun ReaderTopBar(
                 ReaderBarButton(Icons.Rounded.Tune, "Reader controls", content, onOpenSheet)
             }
         }
-        // Small fade so the solid bar dissolves into the page instead of hard-cutting.
-        if (edgeShadow) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(12.dp)
-                    .background(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0f)))),
-            )
-        }
     }
 }
 
@@ -127,42 +127,176 @@ internal fun ReaderFooter(
     val time = rememberClock()
     val battery = rememberBattery()
     Column(modifier = modifier.fillMaxWidth()) {
-        if (settings.edgeShadows) {
-            Box(
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .onSizeChanged { onContentHeight(it.height) }) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(12.dp)
-                    .background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg))),
-            )
+                    .background(bg)
+                    // Extra bottom padding keeps the row clear of the device's rounded corners.
+                    .padding(start = 20.dp, end = 20.dp, top = 3.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Battery on the left: a horizontal bar whose fill tracks the level.
+                if (settings.footerShowBattery) {
+                    BatteryIndicator(
+                        level = battery.level,
+                        charging = battery.charging,
+                        color = muted
+                    )
+                }
+                if (settings.footerShowClock) {
+                    if (settings.footerShowBattery) Spacer(Modifier.width(14.dp))
+                    Text(text = time, color = muted, style = YomuTheme.type.mono)
+                }
+                Spacer(Modifier.weight(1f))
+                // Reading progress on the right.
+                if (settings.footerShowProgress) {
+                    Text(
+                        text = progressPercent?.let { "$it%" } ?: "",
+                        color = muted,
+                        style = YomuTheme.type.mono,
+                    )
+                }
+            }
         }
-        Column(modifier = Modifier.fillMaxWidth().onSizeChanged { onContentHeight(it.height) }) {
+    }
+}
+
+/**
+ * A "Next chapter" button that slides up at the end of a chapter. Styled to the reading theme so it
+ * reads clearly on any page; opaque so text doesn't bleed through.
+ */
+@Composable
+internal fun BoxScope.ReaderChapterButtons(
+    chapterProgression: Double,
+    hasNext: Boolean,
+    bottomInset: Dp,
+    background: Color,
+    content: Color,
+    onNext: () -> Unit,
+) {
+    // Slides up into view as the chapter end is reached — the cue that tapping advances a chapter.
+    AnimatedVisibility(
+        visible = hasNext && chapterProgression >= 1.0 - CHAPTER_EDGE,
+        enter = slideInVertically { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = bottomInset + 14.dp),
+    ) {
+        ChapterPill(
+            text = "Next chapter",
+            icon = Icons.Rounded.KeyboardArrowDown,
+            background = background,
+            content = content,
+            onClick = onNext,
+        )
+    }
+}
+
+private const val CHAPTER_EDGE = 0.01
+
+/**
+ * Always-visible "Look up «word»" bar pinned to the bottom of the reading area while text is
+ * selected. Opaque so the page text doesn't bleed through.
+ */
+@Composable
+internal fun BoxScope.ReaderSelectionBar(
+    word: String,
+    background: Color,
+    content: Color,
+    bottomInset: Dp,
+    onLookUp: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = bottomInset + 16.dp)
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(50)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(bg)
-                // Extra bottom padding keeps the row clear of the device's rounded corners.
-                .padding(start = 20.dp, end = 20.dp, top = 3.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Battery on the left: a horizontal bar whose fill tracks the level.
-            if (settings.footerShowBattery) {
-                BatteryIndicator(level = battery.level, charging = battery.charging, color = muted)
-            }
-            if (settings.footerShowClock) {
-                if (settings.footerShowBattery) Spacer(Modifier.width(14.dp))
-                Text(text = time, color = muted, style = YomuTheme.type.mono)
-            }
-            Spacer(Modifier.weight(1f))
-            // Reading progress on the right.
-            if (settings.footerShowProgress) {
-                Text(
-                    text = progressPercent?.let { "$it%" } ?: "",
-                    color = muted,
-                    style = YomuTheme.type.mono,
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onLookUp,
                 )
-            }
+                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = "Look up “$word”",
+                color = content,
+                style = YomuTheme.type.body,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = "Dismiss",
+                tint = content,
+                modifier = Modifier.size(16.dp)
+            )
         }
+    }
+}
+
+@Composable
+private fun ChapterPill(
+    text: String,
+    icon: ImageVector,
+    background: Color,
+    content: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            // Opaque page-coloured fill + subtle border, so text never bleeds through the pill.
+            .background(background)
+            .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(50))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(text = text, color = content, style = YomuTheme.type.caption, maxLines = 1)
     }
 }
 
@@ -181,7 +315,12 @@ private fun rememberClock(): String {
 }
 
 @Composable
-private fun ReaderBarButton(icon: ImageVector, description: String, tint: Color, onClick: () -> Unit) {
+private fun ReaderBarButton(
+    icon: ImageVector,
+    description: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -260,6 +399,6 @@ private fun batteryFrom(intent: Intent?): BatteryStatus? {
     if (level < 0 || scale <= 0) return null
     val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
     val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-        status == BatteryManager.BATTERY_STATUS_FULL
+            status == BatteryManager.BATTERY_STATUS_FULL
     return BatteryStatus(level = (level * 100 / scale), charging = charging)
 }

@@ -1,6 +1,5 @@
 package com.itexpert120.yomu.core.designsystem
 
-import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -25,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import android.graphics.Color as AndroidColor
 
 /**
  * Custom HSV color picker: a saturation/value square plus a hue rail. Emits live as the user

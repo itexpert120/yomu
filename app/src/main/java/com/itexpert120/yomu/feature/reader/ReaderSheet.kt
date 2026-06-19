@@ -15,25 +15,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,34 +46,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily as ComposeFontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuColorPicker
-import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
-import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
-import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
-import java.io.File
+import com.itexpert120.yomu.core.reader.ReaderTocItem
+import kotlin.math.round
 import kotlin.math.roundToInt
+import androidx.compose.ui.text.font.FontFamily as ComposeFontFamily
 
-private enum class SheetTab(val label: String) { Controls("Controls"), Theme("Theme"), Fonts("Fonts") }
+private enum class SheetTab(val label: String) { Controls("Controls"), Display("Display") }
 
 @Composable
 internal fun ReaderControlsSheet(
@@ -80,15 +84,22 @@ internal fun ReaderControlsSheet(
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    onResetSettings: () -> Unit,
+    onOpenCustomTheme: () -> Unit,
+    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+    onOpenToc: () -> Unit,
     onPreviewBrightness: (Float) -> Unit,
     onCommitBrightness: (Float) -> Unit,
-    onAbout: () -> Unit,
+    onPreviewDim: (Float) -> Unit,
+    onCommitDim: (Float) -> Unit,
 ) {
     var tab by remember { mutableStateOf(SheetTab.Controls) }
     YomuBottomSheet(visible = visible, onDismiss = onDismiss) { _ ->
         Column(
             // Animate the height as tab content of differing size swaps in.
-            modifier = Modifier.fillMaxWidth().animateContentSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             val tabs = SheetTab.entries
@@ -109,15 +120,21 @@ internal fun ReaderControlsSheet(
                         onSeek = onSeek,
                         onNextChapter = onNextChapter,
                         onPreviousChapter = onPreviousChapter,
-                        onAbout = onAbout,
-                    )
-                    SheetTab.Theme -> ThemeTab(
-                        state = state,
+                        onOpenToc = onOpenToc,
                         onUpdateSettings = onUpdateSettings,
                         onPreviewBrightness = onPreviewBrightness,
                         onCommitBrightness = onCommitBrightness,
+                        onPreviewDim = onPreviewDim,
+                        onCommitDim = onCommitDim,
                     )
-                    SheetTab.Fonts -> FontsTab(state = state, onUpdateSettings = onUpdateSettings)
+
+                    SheetTab.Display -> DisplayTab(
+                        state = state,
+                        onUpdateSettings = onUpdateSettings,
+                        onResetSettings = onResetSettings,
+                        onOpenCustomTheme = onOpenCustomTheme,
+                        onApplyCustomTheme = onApplyCustomTheme,
+                    )
                 }
             }
         }
@@ -130,11 +147,24 @@ private fun ControlsTab(
     onSeek: (Double) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
-    onAbout: () -> Unit,
+    onOpenToc: () -> Unit,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    onPreviewBrightness: (Float) -> Unit,
+    onCommitBrightness: (Float) -> Unit,
+    onPreviewDim: (Float) -> Unit,
+    onCommitDim: (Float) -> Unit,
 ) {
+    val s = state.settings
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RoundIcon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous chapter", onPreviousChapter)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            RoundIcon(
+                Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                "Previous chapter",
+                onPreviousChapter
+            )
             ReaderSlider(
                 fraction = state.totalProgression.toFloat(),
                 onSeek = { onSeek(it.toDouble()) },
@@ -147,57 +177,13 @@ private fun ControlsTab(
             color = YomuTheme.colors.textMuted,
             style = YomuTheme.type.mono,
         )
-        AboutRow(coverPath = state.coverImagePath, title = state.title, onClick = onAbout)
-    }
-}
 
-@Composable
-private fun ThemeTab(
-    state: ReaderUiState,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    onPreviewBrightness: (Float) -> Unit,
-    onCommitBrightness: (Float) -> Unit,
-) {
-    val s = state.settings
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(text = "Theme", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ReaderThemeMode.entries.forEach { mode ->
-                val pageColor = Color(ReaderSettings().copy(theme = mode).backgroundArgb)
-                YomuColorSwatch(
-                    name = mode.name,
-                    color = pageColor,
-                    selected = s.theme == mode,
-                    onClick = { onUpdateSettings(s.copy(theme = mode)) },
-                )
-            }
-        }
-
-        if (s.theme == ReaderThemeMode.Custom) {
-            Text(text = "Background colour", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-            YomuColorPicker(
-                color = Color(s.backgroundArgb),
-                // customBackground is an ARGB Long; toArgb() yields an Int, mask to keep it unsigned.
-                onColorChange = { color ->
-                    onUpdateSettings(s.copy(customBackground = color.toArgb().toLong() and 0xFFFFFFFFL))
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(text = "Text colour", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-            YomuColorPicker(
-                color = Color(s.textArgb),
-                onColorChange = { color ->
-                    onUpdateSettings(s.copy(customText = color.toArgb().toLong() and 0xFFFFFFFFL))
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        Text(text = "Brightness", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        // Brightness + extra dim are contextual to the current reading session, so they stay here.
+        Text(
+            text = "Brightness",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption
+        )
         YomuSettingRow(title = "Use system brightness") {
             YomuTogglePill(
                 checked = s.useSystemBrightness,
@@ -212,83 +198,382 @@ private fun ThemeTab(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Extra dim",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${(s.dimLevel * 100).roundToInt()}%",
+                color = if (s.dimLevel > 0f) YomuTheme.colors.accent else YomuTheme.colors.textMuted,
+                style = YomuTheme.type.mono,
+            )
+        }
+        ReaderSlider(
+            fraction = s.dimLevel,
+            onSeek = onCommitDim,
+            onDrag = onPreviewDim,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
-        Text(text = "Chrome", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        YomuSettingRow(title = "Show footer") {
-            YomuTogglePill(checked = s.showFooter, onCheckedChange = { onUpdateSettings(s.copy(showFooter = it)) })
+        if (state.toc.isNotEmpty()) {
+            YomuButton(
+                text = "Contents",
+                onClick = onOpenToc,
+                emphasis = YomuButtonEmphasis.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
-        YomuSettingRow(title = "Edge shadows", subtitle = "Soft fade behind the bars") {
-            YomuTogglePill(checked = s.edgeShadows, onCheckedChange = { onUpdateSettings(s.copy(edgeShadows = it)) })
+    }
+}
+
+/**
+ * Quick per-book display overrides. The comprehensive defaults (advanced typography, chrome, etc.)
+ * live on the global Reading Defaults screen in Settings — this sheet stays lean.
+ */
+@Composable
+private fun DisplayTab(
+    state: ReaderUiState,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    onResetSettings: () -> Unit,
+    onOpenCustomTheme: () -> Unit,
+    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+) {
+    val s = state.settings
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(
+            text = "Theme · this book",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption
+        )
+        ReaderThemeRow(s, onUpdateSettings)
+        if (s.theme == ReaderThemeMode.Custom) {
+            ReaderCustomThemeRow(s, state.customThemes, onOpenCustomTheme, onApplyCustomTheme)
         }
-        if (s.showFooter) {
-            Text(text = "Footer", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-            YomuSettingRow(title = "Battery") {
-                YomuTogglePill(checked = s.footerShowBattery, onCheckedChange = { onUpdateSettings(s.copy(footerShowBattery = it)) })
-            }
-            YomuSettingRow(title = "Clock") {
-                YomuTogglePill(checked = s.footerShowClock, onCheckedChange = { onUpdateSettings(s.copy(footerShowClock = it)) })
-            }
-            YomuSettingRow(title = "Reading progress") {
-                YomuTogglePill(checked = s.footerShowProgress, onCheckedChange = { onUpdateSettings(s.copy(footerShowProgress = it)) })
+        Text(text = "Layout", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        ReaderLayoutControl(s, onUpdateSettings)
+        Text(text = "Font", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        ReaderFontRow(s, onUpdateSettings)
+        ReaderFontSizeControl(s, onUpdateSettings)
+        Text(text = "Text", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        ReaderTextAlignControl(s, onUpdateSettings)
+        ReaderTypographySliders(s, onUpdateSettings)
+
+        // Drop this book's overrides and follow the global Reading Defaults again.
+        YomuButton(
+            text = "Reset to defaults",
+            onClick = onResetSettings,
+            emphasis = YomuButtonEmphasis.Ghost,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * A labelled slider for an optional numeric setting. [value] of null shows "Auto" (engine default)
+ * and parks the thumb at [default]; tapping the value chip resets back to Auto. Seeks snap to [step].
+ */
+@Composable
+internal fun AutoSlider(
+    label: String,
+    value: Float?,
+    min: Float,
+    max: Float,
+    default: Float,
+    step: Float,
+    valueText: (Float) -> String,
+    onChange: (Float?) -> Unit,
+) {
+    fun snap(v: Float): Float = (round(v / step) * step).coerceIn(min, max)
+    val auto = value == null
+    val current = value ?: default
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+                modifier = Modifier.weight(1f),
+            )
+            // "Auto" when at the engine default; tap a concrete value to reset back to Auto.
+            Text(
+                text = if (auto) "Auto" else valueText(value!!),
+                color = if (auto) YomuTheme.colors.textMuted else YomuTheme.colors.accent,
+                style = YomuTheme.type.mono,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = !auto,
+                        onClick = { onChange(null) },
+                    )
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            RoundIcon(Icons.Rounded.Remove, "Decrease $label") { onChange(snap(current - step)) }
+            ReaderSlider(
+                fraction = ((current - min) / (max - min)).coerceIn(0f, 1f),
+                // Tick marks the default value's position on the track.
+                markerFraction = ((default - min) / (max - min)).coerceIn(0f, 1f),
+                onSeek = { onChange(snap(min + it * (max - min))) },
+                modifier = Modifier.weight(1f),
+            )
+            RoundIcon(Icons.Rounded.Add, "Increase $label") { onChange(snap(current + step)) }
+        }
+    }
+}
+
+/**
+ * A separate bottom sheet for building a custom theme: live colour pickers (applied to the page as
+ * you edit), a name field to save the current colours as a reusable palette, and the saved list.
+ */
+@Composable
+internal fun CustomThemeSheet(
+    visible: Boolean,
+    settings: ReaderSettings,
+    customThemes: List<CustomReaderTheme>,
+    onDismiss: () -> Unit,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    onSave: (String) -> Unit,
+    onApply: (CustomReaderTheme) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    // scrollable=false: the colour picker handles its own vertical drag, which would fight a parent scroll.
+    YomuBottomSheet(visible = visible, onDismiss = onDismiss, scrollable = false) { _ ->
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = "Custom theme",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.body
+            )
+
+            Text(
+                text = "Background colour",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption
+            )
+            YomuColorPicker(
+                color = Color(settings.backgroundArgb),
+                // customBackground is an ARGB Long; toArgb() yields an Int, mask to keep it unsigned.
+                onColorChange = { color ->
+                    onUpdateSettings(
+                        settings.copy(
+                            customBackground = color.toArgb().toLong() and 0xFFFFFFFFL
+                        )
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Text colour",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption
+            )
+            YomuColorPicker(
+                color = Color(settings.textArgb),
+                onColorChange = { color ->
+                    onUpdateSettings(
+                        settings.copy(
+                            customText = color.toArgb().toLong() and 0xFFFFFFFFL
+                        )
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            YomuTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = "Theme name",
+                placeholder = "e.g. Midnight",
+            )
+            YomuButton(
+                text = "Save theme",
+                onClick = {
+                    onSave(name)
+                    name = ""
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (customThemes.isNotEmpty()) {
+                Text(
+                    text = "Saved themes",
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption
+                )
+                customThemes.forEach { theme ->
+                    SavedThemeRow(
+                        theme = theme,
+                        onApply = { onApply(theme) },
+                        onDelete = { onDelete(theme.id) },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun FontsTab(state: ReaderUiState, onUpdateSettings: (ReaderSettings) -> Unit) {
-    val s = state.settings
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(text = "Layout", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        val modes = ReaderLayout.entries
-        YomuSegmentedControl(
-            options = modes.map { it.name },
-            selectedIndex = modes.indexOf(s.layout),
-            onSelected = { onUpdateSettings(s.copy(layout = modes[it])) },
-            modifier = Modifier.fillMaxWidth(),
+private fun SavedThemeRow(theme: CustomReaderTheme, onApply: () -> Unit, onDelete: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YomuTheme.radius.md))
+            .background(YomuTheme.colors.surface)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onApply,
+            )
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Preview: page colour with the text colour as an inner dot.
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(Color(theme.background))
+                .border(1.dp, Color.Black.copy(alpha = 0.18f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(Color(theme.text)),
+            )
+        }
+        Text(
+            text = theme.name,
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.body,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDelete,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Delete,
+                contentDescription = "Delete theme",
+                tint = YomuTheme.colors.textMuted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
 
-        Text(text = "Font", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        FlowRow(
+/**
+ * In-reader table of contents in its own sheet: a height-capped lazy list (TOCs can be thousands of
+ * entries) of jumpable chapters; the current chapter is highlighted, tapping one navigates there.
+ */
+@Composable
+internal fun ReaderTocSheet(
+    visible: Boolean,
+    toc: List<ReaderTocItem>,
+    currentHref: String?,
+    onDismiss: () -> Unit,
+    onJump: (String) -> Unit,
+) {
+    // Only entries with a resolvable position are jumpable.
+    val entries = remember(toc) { toc.filter { it.locatorJson != null } }
+    val listState = rememberLazyListState()
+    // On open, jump the list to the chapter currently being read so the user lands in context.
+    LaunchedEffect(visible, entries, currentHref) {
+        if (visible) {
+            val index = entries.indexOfFirst { it.id == currentHref }
+            if (index >= 0) listState.scrollToItem(index)
+        }
+    }
+    YomuBottomSheet(visible = visible, onDismiss = onDismiss, scrollable = false) { _ ->
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ReaderFont.entries.forEach { font ->
-                FontChip(
-                    font = font,
-                    selected = s.font == font,
-                    onClick = { onUpdateSettings(s.copy(font = font)) },
+            Text(
+                text = "Contents",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.body
+            )
+            if (entries.isEmpty()) {
+                Text(
+                    text = "No table of contents.",
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption,
                 )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 440.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    items(entries) { item ->
+                        TocSheetRow(
+                            item = item,
+                            current = item.id == currentHref,
+                            onClick = { item.locatorJson?.let(onJump) },
+                        )
+                    }
+                }
             }
         }
+    }
+}
 
-        val min = ReaderSettings.MIN_FONT_SCALE
-        val max = ReaderSettings.MAX_FONT_SCALE
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Font size",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-                modifier = Modifier.weight(1f),
+@Composable
+private fun TocSheetRow(item: ReaderTocItem, current: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YomuTheme.radius.md))
+            .background(if (current) YomuTheme.colors.accentSoft else Color.Transparent)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
             )
-            Text(
-                text = "${(s.fontScale * 100).roundToInt()}%",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.mono,
-            )
-        }
-        ReaderSlider(
-            fraction = (s.fontScale - min) / (max - min),
-            onSeek = { onUpdateSettings(s.copy(fontScale = min + it * (max - min))) },
-            modifier = Modifier.fillMaxWidth(),
+            // Indent by TOC depth.
+            .padding(start = (12 + item.depth * 14).dp, top = 11.dp, bottom = 11.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = item.title,
+            color = if (current) YomuTheme.colors.textPrimary else YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.body,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
 /** Font picker chip whose label is rendered in that bundled font as a live preview. */
 @Composable
-private fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) {
+internal fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) {
     val assets = LocalContext.current.assets
     val family = remember(font) {
         ComposeFontFamily(Font(path = "fonts/${font.name}-Regular.ttf", assetManager = assets))
@@ -317,59 +602,9 @@ private fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun AboutRow(coverPath: String?, title: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .background(YomuTheme.colors.surface)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .width(34.dp)
-                .aspectRatio(1f / 1.6f)
-                .clip(RoundedCornerShape(6.dp))
-                .background(YomuTheme.colors.surfaceRaised),
-        ) {
-            if (coverPath != null) {
-                AsyncImage(
-                    model = File(coverPath),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = "About this book", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.body)
-            Text(
-                text = title,
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = YomuTheme.colors.textMuted,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
 
 @Composable
-private fun RoundIcon(
+internal fun RoundIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
     onClick: () -> Unit,
@@ -386,17 +621,23 @@ private fun RoundIcon(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(imageVector = icon, contentDescription = description, tint = YomuTheme.colors.textPrimary, modifier = Modifier.size(22.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = YomuTheme.colors.textPrimary,
+            modifier = Modifier.size(22.dp)
+        )
     }
 }
 
 /** Minimal custom slider: drag the thumb or tap the track to seek (0..1). */
 @Composable
-private fun ReaderSlider(
+internal fun ReaderSlider(
     fraction: Float,
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
     onDrag: ((Float) -> Unit)? = null,
+    markerFraction: Float? = null,
 ) {
     var drag by remember { mutableStateOf<Float?>(null) }
     val currentOnSeek by rememberUpdatedState(onSeek)
@@ -461,6 +702,26 @@ private fun ReaderSlider(
                 .clip(CircleShape)
                 .background(YomuTheme.colors.accent),
         )
+        // Default-position indicator: a faint tick showing where the setting's default sits.
+        markerFraction?.let { m ->
+            val markerWidth = 2.dp
+            val markerWidthPx = with(density) { markerWidth.toPx() }
+            Box(
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            (m.coerceIn(
+                                0f,
+                                1f
+                            ) * trackWidthPx + thumbPx / 2f - markerWidthPx / 2f).roundToInt(),
+                            0,
+                        )
+                    }
+                    .size(width = markerWidth, height = 12.dp)
+                    .clip(CircleShape)
+                    .background(YomuTheme.colors.textMuted.copy(alpha = 0.7f)),
+            )
+        }
         Box(
             modifier = Modifier
                 .offset {

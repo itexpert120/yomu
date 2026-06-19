@@ -25,8 +25,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -103,7 +103,8 @@ fun BookDetailsScreen(
     onMarkSelectedChapters: (Boolean) -> Unit,
     onMarkPreviousRead: () -> Unit,
 ) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
     var showCover by remember { mutableStateOf(false) }
     // Reveal the title in the bar only once the in-content header (item 0) has scrolled away, so
@@ -127,7 +128,9 @@ fun BookDetailsScreen(
                     titleVisible = showHeaderTitle && book != null,
                 )
 
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier
+                    .weight(1f)
+                    .fillMaxWidth()) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -156,7 +159,9 @@ fun BookDetailsScreen(
                         item {
                             BookHeader(
                                 book = book,
-                                onCoverClick = { if (book.coverImagePath != null) showCover = true },
+                                onCoverClick = {
+                                    if (book.coverImagePath != null) showCover = true
+                                },
                                 onEdit = onEdit,
                                 onMarkRead = onMarkRead,
                                 onMarkUnread = onMarkUnread,
@@ -241,7 +246,9 @@ private fun BookHeader(
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             DetailCover(book, onClick = onCoverClick, modifier = Modifier.width(116.dp))
             Column(
-                modifier = Modifier.weight(1f).padding(top = 2.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 2.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -395,13 +402,22 @@ private fun RowScope.ActionItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
         Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
     }
 }
 
 @Composable
-private fun FloatingReadButton(reading: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun FloatingReadButton(
+    reading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val onAccent = YomuTheme.colors.appBackground
     Row(
         modifier = modifier
@@ -522,7 +538,12 @@ private fun TocRow(
                 onLongClick = onLongPress,
             )
             // Indent nested entries so the hierarchy reads at a glance in reading order.
-            .padding(start = 12.dp + (entry.depth * 16).dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+            .padding(
+                start = 12.dp + (entry.depth * 16).dp,
+                end = 6.dp,
+                top = 12.dp,
+                bottom = 12.dp
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -641,9 +662,19 @@ private fun ChapterSelectionBar(
     ) {
         SelectionAction(Icons.Rounded.Close, "Close ($selectedCount)", onClose)
         SelectionAction(Icons.Rounded.Check, "Read", onMarkRead, enabled = selectedCount > 0)
-        SelectionAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread, enabled = selectedCount > 0)
+        SelectionAction(
+            Icons.Rounded.RemoveDone,
+            "Unread",
+            onMarkUnread,
+            enabled = selectedCount > 0
+        )
         // Mark every chapter up to (and including) the selected one as read.
-        SelectionAction(Icons.Rounded.PlaylistAddCheck, "To here", onMarkPrevious, enabled = selectedCount > 0)
+        SelectionAction(
+            Icons.Rounded.PlaylistAddCheck,
+            "To here",
+            onMarkPrevious,
+            enabled = selectedCount > 0
+        )
         SelectionAction(Icons.Rounded.DoneAll, "All", onSelectAll)
     }
 }
@@ -670,7 +701,12 @@ private fun RowScope.SelectionAction(
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         val tint = if (enabled) YomuTheme.colors.textPrimary else YomuTheme.colors.textMuted
-        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
         Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
     }
 }

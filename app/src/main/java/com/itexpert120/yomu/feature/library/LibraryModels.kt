@@ -46,7 +46,10 @@ data class LibraryGroup(val label: String, val books: List<LibraryBook>)
 
 data class LibraryUiState(
     val isLoading: Boolean = true,
+    // True size of the library (for the header count + empty state).
     val totalCount: Int = 0,
+    // Number of selectable grid items (excludes the continue-reading hero); for "select all".
+    val selectableCount: Int = 0,
     val continueReading: LibraryBook? = null,
     val groups: List<LibraryGroup> = emptyList(),
     val sortMode: SortMode = SortMode.Recent,

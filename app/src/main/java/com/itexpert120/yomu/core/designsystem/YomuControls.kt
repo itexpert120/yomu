@@ -8,8 +8,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -33,13 +32,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 
@@ -97,7 +97,11 @@ fun YomuChip(
         modifier = modifier
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
             .background(if (selected) colors.textPrimary else colors.surfaceRaised)
-            .border(1.dp, if (selected) colors.textPrimary else colors.border, RoundedCornerShape(YomuTheme.radius.pill))
+            .border(
+                1.dp,
+                if (selected) colors.textPrimary else colors.border,
+                RoundedCornerShape(YomuTheme.radius.pill)
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -144,7 +148,7 @@ fun YomuSegmentedControl(
             )
             Box(
                 modifier = Modifier
-                    .offset(x = indicatorOffset)
+                    .offset { IntOffset(indicatorOffset.roundToPx(), 0) }
                     .width(segmentWidth)
                     .height(controlHeight)
                     .clip(RoundedCornerShape(YomuTheme.radius.pill))
@@ -170,7 +174,12 @@ fun YomuSegmentedControl(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(text = option, color = textColor, style = YomuTheme.type.caption, maxLines = 1)
+                        Text(
+                            text = option,
+                            color = textColor,
+                            style = YomuTheme.type.caption,
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -199,7 +208,9 @@ fun YomuRangeRow(
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            YomuStepButton(text = "-", onClick = { onValueChange((value - 0.05f).coerceIn(0f, 1f)) })
+            YomuStepButton(
+                text = "-",
+                onClick = { onValueChange((value - 0.05f).coerceIn(0f, 1f)) })
             Spacer(Modifier.width(12.dp))
             var sliderSize by remember { mutableStateOf(IntSize.Zero) }
             Canvas(
@@ -210,7 +221,8 @@ fun YomuRangeRow(
                     .pointerInput(sliderSize) {
                         fun updateValue(x: Float) {
                             val handleRadius = 7.dp.toPx()
-                            val trackWidth = (sliderSize.width - handleRadius * 2f).coerceAtLeast(1f)
+                            val trackWidth =
+                                (sliderSize.width - handleRadius * 2f).coerceAtLeast(1f)
                             onValueChange(((x - handleRadius) / trackWidth).coerceIn(0f, 1f))
                         }
 
@@ -252,7 +264,9 @@ fun YomuRangeRow(
                 )
             }
             Spacer(Modifier.width(12.dp))
-            YomuStepButton(text = "+", onClick = { onValueChange((value + 0.05f).coerceIn(0f, 1f)) })
+            YomuStepButton(
+                text = "+",
+                onClick = { onValueChange((value + 0.05f).coerceIn(0f, 1f)) })
         }
     }
 }
@@ -289,7 +303,11 @@ fun YomuColorSwatch(
         modifier = modifier
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (selected) colors.surfaceSunken else colors.surfaceRaised)
-            .border(1.dp, if (selected) colors.textPrimary else colors.border, RoundedCornerShape(YomuTheme.radius.md))
+            .border(
+                1.dp,
+                if (selected) colors.textPrimary else colors.border,
+                RoundedCornerShape(YomuTheme.radius.md)
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

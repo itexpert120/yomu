@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -39,9 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.vector.ImageVector
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -67,6 +68,7 @@ internal fun LibraryHeader(
     onDisplaySheetToggle: () -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
+    onOpenStats: () -> Unit,
     onOpenSettings: () -> Unit,
     elevated: Boolean,
 ) {
@@ -108,6 +110,11 @@ internal fun LibraryHeader(
                     onClick = onThemeToggle,
                     icon = themePreference.themeIcon(),
                     contentDescription = "Toggle theme",
+                )
+                YomuCircleIconButton(
+                    onClick = onOpenStats,
+                    icon = Icons.Rounded.Insights,
+                    contentDescription = "Statistics",
                 )
                 YomuCircleIconButton(
                     onClick = onOpenSettings,

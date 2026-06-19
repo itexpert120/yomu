@@ -16,6 +16,12 @@ data class EditBook(val bookId: String)
 object Settings
 
 @Serializable
+object Stats
+
+@Serializable
+object ReaderDefaults
+
+@Serializable
 object About
 
 /**

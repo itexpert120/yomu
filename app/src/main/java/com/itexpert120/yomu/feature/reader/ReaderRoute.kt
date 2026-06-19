@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @Composable
-fun ReaderRoute(onBack: () -> Unit, onAbout: () -> Unit) {
+fun ReaderRoute(onBack: () -> Unit) {
     val viewModel: ReaderViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
     val session by viewModel.session.collectAsState()
@@ -21,6 +21,19 @@ fun ReaderRoute(onBack: () -> Unit, onAbout: () -> Unit) {
         onNextChapter = viewModel::onNextChapter,
         onPreviousChapter = viewModel::onPreviousChapter,
         onUpdateSettings = viewModel::onUpdateSettings,
-        onAbout = onAbout,
+        onResetSettings = viewModel::onResetBookSettings,
+        onOpenCustomTheme = viewModel::onOpenCustomTheme,
+        onCloseCustomTheme = viewModel::onCloseCustomTheme,
+        onApplyCustomTheme = viewModel::onApplyCustomTheme,
+        onSaveCustomTheme = viewModel::onSaveCustomTheme,
+        onDeleteCustomTheme = viewModel::onDeleteCustomTheme,
+        onOpenToc = viewModel::onOpenToc,
+        onCloseToc = viewModel::onCloseToc,
+        onJumpToLocator = viewModel::onJumpToLocator,
+        onLookUpSelection = viewModel::onLookUpSelection,
+        onDismissSelection = viewModel::onDismissSelection,
+        onCloseLookup = viewModel::onCloseLookup,
+        onReadingResumed = viewModel::onReadingResumed,
+        onReadingPaused = viewModel::onReadingPaused,
     )
 }

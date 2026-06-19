@@ -36,6 +36,11 @@ android {
         compose = true
         buildConfig = true
     }
+    lint {
+        // OldTargetApi: we deliberately target the latest STABLE SDK (36); 37 is a preview.
+        // VectorPath: the app icon / wordmark is a single detailed logo with a long path — expected.
+        disable += setOf("OldTargetApi", "VectorPath")
+    }
 }
 
 ksp {

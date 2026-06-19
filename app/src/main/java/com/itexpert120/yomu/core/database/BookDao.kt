@@ -35,7 +35,7 @@ interface BookDao {
 
     @Query(
         "UPDATE books SET title = :title, subtitle = :subtitle, author = :author, " +
-            "description = :description, coverImagePath = :coverImagePath WHERE id = :id",
+                "description = :description, coverImagePath = :coverImagePath WHERE id = :id",
     )
     suspend fun updateMetadata(
         id: String,
@@ -48,7 +48,7 @@ interface BookDao {
 
     @Query(
         "UPDATE books SET progress = :progress, totalProgression = :totalProgression, " +
-            "locatorJson = :locatorJson, lastOpenedAt = :lastOpenedAt WHERE id = :id",
+                "locatorJson = :locatorJson, lastOpenedAt = :lastOpenedAt WHERE id = :id",
     )
     suspend fun updateProgress(
         id: String,
@@ -90,6 +90,44 @@ interface BookDao {
 
     @Query("DELETE FROM reader_settings WHERE bookId IN (:bookIds)")
     suspend fun deleteReaderSettingsForBooks(bookIds: List<String>)
+
+    // endregion
+
+    // region Cached table of contents
+
+    @Query("SELECT json FROM book_toc WHERE bookId = :bookId")
+    suspend fun getCachedToc(bookId: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertToc(entity: BookTocEntity)
+
+    @Query("DELETE FROM book_toc WHERE bookId IN (:bookIds)")
+    suspend fun deleteTocForBooks(bookIds: List<String>)
+
+    // endregion
+
+    // region Reading statistics
+
+    @Query("SELECT * FROM reading_days")
+    fun observeReadingDays(): Flow<List<ReadingDayEntity>>
+
+    @Query("SELECT seconds FROM reading_days WHERE date = :date")
+    suspend fun getReadingDaySeconds(date: String): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReadingDay(entity: ReadingDayEntity)
+
+    @Query("SELECT COUNT(*) FROM chapter_reads")
+    fun observeChapterReadCount(): Flow<Int>
+
+    @Insert
+    suspend fun insertReadingSession(entity: ReadingSessionEntity)
+
+    @Query("SELECT * FROM reading_sessions ORDER BY startedAt DESC LIMIT :limit")
+    fun observeRecentSessions(limit: Int): Flow<List<ReadingSessionEntity>>
+
+    @Query("DELETE FROM reading_sessions WHERE bookId IN (:bookIds)")
+    suspend fun deleteSessionsForBooks(bookIds: List<String>)
 
     // endregion
 }

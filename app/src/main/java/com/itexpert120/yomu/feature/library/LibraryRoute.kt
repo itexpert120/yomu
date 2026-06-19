@@ -20,6 +20,7 @@ fun LibraryRoute(
     onOpenReader: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
     onThemeToggle: () -> Unit,
+    onOpenStats: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val viewModel: LibraryViewModel = hiltViewModel()
@@ -54,6 +55,7 @@ fun LibraryRoute(
         onOpenReader = onOpenReader,
         onOpenDetails = onOpenDetails,
         onThemeToggle = onThemeToggle,
+        onOpenStats = onOpenStats,
         onOpenSettings = onOpenSettings,
         onEnterSelection = viewModel::onEnterSelection,
         onToggleSelect = viewModel::onToggleSelect,

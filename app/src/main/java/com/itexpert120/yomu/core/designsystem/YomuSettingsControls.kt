@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 /** Custom switch (not a Material `Switch`): an animated knob in a pill track. */
@@ -63,7 +64,7 @@ fun YomuTogglePill(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = knobOffset)
+                .offset { IntOffset(knobOffset.roundToPx(), 0) }
                 .size(22.dp)
                 .clip(CircleShape)
                 .background(if (checked) colors.appBackground else colors.textMuted),

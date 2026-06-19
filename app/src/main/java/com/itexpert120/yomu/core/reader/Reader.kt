@@ -5,6 +5,7 @@ import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderSettings
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 
 /** Yomu-owned reading position (wraps the engine's native locator JSON). */
 data class ReaderLocator(
@@ -13,6 +14,11 @@ data class ReaderLocator(
     val chapterTitle: String?,
     // Resource href of the current position; matches [ReaderTocItem.id] so the TOC can track reads.
     val href: String?,
+    // Progression within the current resource/chapter (0..1), for chapter-boundary detection.
+    val chapterProgression: Double? = null,
+    // Whether a previous/next resource (chapter) exists in reading order.
+    val hasPreviousChapter: Boolean = false,
+    val hasNextChapter: Boolean = false,
 )
 
 /**
@@ -21,6 +27,23 @@ data class ReaderLocator(
  * UI can indent without holding the tree. [locatorJson] is the position to open the reader at, or
  * null when the entry has no resolvable target.
  */
+/**
+ * An active text selection: the highlighted [text] and, when known, its on-screen frame in the
+ * navigator view's pixels ([anchor]) so the UI can position a popup next to the word.
+ */
+data class ReaderSelection(
+    val text: String,
+    val anchor: ReaderRect?,
+)
+
+/** A rectangle in navigator-view pixels (top/bottom edges + horizontal centre). */
+data class ReaderRect(
+    val topPx: Float,
+    val bottomPx: Float,
+    val centerXPx: Float,
+)
+
+@Serializable
 data class ReaderTocItem(
     val id: String,
     val title: String,
@@ -52,6 +75,12 @@ interface ReaderSession {
     /** Emits when the user taps the centre of the page (used to open the controls sheet). */
     val centerTaps: SharedFlow<Unit>
 
+    /** The current text selection, or null when there's none (for word lookup). */
+    val selection: StateFlow<ReaderSelection?>
+
+    /** Clears any active text selection. */
+    fun clearSelection()
+
     val fragmentFactory: FragmentFactory
     val fragmentClassName: String
 
@@ -66,6 +95,9 @@ interface ReaderSession {
     fun nextChapter()
     fun previousChapter()
     fun goToProgression(totalProgression: Double)
+
+    /** Jumps to a specific locator (e.g. a TOC entry's stored position). */
+    fun goToLocator(locatorJson: String)
 
     fun close()
 }

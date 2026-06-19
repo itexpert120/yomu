@@ -55,7 +55,8 @@ internal fun LibrarySelectionDock(
     onOpenDetails: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val panel = YomuTheme.colors.panel
     Box(
         modifier = modifier
@@ -122,7 +123,12 @@ private fun LabeledAction(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
         Text(text = label, color = tint, style = YomuTheme.type.caption)
     }
 }

@@ -8,13 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingState
-import com.itexpert120.yomu.core.reader.ReaderEngine
-import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.BookRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.File
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +24,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import javax.inject.Inject
 
 /** Presentation model for the details screen. */
 data class BookDetailsUi(
@@ -83,7 +81,6 @@ class BookDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val repository: BookRepository,
-    private val readerEngine: ReaderEngine,
 ) : ViewModel() {
 
     // "bookId" is the property name from the type-safe BookDetails route.
@@ -98,8 +95,11 @@ class BookDetailsViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    private val tocLoading = MutableStateFlow(true)
-    private val tocItems = MutableStateFlow<List<ReaderTocItem>>(emptyList())
+    // Prime from the in-memory cache when available so re-opening this book shows the TOC instantly
+    // (no loading flash); only a genuine first-load this session starts in the loading state.
+    private val cachedToc = repository.cachedTableOfContents(BookId(bookId))
+    private val tocLoading = MutableStateFlow(cachedToc == null)
+    private val tocItems = MutableStateFlow(cachedToc ?: emptyList())
     private val tocSort = MutableStateFlow(TocSortMode.Ascending)
     private val selectedUids = MutableStateFlow<Set<Int>>(emptySet())
     private val selectionMode = MutableStateFlow(false)
@@ -117,7 +117,8 @@ class BookDetailsViewModel @Inject constructor(
         val (loading, sort) = config
         val (selected, inSelection) = selection
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
-        val ordered = items.withIndex().toList().let { if (sort == TocSortMode.Descending) it.asReversed() else it }
+        val ordered = items.withIndex().toList()
+            .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
         TocUiState(
             loading = loading,
             sort = sort,
@@ -140,13 +141,14 @@ class BookDetailsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TocUiState())
 
     init {
-        viewModelScope.launch {
-            val items = withContext(Dispatchers.IO) {
-                val target = repository.readingTarget(BookId(bookId))
-                target?.let { readerEngine.tableOfContents(it.storagePath) }.orEmpty()
+        if (cachedToc == null) {
+            viewModelScope.launch {
+                val items = withContext(Dispatchers.IO) {
+                    repository.tableOfContents(BookId(bookId))
+                }
+                tocItems.value = items
+                tocLoading.value = false
             }
-            tocItems.value = items
-            tocLoading.value = false
         }
     }
 
@@ -207,7 +209,8 @@ class BookDetailsViewModel @Inject constructor(
         val book = state.value ?: return
         val path = book.coverImagePath ?: return
         viewModelScope.launch {
-            val name = book.title.ifBlank { "cover" }.take(60).replace(Regex("[^A-Za-z0-9 ._-]"), "_")
+            val name =
+                book.title.ifBlank { "cover" }.take(60).replace(Regex("[^A-Za-z0-9 ._-]"), "_")
             val ok = saveImageToGallery(context, File(path), "$name.png")
             _messages.emit(if (ok) "Saved to gallery" else "Couldn't save cover")
         }
