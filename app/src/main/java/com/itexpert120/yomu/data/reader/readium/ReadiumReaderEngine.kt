@@ -42,6 +42,8 @@ import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.epub.css.FontStyle
 import org.readium.r2.navigator.epub.css.FontWeight
+import org.readium.r2.navigator.epub.css.Length
+import org.readium.r2.navigator.epub.css.RsProperties
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.FontFamily
@@ -222,6 +224,11 @@ private class ReadiumReaderSession(
                 // the engine-level guard the InputListener.onDrag swallow couldn't provide. Paged
                 // mode is untouched — the flag only gates scroll-mode swipes.
                 disablePageTurnsWhileScrolling = true
+
+                // Readium caps the text column at an "optimal line length" and centres it, which
+                // leaves huge side margins on a wide tablet. Raise the cap far past any screen so the
+                // column fills the available width; the page margins (pageMargins) remain the gutter.
+                readiumCssRsProperties = RsProperties(maxLineLength = Length.Rem(120.0))
 
                 // Customize the text-selection menu. Readium replaces the WebView's native menu with
                 // this callback entirely (it drops Chromium's Copy/Share/Read-aloud), so we rebuild

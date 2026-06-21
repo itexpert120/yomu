@@ -75,9 +75,9 @@
             </intent-filter>
         </activity>
 
-        <!-- "Continue reading" home-screen widget (Jetpack Glance). -->
+        <!-- Resizable library widget: recent books as a fast-launch cover grid (Jetpack Glance). -->
         <receiver
-            android:name=".widget.ContinueReadingWidgetReceiver"
+            android:name=".widget.LibraryWidgetReceiver"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -85,12 +85,12 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/continue_reading_widget_info" />
+                android:resource="@xml/library_widget_info" />
         </receiver>
 
-        <!-- Small library/open-app shortcut tile (Jetpack Glance). -->
+        <!-- Resizable reading-activity widget: streak, time, and a daily heatmap (Jetpack Glance). -->
         <receiver
-            android:name=".widget.LibraryShortcutWidgetReceiver"
+            android:name=".widget.ActivityWidgetReceiver"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -98,7 +98,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/library_shortcut_widget_info" />
+                android:resource="@xml/activity_widget_info" />
         </receiver>
     </application>
 

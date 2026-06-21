@@ -29,6 +29,7 @@ fun YomuApp(
     externalOpenViewModel: ExternalOpenViewModel,
     onResolvedThemeChange: (YomuThemeMode) -> Unit,
     openBookFromWidget: Flow<String> = emptyFlow(),
+    openStatsFromWidget: Flow<Unit> = emptyFlow(),
 ) {
     val preference by appViewModel.themePreference.collectAsState()
     val oledDark by appViewModel.oledDark.collectAsState()
@@ -61,6 +62,7 @@ fun YomuApp(
                 appViewModel = appViewModel,
                 externalOpenViewModel = externalOpenViewModel,
                 openBookFromWidget = openBookFromWidget,
+                openStatsFromWidget = openStatsFromWidget,
             )
         }
     }

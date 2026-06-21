@@ -37,6 +37,13 @@ class MainActivity : FragmentActivity() {
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
+    // One-shot "open Statistics" requests from the activity widget. Same buffering rationale.
+    private val openStatsFromWidget = MutableSharedFlow<Unit>(
+        replay = 1,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         // Set before super.onCreate so a navigator fragment saved before a config change (rotation)
@@ -53,6 +60,7 @@ class MainActivity : FragmentActivity() {
                 appViewModel = appViewModel,
                 externalOpenViewModel = externalOpenViewModel,
                 openBookFromWidget = openBookFromWidget.asSharedFlow(),
+                openStatsFromWidget = openStatsFromWidget.asSharedFlow(),
                 onResolvedThemeChange = { updateYomuSystemBarIcons(it) },
             )
         }
@@ -73,8 +81,13 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handleWidgetIntent(intent: Intent?) {
-        val bookId = intent?.getStringExtra(WidgetDeepLink.EXTRA_OPEN_BOOK_ID) ?: return
-        openBookFromWidget.tryEmit(bookId)
+        intent?.getStringExtra(WidgetDeepLink.EXTRA_OPEN_BOOK_ID)?.let {
+            openBookFromWidget.tryEmit(it)
+            return
+        }
+        if (intent?.getBooleanExtra(WidgetDeepLink.EXTRA_OPEN_STATS, false) == true) {
+            openStatsFromWidget.tryEmit(Unit)
+        }
     }
 }
 

@@ -3,76 +3,139 @@ package com.itexpert120.yomu.widget
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.Color
+import com.itexpert120.yomu.core.model.HeatmapDay
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/**
- * Immutable snapshot the "Continue reading" widget renders. [cover] is a decoded, size-limited
- * bitmap (or null to fall back to a gradient/placeholder). [Empty] represents the no-books state.
- */
-data class ContinueReadingState(
-    val bookId: String?,
-    val title: String,
-    val author: String,
-    val progress: Float,
-    val progressLabel: String,
-    val cover: Bitmap?,
-) {
-    val isEmpty: Boolean get() = bookId == null
+// Yomu's dark, reader-like palette approximated with Glance primitives (Glance can't read the
+// app's CompositionLocal theme). Sourced from core/designsystem DarkYomuColors. Shared by both
+// home-screen widgets so they stay visually consistent.
+internal object WidgetColors {
+    val background = Color(0xFF171815)
+    val backgroundRaised = Color(0xFF1D1F1B)
+    val textPrimary = Color(0xFFF4F4EF)
+    val textSecondary = Color(0xFFBFC2B8)
+    val textMuted = Color(0xFF858A7E)
+    val accent = Color(0xFFB8D88F)
+    val track = Color(0xFF2C2F29)
+    val coverFallback = Color(0xFF0C0D0B)
 
-    companion object {
-        val Empty = ContinueReadingState(
-            bookId = null,
-            title = "",
-            author = "",
-            progress = 0f,
-            progressLabel = "",
-            cover = null,
-        )
-    }
+    /** Heatmap / bar intensity ramp (0 = none … 4 = busiest). Index 0 is the empty-cell track. */
+    val intensity = arrayOf(
+        Color(0xFF24271F), // 0 — no reading
+        Color(0xFF3C4A2E),
+        Color(0xFF5E7A3F),
+        Color(0xFF8BB45F),
+        Color(0xFFB8D88F), // 4 — accent
+    )
 }
 
-/** Hilt bridge so the widget/receiver (not @AndroidEntryPoint) can reach app singletons. */
+// ---------------------------------------------------------------------------------------------
+// Hilt bridge
+// ---------------------------------------------------------------------------------------------
+
+/** Hilt bridge so the widgets/receivers (not @AndroidEntryPoint) can reach app singletons. */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface WidgetEntryPoint {
     fun bookRepository(): BookRepository
+    fun statsRepository(): StatsRepository
 }
 
-internal fun widgetBookRepository(context: Context): BookRepository =
-    EntryPointAccessors.fromApplication(
-        context.applicationContext,
-        WidgetEntryPoint::class.java,
-    ).bookRepository()
+private fun widgetEntryPoint(context: Context): WidgetEntryPoint =
+    EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
+
+// ---------------------------------------------------------------------------------------------
+// Library widget data
+// ---------------------------------------------------------------------------------------------
+
+/** One book tile in the library widget: enough to render a cover + title and deep-link a tap. */
+data class WidgetBook(
+    val id: String,
+    val title: String,
+    val author: String,
+    val cover: Bitmap?,
+)
 
 /**
- * Loads the "Continue reading" snapshot off the main thread. Decodes the cover at a small,
- * memory-safe size — home-screen widget bitmaps must stay well under the RemoteViews limit.
+ * Loads up to [limit] most-recently-opened books for the library widget, decoding each cover at a
+ * small, RemoteViews-safe size. Runs off the main thread (provideGlance is suspend).
  */
-internal suspend fun loadContinueReadingState(context: Context): ContinueReadingState =
+internal suspend fun loadLibraryBooks(context: Context, limit: Int): List<WidgetBook> =
     withContext(Dispatchers.IO) {
-        val book = widgetBookRepository(context).continueReadingBook()
-            ?: return@withContext ContinueReadingState.Empty
-        ContinueReadingState(
-            bookId = book.id.value,
-            title = book.title,
-            author = book.author,
-            progress = book.progress.coerceIn(0f, 1f),
-            progressLabel = book.remainingLabel,
-            cover = book.coverImagePath?.let { decodeCover(it) },
+        widgetEntryPoint(context).bookRepository().recentBooks(limit).map { book ->
+            WidgetBook(
+                id = book.id.value,
+                title = book.title,
+                author = book.author,
+                cover = book.coverImagePath?.let { decodeCover(it) },
+            )
+        }
+    }
+
+// ---------------------------------------------------------------------------------------------
+// Activity widget data
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Immutable snapshot for the reading-activity widget: headline figures plus the recent daily
+ * series (oldest → newest) used to draw the bar chart / mini heatmap. [days] always carries the
+ * full heatmap window; small widget sizes render only its tail.
+ */
+data class WidgetActivity(
+    val todaySeconds: Long,
+    val weekSeconds: Long,
+    val currentStreakDays: Int,
+    val days: List<HeatmapDay>,
+) {
+    val isEmpty: Boolean get() = days.none { it.seconds > 0L } && currentStreakDays == 0
+}
+
+/** Loads the reading-activity snapshot off the main thread from the stats repository. */
+internal suspend fun loadActivity(context: Context): WidgetActivity =
+    withContext(Dispatchers.IO) {
+        val stats = widgetEntryPoint(context).statsRepository()
+        val statsSnapshot = stats.stats.first()
+        val days = stats.heatmap.first()
+        val today = days.lastOrNull()?.seconds ?: 0L
+        WidgetActivity(
+            todaySeconds = today,
+            weekSeconds = statsSnapshot.secondsLast7Days,
+            currentStreakDays = statsSnapshot.currentStreakDays,
+            days = days,
         )
     }
 
+/** Human-readable reading time, compact for a widget (e.g. "0m", "45m", "2h 5m"). */
+internal fun formatDuration(seconds: Long): String {
+    if (seconds <= 0L) return "0m"
+    val hours = TimeUnit.SECONDS.toHours(seconds)
+    val minutes = TimeUnit.SECONDS.toMinutes(seconds) % 60
+    return when {
+        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+        hours > 0 -> "${hours}h"
+        else -> "${minutes}m"
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cover decoding (shared)
+// ---------------------------------------------------------------------------------------------
+
 /** Decodes a cover capped to [maxDimensionPx] on its longest side, or null if it can't be read. */
-private fun decodeCover(path: String, maxDimensionPx: Int = 360): Bitmap? {
+internal fun decodeCover(path: String, maxDimensionPx: Int = 320): Bitmap? {
     val file = File(path)
     if (!file.exists()) return null
     return runCatching {

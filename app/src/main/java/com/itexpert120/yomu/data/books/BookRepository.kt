@@ -49,6 +49,12 @@ interface BookRepository {
     suspend fun continueReadingBook(): Book?
 
     /**
+     * The [limit] most-recently-opened books (newest first), for the home-screen library widget's
+     * fast-launch grid. Empty when the library has no books.
+     */
+    suspend fun recentBooks(limit: Int): List<Book>
+
+    /**
      * The book's table of contents, served from a persistent cache. On a cache miss it is extracted
      * from the EPUB and stored, so subsequent opens are instant. Also keeps a process-lifetime
      * in-memory copy ([cachedTableOfContents]) so repeat opens don't even re-read/parse from disk.

@@ -70,7 +70,11 @@ class RoomBookRepository @Inject constructor(
     override suspend fun findIdByHash(sha256: String): BookId? =
         dao.findIdByHash(sha256)?.let { BookId(it) }
 
-    override suspend fun insert(book: ImportedBook) = dao.insert(book.toEntity())
+    override suspend fun insert(book: ImportedBook) {
+        dao.insert(book.toEntity())
+        // A newly imported book should appear in the library widget's recent grid.
+        WidgetUpdater.refreshLibrary(context)
+    }
 
     override suspend fun readingTarget(id: BookId): ReadingTarget? {
         val entity = dao.getBook(id.value) ?: return null
@@ -89,12 +93,15 @@ class RoomBookRepository @Inject constructor(
             locatorJson = locatorJson,
             lastOpenedAt = System.currentTimeMillis(),
         )
-        // Keep the "Continue reading" home-screen widget in sync with the latest position.
-        WidgetUpdater.refreshContinueReading(context)
+        // Keep the library widget's recent-books ordering in sync with the latest reading.
+        WidgetUpdater.refreshLibrary(context)
     }
 
     override suspend fun continueReadingBook(): Book? =
         (dao.getContinueReadingBook() ?: dao.getMostRecentBook())?.toBook()
+
+    override suspend fun recentBooks(limit: Int): List<Book> =
+        dao.getRecentBooks(limit).map { it.toBook() }
 
     override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = tocMemory[id.value]
 

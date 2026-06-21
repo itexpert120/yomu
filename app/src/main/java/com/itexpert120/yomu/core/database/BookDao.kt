@@ -32,6 +32,13 @@ interface BookDao {
     @Query("SELECT * FROM books ORDER BY lastOpenedAt DESC LIMIT 1")
     suspend fun getMostRecentBook(): BookEntity?
 
+    /**
+     * The [limit] most-recently-opened books (newest first), for the resizable library widget's
+     * fast-launch grid. Books that have never been opened sort last (lastOpenedAt defaults to 0).
+     */
+    @Query("SELECT * FROM books ORDER BY lastOpenedAt DESC LIMIT :limit")
+    suspend fun getRecentBooks(limit: Int): List<BookEntity>
+
     @Query("SELECT * FROM books WHERE id IN (:ids)")
     suspend fun getBooks(ids: List<String>): List<BookEntity>
 

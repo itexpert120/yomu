@@ -11,6 +11,9 @@ import com.itexpert120.yomu.core.model.HourlyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import com.itexpert120.yomu.core.model.WeekdayReading
+import android.content.Context
+import com.itexpert120.yomu.widget.WidgetUpdater
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -34,6 +37,7 @@ import javax.inject.Singleton
 @Singleton
 class StatsRepository @Inject constructor(
     private val dao: BookDao,
+    @ApplicationContext private val context: Context,
 ) {
     private val writeMutex = Mutex()
 
@@ -57,6 +61,8 @@ class StatsRepository @Inject constructor(
             val current = dao.getReadingDaySeconds(date) ?: 0L
             dao.upsertReadingDay(ReadingDayEntity(date, current + seconds))
         }
+        // Reflect the new session in the home-screen reading-activity widget.
+        WidgetUpdater.refreshActivity(context)
     }
 
     // Day-derived figures recompute only when reading-day data actually changes (not on every book

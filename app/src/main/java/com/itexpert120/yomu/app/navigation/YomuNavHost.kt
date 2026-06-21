@@ -36,6 +36,7 @@ fun YomuNavHost(
     externalOpenViewModel: ExternalOpenViewModel,
     modifier: Modifier = Modifier,
     openBookFromWidget: Flow<String> = emptyFlow(),
+    openStatsFromWidget: Flow<Unit> = emptyFlow(),
 ) {
     val navController = rememberNavController()
 
@@ -50,6 +51,12 @@ fun YomuNavHost(
     LaunchedEffect(Unit) {
         openBookFromWidget.collect { bookId ->
             navController.navigate(Reader(bookId))
+        }
+    }
+    // The activity widget deep-links into the Statistics screen.
+    LaunchedEffect(Unit) {
+        openStatsFromWidget.collect {
+            navController.navigate(Stats)
         }
     }
     // Material "shared axis (X)" — the transition Google's own apps use for hierarchical
