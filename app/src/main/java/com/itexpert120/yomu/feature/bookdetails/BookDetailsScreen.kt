@@ -270,18 +270,18 @@ private fun BookHeader(
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.caption,
                 )
-            }
-        }
 
-        if (book.progress > 0f) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailProgress(book.progress)
-                Text(
-                    // remaining already reads as "5% read" / "Finished" — don't restate the percent.
-                    text = book.remaining,
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.mono,
-                )
+                // Reading progress lives under the title/author beside the cover, so it stays
+                // compact instead of taking a full-width block of its own below.
+                if (book.progress > 0f) {
+                    DetailProgress(book.progress)
+                    Text(
+                        // remaining already reads as "5% read" / "Finished".
+                        text = book.remaining,
+                        color = YomuTheme.colors.textMuted,
+                        style = YomuTheme.type.mono,
+                    )
+                }
             }
         }
 
