@@ -66,8 +66,6 @@ fun ReaderScreen(
     onOpenToc: () -> Unit,
     onCloseToc: () -> Unit,
     onJumpToLocator: (String) -> Unit,
-    onLookUpSelection: () -> Unit,
-    onDismissSelection: () -> Unit,
     onCloseLookup: () -> Unit,
     onReadingResumed: () -> Unit,
     onReadingPaused: () -> Unit,
@@ -280,9 +278,8 @@ fun ReaderScreen(
                 }
 
                 // Next-chapter button at the chapter end (above the dim scrim so it stays legible).
-                // Hidden while selecting / looking up so it doesn't collide with the bottom bar.
-                val selection = state.selection
-                if (selection == null && state.lookup == null) {
+                // Hidden while a lookup popup is open so it doesn't collide with the sheet.
+                if (state.lookup == null) {
                     ReaderChapterButtons(
                         chapterProgression = state.chapterProgression,
                         hasNext = state.hasNextChapter,
@@ -290,18 +287,6 @@ fun ReaderScreen(
                         background = background,
                         content = onBackground,
                         onNext = onNextChapter,
-                    )
-                }
-
-                // Always-visible "Look up" bar while text is selected.
-                if (selection != null && state.lookup == null) {
-                    ReaderSelectionBar(
-                        word = selection.text,
-                        background = background,
-                        content = onBackground,
-                        bottomInset = bottomInset,
-                        onLookUp = onLookUpSelection,
-                        onDismiss = onDismissSelection,
                     )
                 }
 

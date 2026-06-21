@@ -30,8 +30,6 @@ fun ReaderRoute(onBack: () -> Unit) {
         onOpenToc = viewModel::onOpenToc,
         onCloseToc = viewModel::onCloseToc,
         onJumpToLocator = viewModel::onJumpToLocator,
-        onLookUpSelection = viewModel::onLookUpSelection,
-        onDismissSelection = viewModel::onDismissSelection,
         onCloseLookup = viewModel::onCloseLookup,
         onReadingResumed = viewModel::onReadingResumed,
         onReadingPaused = viewModel::onReadingPaused,

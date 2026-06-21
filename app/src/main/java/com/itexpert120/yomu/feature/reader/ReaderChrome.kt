@@ -34,9 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -96,7 +94,7 @@ internal fun ReaderTopBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(bg)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(bottom = 8.dp, start = 16.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -198,74 +196,6 @@ internal fun BoxScope.ReaderChapterButtons(
 
 private const val CHAPTER_EDGE = 0.01
 
-/**
- * Always-visible "Look up «word»" bar pinned to the bottom of the reading area while text is
- * selected. Opaque so the page text doesn't bleed through.
- */
-@Composable
-internal fun BoxScope.ReaderSelectionBar(
-    word: String,
-    background: Color,
-    content: Color,
-    bottomInset: Dp,
-    onLookUp: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = bottomInset + 16.dp)
-            .clip(RoundedCornerShape(50))
-            .background(background)
-            .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(50)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onLookUp,
-                )
-                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = null,
-                tint = content,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = "Look up “$word”",
-                color = content,
-                style = YomuTheme.type.body,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Close,
-                contentDescription = "Dismiss",
-                tint = content,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-    }
-}
-
 @Composable
 private fun ChapterPill(
     text: String,
@@ -323,7 +253,7 @@ private fun ReaderBarButton(
 ) {
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(24.dp)
             .clip(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

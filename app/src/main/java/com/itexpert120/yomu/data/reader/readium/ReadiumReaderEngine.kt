@@ -1,6 +1,13 @@
 package com.itexpert120.yomu.data.reader.readium
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.speech.tts.TextToSpeech
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -8,8 +15,6 @@ import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderLocator
-import com.itexpert120.yomu.core.reader.ReaderRect
-import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,14 +22,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.readium.r2.navigator.OverflowableNavigator
@@ -34,7 +37,6 @@ import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.epub.css.FontStyle
 import org.readium.r2.navigator.epub.css.FontWeight
-import org.readium.r2.navigator.input.DragEvent
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.FontFamily
@@ -54,7 +56,6 @@ import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.time.Duration.Companion.milliseconds
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 
@@ -80,7 +81,7 @@ class ReadiumReaderEngine @Inject constructor(
         initialSettings: ReaderSettings,
     ): ReaderSession? {
         val publication = openPublication(filePath) ?: return null
-        return ReadiumReaderSession(publication, initialLocatorJson, initialSettings)
+        return ReadiumReaderSession(context, publication, initialLocatorJson, initialSettings)
     }
 
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem> {
@@ -138,6 +139,7 @@ class ReadiumReaderEngine @Inject constructor(
 
 @OptIn(ExperimentalReadiumApi::class)
 private class ReadiumReaderSession(
+    private val context: Context,
     private val publication: Publication,
     initialLocatorJson: String?,
     initialSettings: ReaderSettings,
@@ -151,8 +153,8 @@ private class ReadiumReaderSession(
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
-    private val _selection = MutableStateFlow<ReaderSelection?>(null)
-    override val selection: StateFlow<ReaderSelection?> = _selection.asStateFlow()
+    private val _lookUpRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val lookUpRequests: SharedFlow<String> = _lookUpRequests.asSharedFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
@@ -166,9 +168,9 @@ private class ReadiumReaderSession(
     // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
     private var currentSettings: ReaderSettings = initialSettings
 
-    // The selection text we just cleared; polls matching it are ignored until the WebView drops it
-    // (so the bar doesn't flicker back), but a *different* fresh selection is reported normally.
-    private var clearedSelectionText: String? = null
+    // Lazily-created TTS for the "Read aloud" selection action; reused across taps, shut down on close.
+    private var tts: TextToSpeech? = null
+    private var pendingSpeak: String? = null
 
     private val initialLocator: Locator? = initialLocatorJson
         ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
@@ -185,6 +187,54 @@ private class ReadiumReaderSession(
             initialPreferences = initialSettings.toPreferences(),
             listener = listener,
             configuration = EpubNavigatorFragment.Configuration {
+                // In scroll mode a horizontal swipe jumps a whole resource (chapter), which users
+                // hit accidentally while scrolling vertically. Disable it: chapters are advanced via
+                // the next-chapter button / controls sheet / TOC (programmatic, unaffected). This is
+                // the engine-level guard the InputListener.onDrag swallow couldn't provide. Paged
+                // mode is untouched — the flag only gates scroll-mode swipes.
+                disablePageTurnsWhileScrolling = true
+
+                // Customize the text-selection menu. Readium replaces the WebView's native menu with
+                // this callback entirely (it drops Chromium's Copy/Share/Read-aloud), so we rebuild
+                // the standard actions ourselves — Copy, Read aloud (TTS), Share — and slot "Look up"
+                // in. "Look up" hands the selected text to the dictionary flow; this also replaces the
+                // old floating look-up bar.
+                selectionActionModeCallback = object : ActionMode.Callback {
+                    override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                        menu ?: return false
+                        menu.add(Menu.NONE, MENU_COPY, 0, android.R.string.copy)
+                        menu.add(Menu.NONE, MENU_LOOK_UP, 1, "Look up")
+                        menu.add(Menu.NONE, MENU_SPEAK, 2, "Read aloud")
+                        menu.add(Menu.NONE, MENU_SHARE, 3, "Share")
+                        return true
+                    }
+
+                    override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) = false
+
+                    override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+                        val id = item?.itemId ?: return false
+                        if (id !in setOf(MENU_COPY, MENU_LOOK_UP, MENU_SPEAK, MENU_SHARE)) {
+                            return false
+                        }
+                        scope.launch {
+                            val selection = (navigator as? SelectableNavigator)?.currentSelection()
+                            val text = selection?.locator?.text?.highlight?.trim()
+                            if (!text.isNullOrBlank()) {
+                                when (id) {
+                                    MENU_COPY -> copySelection(text)
+                                    MENU_SPEAK -> speakSelection(text)
+                                    MENU_SHARE -> shareSelection(text)
+                                    MENU_LOOK_UP -> _lookUpRequests.tryEmit(text)
+                                }
+                            }
+                            mode?.finish()
+                        }
+                        return true
+                    }
+
+                    override fun onDestroyActionMode(mode: ActionMode?) {}
+                }
+
                 // Serve the bundled .ttf files from assets/fonts/ to the EPUB engine.
                 servedAssets += "fonts/.*"
 
@@ -316,49 +366,7 @@ private class ReadiumReaderSession(
                 }
                 return false
             }
-
-            // In scroll mode a horizontal swipe to change chapter makes no sense, so swallow
-            // horizontal drags there (vertical scrolling still works). Paged mode keeps its
-            // natural left/right page swipe. Never swallow while a selection is active, so dragging
-            // to extend a selection isn't blocked.
-            override fun onDrag(event: DragEvent): Boolean =
-                currentSettings.layout == ReaderLayout.Scroll &&
-                        _selection.value == null &&
-                        kotlin.math.abs(event.offset.x) > kotlin.math.abs(event.offset.y)
         })
-
-        // Track the active text selection (for word lookup). Readium exposes it as a one-shot
-        // suspend call, so poll lightly while the reader is open. After we clear a selection, keep
-        // reporting null until Readium's WebView actually drops it, so the bar doesn't flicker back.
-        (nav as? SelectableNavigator)?.let { selectable ->
-            scope.launch {
-                while (isActive) {
-                    val current = runCatching { selectable.currentSelection() }.getOrNull()
-                    val text = current?.locator?.text?.highlight?.trim()?.takeIf { it.isNotBlank() }
-                    if (text == null || text == clearedSelectionText) {
-                        // No selection, or the same one we just cleared (still settling): hide it.
-                        _selection.value = null
-                    } else {
-                        clearedSelectionText = null
-                        val rect = current.rect?.let {
-                            ReaderRect(
-                                topPx = it.top,
-                                bottomPx = it.bottom,
-                                centerXPx = it.centerX()
-                            )
-                        }
-                        _selection.value = ReaderSelection(text = text, anchor = rect)
-                    }
-                    delay(SELECTION_POLL_MS.milliseconds)
-                }
-            }
-        }
-    }
-
-    override fun clearSelection() {
-        clearedSelectionText = _selection.value?.text
-        (navigator as? SelectableNavigator)?.clearSelection()
-        _selection.value = null
     }
 
     override fun applySettings(settings: ReaderSettings) {
@@ -406,7 +414,41 @@ private class ReadiumReaderSession(
 
     override fun close() {
         scope.cancel()
+        tts?.shutdown()
+        tts = null
         runCatching { publication.close() }
+    }
+
+    private fun speakSelection(text: String) {
+        val existing = tts
+        if (existing != null) {
+            existing.speak(text, TextToSpeech.QUEUE_FLUSH, null, "yomu-selection")
+            return
+        }
+        // First use: TTS init is async, so remember the text and speak once the engine is ready.
+        pendingSpeak = text
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                pendingSpeak?.let {
+                    tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "yomu-selection")
+                }
+            }
+            pendingSpeak = null
+        }
+    }
+
+    private fun copySelection(text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboard?.setPrimaryClip(ClipData.newPlainText("Selection", text))
+    }
+
+    private fun shareSelection(text: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        val chooser = Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(chooser) }
     }
 
     // Layout + size + theme colours (explicit bg/text so it matches the chrome) + the bundled font.
@@ -437,6 +479,11 @@ private class ReadiumReaderSession(
         // Tap-zone boundaries as fractions of the page width.
         const val TAP_LEFT = 0.33f
         const val TAP_RIGHT = 0.67f
-        const val SELECTION_POLL_MS = 400L
+
+        // Menu item ids for the actions we rebuild in the text-selection menu.
+        const val MENU_COPY = 1
+        const val MENU_LOOK_UP = 2
+        const val MENU_SPEAK = 3
+        const val MENU_SHARE = 4
     }
 }

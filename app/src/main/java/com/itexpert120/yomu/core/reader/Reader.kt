@@ -27,22 +27,6 @@ data class ReaderLocator(
  * UI can indent without holding the tree. [locatorJson] is the position to open the reader at, or
  * null when the entry has no resolvable target.
  */
-/**
- * An active text selection: the highlighted [text] and, when known, its on-screen frame in the
- * navigator view's pixels ([anchor]) so the UI can position a popup next to the word.
- */
-data class ReaderSelection(
-    val text: String,
-    val anchor: ReaderRect?,
-)
-
-/** A rectangle in navigator-view pixels (top/bottom edges + horizontal centre). */
-data class ReaderRect(
-    val topPx: Float,
-    val bottomPx: Float,
-    val centerXPx: Float,
-)
-
 @Serializable
 data class ReaderTocItem(
     val id: String,
@@ -75,11 +59,11 @@ interface ReaderSession {
     /** Emits when the user taps the centre of the page (used to open the controls sheet). */
     val centerTaps: SharedFlow<Unit>
 
-    /** The current text selection, or null when there's none (for word lookup). */
-    val selection: StateFlow<ReaderSelection?>
-
-    /** Clears any active text selection. */
-    fun clearSelection()
+    /**
+     * Emits the selected text when the user taps "Look up" in the native text-selection menu. The
+     * engine finishes the selection action mode itself, so callers don't need to clear anything.
+     */
+    val lookUpRequests: SharedFlow<String>
 
     val fragmentFactory: FragmentFactory
     val fragmentClassName: String

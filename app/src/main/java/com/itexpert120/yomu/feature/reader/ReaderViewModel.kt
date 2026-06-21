@@ -8,8 +8,6 @@ import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.reader.ReaderEngine
-import com.itexpert120.yomu.core.reader.ReaderRect
-import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.BookRepository
@@ -49,15 +47,14 @@ data class ReaderUiState(
     val toc: List<ReaderTocItem> = emptyList(),
     val tocSheetVisible: Boolean = false,
     val currentHref: String? = null,
-    // Word lookup: the live text selection, and the active lookup sheet (null = closed).
-    val selection: ReaderSelection? = null,
+    // Word lookup: the active lookup sheet (null = closed). Triggered from the native "Look up"
+    // text-selection menu item.
     val lookup: WordLookupUiState? = null,
 )
 
-/** State of the word-definition popup. [anchor] is the selection frame captured at lookup time. */
+/** State of the word-definition popup. */
 data class WordLookupUiState(
     val word: String,
-    val anchor: ReaderRect? = null,
     val loading: Boolean = true,
     val result: DictionaryResult? = null,
 )
@@ -187,7 +184,7 @@ class ReaderViewModel @Inject constructor(
                 opened.centerTaps.collect { _state.update { it.copy(sheetVisible = true) } }
             }
             launch {
-                opened.selection.collect { sel -> _state.update { it.copy(selection = sel) } }
+                opened.lookUpRequests.collect { text -> lookUp(text) }
             }
             launch {
                 repository.observeBook(BookId(bookId)).collect { book ->
@@ -258,17 +255,10 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.deleteCustomTheme(id) }
     }
 
-    /** Looks up the current selection's first word in the dictionary and opens the result popup. */
-    fun onLookUpSelection() {
-        val sel = state.value.selection ?: return
-        val word = sanitizeWord(sel.text) ?: return
-        _session.value?.clearSelection()
-        _state.update {
-            it.copy(
-                selection = null,
-                lookup = WordLookupUiState(word = word, anchor = sel.anchor, loading = true)
-            )
-        }
+    /** Looks up the selected text's first word in the dictionary and opens the result popup. */
+    private fun lookUp(rawText: String) {
+        val word = sanitizeWord(rawText) ?: return
+        _state.update { it.copy(lookup = WordLookupUiState(word = word, loading = true)) }
         viewModelScope.launch {
             val result = dictionary.lookup(word)
             _state.update { st ->
@@ -278,11 +268,6 @@ class ReaderViewModel @Inject constructor(
                 st.copy(lookup = current.copy(loading = false, result = result))
             }
         }
-    }
-
-    fun onDismissSelection() {
-        _session.value?.clearSelection()
-        _state.update { it.copy(selection = null) }
     }
 
     fun onCloseLookup() = _state.update { it.copy(lookup = null) }
