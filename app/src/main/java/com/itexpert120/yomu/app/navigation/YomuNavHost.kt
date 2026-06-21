@@ -27,12 +27,15 @@ import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
 import com.itexpert120.yomu.feature.stats.StatsRoute
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
 fun YomuNavHost(
     appViewModel: AppViewModel,
     externalOpenViewModel: ExternalOpenViewModel,
     modifier: Modifier = Modifier,
+    openBookFromWidget: Flow<String> = emptyFlow(),
 ) {
     val navController = rememberNavController()
 
@@ -40,6 +43,12 @@ fun YomuNavHost(
     // jump straight into the reader for the resolved book (an existing entry on a duplicate).
     LaunchedEffect(Unit) {
         externalOpenViewModel.openBook.collect { bookId ->
+            navController.navigate(Reader(bookId))
+        }
+    }
+    // A home-screen widget tap deep-links straight into the reader for the requested book.
+    LaunchedEffect(Unit) {
+        openBookFromWidget.collect { bookId ->
             navController.navigate(Reader(bookId))
         }
     }

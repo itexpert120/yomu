@@ -15,6 +15,8 @@ import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.ThemePreference
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Root composable: resolves the concrete theme mode (combining the saved preference, the OLED
@@ -26,6 +28,7 @@ fun YomuApp(
     appViewModel: AppViewModel,
     externalOpenViewModel: ExternalOpenViewModel,
     onResolvedThemeChange: (YomuThemeMode) -> Unit,
+    openBookFromWidget: Flow<String> = emptyFlow(),
 ) {
     val preference by appViewModel.themePreference.collectAsState()
     val oledDark by appViewModel.oledDark.collectAsState()
@@ -57,6 +60,7 @@ fun YomuApp(
             YomuNavHost(
                 appViewModel = appViewModel,
                 externalOpenViewModel = externalOpenViewModel,
+                openBookFromWidget = openBookFromWidget,
             )
         }
     }

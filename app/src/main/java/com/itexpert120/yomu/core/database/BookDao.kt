@@ -18,6 +18,20 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun getBook(id: String): BookEntity?
 
+    /**
+     * The most-recently-opened book that is still in progress (started but not finished), for the
+     * "Continue reading" home-screen widget. Falls back to nothing when no book is in progress.
+     */
+    @Query(
+        "SELECT * FROM books WHERE progress > 0.0 AND progress < 1.0 " +
+                "ORDER BY lastOpenedAt DESC LIMIT 1",
+    )
+    suspend fun getContinueReadingBook(): BookEntity?
+
+    /** The most-recently-opened book regardless of progress, used as a final widget fallback. */
+    @Query("SELECT * FROM books ORDER BY lastOpenedAt DESC LIMIT 1")
+    suspend fun getMostRecentBook(): BookEntity?
+
     @Query("SELECT * FROM books WHERE id IN (:ids)")
     suspend fun getBooks(ids: List<String>): List<BookEntity>
 
