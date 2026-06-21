@@ -3,6 +3,7 @@ package com.itexpert120.yomu.app.di
 import android.content.Context
 import androidx.room.Room
 import com.itexpert120.yomu.core.database.BookDao
+import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.YomuDatabase
 import dagger.Module
 import dagger.Provides
@@ -25,9 +26,13 @@ object DatabaseModule {
                 YomuDatabase.MIGRATION_3_4,
                 YomuDatabase.MIGRATION_4_5,
                 YomuDatabase.MIGRATION_5_6,
+                YomuDatabase.MIGRATION_6_7,
             )
             .build()
 
     @Provides
     fun provideBookDao(database: YomuDatabase): BookDao = database.bookDao()
+
+    @Provides
+    fun provideHighlightDao(database: YomuDatabase): HighlightDao = database.highlightDao()
 }

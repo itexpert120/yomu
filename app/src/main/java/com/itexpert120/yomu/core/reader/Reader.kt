@@ -71,6 +71,15 @@ interface ReaderSession {
      */
     val footnotes: SharedFlow<String>
 
+    /**
+     * Emits a [ReaderHighlightDraft] when the user taps "Highlight" in the text-selection menu. The
+     * engine finishes the selection action mode itself; the app decides colour + persistence.
+     */
+    val highlightRequests: SharedFlow<ReaderHighlightDraft>
+
+    /** Emits the id of an on-page highlight the user tapped, so the UI can edit/delete it. */
+    val highlightTaps: SharedFlow<String>
+
     val fragmentFactory: FragmentFactory
     val fragmentClassName: String
 
@@ -92,6 +101,12 @@ interface ReaderSession {
 
     /** Jumps to a specific locator (e.g. a TOC entry's stored position). */
     fun goToLocator(locatorJson: String)
+
+    /**
+     * Renders the given highlights on the page (replacing the previous set). Safe to call before the
+     * navigator is hosted — the engine re-applies them once it is.
+     */
+    fun applyHighlights(highlights: List<ReaderHighlight>)
 
     fun close()
 }

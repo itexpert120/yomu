@@ -70,6 +70,15 @@ fun ReaderScreen(
     onJumpToLocator: (String) -> Unit,
     onCloseLookup: () -> Unit,
     onCloseFootnote: () -> Unit,
+    onOpenHighlights: () -> Unit,
+    onCloseHighlights: () -> Unit,
+    onJumpToHighlight: (String) -> Unit,
+    onConfirmPendingHighlight: (Int) -> Unit,
+    onCancelPendingHighlight: () -> Unit,
+    onChangeHighlightColor: (Int) -> Unit,
+    onDeleteHighlight: () -> Unit,
+    onDeleteHighlightById: (String) -> Unit,
+    onCloseEditHighlight: () -> Unit,
     onReadingResumed: () -> Unit,
     onReadingPaused: () -> Unit,
 ) {
@@ -305,6 +314,7 @@ fun ReaderScreen(
                     onNext = onNextChapter,
                     onScrollToTop = onScrollToTop,
                     onScrollToBottom = onScrollToBottom,
+                    onHighlights = onOpenHighlights,
                     onSettings = onOpenSheet,
                 )
 
@@ -358,6 +368,28 @@ fun ReaderScreen(
                 WordLookupSheet(state = state.lookup, onDismiss = onCloseLookup)
 
                 FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)
+
+                HighlightsSheet(
+                    visible = state.highlightsSheetVisible,
+                    highlights = state.highlights,
+                    onJump = onJumpToHighlight,
+                    onDelete = onDeleteHighlightById,
+                    onDismiss = onCloseHighlights,
+                )
+
+                HighlightColorPickerSheet(
+                    visible = state.pendingHighlight != null,
+                    snippet = state.pendingHighlight?.text,
+                    onPick = onConfirmPendingHighlight,
+                    onDismiss = onCancelPendingHighlight,
+                )
+
+                HighlightEditSheet(
+                    highlight = state.editingHighlight,
+                    onChangeColor = onChangeHighlightColor,
+                    onDelete = onDeleteHighlight,
+                    onDismiss = onCloseEditHighlight,
+                )
             }
         }
     }

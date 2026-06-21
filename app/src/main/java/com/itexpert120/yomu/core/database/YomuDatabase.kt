@@ -13,12 +13,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BookTocEntity::class,
         ReadingDayEntity::class,
         ReadingSessionEntity::class,
+        HighlightEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
+    abstract fun highlightDao(): HighlightDao
 
     companion object {
         /** v2 adds chapter read-state tracking; books are preserved. */
@@ -73,6 +75,23 @@ abstract class YomuDatabase : RoomDatabase() {
                             "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                             "`bookId` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, " +
                             "`seconds` INTEGER NOT NULL)",
+                )
+            }
+        }
+
+        /** v7 adds user text highlights. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `highlights` (" +
+                            "`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                            "`locatorJson` TEXT NOT NULL, `text` TEXT NOT NULL, " +
+                            "`colorArgb` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_highlights_bookId` " +
+                            "ON `highlights` (`bookId`)",
                 )
             }
         }

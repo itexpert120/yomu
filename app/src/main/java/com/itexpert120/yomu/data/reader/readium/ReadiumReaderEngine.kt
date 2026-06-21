@@ -14,6 +14,8 @@ import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.reader.ReaderEngine
+import com.itexpert120.yomu.core.reader.ReaderHighlight
+import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
@@ -30,6 +32,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.readium.r2.navigator.Decoration
+import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.HyperlinkNavigator
 import org.readium.r2.navigator.OverflowableNavigator
 import org.readium.r2.navigator.SelectableNavigator
@@ -160,6 +164,16 @@ private class ReadiumReaderSession(
     private val _footnotes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val footnotes: SharedFlow<String> = _footnotes.asSharedFlow()
 
+    private val _highlightRequests = MutableSharedFlow<ReaderHighlightDraft>(extraBufferCapacity = 1)
+    override val highlightRequests: SharedFlow<ReaderHighlightDraft> =
+        _highlightRequests.asSharedFlow()
+
+    private val _highlightTaps = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val highlightTaps: SharedFlow<String> = _highlightTaps.asSharedFlow()
+
+    // Latest highlight set; remembered so it can be re-applied once the navigator is hosted.
+    private var pendingHighlights: List<ReaderHighlight> = emptyList()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
 
@@ -218,9 +232,10 @@ private class ReadiumReaderSession(
                     override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                         menu ?: return false
                         menu.add(Menu.NONE, MENU_COPY, 0, android.R.string.copy)
-                        menu.add(Menu.NONE, MENU_LOOK_UP, 1, "Look up")
-                        menu.add(Menu.NONE, MENU_SPEAK, 2, "Read aloud")
-                        menu.add(Menu.NONE, MENU_SHARE, 3, "Share")
+                        menu.add(Menu.NONE, MENU_HIGHLIGHT, 1, "Highlight")
+                        menu.add(Menu.NONE, MENU_LOOK_UP, 2, "Look up")
+                        menu.add(Menu.NONE, MENU_SPEAK, 3, "Read aloud")
+                        menu.add(Menu.NONE, MENU_SHARE, 4, "Share")
                         return true
                     }
 
@@ -228,18 +243,32 @@ private class ReadiumReaderSession(
 
                     override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
                         val id = item?.itemId ?: return false
-                        if (id !in setOf(MENU_COPY, MENU_LOOK_UP, MENU_SPEAK, MENU_SHARE)) {
+                        if (id !in setOf(
+                                MENU_COPY,
+                                MENU_HIGHLIGHT,
+                                MENU_LOOK_UP,
+                                MENU_SPEAK,
+                                MENU_SHARE,
+                            )
+                        ) {
                             return false
                         }
                         scope.launch {
                             val selection = (navigator as? SelectableNavigator)?.currentSelection()
-                            val text = selection?.locator?.text?.highlight?.trim()
+                            val locator = selection?.locator
+                            val text = locator?.text?.highlight?.trim()
                             if (!text.isNullOrBlank()) {
                                 when (id) {
                                     MENU_COPY -> copySelection(text)
                                     MENU_SPEAK -> speakSelection(text)
                                     MENU_SHARE -> shareSelection(text)
                                     MENU_LOOK_UP -> _lookUpRequests.tryEmit(text)
+                                    MENU_HIGHLIGHT -> _highlightRequests.tryEmit(
+                                        ReaderHighlightDraft(
+                                            locatorJson = locator.toJSON().toString(),
+                                            text = text,
+                                        ),
+                                    )
                                 }
                             }
                             mode?.finish()
@@ -383,6 +412,43 @@ private class ReadiumReaderSession(
                 return false
             }
         })
+
+        // Tapping an on-page highlight surfaces its id so the UI can open the edit/delete popup.
+        (nav as? DecorableNavigator)?.addDecorationListener(
+            HIGHLIGHTS_GROUP,
+            object : DecorableNavigator.Listener {
+                override fun onDecorationActivated(
+                    event: DecorableNavigator.OnActivatedEvent,
+                ): Boolean {
+                    if (event.group != HIGHLIGHTS_GROUP) return false
+                    _highlightTaps.tryEmit(event.decoration.id)
+                    return true
+                }
+            },
+        )
+
+        // Re-apply any highlights requested before the navigator existed.
+        if (pendingHighlights.isNotEmpty()) renderHighlights(pendingHighlights)
+    }
+
+    override fun applyHighlights(highlights: List<ReaderHighlight>) {
+        pendingHighlights = highlights
+        renderHighlights(highlights)
+    }
+
+    private fun renderHighlights(highlights: List<ReaderHighlight>) {
+        val nav = navigator as? DecorableNavigator ?: return
+        val decorations = highlights.mapNotNull { highlight ->
+            val locator = runCatching {
+                Locator.fromJSON(JSONObject(highlight.locatorJson))
+            }.getOrNull() ?: return@mapNotNull null
+            Decoration(
+                id = highlight.id,
+                locator = locator,
+                style = Decoration.Style.Highlight(tint = highlight.colorArgb),
+            )
+        }
+        scope.launch { nav.applyDecorations(decorations, HIGHLIGHTS_GROUP) }
     }
 
     override fun applySettings(settings: ReaderSettings) {
@@ -512,5 +578,9 @@ private class ReadiumReaderSession(
         const val MENU_LOOK_UP = 2
         const val MENU_SPEAK = 3
         const val MENU_SHARE = 4
+        const val MENU_HIGHLIGHT = 5
+
+        // Decoration group name for user highlights.
+        const val HIGHLIGHTS_GROUP = "highlights"
     }
 }

@@ -8,11 +8,14 @@ import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.reader.ReaderEngine
+import com.itexpert120.yomu.core.reader.ReaderHighlight
+import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
+import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -55,6 +58,13 @@ data class ReaderUiState(
     val lookup: WordLookupUiState? = null,
     // Footnote popup content (HTML), or null when closed. Shown when a footnote ref is tapped.
     val footnoteHtml: String? = null,
+    // All of this book's highlights (newest first), for the list sheet.
+    val highlights: List<ReaderHighlight> = emptyList(),
+    val highlightsSheetVisible: Boolean = false,
+    // A pending highlight awaiting a colour choice (color-picker for a new selection), or null.
+    val pendingHighlight: ReaderHighlightDraft? = null,
+    // An existing highlight the user tapped, shown in an edit/delete popup, or null.
+    val editingHighlight: ReaderHighlight? = null,
 )
 
 /** State of the word-definition popup. */
@@ -72,6 +82,7 @@ class ReaderViewModel @Inject constructor(
     private val settingsRepository: ReaderSettingsRepository,
     private val dictionary: DictionaryRepository,
     private val stats: StatsRepository,
+    private val highlights: HighlightRepository,
 ) : ViewModel() {
 
     // Wall-clock start of the current foreground reading stretch, or null when paused/closed.
@@ -198,6 +209,26 @@ class ReaderViewModel @Inject constructor(
             launch {
                 opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
             }
+            // A "Highlight" tap on a selection: open the colour picker for the pending selection.
+            launch {
+                opened.highlightRequests.collect { draft ->
+                    _state.update { it.copy(pendingHighlight = draft) }
+                }
+            }
+            // A tap on an on-page highlight: open its edit/delete popup.
+            launch {
+                opened.highlightTaps.collect { id ->
+                    val target = _state.value.highlights.firstOrNull { it.id == id }
+                    if (target != null) _state.update { it.copy(editingHighlight = target) }
+                }
+            }
+            // Observe this book's highlights: keep the list state and the on-page decorations in sync.
+            launch {
+                highlights.observeForBook(BookId(bookId)).collect { list ->
+                    _state.update { it.copy(highlights = list) }
+                    opened.applyHighlights(list)
+                }
+            }
             launch {
                 repository.observeBook(BookId(bookId)).collect { book ->
                     _state.update { it.copy(coverImagePath = book?.coverImagePath) }
@@ -305,6 +336,52 @@ class ReaderViewModel @Inject constructor(
     fun onCloseLookup() = _state.update { it.copy(lookup = null) }
 
     fun onCloseFootnote() = _state.update { it.copy(footnoteHtml = null) }
+
+    // --- Highlights ---
+
+    fun onOpenHighlights() = _state.update {
+        it.copy(highlightsSheetVisible = true, chapterControlsVisible = false, sheetVisible = false)
+    }
+
+    fun onCloseHighlights() = _state.update { it.copy(highlightsSheetVisible = false) }
+
+    /** Dismisses the new-highlight colour picker without saving. */
+    fun onCancelPendingHighlight() = _state.update { it.copy(pendingHighlight = null) }
+
+    /** Persists the pending selection as a highlight with the chosen colour. */
+    fun onConfirmPendingHighlight(colorArgb: Int) {
+        val draft = _state.value.pendingHighlight ?: return
+        _state.update { it.copy(pendingHighlight = null) }
+        viewModelScope.launch {
+            highlights.add(BookId(bookId), draft.locatorJson, draft.text, colorArgb)
+        }
+    }
+
+    fun onCloseEditHighlight() = _state.update { it.copy(editingHighlight = null) }
+
+    /** Recolours the highlight currently open in the edit popup. */
+    fun onChangeHighlightColor(colorArgb: Int) {
+        val target = _state.value.editingHighlight ?: return
+        _state.update { it.copy(editingHighlight = null) }
+        viewModelScope.launch { highlights.updateColor(target.id, colorArgb) }
+    }
+
+    fun onDeleteHighlight() {
+        val target = _state.value.editingHighlight ?: return
+        _state.update { it.copy(editingHighlight = null) }
+        viewModelScope.launch { highlights.delete(target.id) }
+    }
+
+    /** Delete a specific highlight (used by the per-row delete in the list). */
+    fun onDeleteHighlightById(id: String) {
+        viewModelScope.launch { highlights.delete(id) }
+    }
+
+    /** Jump to a highlight's stored position from the list, and close the list. */
+    fun onJumpToHighlight(locatorJson: String) {
+        _session.value?.goToLocator(locatorJson)
+        _state.update { it.copy(highlightsSheetVisible = false) }
+    }
 
     /** Start counting reading time (reader brought to the foreground). */
     fun onReadingResumed() {

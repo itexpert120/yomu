@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Highlight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -217,6 +218,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
     onNext: () -> Unit,
     onScrollToTop: () -> Unit,
     onScrollToBottom: () -> Unit,
+    onHighlights: () -> Unit,
     onSettings: () -> Unit,
 ) {
     AnimatedVisibility(
@@ -241,6 +243,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
             ControlButton(Icons.Rounded.VerticalAlignTop, "Top", content, enabled = true, onScrollToTop)
             ControlButton(Icons.Rounded.VerticalAlignBottom, "Bottom", content, enabled = true, onScrollToBottom)
             ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
+            ControlButton(Icons.Rounded.Highlight, "Highlights", content, enabled = true, onHighlights)
             ControlButton(Icons.Rounded.Tune, "Settings", content, enabled = true, onSettings)
         }
     }
