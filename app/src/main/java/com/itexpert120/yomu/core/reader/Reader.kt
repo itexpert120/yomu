@@ -86,6 +86,10 @@ interface ReaderSession {
     fun previousChapter()
     fun goToProgression(totalProgression: Double)
 
+    /** Jumps to the start/end of the current chapter (resource). */
+    fun scrollToChapterStart()
+    fun scrollToChapterEnd()
+
     /** Jumps to a specific locator (e.g. a TOC entry's stored position). */
     fun goToLocator(locatorJson: String)
 

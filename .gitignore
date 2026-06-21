@@ -16,3 +16,6 @@ local.properties
 
 # Kotlin daemon/build artifacts
 .kotlin/
+
+# Claude agent worktrees / session files
+.claude/worktrees/

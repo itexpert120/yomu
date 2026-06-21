@@ -421,6 +421,17 @@ private class ReadiumReaderSession(
         }
     }
 
+    override fun scrollToChapterStart() = goToChapterProgression(0.0)
+
+    override fun scrollToChapterEnd() = goToChapterProgression(0.999)
+
+    // Jump within the current resource by replacing only its progression, so start/end stay in-chapter.
+    private fun goToChapterProgression(progression: Double) {
+        val base = lastLocator ?: return
+        val target = base.copy(locations = Locator.Locations(progression = progression))
+        scope.launch { navigator?.go(target, animated = false) }
+    }
+
     override fun goToLocator(locatorJson: String) {
         val locator =
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
