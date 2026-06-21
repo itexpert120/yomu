@@ -18,6 +18,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +37,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -78,6 +82,7 @@ import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.model.ReadingState
 import java.io.File
 
@@ -128,59 +133,85 @@ fun BookDetailsScreen(
                     titleVisible = showHeaderTitle && book != null,
                 )
 
-                Box(Modifier
-                    .weight(1f)
-                    .fillMaxWidth()) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .widthIn(max = 640.dp)
-                            .fillMaxWidth(),
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 4.dp,
-                            bottom = navBottom + 28.dp,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        if (book == null) {
-                            item {
-                                Text(
-                                    text = "This book is no longer in your library.",
-                                    color = YomuTheme.colors.textMuted,
-                                    style = YomuTheme.type.body,
-                                )
-                            }
-                            return@LazyColumn
-                        }
+                BoxWithConstraints(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    // On a tablet-wide screen, split the cover/metadata/actions into a left column
+                    // and the contents/description into a right column so the two read side by side
+                    // instead of the cover sitting alone above a long scroll. Phones stay single-pane.
+                    val wideEnough = YomuWidthClass.fromWidth(maxWidth).isExpanded
 
-                        item {
-                            BookHeader(
-                                book = book,
-                                onCoverClick = {
-                                    if (book.coverImagePath != null) showCover = true
-                                },
-                                onEdit = onEdit,
-                                onMarkRead = onMarkRead,
-                                onMarkUnread = onMarkUnread,
-                                onRemove = onRemove,
-                            )
-                        }
-
-                        tocSection(
+                    if (wideEnough && book != null) {
+                        TwoPaneDetails(
+                            book = book,
                             toc = toc,
+                            listState = listState,
+                            navBottom = navBottom,
+                            onCoverClick = { if (book.coverImagePath != null) showCover = true },
+                            onEdit = onEdit,
+                            onMarkRead = onMarkRead,
+                            onMarkUnread = onMarkUnread,
+                            onRemove = onRemove,
                             onTocSortChange = onTocSortChange,
                             onOpenChapter = onOpenChapter,
                             onSetChapterRead = onSetChapterRead,
-                            onEnterSelection = onEnterChapterSelection,
-                            onToggleSelection = onToggleChapterSelection,
+                            onEnterChapterSelection = onEnterChapterSelection,
+                            onToggleChapterSelection = onToggleChapterSelection,
                         )
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .widthIn(max = 640.dp)
+                                .fillMaxWidth(),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 4.dp,
+                                bottom = navBottom + 28.dp,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (book == null) {
+                                item {
+                                    Text(
+                                        text = "This book is no longer in your library.",
+                                        color = YomuTheme.colors.textMuted,
+                                        style = YomuTheme.type.body,
+                                    )
+                                }
+                                return@LazyColumn
+                            }
 
-                        // Trailing room for the floating Read button / selection bar without
-                        // shifting the rows above when selection toggles.
-                        item { Spacer(Modifier.height(72.dp)) }
+                            item {
+                                BookHeader(
+                                    book = book,
+                                    onCoverClick = {
+                                        if (book.coverImagePath != null) showCover = true
+                                    },
+                                    onEdit = onEdit,
+                                    onMarkRead = onMarkRead,
+                                    onMarkUnread = onMarkUnread,
+                                    onRemove = onRemove,
+                                )
+                            }
+
+                            tocSection(
+                                toc = toc,
+                                onTocSortChange = onTocSortChange,
+                                onOpenChapter = onOpenChapter,
+                                onSetChapterRead = onSetChapterRead,
+                                onEnterSelection = onEnterChapterSelection,
+                                onToggleSelection = onToggleChapterSelection,
+                            )
+
+                            // Trailing room for the floating Read button / selection bar without
+                            // shifting the rows above when selection toggles.
+                            item { Spacer(Modifier.height(72.dp)) }
+                        }
                     }
 
                     BottomScrim(Modifier.align(Alignment.BottomCenter))
@@ -229,6 +260,79 @@ fun BookDetailsScreen(
             onSave = onSaveCover,
             onClose = { showCover = false },
         )
+    }
+}
+
+/**
+ * Tablet/expanded layout: cover + metadata + actions + description in a scrollable left column,
+ * with the contents list in a scrollable right column, so the two read side by side. The contents
+ * stays a [LazyColumn] (a book's TOC can be thousands of entries).
+ */
+@Composable
+private fun TwoPaneDetails(
+    book: BookDetailsUi,
+    toc: TocUiState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    navBottom: androidx.compose.ui.unit.Dp,
+    onCoverClick: () -> Unit,
+    onEdit: () -> Unit,
+    onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
+    onRemove: () -> Unit,
+    onTocSortChange: (TocSortMode) -> Unit,
+    onOpenChapter: (String) -> Unit,
+    onSetChapterRead: (Int, Boolean) -> Unit,
+    onEnterChapterSelection: (Int) -> Unit,
+    onToggleChapterSelection: (Int) -> Unit,
+) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    Row(
+        modifier = Modifier
+            .widthIn(max = 1080.dp)
+            .fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        // Left pane: book identity + actions + description, independently scrollable.
+        Column(
+            modifier = Modifier
+                .width(360.dp)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, top = 4.dp, bottom = navBottom + 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            BookHeader(
+                book = book,
+                onCoverClick = onCoverClick,
+                onEdit = onEdit,
+                onMarkRead = onMarkRead,
+                onMarkUnread = onMarkUnread,
+                onRemove = onRemove,
+            )
+        }
+
+        // Right pane: the contents list (virtualized).
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(end = 20.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = navBottom + 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            tocSection(
+                toc = toc,
+                onTocSortChange = onTocSortChange,
+                onOpenChapter = onOpenChapter,
+                onSetChapterRead = onSetChapterRead,
+                onEnterSelection = onEnterChapterSelection,
+                onToggleSelection = onToggleChapterSelection,
+            )
+            // Trailing room for the floating Read button / selection bar.
+            item { Spacer(Modifier.height(72.dp)) }
+        }
+    }
     }
 }
 

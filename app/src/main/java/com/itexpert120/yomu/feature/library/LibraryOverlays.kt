@@ -58,6 +58,8 @@ internal fun ConfirmRemoveDialog(
     Dialog(onDismissRequest = onCancel) {
         Column(
             modifier = Modifier
+                // Keep the dialog to a readable width on tablets instead of stretching wide.
+                .widthIn(max = 360.dp)
                 .clip(RoundedCornerShape(YomuTheme.radius.panel))
                 .background(YomuTheme.colors.panel)
                 .padding(20.dp),

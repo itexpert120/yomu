@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -47,8 +49,10 @@ import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
@@ -319,44 +323,59 @@ private fun LibraryGrid(
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
-    LazyVerticalGrid(
-        state = state,
-        // Auto (0): adaptive so covers stay a comfortable size — ~3 columns on a phone, more on a
-        // tablet. A positive value forces that exact column count.
-        columns = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
-            GridCells.Adaptive(minSize = 118.dp)
-        } else {
-            GridCells.Fixed(columns)
-        },
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (continueReading != null) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                ContinueReadingCard(
-                    book = continueReading,
-                    onClick = { onBookClick(continueReading) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
+    // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
+    // wide tablet/desktop; on a phone this is a no-op (screen < max width).
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val widthClass = YomuWidthClass.fromWidth(maxWidth)
+        // In Auto mode, give covers more room to breathe as the screen widens — slightly larger
+        // minimum cell on tablets means fewer, larger covers rather than a dense wall of tiny ones.
+        val autoMinSize = when (widthClass) {
+            YomuWidthClass.Expanded -> 150.dp
+            YomuWidthClass.Medium -> 132.dp
+            YomuWidthClass.Compact -> 118.dp
         }
-
-        groups.forEach { group ->
-            if (group.label.isNotEmpty()) {
+        LazyVerticalGrid(
+            state = state,
+            // Auto (0): adaptive so covers stay a comfortable size — ~3 columns on a phone, more on a
+            // tablet. A positive value forces that exact column count.
+            columns = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
+                GridCells.Adaptive(minSize = autoMinSize)
+            } else {
+                GridCells.Fixed(columns)
+            },
+            modifier = Modifier
+                .widthIn(max = YomuContentMaxWidth)
+                .fillMaxSize()
+                .align(Alignment.TopCenter),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (continueReading != null) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    GroupSectionHeader(title = group.label, modifier = Modifier.animateItem())
+                    ContinueReadingCard(
+                        book = continueReading,
+                        onClick = { onBookClick(continueReading) },
+                        modifier = Modifier.animateItem(),
+                    )
                 }
             }
-            items(group.books, key = { it.id }) { book ->
-                GridBookCard(
-                    book = book,
-                    onClick = { onBookClick(book) },
-                    onLongPress = { onBookLongPress(book) },
-                    selected = book.id in selectedIds,
-                    modifier = Modifier.animateItem(),
-                )
+
+            groups.forEach { group ->
+                if (group.label.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        GroupSectionHeader(title = group.label, modifier = Modifier.animateItem())
+                    }
+                }
+                items(group.books, key = { it.id }) { book ->
+                    GridBookCard(
+                        book = book,
+                        onClick = { onBookClick(book) },
+                        onLongPress = { onBookLongPress(book) },
+                        selected = book.id in selectedIds,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
         }
     }
@@ -371,9 +390,15 @@ private fun LibraryList(
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
+    // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
+    // column centered on screen. Phones are unaffected (screen < max width).
+    BoxWithConstraints(Modifier.fillMaxSize()) {
     LazyColumn(
         state = state,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .widthIn(max = 720.dp)
+            .fillMaxSize()
+            .align(Alignment.TopCenter),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -401,6 +426,7 @@ private fun LibraryList(
                 )
             }
         }
+    }
     }
 }
 
