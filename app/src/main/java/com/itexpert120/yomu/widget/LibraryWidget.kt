@@ -2,7 +2,6 @@ package com.itexpert120.yomu.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -43,16 +42,8 @@ import com.itexpert120.yomu.R
  */
 class LibraryWidget : GlanceAppWidget() {
 
-    // Responsive buckets the launcher maps the placed size onto; we then derive an exact column /
-    // row count from LocalSize so partial cells between buckets still fill cleanly.
-    override val sizeMode = SizeMode.Responsive(
-        setOf(
-            DpSize(110.dp, 110.dp),  // tiny: a couple of covers
-            DpSize(180.dp, 110.dp),  // wide-short row
-            DpSize(250.dp, 200.dp),  // medium grid
-            DpSize(320.dp, 320.dp),  // large grid
-        ),
-    )
+    // Exact: recompose for the actual placed size so the grid scales continuously to any size.
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         // Cap the query at the largest grid we could draw; loaded off the main thread.
@@ -63,8 +54,11 @@ class LibraryWidget : GlanceAppWidget() {
     }
 
     private companion object {
-        const val MAX_BOOKS = 12
-        const val COVER_TARGET_DP = 84
+        const val COVER_TARGET_DP = 86   // approx tile width; columns scale with widget width
+        const val ROW_HEIGHT_DP = 96     // approx tile height; rows scale with widget height
+        const val MAX_COLS = 6
+        const val MAX_ROWS = 6
+        const val MAX_BOOKS = MAX_COLS * MAX_ROWS
     }
 
     @Composable
@@ -81,9 +75,9 @@ class LibraryWidget : GlanceAppWidget() {
             return
         }
 
-        // Derive a grid that fills the box: column count from width, row count from height.
-        val columns = ((size.width.value - 20) / COVER_TARGET_DP).toInt().coerceIn(1, 4)
-        val rows = ((size.height.value - 20) / (COVER_TARGET_DP + 14)).toInt().coerceIn(1, 3)
+        // Dynamic grid: columns scale with width, rows with height.
+        val columns = ((size.width.value - 20) / COVER_TARGET_DP).toInt().coerceIn(1, MAX_COLS)
+        val rows = ((size.height.value - 20) / ROW_HEIGHT_DP).toInt().coerceIn(1, MAX_ROWS)
         val capacity = (columns * rows).coerceAtMost(books.size)
         val shown = books.take(capacity)
 

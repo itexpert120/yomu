@@ -2,12 +2,10 @@ package com.itexpert120.yomu.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -41,14 +39,8 @@ import com.itexpert120.yomu.core.model.HeatmapDay
  */
 class ActivityWidget : GlanceAppWidget() {
 
-    override val sizeMode = SizeMode.Responsive(
-        setOf(
-            DpSize(110.dp, 110.dp),  // compact: headline figures only
-            DpSize(250.dp, 110.dp),  // wide-short: figures + single bar strip
-            DpSize(250.dp, 200.dp),  // medium: + multi-week heatmap
-            DpSize(320.dp, 280.dp),  // large: full heatmap window
-        ),
-    )
+    // Exact: recompose for the actual placed size so the heatmap scales continuously to any size.
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val activity = loadActivity(context)
@@ -59,7 +51,6 @@ class ActivityWidget : GlanceAppWidget() {
 
     @Composable
     private fun ActivityContent(context: Context, activity: WidgetActivity) {
-        val size = LocalSize.current
         val root = GlanceModifier
             .fillMaxSize()
             .background(WidgetColors.background)
@@ -70,43 +61,30 @@ class ActivityWidget : GlanceAppWidget() {
         Column(modifier = root) {
             Header(activity)
 
-            val wideEnough = size.width.value >= 220
-            val tallEnough = size.height.value >= 170
-
             if (activity.isEmpty) {
-                if (size.height.value >= 150) {
-                    Spacer(GlanceModifier.height(10.dp))
-                    Text(
-                        text = "No reading yet — open a book to start your streak.",
-                        style = TextStyle(
-                            color = ColorProvider(WidgetColors.textMuted),
-                            fontSize = 12.sp,
-                        ),
-                        maxLines = 2,
-                    )
-                }
+                Spacer(GlanceModifier.height(10.dp))
+                Text(
+                    text = "No reading yet — open a book to start your streak.",
+                    style = TextStyle(
+                        color = ColorProvider(WidgetColors.textMuted),
+                        fontSize = 12.sp,
+                    ),
+                    maxLines = 2,
+                )
                 return@Column
             }
 
-            if (wideEnough && tallEnough) {
-                // Multi-row heatmap: as many trailing weeks as fit the height.
-                Spacer(GlanceModifier.height(12.dp))
-                val rowsForHeight = ((size.height.value - 120) / 18).toInt().coerceIn(2, 7)
-                Heatmap(
-                    days = activity.days,
-                    weeks = weeksForWidth(size.width.value),
-                    rows = rowsForHeight,
-                    modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
-                )
-            } else if (wideEnough) {
-                // Single bar strip of the most recent days.
-                Spacer(GlanceModifier.height(12.dp))
-                BarStrip(
-                    days = activity.days,
-                    count = barsForWidth(size.width.value),
-                    modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
-                )
-            }
+            // The activity box graph — the SAME week-columns × 7 day-rows grid as the Statistics
+            // screen, scaled (shrunk) to fill the widget at any size.
+            Spacer(GlanceModifier.height(12.dp))
+            val rows = WEEK_DAYS
+            val weeks = (activity.days.size + rows - 1) / rows
+            Heatmap(
+                days = activity.days,
+                weeks = weeks,
+                rows = rows,
+                modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+            )
         }
     }
 
@@ -161,24 +139,6 @@ class ActivityWidget : GlanceAppWidget() {
         }
     }
 
-    /** A horizontal strip of intensity-coloured bars for the most recent [count] days. */
-    @Composable
-    private fun BarStrip(days: List<HeatmapDay>, count: Int, modifier: GlanceModifier) {
-        val recent = days.takeLast(count)
-        Row(modifier = modifier) {
-            recent.forEachIndexed { index, day ->
-                Box(
-                    modifier = GlanceModifier
-                        .defaultWeight()
-                        .fillMaxHeight()
-                        .cornerRadius(3.dp)
-                        .background(WidgetColors.intensity[day.level.coerceIn(0, 4)]),
-                ) {}
-                if (index < recent.lastIndex) Spacer(GlanceModifier.width(3.dp))
-            }
-        }
-    }
-
     /**
      * GitHub-style heatmap: [weeks] columns × [rows] rows of the trailing window. We lay it out by
      * column (a week) so cells read newest-week-rightmost; each cell is a small rounded square.
@@ -208,11 +168,9 @@ class ActivityWidget : GlanceAppWidget() {
         }
     }
 
-    private fun barsForWidth(widthDp: Float): Int =
-        ((widthDp - 28) / 10).toInt().coerceIn(7, 21)
-
-    private fun weeksForWidth(widthDp: Float): Int =
-        ((widthDp - 28) / 14).toInt().coerceIn(4, 18)
+    private companion object {
+        const val WEEK_DAYS = 7
+    }
 }
 
 class ActivityWidgetReceiver : GlanceAppWidgetReceiver() {

@@ -182,6 +182,9 @@ private class ReadiumReaderSession(
     // Latest engine locator, used for reading-order (chapter) navigation.
     private var lastLocator: Locator? = null
 
+    // The resource we last injected the scroll-width CSS override into (re-injected per resource).
+    private var lastStyledHref: String? = null
+
     // Settings requested before the navigator exists; applied once it is hosted.
     private var pendingSettings: ReaderSettings? = initialSettings
 
@@ -381,6 +384,13 @@ private class ReadiumReaderSession(
             nav.currentLocator.collect { locator ->
                 lastLocator = locator
                 val hrefStr = locator.href.toString()
+                // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
+                // RsProperties maxLineLength can't override (it's set per-resource on body). Inject a
+                // style override so scroll mode fills the width too. Re-applied per resource.
+                if (hrefStr != lastStyledHref) {
+                    lastStyledHref = hrefStr
+                    scope.launch { runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
+                }
                 val order = publication.readingOrder
                 val index = order.indexOfFirst { it.url().toString() == hrefStr }
                 _currentLocator.value = ReaderLocator(
@@ -589,5 +599,18 @@ private class ReadiumReaderSession(
 
         // Decoration group name for user highlights.
         const val HIGHLIGHTS_GROUP = "highlights"
+
+        // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
+        // the width like paged mode does. No-op in paged mode (the selector only matches scroll).
+        val SCROLL_WIDTH_FIX_JS = """
+            (function() {
+              var id = 'yomu-scroll-width';
+              if (document.getElementById(id)) return;
+              var s = document.createElement('style');
+              s.id = id;
+              s.textContent = ':root[style*="readium-scroll-on"] body{max-width:none!important}';
+              (document.head || document.documentElement).appendChild(s);
+            })();
+        """.trimIndent()
     }
 }
