@@ -129,8 +129,22 @@ interface BookDao {
     @Query("SELECT * FROM reading_sessions ORDER BY startedAt DESC LIMIT :limit")
     fun observeRecentSessions(limit: Int): Flow<List<ReadingSessionEntity>>
 
+    /**
+     * (startedAt, seconds) for every session, newest first. Drives the weekday / hour-of-day
+     * distributions and the session aggregates (count, average, longest) — the seconds are small
+     * (one row per finished session) so loading them is cheap.
+     */
+    @Query("SELECT startedAt, seconds FROM reading_sessions ORDER BY startedAt DESC")
+    fun observeSessionTimes(): Flow<List<SessionTime>>
+
     @Query("DELETE FROM reading_sessions WHERE bookId IN (:bookIds)")
     suspend fun deleteSessionsForBooks(bookIds: List<String>)
 
     // endregion
 }
+
+/** Lightweight projection of a reading session: when it started and how long it lasted. */
+data class SessionTime(
+    val startedAt: Long,
+    val seconds: Long,
+)
