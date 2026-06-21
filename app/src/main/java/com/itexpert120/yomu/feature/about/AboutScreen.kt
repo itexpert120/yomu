@@ -87,17 +87,50 @@ fun AboutScreen(onBack: () -> Unit) {
             )
         }
 
-        YomuSettingGroup(title = "Built with") {
+        YomuSettingGroup(title = "Privacy") {
             Text(
-                text = "Jetpack Compose · Kotlin Coroutines · DataStore",
+                text = "Yomu keeps your library, reading progress, highlights, and statistics on " +
+                        "this device only. There are no accounts, ads, or analytics, and nothing " +
+                        "about your reading is collected or shared. The books you add never leave " +
+                        "your device.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )
             Text(
-                text = "EPUB rendering via Readium (planned).",
+                text = "The only feature that uses the internet is dictionary “Look up”: the " +
+                        "selected word is sent to a third-party dictionary service to fetch its " +
+                        "definition. No other data is transmitted.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.caption,
             )
         }
+
+        YomuSettingGroup(title = "Terms of use") {
+            Text(
+                text = "Yomu is provided “as is”, without warranty of any kind, to the fullest " +
+                        "extent permitted by law. You are responsible for the books you import and " +
+                        "for complying with their licenses and applicable copyright law. Yomu does " +
+                        "not provide, sell, or distribute any books.",
+                color = YomuTheme.colors.textSecondary,
+                style = YomuTheme.type.body,
+            )
+        }
+
+        YomuSettingGroup(title = "Acknowledgements") {
+            Text(
+                text = "EPUB parsing and rendering by the Readium Kotlin toolkit (BSD-3-Clause). " +
+                        "Charts by Vico (Apache-2.0). Cover loading by Coil. Built with Jetpack " +
+                        "Compose. Bundled reading fonts are used under the SIL Open Font License.",
+                color = YomuTheme.colors.textSecondary,
+                style = YomuTheme.type.body,
+            )
+        }
+
+        Text(
+            text = "© 2026 Yomu. All rights reserved.",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption,
+            modifier = Modifier.padding(top = 4.dp, start = 4.dp, bottom = 8.dp),
+        )
     }
 }
