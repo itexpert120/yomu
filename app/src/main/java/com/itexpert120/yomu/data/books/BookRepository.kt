@@ -42,13 +42,6 @@ interface BookRepository {
     suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double)
 
     /**
-     * The book to surface in the "Continue reading" home-screen widget: the most-recently-opened
-     * in-progress book, or the most-recent book of any state as a fallback, or null when the library
-     * is empty.
-     */
-    suspend fun continueReadingBook(): Book?
-
-    /**
      * The [limit] most-recently-opened books (newest first), for the home-screen library widget's
      * fast-launch grid. Empty when the library has no books.
      */

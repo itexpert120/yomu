@@ -97,9 +97,6 @@ class RoomBookRepository @Inject constructor(
         WidgetUpdater.refreshLibrary(context)
     }
 
-    override suspend fun continueReadingBook(): Book? =
-        (dao.getContinueReadingBook() ?: dao.getMostRecentBook())?.toBook()
-
     override suspend fun recentBooks(limit: Int): List<Book> =
         dao.getRecentBooks(limit).map { it.toBook() }
 

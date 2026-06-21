@@ -215,11 +215,20 @@ private class ReadiumReaderSession(
         }
     }
 
+    // Inject the scroll-width CSS fix the moment each resource finishes loading — earlier than the
+    // currentLocator settle, so the page doesn't briefly flash at the narrow default width first.
+    private val paginationListener = object : EpubNavigatorFragment.PaginationListener {
+        override fun onPageLoaded() {
+            scope.launch { runCatching { navigator?.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
+        }
+    }
+
     override val fragmentFactory: FragmentFactory =
         navigatorFactory.createFragmentFactory(
             initialLocator = initialLocator,
             initialPreferences = initialSettings.toPreferences(),
             listener = listener,
+            paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration {
                 // In scroll mode a horizontal swipe jumps a whole resource (chapter), which users
                 // hit accidentally while scrolling vertically. Disable it: chapters are advanced via

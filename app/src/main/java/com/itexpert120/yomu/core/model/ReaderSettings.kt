@@ -47,9 +47,7 @@ data class ReaderSettings(
     val brightness: Float = 0.5f,
     // Extra dimming below the device minimum: a black overlay (0 = off .. 1 = darkest allowed).
     val dimLevel: Float = 0f,
-    // Tapping the centre of the page opens the controls sheet (the top-bar button always does too).
-    val centerTapOpensSheet: Boolean = true,
-    // Tapping the left/right edge turns the page (and crosses chapters at the edges).
+    // Tapping the left/right edge turns the page in paged mode (centre/scroll toggles controls).
     val tapNavigation: Boolean = true,
     // Chrome appearance. The top bar is always present (sleek + compact); the footer is optional.
     val showFooter: Boolean = true,
