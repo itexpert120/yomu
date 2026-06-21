@@ -85,6 +85,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.model.ReadingState
+import com.itexpert120.yomu.feature.library.ConfirmRemoveDialog
 import java.io.File
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -113,6 +114,9 @@ fun BookDetailsScreen(
         WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
     var showCover by remember { mutableStateOf(false) }
+    var showRemoveConfirm by remember { mutableStateOf(false) }
+    // The Remove action opens a confirmation first; only the dialog's confirm performs the removal.
+    val requestRemove = { showRemoveConfirm = true }
     // Reveal the title in the bar only once the in-content header (item 0) has scrolled away, so
     // the otherwise-empty bar gains context as you scroll.
     val showHeaderTitle by remember {
@@ -154,7 +158,7 @@ fun BookDetailsScreen(
                             onEdit = onEdit,
                             onMarkRead = onMarkRead,
                             onMarkUnread = onMarkUnread,
-                            onRemove = onRemove,
+                            onRemove = requestRemove,
                             onTocSortChange = onTocSortChange,
                             onOpenChapter = onOpenChapter,
                             onSetChapterRead = onSetChapterRead,
@@ -196,7 +200,7 @@ fun BookDetailsScreen(
                                     onEdit = onEdit,
                                     onMarkRead = onMarkRead,
                                     onMarkUnread = onMarkUnread,
-                                    onRemove = onRemove,
+                                    onRemove = requestRemove,
                                 )
                             }
 
@@ -262,6 +266,16 @@ fun BookDetailsScreen(
             onClose = { showCover = false },
         )
     }
+
+    ConfirmRemoveDialog(
+        visible = showRemoveConfirm,
+        count = 1,
+        onCancel = { showRemoveConfirm = false },
+        onConfirm = {
+            showRemoveConfirm = false
+            onRemove()
+        },
+    )
 }
 
 /**
@@ -370,7 +384,8 @@ private fun BookHeader(
                 )
                 book.series?.let { SeriesTag(it) }
                 Text(
-                    text = book.readingState.statusLabel(),
+                    text = book.readingState.statusLabel() +
+                        (book.readingTime?.let { " · $it read" } ?: ""),
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.caption,
                 )
@@ -385,6 +400,20 @@ private fun BookHeader(
                         color = YomuTheme.colors.textMuted,
                         style = YomuTheme.type.mono,
                     )
+                }
+
+                // render timeline here
+                // timeline heading
+                Text(
+                    text = "Timeline",
+                    color = YomuTheme.colors.textPrimary,
+                    style = YomuTheme.type.section,
+                )
+                // timeline rows
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)){
+                    TimelineRow("Added", "${book.addedDate}")
+                    TimelineRow("Started", "${book.startedDate}")
+                    TimelineRow("Last read", "${book.lastReadDate}")
                 }
             }
         }
@@ -402,6 +431,24 @@ private fun BookHeader(
                 ExpandableBookDescription(description = description)
             }
         }
+    }
+}
+
+
+@Composable
+private fun TimelineRow(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            color = YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.body,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.mono,
+        )
     }
 }
 

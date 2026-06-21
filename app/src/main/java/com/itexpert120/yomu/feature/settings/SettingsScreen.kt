@@ -36,7 +36,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuColorPicker
@@ -157,6 +159,16 @@ fun SettingsScreen(
             icon = painterResource(R.drawable.ic_yomu_mark),
             label = "About Yomu",
             onClick = onOpenAbout,
+        )
+
+        Text(
+            text = "Yomu v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 8.dp),
+            textAlign = TextAlign.Center,
         )
     }
 

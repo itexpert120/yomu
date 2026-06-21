@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingSessionEntity::class,
         HighlightEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
@@ -92,6 +92,31 @@ abstract class YomuDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_highlights_bookId` " +
                             "ON `highlights` (`bookId`)",
+                )
+            }
+        }
+
+        /**
+         * v8 adds reading-timeline columns (started/finished) to books, backfilled from existing
+         * data: started from the earliest logged session (or last-opened as a fallback), finished
+         * from last-opened for books already at 100%.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `startedAt` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `finishedAt` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "UPDATE books SET startedAt = COALESCE(" +
+                            "(SELECT MIN(startedAt) FROM reading_sessions " +
+                            "WHERE reading_sessions.bookId = books.id), 0)",
+                )
+                db.execSQL(
+                    "UPDATE books SET startedAt = lastOpenedAt " +
+                            "WHERE startedAt = 0 AND lastOpenedAt > 0",
+                )
+                db.execSQL(
+                    "UPDATE books SET finishedAt = lastOpenedAt " +
+                            "WHERE progress >= 0.999 AND lastOpenedAt > 0",
                 )
             }
         }

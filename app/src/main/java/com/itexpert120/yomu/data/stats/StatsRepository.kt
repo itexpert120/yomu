@@ -41,6 +41,10 @@ class StatsRepository @Inject constructor(
 ) {
     private val writeMutex = Mutex()
 
+    /** Total time spent reading a single book (seconds), as a live flow. */
+    fun bookReadingSeconds(bookId: BookId): Flow<Long> =
+        dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
+
     /** Logs a finished reading session and folds its time into the day it started. */
     suspend fun recordSession(bookId: BookId, startedAtMillis: Long, seconds: Long) {
         if (seconds <= 0L) return
@@ -290,7 +294,7 @@ class StatsRepository @Inject constructor(
 
     private companion object {
         const val WORDS_PER_MINUTE = 200
-        const val RECENT_LIMIT = 40
+        const val RECENT_LIMIT = 300
         const val WEEK_DAYS = 7
         const val MONTH_DAYS = 30
         const val HEATMAP_WEEKS = 18

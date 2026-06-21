@@ -36,7 +36,8 @@ class RoomBookRepository @Inject constructor(
     override fun observeBook(id: BookId): Flow<Book?> =
         dao.observeBook(id.value).map { it?.toBook() }
 
-    override suspend fun markRead(id: BookId) = dao.markRead(id.value)
+    override suspend fun markRead(id: BookId) =
+        dao.markRead(id.value, System.currentTimeMillis())
 
     override suspend fun markUnread(id: BookId) = dao.markUnread(id.value)
 
@@ -47,7 +48,9 @@ class RoomBookRepository @Inject constructor(
         dao.deleteAllReadChapters(keys)
         dao.deleteReaderSettingsForBooks(keys)
         dao.deleteTocForBooks(keys)
-        dao.deleteSessionsForBooks(keys)
+        // Intentionally keep this book's reading_sessions: removing a book should not erase the
+        // reading time/history it contributed to overall statistics. The session rows survive (the
+        // stats history falls back to "Unknown book" once the book row is gone).
         keys.forEach { tocMemory.remove(it) }
         // Clean up the imported EPUB + extracted cover for each removed book.
         entities.forEach { entity ->

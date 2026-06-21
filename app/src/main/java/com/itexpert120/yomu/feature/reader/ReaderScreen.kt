@@ -56,8 +56,6 @@ fun ReaderScreen(
     onSeek: (Double) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
-    onScrollToTop: () -> Unit,
-    onScrollToBottom: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
     onResetSettings: () -> Unit,
     onOpenCustomTheme: () -> Unit,
@@ -69,13 +67,13 @@ fun ReaderScreen(
     onCloseToc: () -> Unit,
     onJumpToLocator: (String) -> Unit,
     onCloseLookup: () -> Unit,
+    onLookUpWord: (String) -> Unit,
+    onLookupBack: () -> Unit,
+    onPronounce: (String) -> Unit,
     onCloseFootnote: () -> Unit,
     onOpenHighlights: () -> Unit,
     onCloseHighlights: () -> Unit,
     onJumpToHighlight: (String) -> Unit,
-    onConfirmPendingHighlight: (Int) -> Unit,
-    onCancelPendingHighlight: () -> Unit,
-    onChangeHighlightColor: (Int) -> Unit,
     onDeleteHighlight: () -> Unit,
     onDeleteHighlightById: (String) -> Unit,
     onCloseEditHighlight: () -> Unit,
@@ -312,8 +310,6 @@ fun ReaderScreen(
                     onToc = onOpenToc,
                     onPrevious = onPreviousChapter,
                     onNext = onNextChapter,
-                    onScrollToTop = onScrollToTop,
-                    onScrollToBottom = onScrollToBottom,
                     onHighlights = onOpenHighlights,
                     onSettings = onOpenSheet,
                 )
@@ -365,7 +361,13 @@ fun ReaderScreen(
                     onJump = onJumpToLocator,
                 )
 
-                WordLookupSheet(state = state.lookup, onDismiss = onCloseLookup)
+                WordLookupSheet(
+                    state = state.lookup,
+                    onDismiss = onCloseLookup,
+                    onPronounce = onPronounce,
+                    onLookUpWord = onLookUpWord,
+                    onBack = onLookupBack,
+                )
 
                 FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)
 
@@ -377,16 +379,8 @@ fun ReaderScreen(
                     onDismiss = onCloseHighlights,
                 )
 
-                HighlightColorPickerSheet(
-                    visible = state.pendingHighlight != null,
-                    snippet = state.pendingHighlight?.text,
-                    onPick = onConfirmPendingHighlight,
-                    onDismiss = onCancelPendingHighlight,
-                )
-
                 HighlightEditSheet(
                     highlight = state.editingHighlight,
-                    onChangeColor = onChangeHighlightColor,
                     onDelete = onDeleteHighlight,
                     onDismiss = onCloseEditHighlight,
                 )

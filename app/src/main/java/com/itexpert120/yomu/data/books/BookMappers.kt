@@ -28,6 +28,8 @@ internal fun BookEntity.toBook(): Book {
         },
         addedAt = addedAt,
         lastOpenedAt = lastOpenedAt,
+        startedAt = startedAt,
+        finishedAt = finishedAt,
     )
 }
 
@@ -51,6 +53,8 @@ internal fun ImportedBook.toEntity(): BookEntity = BookEntity(
     locatorJson = null,
     addedAt = addedAt,
     lastOpenedAt = 0L,
+    startedAt = 0L,
+    finishedAt = 0L,
 )
 
 private fun remainingLabelFor(progress: Float): String = when {

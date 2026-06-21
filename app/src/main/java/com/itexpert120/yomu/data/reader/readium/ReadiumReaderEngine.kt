@@ -88,7 +88,12 @@ class ReadiumReaderEngine @Inject constructor(
         initialSettings: ReaderSettings,
     ): ReaderSession? {
         val publication = openPublication(filePath) ?: return null
-        return ReadiumReaderSession(context, publication, initialLocatorJson, initialSettings)
+        return ReadiumReaderSession(
+            context,
+            publication,
+            initialLocatorJson,
+            initialSettings,
+        )
     }
 
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem> {
@@ -201,7 +206,12 @@ private class ReadiumReaderSession(
     private val navigatorFactory = EpubNavigatorFactory(publication)
 
     private val listener = object : EpubNavigatorFragment.Listener {
-        override fun onExternalLinkActivated(url: AbsoluteUrl) {}
+        override fun onExternalLinkActivated(url: AbsoluteUrl) {
+            // The in-content "Next chapter" button is an <a href="yomu://next-chapter"> injected at
+            // the end of each resource; Readium routes its tap here as an external link. Intercept the
+            // custom scheme and advance instead of opening a browser.
+            if (url.toString().startsWith(NEXT_CHAPTER_URL)) nextChapter()
+        }
 
         // Tapping a footnote reference: surface the note's content in a popup instead of letting the
         // navigator jump to it at the bottom of the resource. Returning false cancels that jump.
@@ -396,12 +406,15 @@ private class ReadiumReaderSession(
                 // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
                 // RsProperties maxLineLength can't override (it's set per-resource on body). Inject a
                 // style override so scroll mode fills the width too. Re-applied per resource.
+                val order = publication.readingOrder
+                val index = order.indexOfFirst { it.url().toString() == hrefStr }
+                val hasNext = index in 0 until order.lastIndex
                 if (hrefStr != lastStyledHref) {
                     lastStyledHref = hrefStr
                     scope.launch { runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
+                    // Append the end-of-chapter "Next chapter" button for this resource.
+                    injectNextChapterButton()
                 }
-                val order = publication.readingOrder
-                val index = order.indexOfFirst { it.url().toString() == hrefStr }
                 _currentLocator.value = ReaderLocator(
                     locatorJson = locator.toJSON().toString(),
                     totalProgression = locator.locations.totalProgression,
@@ -409,7 +422,7 @@ private class ReadiumReaderSession(
                     href = hrefStr,
                     chapterProgression = locator.locations.progression,
                     hasPreviousChapter = index > 0,
-                    hasNextChapter = index in 0 until order.lastIndex,
+                    hasNextChapter = hasNext,
                 )
             }
         }
@@ -481,6 +494,24 @@ private class ReadiumReaderSession(
         pendingSettings = settings
         currentSettings = settings
         navigator?.submitPreferences(settings.toPreferences())
+        // Re-style the injected button so its colours track a live theme/accent change.
+        injectNextChapterButton()
+    }
+
+    // True when the current resource has a following resource in reading order.
+    private fun currentHasNext(): Boolean {
+        val hrefStr = lastLocator?.href?.toString() ?: return false
+        val order = publication.readingOrder
+        val index = order.indexOfFirst { it.url().toString() == hrefStr }
+        return index in 0 until order.lastIndex
+    }
+
+    // Inject (or refresh) the end-of-chapter "Next chapter" button into the current resource, styled
+    // from the active theme + accent. Removes it on the final chapter (nothing to advance to).
+    private fun injectNextChapterButton() {
+        val nav = navigator ?: return
+        val js = nextChapterButtonJs(currentHasNext(), currentSettings)
+        scope.launch { runCatching { nav.evaluateJavascript(js) } }
     }
 
     override fun goForward() {
@@ -570,6 +601,56 @@ private class ReadiumReaderSession(
         runCatching { context.startActivity(chooser) }
     }
 
+    // Builds the JS that appends a "Next chapter" pill to the end of the resource body. Colours are
+    // derived from the active reading theme (the page's own text colour) — never the app accent — so
+    // the button always harmonises with the page: a soft filled background, a defined border, and a
+    // text-coloured label. System font, fixed px size. The button is an anchor to a custom scheme;
+    // its tap is caught in onExternalLinkActivated. Removed on the final chapter.
+    private fun nextChapterButtonJs(hasNext: Boolean, settings: ReaderSettings): String {
+        val text = settings.textArgb.toInt()
+        val r = (text shr 16) and 0xFF
+        val g = (text shr 8) and 0xFF
+        val b = text and 0xFF
+        val fill = "rgba($r,$g,$b,0.10)"
+        val border = "rgba($r,$g,$b,0.30)"
+        val label = "rgb($r,$g,$b)"
+        return """
+            (function() {
+              var id = 'yomu-next-chapter';
+              var prev = document.getElementById(id);
+              if (prev) prev.remove();
+              if (!$hasNext) return;
+              var a = document.createElement('a');
+              a.id = id;
+              a.href = '$NEXT_CHAPTER_URL';
+              a.textContent = 'Next chapter';
+              // Fixed px (not em/rem) so the button keeps its size regardless of reading font scale.
+              a.style.cssText = [
+                'display:block',
+                'box-sizing:border-box',
+                'width:fit-content',
+                'max-width:100%',
+                'margin:2.75em auto 1.75em',
+                'padding:14px 28px',
+                'border:1px solid $border',
+                'border-radius:14px',
+                'background:$fill',
+                'color:$label',
+                'font-family:system-ui,-apple-system,Roboto,sans-serif',
+                'font-size:16px',
+                'font-weight:600',
+                'line-height:1',
+                'letter-spacing:0.01em',
+                'text-align:center',
+                'text-decoration:none',
+                'cursor:pointer',
+                '-webkit-tap-highlight-color:transparent'
+              ].join(';');
+              document.body.appendChild(a);
+            })();
+        """.trimIndent()
+    }
+
     // Layout + size + theme colours (explicit bg/text so it matches the chrome) + the bundled font.
     private fun ReaderSettings.toPreferences(): EpubPreferences = EpubPreferences(
         scroll = layout == ReaderLayout.Scroll,
@@ -608,6 +689,9 @@ private class ReadiumReaderSession(
 
         // Decoration group name for user highlights.
         const val HIGHLIGHTS_GROUP = "highlights"
+
+        // Custom-scheme URL behind the injected end-of-chapter "Next chapter" button.
+        const val NEXT_CHAPTER_URL = "yomu://next-chapter"
 
         // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
         // the width like paged mode does. No-op in paged mode (the selector only matches scroll).

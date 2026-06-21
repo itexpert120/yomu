@@ -9,6 +9,7 @@ import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingState
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,13 @@ data class BookDetailsUi(
     val description: String?,
     val progress: Float,
     val remaining: String,
+    // Total time spent reading this book, e.g. "3h 24m"; null when nothing has been read yet.
+    val readingTime: String?,
+    // Reading-timeline dates, pre-formatted for display; null when the event hasn't happened.
+    val addedDate: String?,
+    val startedDate: String?,
+    val lastReadDate: String?,
+    val finishedDate: String?,
     val coverImagePath: String?,
     val coverColors: List<Color>,
     val readingState: ReadingState,
@@ -81,14 +89,17 @@ class BookDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val repository: BookRepository,
+    private val statsRepository: StatsRepository,
 ) : ViewModel() {
 
     // "bookId" is the property name from the type-safe BookDetails route.
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
 
     val state: StateFlow<BookDetailsUi?> =
-        repository.observeBook(BookId(bookId))
-            .map { it?.toUi() }
+        combine(
+            repository.observeBook(BookId(bookId)),
+            statsRepository.bookReadingSeconds(BookId(bookId)),
+        ) { book, readingSeconds -> book?.toUi(readingSeconds) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // One-shot user messages (e.g. gallery-save result), surfaced as a transient notice.
@@ -239,7 +250,7 @@ class BookDetailsViewModel @Inject constructor(
 /** Current reading position projected for the TOC: which resource and how far through it. */
 private data class ReadingPosition(val href: String?, val chapterProgress: Float?)
 
-private fun Book.toUi(): BookDetailsUi = BookDetailsUi(
+private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     id = id.value,
     title = title,
     author = author,
@@ -247,7 +258,32 @@ private fun Book.toUi(): BookDetailsUi = BookDetailsUi(
     description = description,
     progress = progress,
     remaining = remainingLabel,
+    readingTime = formatReadingDuration(readingSeconds),
+    addedDate = formatDate(addedAt),
+    startedDate = formatDate(startedAt),
+    lastReadDate = formatDate(lastOpenedAt),
+    finishedDate = formatDate(finishedAt),
     coverImagePath = coverImagePath,
     coverColors = coverPalette.map { Color(it) },
     readingState = readingState,
 )
+
+/** "3h 24m" / "12m" / "<1m" for any positive duration; null when nothing has been read. */
+private fun formatReadingDuration(seconds: Long): String? {
+    if (seconds <= 0L) return null
+    val totalMinutes = seconds / 60
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "<1m"
+    }
+}
+
+/** Friendly absolute date + time like "Jun 21, 2026 · 3:45 PM"; null for unset (0) timestamps. */
+private fun formatDate(millis: Long): String? {
+    if (millis <= 0L) return null
+    return java.text.SimpleDateFormat("MMM d, yyyy · h:mm a", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))
+}

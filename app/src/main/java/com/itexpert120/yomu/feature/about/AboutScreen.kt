@@ -71,7 +71,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     style = YomuTheme.type.body,
                 )
                 Text(
-                    text = "Version ${BuildConfig.VERSION_NAME}",
+                    text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.mono,
                 )
@@ -98,8 +98,9 @@ fun AboutScreen(onBack: () -> Unit) {
             )
             Text(
                 text = "The only feature that uses the internet is dictionary “Look up”: the " +
-                        "selected word is sent to a third-party dictionary service to fetch its " +
-                        "definition. No other data is transmitted.",
+                        "selected word is sent to a third-party dictionary service " +
+                        "(freedictionaryapi.com) to fetch its definition. Pronunciation is spoken " +
+                        "on-device by your system text-to-speech. No other data is transmitted.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.caption,
             )
@@ -120,7 +121,9 @@ fun AboutScreen(onBack: () -> Unit) {
             Text(
                 text = "EPUB parsing and rendering by the Readium Kotlin toolkit (BSD-3-Clause). " +
                         "Charts by Vico (Apache-2.0). Cover loading by Coil. Built with Jetpack " +
-                        "Compose. Bundled reading fonts are used under the SIL Open Font License.",
+                        "Compose. Bundled reading fonts are used under the SIL Open Font License. " +
+                        "Dictionary definitions from freedictionaryapi.com, sourced from Wiktionary " +
+                        "(CC BY-SA).",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )

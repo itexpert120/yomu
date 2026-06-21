@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,8 +42,6 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.VerticalAlignBottom
-import androidx.compose.material.icons.rounded.VerticalAlignTop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -202,7 +202,7 @@ private const val CHAPTER_EDGE = 0.01
 
 /**
  * Bottom chapter-controls bar, revealed by a centre tap. Holds quick navigation: table of contents,
- * previous/next chapter, scroll to the top/bottom of the chapter, and reader settings. The top bar
+ * previous/next chapter, highlights, and reader settings. The top bar
  * stays static, so the chapter title remains visible at all times.
  */
 @Composable
@@ -216,8 +216,6 @@ internal fun BoxScope.ReaderChapterControlsBar(
     onToc: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onScrollToTop: () -> Unit,
-    onScrollToBottom: () -> Unit,
     onHighlights: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -231,17 +229,19 @@ internal fun BoxScope.ReaderChapterControlsBar(
     ) {
         Row(
             modifier = Modifier
+                // Keep the pill clear of the screen edges; on narrow devices the row scrolls
+                // horizontally instead of overflowing/clipping its buttons.
+                .padding(horizontal = 12.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(background)
                 .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             ControlButton(Icons.Rounded.Toc, "Contents", content, enabled = true, onToc)
             ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
-            ControlButton(Icons.Rounded.VerticalAlignTop, "Top", content, enabled = true, onScrollToTop)
-            ControlButton(Icons.Rounded.VerticalAlignBottom, "Bottom", content, enabled = true, onScrollToBottom)
             ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
             ControlButton(Icons.Rounded.Highlight, "Highlights", content, enabled = true, onHighlights)
             ControlButton(Icons.Rounded.Tune, "Settings", content, enabled = true, onSettings)

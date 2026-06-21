@@ -29,6 +29,9 @@ data class Book(
     val currentChapterProgress: Float? = null,
     val addedAt: Long = 0L,
     val lastOpenedAt: Long = 0L,
+    // Reading-timeline timestamps (epoch millis); 0 = not started / not finished yet.
+    val startedAt: Long = 0L,
+    val finishedAt: Long = 0L,
 ) {
     val readingState: ReadingState
         get() = when {

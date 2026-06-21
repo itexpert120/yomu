@@ -2,6 +2,7 @@ package com.itexpert120.yomu.feature.stats
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,17 +23,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -62,8 +63,8 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
 import com.patrykandpatrick.vico.core.cartesian.layer.ColumnCartesianLayer
 import com.patrykandpatrick.vico.core.common.shape.CorneredShape
-import java.io.File
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
@@ -349,59 +350,88 @@ private fun heatColor(level: Int): Color {
 
 // region History
 
+/** How many sessions to reveal per "Show more" press. */
+private const val HISTORY_PAGE = 12
+
+/**
+ * Recent reading, grouped by day: a date heading, then a compact timeline of that day's sessions
+ * (when it was read · how long). Paginated so a long history stays tidy instead of an endless list.
+ */
 @Composable
 private fun ColumnScope.HistorySection(history: List<ReadingSessionItem>) {
     SectionLabel("Recent reading", modifier = Modifier.padding(top = 8.dp))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg)),
-    ) {
-        history.forEach { session -> HistoryRow(session) }
+
+    var visibleCount by remember { mutableIntStateOf(HISTORY_PAGE) }
+    val shown = history.take(visibleCount)
+    // groupBy keeps key order; history is newest-first, so days come newest-first too.
+    val byDay = shown.groupBy {
+        Instant.ofEpochMilli(it.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        byDay.forEach { (day, sessions) -> DayGroup(day, sessions) }
+    }
+
+    if (history.size > visibleCount) {
+        Text(
+            text = "Show more",
+            color = YomuTheme.colors.accent,
+            style = YomuTheme.type.control,
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .align(Alignment.CenterHorizontally)
+                .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                .clickable { visibleCount += HISTORY_PAGE }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        )
     }
 }
 
 @Composable
-private fun HistoryRow(session: ReadingSessionItem) {
+private fun DayGroup(day: LocalDate, sessions: List<ReadingSessionItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = formatDayHeader(day),
+            color = YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.control,
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(YomuTheme.radius.lg))
+                .background(YomuTheme.colors.surfaceRaised)
+                .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
+                .padding(vertical = 4.dp),
+        ) {
+            sessions.forEach { session -> SessionTimelineRow(session) }
+        }
+    }
+}
+
+@Composable
+private fun SessionTimelineRow(session: ReadingSessionItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .width(28.dp)
-                .aspectRatio(1f / 1.6f)
-                .clip(RoundedCornerShape(4.dp))
-                .background(YomuTheme.colors.surfaceSunken),
-        ) {
-            if (session.coverImagePath != null) {
-                AsyncImage(
-                    model = File(session.coverImagePath),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = session.bookTitle,
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = formatTimestamp(session.startedAt),
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-            )
-        }
+        // When it was read, first.
+        Text(
+            text = formatClock(session.startedAt),
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.mono,
+            modifier = Modifier.width(68.dp),
+        )
+        Text(
+            text = session.bookTitle,
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.body,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         Text(
             text = formatReadingTime(session.seconds),
             color = YomuTheme.colors.textSecondary,
@@ -463,7 +493,7 @@ private fun ColumnChart(
         ),
         modelProducer = modelProducer,
         modifier = modifier,
-        scrollState = rememberVicoScrollState(scrollEnabled = false),
+        scrollState = rememberVicoScrollState(scrollEnabled = true),
         zoomState = rememberVicoZoomState(zoomEnabled = false),
     )
 }
@@ -554,8 +584,21 @@ private fun EmptyChartHint(text: String) {
 
 // endregion
 
-private fun formatTimestamp(millis: Long): String =
-    SimpleDateFormat("MMM d · h:mm a", Locale.getDefault()).format(Date(millis))
+/** "Today" / "Yesterday" / "Jun 20, 2026" for a session-group day heading. */
+private fun formatDayHeader(day: LocalDate): String {
+    val today = LocalDate.now()
+    return when (day) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> {
+            val date = Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())
+            SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(date)
+        }
+    }
+}
+
+private fun formatClock(millis: Long): String =
+    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
 
 private fun formatReadingTime(seconds: Long): String {
     val totalMinutes = seconds / 60

@@ -1,5 +1,7 @@
 package com.itexpert120.yomu.feature.reader
 
+import android.content.Context
+import android.speech.tts.TextToSpeech
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,6 +21,7 @@ import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
@@ -61,22 +65,23 @@ data class ReaderUiState(
     // All of this book's highlights (newest first), for the list sheet.
     val highlights: List<ReaderHighlight> = emptyList(),
     val highlightsSheetVisible: Boolean = false,
-    // A pending highlight awaiting a colour choice (color-picker for a new selection), or null.
-    val pendingHighlight: ReaderHighlightDraft? = null,
     // An existing highlight the user tapped, shown in an edit/delete popup, or null.
     val editingHighlight: ReaderHighlight? = null,
 )
 
-/** State of the word-definition popup. */
+/** State of the word-definition popup. [canGoBack] is true when a deeper word has been looked up
+ *  from within the sheet, so the UI can offer a back step through the lookup history. */
 data class WordLookupUiState(
     val word: String,
     val loading: Boolean = true,
     val result: DictionaryResult? = null,
+    val canGoBack: Boolean = false,
 )
 
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context,
     private val engine: ReaderEngine,
     private val repository: BookRepository,
     private val settingsRepository: ReaderSettingsRepository,
@@ -209,10 +214,16 @@ class ReaderViewModel @Inject constructor(
             launch {
                 opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
             }
-            // A "Highlight" tap on a selection: open the colour picker for the pending selection.
+            // A "Highlight" tap on a selection: create the highlight immediately in the default
+            // yellow (highlights are single-colour now — no picker).
             launch {
                 opened.highlightRequests.collect { draft ->
-                    _state.update { it.copy(pendingHighlight = draft) }
+                    highlights.add(
+                        BookId(bookId),
+                        draft.locatorJson,
+                        draft.text,
+                        DEFAULT_HIGHLIGHT_ARGB,
+                    )
                 }
             }
             // A tap on an on-page highlight: open its edit/delete popup.
@@ -253,16 +264,6 @@ class ReaderViewModel @Inject constructor(
 
     fun onPreviousChapter() {
         _session.value?.previousChapter()
-        _state.update { it.copy(chapterControlsVisible = false) }
-    }
-
-    fun onScrollToTop() {
-        _session.value?.scrollToChapterStart()
-        _state.update { it.copy(chapterControlsVisible = false) }
-    }
-
-    fun onScrollToBottom() {
-        _session.value?.scrollToChapterEnd()
         _state.update { it.copy(chapterControlsVisible = false) }
     }
 
@@ -318,12 +319,64 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.deleteCustomTheme(id) }
     }
 
-    /** Looks up the selected text's first word in the dictionary and opens the result popup. */
+    // Lookup history (a back-stack of words) so tapping a word inside a definition drills in and the
+    // user can step back. Results are cached per word so back/forward is instant.
+    private val lookupStack = ArrayDeque<String>()
+    private val lookupCache = mutableMapOf<String, DictionaryResult>()
+
+    // Text-to-speech for the dictionary "pronounce" button. The API provides only IPA text (no audio
+    // clips), so the word is spoken with the device voice. Lazily initialised; a word requested
+    // before init completes is spoken once the engine is ready.
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var pendingPronounce: String? = null
+
+    /** Entry point from a text selection: opens a fresh lookup (resets any history). */
     private fun lookUp(rawText: String) {
         val word = sanitizeWord(rawText) ?: return
-        _state.update { it.copy(lookup = WordLookupUiState(word = word, loading = true)) }
+        lookupStack.clear()
+        pushLookup(word)
+    }
+
+    /** Look up a word tapped from within the dictionary sheet (definitions, synonyms, antonyms). */
+    fun onLookUpWord(raw: String) {
+        val word = sanitizeWord(raw) ?: return
+        if (lookupStack.lastOrNull() == word) return
+        pushLookup(word)
+    }
+
+    /** Step back to the previously looked-up word, or close the sheet at the bottom of the stack. */
+    fun onLookupBack() {
+        if (lookupStack.size <= 1) {
+            onCloseLookup()
+            return
+        }
+        lookupStack.removeLast()
+        showLookup(lookupStack.last())
+    }
+
+    private fun pushLookup(word: String) {
+        lookupStack.addLast(word)
+        showLookup(word)
+    }
+
+    /** Render the current top-of-stack word, fetching it if not already cached. */
+    private fun showLookup(word: String) {
+        val cached = lookupCache[word]
+        _state.update {
+            it.copy(
+                lookup = WordLookupUiState(
+                    word = word,
+                    loading = cached == null,
+                    result = cached,
+                    canGoBack = lookupStack.size > 1,
+                ),
+            )
+        }
+        if (cached != null) return
         viewModelScope.launch {
             val result = dictionary.lookup(word)
+            lookupCache[word] = result
             _state.update { st ->
                 val current = st.lookup ?: return@update st
                 // Ignore a stale response if the user has since looked up a different word.
@@ -333,7 +386,35 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    fun onCloseLookup() = _state.update { it.copy(lookup = null) }
+    /** Speak [word] aloud with the device text-to-speech voice. */
+    fun onPronounce(word: String) {
+        val term = word.trim()
+        if (term.isEmpty()) return
+        val engine = tts
+        if (engine != null && ttsReady) {
+            engine.speak(term, TextToSpeech.QUEUE_FLUSH, null, "yomu-pronounce")
+            return
+        }
+        // First use: init is async, so remember the word and speak it once the engine is ready.
+        pendingPronounce = term
+        if (engine == null) {
+            tts = TextToSpeech(context) { status ->
+                ttsReady = status == TextToSpeech.SUCCESS
+                if (ttsReady) {
+                    tts?.language = Locale.ENGLISH
+                    pendingPronounce?.let {
+                        tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "yomu-pronounce")
+                    }
+                }
+                pendingPronounce = null
+            }
+        }
+    }
+
+    fun onCloseLookup() {
+        lookupStack.clear()
+        _state.update { it.copy(lookup = null) }
+    }
 
     fun onCloseFootnote() = _state.update { it.copy(footnoteHtml = null) }
 
@@ -345,26 +426,7 @@ class ReaderViewModel @Inject constructor(
 
     fun onCloseHighlights() = _state.update { it.copy(highlightsSheetVisible = false) }
 
-    /** Dismisses the new-highlight colour picker without saving. */
-    fun onCancelPendingHighlight() = _state.update { it.copy(pendingHighlight = null) }
-
-    /** Persists the pending selection as a highlight with the chosen colour. */
-    fun onConfirmPendingHighlight(colorArgb: Int) {
-        val draft = _state.value.pendingHighlight ?: return
-        _state.update { it.copy(pendingHighlight = null) }
-        viewModelScope.launch {
-            highlights.add(BookId(bookId), draft.locatorJson, draft.text, colorArgb)
-        }
-    }
-
     fun onCloseEditHighlight() = _state.update { it.copy(editingHighlight = null) }
-
-    /** Recolours the highlight currently open in the edit popup. */
-    fun onChangeHighlightColor(colorArgb: Int) {
-        val target = _state.value.editingHighlight ?: return
-        _state.update { it.copy(editingHighlight = null) }
-        viewModelScope.launch { highlights.updateColor(target.id, colorArgb) }
-    }
 
     fun onDeleteHighlight() {
         val target = _state.value.editingHighlight ?: return
@@ -412,10 +474,15 @@ class ReaderViewModel @Inject constructor(
 
     override fun onCleared() {
         onReadingPaused()
+        runCatching { tts?.shutdown() }
+        tts = null
         _session.value?.close()
     }
 
     private companion object {
         const val MAX_SESSION_SECONDS = 24L * 60 * 60
+
+        // Single default highlight colour (a warm yellow) — highlights are no longer multi-colour.
+        const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()
     }
 }

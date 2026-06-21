@@ -32,4 +32,7 @@ data class BookEntity(
     val locatorJson: String?,
     val addedAt: Long,
     val lastOpenedAt: Long,
+    // Epoch millis for the reading timeline; 0 = not yet started / not yet finished.
+    val startedAt: Long,
+    val finishedAt: Long,
 )
