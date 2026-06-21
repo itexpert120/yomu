@@ -358,16 +358,16 @@ private class ReadiumReaderSession(
                 )
             }
         }
-        // Tap-zone navigation: in PAGED mode, the left/right thirds turn pages; the centre opens the
-        // controls sheet (any mode). In SCROLL mode edge taps do nothing — the user scrolls. We
-        // deliberately don't handle drags, so there's no swipe/drag-to-change-chapter. Unhandled
-        // taps return false so Readium can still activate in-page links.
+        // Tap zones: in PAGED mode the left/right thirds turn pages and the centre toggles the
+        // controls bar. In SCROLL mode there are no page-turn zones, so a tap *anywhere* toggles the
+        // bar. Unhandled taps return false so Readium can still activate in-page links/footnotes.
         nav.addInputListener(object : InputListener {
             override fun onTap(event: TapEvent): Boolean {
                 val view = nav.view ?: return false
                 if (view.width <= 0) return false
                 val x = event.point.x / view.width
-                if (currentSettings.tapNavigation && currentSettings.layout == ReaderLayout.Paged) {
+                val paged = currentSettings.layout == ReaderLayout.Paged
+                if (currentSettings.tapNavigation && paged) {
                     if (x <= TAP_LEFT) {
                         goBackward(); return true
                     }
@@ -375,7 +375,8 @@ private class ReadiumReaderSession(
                         goForward(); return true
                     }
                 }
-                if (x > TAP_LEFT && x < TAP_RIGHT && currentSettings.centerTapOpensSheet) {
+                // Centre third (paged) or anywhere (scroll) toggles the chapter-controls bar.
+                if (!paged || (x > TAP_LEFT && x < TAP_RIGHT)) {
                     _centerTaps.tryEmit(Unit)
                     return true
                 }

@@ -319,7 +319,6 @@ fun ReaderScreen(
                     onResetSettings = onResetSettings,
                     onOpenCustomTheme = onOpenCustomTheme,
                     onApplyCustomTheme = onApplyCustomTheme,
-                    onOpenToc = onOpenToc,
                     onPreviewBrightness = { brightness ->
                         brightnessPreview = brightness.coerceIn(0f, 1f)
                     },
@@ -350,6 +349,7 @@ fun ReaderScreen(
                 ReaderTocSheet(
                     visible = state.tocSheetVisible,
                     toc = state.toc,
+                    loading = state.tocLoading,
                     currentHref = state.currentHref,
                     onDismiss = onCloseToc,
                     onJump = onJumpToLocator,

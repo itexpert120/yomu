@@ -55,6 +55,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -460,7 +461,7 @@ private fun LazyListScope.tocSection(
     }
 
     when {
-        toc.loading -> item { TocNotice("Loading contents…") }
+        toc.loading -> item { TocLoading() }
         toc.items.isEmpty() -> item { TocNotice("No table of contents.") }
         // No item key: a book's TOC can legitimately repeat an href, and duplicate keys crash
         // LazyColumn. Positional binding is fine here (sort just rebinds in place).
@@ -733,6 +734,34 @@ private fun TocNotice(text: String) {
         style = YomuTheme.type.body,
         modifier = Modifier.padding(vertical = 8.dp),
     )
+}
+
+/** Loading state for the contents list, with a hint that big books take a moment the first time. */
+@Composable
+private fun TocLoading() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CircularProgressIndicator(
+            color = YomuTheme.colors.accent,
+            strokeWidth = 2.5.dp,
+            modifier = Modifier.size(30.dp),
+        )
+        Text(
+            text = "Building contents…",
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.body,
+        )
+        Text(
+            text = "Large books can take a few moments the first time.",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption,
+        )
+    }
 }
 
 private fun ReadingState.statusLabel(): String = when (this) {

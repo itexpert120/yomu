@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,7 +88,6 @@ internal fun ReaderControlsSheet(
     onResetSettings: () -> Unit,
     onOpenCustomTheme: () -> Unit,
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
-    onOpenToc: () -> Unit,
     onPreviewBrightness: (Float) -> Unit,
     onCommitBrightness: (Float) -> Unit,
     onPreviewDim: (Float) -> Unit,
@@ -120,7 +120,6 @@ internal fun ReaderControlsSheet(
                         onSeek = onSeek,
                         onNextChapter = onNextChapter,
                         onPreviousChapter = onPreviousChapter,
-                        onOpenToc = onOpenToc,
                         onUpdateSettings = onUpdateSettings,
                         onPreviewBrightness = onPreviewBrightness,
                         onCommitBrightness = onCommitBrightness,
@@ -147,7 +146,6 @@ private fun ControlsTab(
     onSeek: (Double) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
-    onOpenToc: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
     onPreviewBrightness: (Float) -> Unit,
     onCommitBrightness: (Float) -> Unit,
@@ -217,15 +215,6 @@ private fun ControlsTab(
             onDrag = onPreviewDim,
             modifier = Modifier.fillMaxWidth(),
         )
-
-        if (state.toc.isNotEmpty()) {
-            YomuButton(
-                text = "Contents",
-                onClick = onOpenToc,
-                emphasis = YomuButtonEmphasis.Secondary,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
     }
 }
 
@@ -494,6 +483,7 @@ private fun SavedThemeRow(theme: CustomReaderTheme, onApply: () -> Unit, onDelet
 internal fun ReaderTocSheet(
     visible: Boolean,
     toc: List<ReaderTocItem>,
+    loading: Boolean,
     currentHref: String?,
     onDismiss: () -> Unit,
     onJump: (String) -> Unit,
@@ -518,7 +508,26 @@ internal fun ReaderTocSheet(
                 color = YomuTheme.colors.textPrimary,
                 style = YomuTheme.type.body
             )
-            if (entries.isEmpty()) {
+            if (loading) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        color = YomuTheme.colors.accent,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = "Building contents…",
+                        color = YomuTheme.colors.textMuted,
+                        style = YomuTheme.type.body,
+                    )
+                }
+            } else if (entries.isEmpty()) {
                 Text(
                     text = "No table of contents.",
                     color = YomuTheme.colors.textMuted,

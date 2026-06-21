@@ -47,6 +47,7 @@ data class ReaderUiState(
     val hasNextChapter: Boolean = false,
     // In-reader table of contents.
     val toc: List<ReaderTocItem> = emptyList(),
+    val tocLoading: Boolean = true,
     val tocSheetVisible: Boolean = false,
     val currentHref: String? = null,
     // Word lookup: the active lookup sheet (null = closed). Triggered from the native "Look up"
@@ -132,7 +133,7 @@ class ReaderViewModel @Inject constructor(
                 val map = LinkedHashMap<String, String>()
                 items.forEach { map.putIfAbsent(it.id, it.title) }
                 tocTitles = map
-                _state.update { it.copy(toc = items) }
+                _state.update { it.copy(toc = items, tocLoading = false) }
             }
 
             // Resolve effective settings (per-book override or global) and keep them applied live.
@@ -214,8 +215,15 @@ class ReaderViewModel @Inject constructor(
         _session.value?.goToProgression(totalProgression)
     }
 
-    fun onNextChapter() = _session.value?.nextChapter() ?: Unit
-    fun onPreviousChapter() = _session.value?.previousChapter() ?: Unit
+    fun onNextChapter() {
+        _session.value?.nextChapter()
+        _state.update { it.copy(chapterControlsVisible = false) }
+    }
+
+    fun onPreviousChapter() {
+        _session.value?.previousChapter()
+        _state.update { it.copy(chapterControlsVisible = false) }
+    }
 
     fun onScrollToTop() {
         _session.value?.scrollToChapterStart()
