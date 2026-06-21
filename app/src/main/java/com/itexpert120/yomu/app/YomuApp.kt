@@ -24,6 +24,7 @@ import com.itexpert120.yomu.core.model.ThemePreference
 @Composable
 fun YomuApp(
     appViewModel: AppViewModel,
+    externalOpenViewModel: ExternalOpenViewModel,
     onResolvedThemeChange: (YomuThemeMode) -> Unit,
 ) {
     val preference by appViewModel.themePreference.collectAsState()
@@ -53,7 +54,10 @@ fun YomuApp(
                 .fillMaxSize()
                 .background(YomuTheme.colors.appBackground),
         ) {
-            YomuNavHost(appViewModel = appViewModel)
+            YomuNavHost(
+                appViewModel = appViewModel,
+                externalOpenViewModel = externalOpenViewModel,
+            )
         }
     }
 }

@@ -24,6 +24,9 @@ interface BookDao {
     @Query("SELECT EXISTS(SELECT 1 FROM books WHERE sha256 = :sha256)")
     suspend fun existsByHash(sha256: String): Boolean
 
+    @Query("SELECT id FROM books WHERE sha256 = :sha256 LIMIT 1")
+    suspend fun findIdByHash(sha256: String): String?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(book: BookEntity)
 

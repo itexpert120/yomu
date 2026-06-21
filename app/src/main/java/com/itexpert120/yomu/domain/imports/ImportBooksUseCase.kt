@@ -15,6 +15,13 @@ data class ImportSummary(val imported: Int, val duplicates: Int, val failed: Int
     val total: Int get() = imported + duplicates + failed
 }
 
+/** Outcome of importing a single EPUB: the resolved book id plus whether it already existed. */
+sealed interface ImportResult {
+    data class Imported(val bookId: String) : ImportResult
+    data class Duplicate(val bookId: String) : ImportResult
+    data object Failed : ImportResult
+}
+
 /**
  * SAF import pipeline (docs "Import Pattern"): copy into app storage, hash, dedupe by sha256,
  * extract metadata/cover via Readium, insert into the library. In-process for now.
@@ -31,47 +38,60 @@ class ImportBooksUseCase @Inject constructor(
         var failed = 0
 
         for (uri in uris) {
-            val bookId = UUID.randomUUID().toString()
-            val copied = runCatching { fileStorage.copyEpub(bookId, uri) }.getOrNull()
-            if (copied == null) {
-                failed++
-                continue
+            when (importOne(uri)) {
+                is ImportResult.Imported -> imported++
+                is ImportResult.Duplicate -> duplicates++
+                ImportResult.Failed -> failed++
             }
-            if (repository.isDuplicate(copied.sha256)) {
-                copied.file.delete()
-                duplicates++
-                continue
-            }
-
-            val metadata = runCatching { extractor.extract(copied.file) }.getOrNull()
-            val displayName = fileStorage.displayName(uri)
-            val coverPath = metadata?.cover?.let { fileStorage.saveCover(bookId, it) }
-
-            repository.insert(
-                ImportedBook(
-                    id = bookId,
-                    title = metadata?.title?.takeIf { it.isNotBlank() }
-                        ?: displayName?.removeEpubSuffix()
-                        ?: "Untitled",
-                    subtitle = null,
-                    author = metadata?.author ?: "Unknown author",
-                    description = metadata?.description,
-                    language = metadata?.language,
-                    publisher = metadata?.publisher,
-                    series = null,
-                    coverImagePath = coverPath,
-                    storagePath = copied.file.absolutePath,
-                    originalUri = uri.toString(),
-                    originalDisplayName = displayName,
-                    sha256 = copied.sha256,
-                    fileSizeBytes = copied.sizeBytes,
-                    addedAt = System.currentTimeMillis(),
-                ),
-            )
-            imported++
         }
 
         ImportSummary(imported, duplicates, failed)
+    }
+
+    /**
+     * Imports a single EPUB (e.g. an external "Open with"/share). Returns the resolved book id so
+     * the caller can open it; on a duplicate it resolves to the existing library entry instead of
+     * creating a second copy.
+     */
+    suspend fun importSingle(uri: Uri): ImportResult = withContext(Dispatchers.IO) { importOne(uri) }
+
+    private suspend fun importOne(uri: Uri): ImportResult {
+        val bookId = UUID.randomUUID().toString()
+        val copied = runCatching { fileStorage.copyEpub(bookId, uri) }.getOrNull()
+            ?: return ImportResult.Failed
+        if (repository.isDuplicate(copied.sha256)) {
+            copied.file.delete()
+            // Resolve to the existing entry so an external open can still land on the book.
+            val existingId = repository.findIdByHash(copied.sha256)?.value
+            return if (existingId != null) ImportResult.Duplicate(existingId) else ImportResult.Failed
+        }
+
+        val metadata = runCatching { extractor.extract(copied.file) }.getOrNull()
+        val displayName = fileStorage.displayName(uri)
+        val coverPath = metadata?.cover?.let { fileStorage.saveCover(bookId, it) }
+
+        repository.insert(
+            ImportedBook(
+                id = bookId,
+                title = metadata?.title?.takeIf { it.isNotBlank() }
+                    ?: displayName?.removeEpubSuffix()
+                    ?: "Untitled",
+                subtitle = null,
+                author = metadata?.author ?: "Unknown author",
+                description = metadata?.description,
+                language = metadata?.language,
+                publisher = metadata?.publisher,
+                series = null,
+                coverImagePath = coverPath,
+                storagePath = copied.file.absolutePath,
+                originalUri = uri.toString(),
+                originalDisplayName = displayName,
+                sha256 = copied.sha256,
+                fileSizeBytes = copied.sizeBytes,
+                addedAt = System.currentTimeMillis(),
+            ),
+        )
+        return ImportResult.Imported(bookId)
     }
 }
 
