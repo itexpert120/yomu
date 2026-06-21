@@ -49,7 +49,6 @@ import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
-import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
@@ -343,10 +342,7 @@ private fun LibraryGrid(
             } else {
                 GridCells.Fixed(columns)
             },
-            modifier = Modifier
-                .widthIn(max = YomuContentMaxWidth)
-                .fillMaxSize()
-                .align(Alignment.TopCenter),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

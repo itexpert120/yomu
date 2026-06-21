@@ -14,6 +14,7 @@ import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.app.YomuApp
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
+import com.itexpert120.yomu.data.reader.readium.readiumRestoreFragmentFactory
 import com.itexpert120.yomu.widget.WidgetDeepLink
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.channels.BufferOverflow
@@ -38,6 +39,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
+        // Set before super.onCreate so a navigator fragment saved before a config change (rotation)
+        // can be re-instantiated during restore instead of crashing; the reader replaces it.
+        supportFragmentManager.fragmentFactory = readiumRestoreFragmentFactory()
         super.onCreate(savedInstanceState)
         enableYomuEdgeToEdge()
         // Cold start from an external "Open with"/share, or a widget tap.

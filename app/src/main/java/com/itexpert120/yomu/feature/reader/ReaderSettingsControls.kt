@@ -229,24 +229,6 @@ internal fun ReaderChromeToggles(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit
 ) {
-    YomuSettingRow(
-        title = "Tap edges to turn pages",
-        subtitle = "Off: only chapter buttons navigate"
-    ) {
-        YomuTogglePill(
-            checked = settings.tapNavigation,
-            onCheckedChange = { onUpdateSettings(settings.copy(tapNavigation = it)) },
-        )
-    }
-    YomuSettingRow(
-        title = "Tap centre for controls",
-        subtitle = "The top-bar button always works too"
-    ) {
-        YomuTogglePill(
-            checked = settings.centerTapOpensSheet,
-            onCheckedChange = { onUpdateSettings(settings.copy(centerTapOpensSheet = it)) },
-        )
-    }
     YomuSettingRow(title = "Show footer") {
         YomuTogglePill(
             checked = settings.showFooter,

@@ -7,6 +7,7 @@ import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -20,8 +21,8 @@ import com.itexpert120.yomu.core.reader.ReaderSession
 
 /**
  * Hosts the engine's navigator fragment inside Compose: a [FragmentContainerView] is created and
- * the fragment added via the session's (Readium) [FragmentFactory] and class name — the engine
- * type never appears here. Yomu chrome is drawn over this by [ReaderScreen].
+ * the fragment added via the session's (Readium) [androidx.fragment.app.FragmentFactory] and class
+ * name — the engine type never appears here. Yomu chrome is drawn over this by [ReaderScreen].
  */
 @Composable
 fun ReaderNavigatorHost(
@@ -32,29 +33,35 @@ fun ReaderNavigatorHost(
     val activity = LocalContext.current.findFragmentActivity()
     val fragmentManager = activity.supportFragmentManager
     val tag = remember(session) { "reader-navigator" }
+    // Stable across configuration changes so a restored fragment can find its container view.
+    val containerId = rememberSaveable { View.generateViewId() }
 
     AndroidView(
         modifier = modifier,
         factory = { context ->
             FragmentContainerView(context).apply {
-                id = View.generateViewId()
+                id = containerId
                 setBackgroundColor(backgroundArgb.toInt())
                 // Draw edge-to-edge: consume insets so the navigator's WebView doesn't pad itself
                 // for the status/nav bars (which left a solid strip). Yomu's chrome handles spacing.
                 ViewCompat.setOnApplyWindowInsetsListener(this) { _, _ -> WindowInsetsCompat.CONSUMED }
-                // Add the fragment only once the container is attached, otherwise the
-                // FragmentManager can't find the container view ("No view found for id").
                 doOnAttach {
-                    if (fragmentManager.findFragmentByTag(tag) == null) {
-                        @Suppress("UNCHECKED_CAST")
-                        val fragmentClass =
-                            Class.forName(session.fragmentClassName) as Class<out Fragment>
-                        fragmentManager.fragmentFactory = session.fragmentFactory
+                    // After a config change a placeholder navigator may have been restored (via the
+                    // activity's restore factory). Remove whatever is there and add a fresh fragment
+                    // bound to the real session factory, so the reader rebuilds correctly.
+                    fragmentManager.findFragmentByTag(tag)?.let { stale ->
                         fragmentManager.beginTransaction()
-                            .setReorderingAllowed(true)
-                            .add(id, fragmentClass, Bundle(), tag)
-                            .commitNow()
+                            .remove(stale)
+                            .commitNowAllowingStateLoss()
                     }
+                    @Suppress("UNCHECKED_CAST")
+                    val fragmentClass =
+                        Class.forName(session.fragmentClassName) as Class<out Fragment>
+                    fragmentManager.fragmentFactory = session.fragmentFactory
+                    fragmentManager.beginTransaction()
+                        .setReorderingAllowed(true)
+                        .add(id, fragmentClass, Bundle(), tag)
+                        .commitNow()
                     session.onFragmentHosted(fragmentManager, tag)
                 }
             }

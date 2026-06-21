@@ -45,7 +45,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
-import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.GroupMode
@@ -92,7 +91,6 @@ internal fun LibraryHeader(
     ) {
     Column(
         modifier = Modifier
-            .widthIn(max = YomuContentMaxWidth)
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
