@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -17,6 +18,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.itexpert120.yomu.app.AppViewModel
+import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
@@ -29,9 +31,18 @@ import com.itexpert120.yomu.feature.stats.StatsRoute
 @Composable
 fun YomuNavHost(
     appViewModel: AppViewModel,
+    externalOpenViewModel: ExternalOpenViewModel,
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
+
+    // An EPUB opened from outside the app (file manager / share) is imported off-screen, then we
+    // jump straight into the reader for the resolved book (an existing entry on a duplicate).
+    LaunchedEffect(Unit) {
+        externalOpenViewModel.openBook.collect { bookId ->
+            navController.navigate(Reader(bookId))
+        }
+    }
     // Material "shared axis (X)" — the transition Google's own apps use for hierarchical
     // navigation. Per MDC, it is exactly SlideDistance(30dp) + FadeThrough, NOT a plain
     // slide+crossfade and NOT the 0.92 scale (that belongs to the separate "fade through"

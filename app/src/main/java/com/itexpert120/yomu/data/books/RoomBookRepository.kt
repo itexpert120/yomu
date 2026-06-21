@@ -63,6 +63,9 @@ class RoomBookRepository @Inject constructor(
 
     override suspend fun isDuplicate(sha256: String): Boolean = dao.existsByHash(sha256)
 
+    override suspend fun findIdByHash(sha256: String): BookId? =
+        dao.findIdByHash(sha256)?.let { BookId(it) }
+
     override suspend fun insert(book: ImportedBook) = dao.insert(book.toEntity())
 
     override suspend fun readingTarget(id: BookId): ReadingTarget? {

@@ -32,6 +32,10 @@ interface BookRepository {
     )
 
     suspend fun isDuplicate(sha256: String): Boolean
+
+    /** The id of the already-imported book with this content hash, or null if none. */
+    suspend fun findIdByHash(sha256: String): BookId?
+
     suspend fun insert(book: ImportedBook)
 
     suspend fun readingTarget(id: BookId): ReadingTarget?
