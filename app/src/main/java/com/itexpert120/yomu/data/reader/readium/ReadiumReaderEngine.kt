@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.readium.r2.navigator.HyperlinkNavigator
 import org.readium.r2.navigator.OverflowableNavigator
 import org.readium.r2.navigator.SelectableNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
@@ -156,6 +157,9 @@ private class ReadiumReaderSession(
     private val _lookUpRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val lookUpRequests: SharedFlow<String> = _lookUpRequests.asSharedFlow()
 
+    private val _footnotes = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val footnotes: SharedFlow<String> = _footnotes.asSharedFlow()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
 
@@ -179,6 +183,17 @@ private class ReadiumReaderSession(
 
     private val listener = object : EpubNavigatorFragment.Listener {
         override fun onExternalLinkActivated(url: AbsoluteUrl) {}
+
+        // Tapping a footnote reference: surface the note's content in a popup instead of letting the
+        // navigator jump to it at the bottom of the resource. Returning false cancels that jump.
+        override fun shouldFollowInternalLink(
+            link: Link,
+            context: HyperlinkNavigator.LinkContext?,
+        ): Boolean {
+            val footnote = context as? HyperlinkNavigator.FootnoteContext ?: return true
+            _footnotes.tryEmit(footnote.noteContent)
+            return false
+        }
     }
 
     override val fragmentFactory: FragmentFactory =

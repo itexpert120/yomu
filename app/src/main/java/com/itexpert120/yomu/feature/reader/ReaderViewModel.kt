@@ -36,6 +36,8 @@ data class ReaderUiState(
     val totalProgression: Double = 0.0,
     val coverImagePath: String? = null,
     val settings: ReaderSettings = ReaderSettings(),
+    // Chrome (top bar) visibility. Starts visible, toggled by a center tap, hidden on scroll/reading.
+    val chromeVisible: Boolean = true,
     val sheetVisible: Boolean = false,
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val customSheetVisible: Boolean = false,
@@ -50,6 +52,8 @@ data class ReaderUiState(
     // Word lookup: the active lookup sheet (null = closed). Triggered from the native "Look up"
     // text-selection menu item.
     val lookup: WordLookupUiState? = null,
+    // Footnote popup content (HTML), or null when closed. Shown when a footnote ref is tapped.
+    val footnoteHtml: String? = null,
 )
 
 /** State of the word-definition popup. */
@@ -78,6 +82,9 @@ class ReaderViewModel @Inject constructor(
     // The resource being read; a chapter is marked read only once the reader leaves it for another.
     private var currentHref: String? = null
     private val markedChapters = mutableSetOf<String>()
+
+    // Last progression seen for chrome auto-hide; lets us hide the top bar once the reader scrolls.
+    private var lastChromeProgression: Double? = null
 
     // Resource href -> chapter title, so the top bar can show the current chapter name even when
     // the engine locator carries no title. Retains the last known title to avoid blanking out.
@@ -159,6 +166,16 @@ class ReaderViewModel @Inject constructor(
                             )
                         }
                         if (progression != null) {
+                            // Hide the chrome once the reader actually moves (scroll/page turn). The
+                            // first emission only seeds the baseline so chrome stays up on open.
+                            val last = lastChromeProgression
+                            if (last != null &&
+                                _state.value.chromeVisible &&
+                                kotlin.math.abs(progression - last) > 0.0005
+                            ) {
+                                _state.update { it.copy(chromeVisible = false) }
+                            }
+                            lastChromeProgression = progression
                             repository.saveProgress(
                                 BookId(bookId),
                                 locator.locatorJson,
@@ -181,10 +198,15 @@ class ReaderViewModel @Inject constructor(
                 }
             }
             launch {
-                opened.centerTaps.collect { _state.update { it.copy(sheetVisible = true) } }
+                // A center tap reveals/hides the chrome instead of opening the sheet directly; the
+                // controls sheet is reached from the revealed top bar's controls button.
+                opened.centerTaps.collect { _state.update { it.copy(chromeVisible = !it.chromeVisible) } }
             }
             launch {
                 opened.lookUpRequests.collect { text -> lookUp(text) }
+            }
+            launch {
+                opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
             }
             launch {
                 repository.observeBook(BookId(bookId)).collect { book ->
@@ -271,6 +293,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     fun onCloseLookup() = _state.update { it.copy(lookup = null) }
+
+    fun onCloseFootnote() = _state.update { it.copy(footnoteHtml = null) }
 
     /** Start counting reading time (reader brought to the foreground). */
     fun onReadingResumed() {

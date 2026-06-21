@@ -31,6 +31,7 @@ fun ReaderRoute(onBack: () -> Unit) {
         onCloseToc = viewModel::onCloseToc,
         onJumpToLocator = viewModel::onJumpToLocator,
         onCloseLookup = viewModel::onCloseLookup,
+        onCloseFootnote = viewModel::onCloseFootnote,
         onReadingResumed = viewModel::onReadingResumed,
         onReadingPaused = viewModel::onReadingPaused,
     )

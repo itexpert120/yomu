@@ -5,14 +5,21 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.view.WindowManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -67,6 +74,7 @@ fun ReaderScreen(
     onCloseToc: () -> Unit,
     onJumpToLocator: (String) -> Unit,
     onCloseLookup: () -> Unit,
+    onCloseFootnote: () -> Unit,
     onReadingResumed: () -> Unit,
     onReadingPaused: () -> Unit,
 ) {
@@ -201,19 +209,13 @@ fun ReaderScreen(
     }
 
     val density = LocalDensity.current
-    var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    // Scroll mode's WebView keeps its own status-bar safe area even when the app hides system bars
-    // for immersive reading. Use the ignoring-visibility inset so that hidden bars still get
-    // subtracted; otherwise scroll mode gets one extra status-bar-sized top gap.
-    val statusTop =
-        WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    val fullTop = with(density) { topBarPx.toDp() }
-    val topInset = if (state.settings.layout == ReaderLayout.Scroll) {
-        (fullTop - statusTop).coerceAtLeast(0.dp)
-    } else {
-        fullTop
-    }
+    // The top bar now overlays the page and auto-hides (immersive reading), so the content only
+    // reserves the system safe area (status bar / display cutout), not the bar height. In scroll
+    // mode the navigator's WebView already insets for the status bar, so reserve nothing extra.
+    val safeTop = WindowInsets.displayCutout.union(WindowInsets.statusBarsIgnoringVisibility)
+        .asPaddingValues().calculateTopPadding()
+    val topInset = if (state.settings.layout == ReaderLayout.Scroll) 0.dp else safeTop
     val footerHeight = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
     val scrollEndPadding =
         if (state.settings.layout == ReaderLayout.Scroll && state.settings.showFooter) {
@@ -246,15 +248,22 @@ fun ReaderScreen(
                         .padding(top = topInset, bottom = bottomInset),
                 )
 
-                ReaderTopBar(
-                    chapter = state.chapterTitle ?: state.title,
-                    background = background,
-                    content = onBackground,
-                    onBack = onBack,
-                    onOpenSheet = onOpenSheet,
-                    onContentHeight = { topBarPx = it },
+                // Chrome reveals on a center tap and hides on scroll/reading (see ReaderViewModel).
+                AnimatedVisibility(
+                    visible = state.chromeVisible,
+                    enter = slideInVertically { -it } + fadeIn(),
+                    exit = slideOutVertically { -it } + fadeOut(),
                     modifier = Modifier.align(Alignment.TopCenter),
-                )
+                ) {
+                    ReaderTopBar(
+                        chapter = state.chapterTitle ?: state.title,
+                        background = background,
+                        content = onBackground,
+                        onBack = onBack,
+                        onOpenSheet = onOpenSheet,
+                        onContentHeight = {},
+                    )
+                }
 
                 if (state.settings.showFooter) {
                     ReaderFooter(
@@ -338,6 +347,8 @@ fun ReaderScreen(
                 )
 
                 WordLookupSheet(state = state.lookup, onDismiss = onCloseLookup)
+
+                FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)
             }
         }
     }

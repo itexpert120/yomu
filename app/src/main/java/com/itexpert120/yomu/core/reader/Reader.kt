@@ -65,6 +65,12 @@ interface ReaderSession {
      */
     val lookUpRequests: SharedFlow<String>
 
+    /**
+     * Emits a footnote's content (HTML) when the user taps a footnote reference, so the UI can show
+     * it in a popup instead of the engine jumping to the note at the bottom of the resource.
+     */
+    val footnotes: SharedFlow<String>
+
     val fragmentFactory: FragmentFactory
     val fragmentClassName: String
 
