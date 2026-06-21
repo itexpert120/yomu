@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -401,22 +402,11 @@ private fun BookHeader(
                         style = YomuTheme.type.mono,
                     )
                 }
-
-                // render timeline here
-                // timeline heading
-                Text(
-                    text = "Timeline",
-                    color = YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.section,
-                )
-                // timeline rows
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)){
-                    TimelineRow("Added", "${book.addedDate}")
-                    TimelineRow("Started", "${book.startedDate}")
-                    TimelineRow("Last read", "${book.lastReadDate}")
-                }
             }
         }
+
+        // Full-width below the cover/metadata block so the dates have room on narrow screens.
+        ReadingTimeline(book)
 
         DetailActionBar(
             book = book,
@@ -435,19 +425,51 @@ private fun BookHeader(
 }
 
 
+/**
+ * Reading timeline (Added / Started / Last read / Finished). Rendered full-width below the header so
+ * the dates aren't squeezed in the narrow metadata column; rows with no date are omitted.
+ */
+@Composable
+private fun ReadingTimeline(book: BookDetailsUi) {
+    val rows = buildList {
+        book.addedDate?.let { add("Added" to it) }
+        book.startedDate?.let { add("Started" to it) }
+        book.lastReadDate?.let { add("Last read" to it) }
+        book.finishedDate?.let { add("Finished" to it) }
+    }
+    if (rows.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Timeline",
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.section,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            rows.forEach { (label, value) -> TimelineRow(label, value) }
+        }
+    }
+}
+
 @Composable
 private fun TimelineRow(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Label keeps its intrinsic width; the value takes the rest and right-aligns (wrapping to a
+        // second line only on the very narrowest screens) so it can never overlap the label.
         Text(
             text = label,
             color = YomuTheme.colors.textSecondary,
             style = YomuTheme.type.body,
-            modifier = Modifier.weight(1f),
         )
         Text(
             text = value,
             color = YomuTheme.colors.textMuted,
             style = YomuTheme.type.mono,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
         )
     }
 }
