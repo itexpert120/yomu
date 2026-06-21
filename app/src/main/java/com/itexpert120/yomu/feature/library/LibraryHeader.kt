@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
+import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.GroupMode
@@ -78,12 +80,20 @@ internal fun LibraryHeader(
         targetValue = if (elevated) 4.dp else 0.dp,
         label = "headerElevation",
     )
-    Column(
+    // The shadowed plane spans full width (so the seam runs edge-to-edge), but its content is
+    // capped to the same max width as the grid below and centered, so they stay aligned on tablets.
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation)
             .background(YomuTheme.colors.appBackground)
-            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+    Column(
+        modifier = Modifier
+            .widthIn(max = YomuContentMaxWidth)
+            .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -155,6 +165,7 @@ internal fun LibraryHeader(
                 onClick = onDisplaySheetToggle,
             )
         }
+    }
     }
 }
 
