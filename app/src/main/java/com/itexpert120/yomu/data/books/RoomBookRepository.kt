@@ -5,8 +5,11 @@ import com.itexpert120.yomu.core.database.BookTocEntity
 import com.itexpert120.yomu.core.database.ChapterReadEntity
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
+import android.content.Context
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.widget.WidgetUpdater
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -18,6 +21,7 @@ import javax.inject.Singleton
 class RoomBookRepository @Inject constructor(
     private val dao: BookDao,
     private val readerEngine: ReaderEngine,
+    @ApplicationContext private val context: Context,
 ) : BookRepository {
 
     private val tocJson = Json { ignoreUnknownKeys = true }
@@ -82,7 +86,12 @@ class RoomBookRepository @Inject constructor(
             locatorJson = locatorJson,
             lastOpenedAt = System.currentTimeMillis(),
         )
+        // Keep the "Continue reading" home-screen widget in sync with the latest position.
+        WidgetUpdater.refreshContinueReading(context)
     }
+
+    override suspend fun continueReadingBook(): Book? =
+        (dao.getContinueReadingBook() ?: dao.getMostRecentBook())?.toBook()
 
     override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = tocMemory[id.value]
 

@@ -38,6 +38,13 @@ interface BookRepository {
     suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double)
 
     /**
+     * The book to surface in the "Continue reading" home-screen widget: the most-recently-opened
+     * in-progress book, or the most-recent book of any state as a fallback, or null when the library
+     * is empty.
+     */
+    suspend fun continueReadingBook(): Book?
+
+    /**
      * The book's table of contents, served from a persistent cache. On a cache miss it is extracted
      * from the EPUB and stored, so subsequent opens are instant. Also keeps a process-lifetime
      * in-memory copy ([cachedTableOfContents]) so repeat opens don't even re-read/parse from disk.

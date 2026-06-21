@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static preview shown in the widget picker for the "Continue reading" widget. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="#171815" />
+        </shape>
+    </item>
+    <!-- Cover placeholder. -->
+    <item
+        android:left="14dp"
+        android:top="14dp"
+        android:bottom="14dp"
+        android:width="64dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="8dp" />
+            <solid android:color="#0C0D0B" />
+        </shape>
+    </item>
+    <!-- Title line. -->
+    <item
+        android:left="92dp"
+        android:top="34dp"
+        android:right="18dp"
+        android:height="10dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#F4F4EF" />
+        </shape>
+    </item>
+    <!-- Author line. -->
+    <item
+        android:left="92dp"
+        android:top="52dp"
+        android:width="90dp"
+        android:height="8dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#BFC2B8" />
+        </shape>
+    </item>
+    <!-- Progress track. -->
+    <item
+        android:left="92dp"
+        android:top="74dp"
+        android:right="18dp"
+        android:height="6dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#2C2F29" />
+        </shape>
+    </item>
+    <!-- Progress fill. -->
+    <item
+        android:left="92dp"
+        android:top="74dp"
+        android:width="80dp"
+        android:height="6dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#B8D88F" />
+        </shape>
+    </item>
+</layer-list>

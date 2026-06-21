@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -25,13 +26,23 @@ import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
 import com.itexpert120.yomu.feature.stats.StatsRoute
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
 fun YomuNavHost(
     appViewModel: AppViewModel,
     modifier: Modifier = Modifier,
+    openBookFromWidget: Flow<String> = emptyFlow(),
 ) {
     val navController = rememberNavController()
+
+    // A home-screen widget tap deep-links straight into the reader for the requested book.
+    LaunchedEffect(Unit) {
+        openBookFromWidget.collect { bookId ->
+            navController.navigate(Reader(bookId))
+        }
+    }
     // Material "shared axis (X)" — the transition Google's own apps use for hierarchical
     // navigation. Per MDC, it is exactly SlideDistance(30dp) + FadeThrough, NOT a plain
     // slide+crossfade and NOT the 0.92 scale (that belongs to the separate "fade through"

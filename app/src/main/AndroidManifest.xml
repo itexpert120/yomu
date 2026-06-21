@@ -32,6 +32,32 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- "Continue reading" home-screen widget (Jetpack Glance). -->
+        <receiver
+            android:name=".widget.ContinueReadingWidgetReceiver"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/continue_reading_widget_info" />
+        </receiver>
+
+        <!-- Small library/open-app shortcut tile (Jetpack Glance). -->
+        <receiver
+            android:name=".widget.LibraryShortcutWidgetReceiver"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/library_shortcut_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

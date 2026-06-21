@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Yomu</string>
+    <string name="widget_continue_reading_description">Resume the book you were last reading.</string>
+    <string name="widget_library_shortcut_description">Open your Yomu library.</string>
 </resources>
