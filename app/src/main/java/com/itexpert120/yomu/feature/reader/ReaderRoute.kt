@@ -20,6 +20,8 @@ fun ReaderRoute(onBack: () -> Unit) {
         onSeek = viewModel::onSeek,
         onNextChapter = viewModel::onNextChapter,
         onPreviousChapter = viewModel::onPreviousChapter,
+        onScrollToTop = viewModel::onScrollToTop,
+        onScrollToBottom = viewModel::onScrollToBottom,
         onUpdateSettings = viewModel::onUpdateSettings,
         onResetSettings = viewModel::onResetBookSettings,
         onOpenCustomTheme = viewModel::onOpenCustomTheme,

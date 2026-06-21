@@ -485,24 +485,25 @@ private fun dayAxisFormatter(trend: List<DailyReading>): CartesianValueFormatter
         if (date != null && index % step == 0) {
             fmt.format(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()))
         } else {
-            ""
+            // Vico forbids empty labels; a blank space hides the label without crashing.
+            " "
         }
     }
 }
 
 private fun hourAxisFormatter(): CartesianValueFormatter =
     CartesianValueFormatter { _, value, _ ->
-        when (val hour = value.toInt()) {
+        when (value.toInt()) {
             0 -> "12a"
             6 -> "6a"
             12 -> "12p"
             18 -> "6p"
-            else -> ""
+            else -> " "
         }
     }
 
 private fun labelFormatter(labels: List<String>): CartesianValueFormatter =
-    CartesianValueFormatter { _, value, _ -> labels.getOrElse(value.toInt()) { "" } }
+    CartesianValueFormatter { _, value, _ -> labels.getOrElse(value.toInt()) { " " } }
 
 private val WEEKDAY_LABELS = listOf("M", "T", "W", "T", "F", "S", "S")
 

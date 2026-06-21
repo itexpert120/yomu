@@ -35,7 +35,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VerticalAlignBottom
+import androidx.compose.material.icons.rounded.VerticalAlignTop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,7 +73,6 @@ internal fun ReaderTopBar(
     background: Color,
     content: Color,
     onBack: () -> Unit,
-    onOpenSheet: () -> Unit,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -107,7 +111,6 @@ internal fun ReaderTopBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                ReaderBarButton(Icons.Rounded.Tune, "Reader controls", content, onOpenSheet)
             }
         }
     }
@@ -195,6 +198,80 @@ internal fun BoxScope.ReaderChapterButtons(
 }
 
 private const val CHAPTER_EDGE = 0.01
+
+/**
+ * Bottom chapter-controls bar, revealed by a centre tap. Holds quick navigation: table of contents,
+ * previous/next chapter, scroll to the top/bottom of the chapter, and reader settings. The top bar
+ * stays static, so the chapter title remains visible at all times.
+ */
+@Composable
+internal fun BoxScope.ReaderChapterControlsBar(
+    visible: Boolean,
+    bottomInset: Dp,
+    background: Color,
+    content: Color,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    onToc: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onScrollToTop: () -> Unit,
+    onScrollToBottom: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = bottomInset + 14.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(background)
+                .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            ControlButton(Icons.Rounded.Toc, "Contents", content, enabled = true, onToc)
+            ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
+            ControlButton(Icons.Rounded.VerticalAlignTop, "Top", content, enabled = true, onScrollToTop)
+            ControlButton(Icons.Rounded.VerticalAlignBottom, "Bottom", content, enabled = true, onScrollToBottom)
+            ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
+            ControlButton(Icons.Rounded.Tune, "Settings", content, enabled = true, onSettings)
+        }
+    }
+}
+
+@Composable
+private fun ControlButton(
+    icon: ImageVector,
+    label: String,
+    content: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val tint = if (enabled) content else content.copy(alpha = 0.3f)
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+        Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
+    }
+}
 
 @Composable
 private fun ChapterPill(

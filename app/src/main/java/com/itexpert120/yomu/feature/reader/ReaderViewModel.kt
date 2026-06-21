@@ -36,8 +36,8 @@ data class ReaderUiState(
     val totalProgression: Double = 0.0,
     val coverImagePath: String? = null,
     val settings: ReaderSettings = ReaderSettings(),
-    // Chrome (top bar) visibility. Starts visible, toggled by a center tap, hidden on scroll/reading.
-    val chromeVisible: Boolean = true,
+    // The bottom chapter-controls bar, toggled by a center tap. The top bar stays static.
+    val chapterControlsVisible: Boolean = false,
     val sheetVisible: Boolean = false,
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val customSheetVisible: Boolean = false,
@@ -82,9 +82,6 @@ class ReaderViewModel @Inject constructor(
     // The resource being read; a chapter is marked read only once the reader leaves it for another.
     private var currentHref: String? = null
     private val markedChapters = mutableSetOf<String>()
-
-    // Last progression seen for chrome auto-hide; lets us hide the top bar once the reader scrolls.
-    private var lastChromeProgression: Double? = null
 
     // Resource href -> chapter title, so the top bar can show the current chapter name even when
     // the engine locator carries no title. Retains the last known title to avoid blanking out.
@@ -166,16 +163,6 @@ class ReaderViewModel @Inject constructor(
                             )
                         }
                         if (progression != null) {
-                            // Hide the chrome once the reader actually moves (scroll/page turn). The
-                            // first emission only seeds the baseline so chrome stays up on open.
-                            val last = lastChromeProgression
-                            if (last != null &&
-                                _state.value.chromeVisible &&
-                                kotlin.math.abs(progression - last) > 0.0005
-                            ) {
-                                _state.update { it.copy(chromeVisible = false) }
-                            }
-                            lastChromeProgression = progression
                             repository.saveProgress(
                                 BookId(bookId),
                                 locator.locatorJson,
@@ -198,9 +185,11 @@ class ReaderViewModel @Inject constructor(
                 }
             }
             launch {
-                // A center tap reveals/hides the chrome instead of opening the sheet directly; the
-                // controls sheet is reached from the revealed top bar's controls button.
-                opened.centerTaps.collect { _state.update { it.copy(chromeVisible = !it.chromeVisible) } }
+                // A center tap toggles the bottom chapter-controls bar (TOC / chapter nav / scroll /
+                // settings). The top bar stays static.
+                opened.centerTaps.collect {
+                    _state.update { it.copy(chapterControlsVisible = !it.chapterControlsVisible) }
+                }
             }
             launch {
                 opened.lookUpRequests.collect { text -> lookUp(text) }
@@ -216,7 +205,9 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    fun onOpenSheet() = _state.update { it.copy(sheetVisible = true) }
+    fun onOpenSheet() =
+        _state.update { it.copy(sheetVisible = true, chapterControlsVisible = false) }
+
     fun onCloseSheet() = _state.update { it.copy(sheetVisible = false) }
 
     fun onSeek(totalProgression: Double) {
@@ -226,7 +217,18 @@ class ReaderViewModel @Inject constructor(
     fun onNextChapter() = _session.value?.nextChapter() ?: Unit
     fun onPreviousChapter() = _session.value?.previousChapter() ?: Unit
 
-    fun onOpenToc() = _state.update { it.copy(tocSheetVisible = true, sheetVisible = false) }
+    fun onScrollToTop() {
+        _session.value?.scrollToChapterStart()
+        _state.update { it.copy(chapterControlsVisible = false) }
+    }
+
+    fun onScrollToBottom() {
+        _session.value?.scrollToChapterEnd()
+        _state.update { it.copy(chapterControlsVisible = false) }
+    }
+
+    fun onOpenToc() =
+        _state.update { it.copy(tocSheetVisible = true, sheetVisible = false, chapterControlsVisible = false) }
     fun onCloseToc() = _state.update { it.copy(tocSheetVisible = false) }
 
     /** Jump to a TOC entry and close the contents sheet. */

@@ -250,9 +250,9 @@ fun YomuBottomSheet(
             if (!sheetState.isVisible) onDismiss()
         }
     }
-    // Cap tall sheets at 85% of the actual window height (containerSize, not Configuration).
+    // Cap tall sheets at 60% of the actual window height (containerSize, not Configuration).
     val maxHeight = with(LocalDensity.current) {
-        (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
+        (LocalWindowInfo.current.containerSize.height * 0.60f).toDp()
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,

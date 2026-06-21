@@ -5,21 +5,14 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.layout.union
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -63,6 +56,8 @@ fun ReaderScreen(
     onSeek: (Double) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
+    onScrollToTop: () -> Unit,
+    onScrollToBottom: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
     onResetSettings: () -> Unit,
     onOpenCustomTheme: () -> Unit,
@@ -209,13 +204,18 @@ fun ReaderScreen(
     }
 
     val density = LocalDensity.current
+    var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    // The top bar now overlays the page and auto-hides (immersive reading), so the content only
-    // reserves the system safe area (status bar / display cutout), not the bar height. In scroll
-    // mode the navigator's WebView already insets for the status bar, so reserve nothing extra.
-    val safeTop = WindowInsets.displayCutout.union(WindowInsets.statusBarsIgnoringVisibility)
-        .asPaddingValues().calculateTopPadding()
-    val topInset = if (state.settings.layout == ReaderLayout.Scroll) 0.dp else safeTop
+    // The top bar is static, so content is inset by its full height. Scroll mode's WebView keeps its
+    // own status-bar safe area, so subtract the status inset there to avoid an extra top gap.
+    val statusTop =
+        WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    val fullTop = with(density) { topBarPx.toDp() }
+    val topInset = if (state.settings.layout == ReaderLayout.Scroll) {
+        (fullTop - statusTop).coerceAtLeast(0.dp)
+    } else {
+        fullTop
+    }
     val footerHeight = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
     val scrollEndPadding =
         if (state.settings.layout == ReaderLayout.Scroll && state.settings.showFooter) {
@@ -248,22 +248,15 @@ fun ReaderScreen(
                         .padding(top = topInset, bottom = bottomInset),
                 )
 
-                // Chrome reveals on a center tap and hides on scroll/reading (see ReaderViewModel).
-                AnimatedVisibility(
-                    visible = state.chromeVisible,
-                    enter = slideInVertically { -it } + fadeIn(),
-                    exit = slideOutVertically { -it } + fadeOut(),
+                // Static top bar: back + chapter title, always visible.
+                ReaderTopBar(
+                    chapter = state.chapterTitle ?: state.title,
+                    background = background,
+                    content = onBackground,
+                    onBack = onBack,
+                    onContentHeight = { topBarPx = it },
                     modifier = Modifier.align(Alignment.TopCenter),
-                ) {
-                    ReaderTopBar(
-                        chapter = state.chapterTitle ?: state.title,
-                        background = background,
-                        content = onBackground,
-                        onBack = onBack,
-                        onOpenSheet = onOpenSheet,
-                        onContentHeight = {},
-                    )
-                }
+                )
 
                 if (state.settings.showFooter) {
                     ReaderFooter(
@@ -287,8 +280,8 @@ fun ReaderScreen(
                 }
 
                 // Next-chapter button at the chapter end (above the dim scrim so it stays legible).
-                // Hidden while a lookup popup is open so it doesn't collide with the sheet.
-                if (state.lookup == null) {
+                // Hidden while a lookup popup or the chapter-controls bar is open, to avoid overlap.
+                if (state.lookup == null && !state.chapterControlsVisible) {
                     ReaderChapterButtons(
                         chapterProgression = state.chapterProgression,
                         hasNext = state.hasNextChapter,
@@ -298,6 +291,22 @@ fun ReaderScreen(
                         onNext = onNextChapter,
                     )
                 }
+
+                // Bottom chapter-controls bar, toggled by a centre tap.
+                ReaderChapterControlsBar(
+                    visible = state.chapterControlsVisible,
+                    bottomInset = bottomInset,
+                    background = background,
+                    content = onBackground,
+                    hasPrevious = state.hasPreviousChapter,
+                    hasNext = state.hasNextChapter,
+                    onToc = onOpenToc,
+                    onPrevious = onPreviousChapter,
+                    onNext = onNextChapter,
+                    onScrollToTop = onScrollToTop,
+                    onScrollToBottom = onScrollToBottom,
+                    onSettings = onOpenSheet,
+                )
 
                 ReaderControlsSheet(
                     visible = state.sheetVisible,
