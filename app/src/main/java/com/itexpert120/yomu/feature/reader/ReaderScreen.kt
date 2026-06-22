@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
@@ -213,12 +214,19 @@ fun ReaderScreen(
     val density = LocalDensity.current
     var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    // The top bar is static, so content is inset by its full height. Scroll mode's WebView keeps its
-    // own status-bar safe area, so subtract the status inset there to avoid an extra top gap.
-    val statusTop =
-        WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    // The top bar is static, so content needs an explicit inset: the navigator host consumes system
+    // insets, so the WebView won't add a safe area for us. Wide / landscape layouts need the full bar
+    // reserved to keep chapter headings clear of the chrome. Compact portrait already has generous
+    // EPUB top whitespace; reserving the status/cutout strip as well creates the large blank gap seen
+    // on phones, so there we reserve just the controls row.
+    val configuration = LocalConfiguration.current
+    val compactPortrait =
+        configuration.screenWidthDp < 600 && configuration.screenHeightDp > configuration.screenWidthDp
     val fullTop = with(density) { topBarPx.toDp() }
-    val topInset = if (state.settings.layout == ReaderLayout.Scroll) {
+    val statusTop = WindowInsets.statusBarsIgnoringVisibility
+        .asPaddingValues()
+        .calculateTopPadding()
+    val topInset = if (state.settings.layout == ReaderLayout.Scroll && compactPortrait) {
         (fullTop - statusTop).coerceAtLeast(0.dp)
     } else {
         fullTop
