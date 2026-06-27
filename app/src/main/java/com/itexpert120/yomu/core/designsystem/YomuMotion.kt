@@ -2,9 +2,11 @@ package com.itexpert120.yomu.core.designsystem
 
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
@@ -93,6 +95,16 @@ fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransit
             animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
             targetScale = YomuMotion.PopupScaleFrom,
             transformOrigin = origin,
+        )
+
+/** A gentle in-place content swap for tab/segment changes: fade + a subtle settle scale, no slide. */
+fun yomuContentSwap(): ContentTransform =
+    (
+        fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
+            scaleIn(spring(dampingRatio = 1f, stiffness = 420f), initialScale = 0.97f)
+        ) togetherWith (
+        fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
+            scaleOut(spring(dampingRatio = 1f, stiffness = 420f), targetScale = 0.97f)
         )
 
 /**

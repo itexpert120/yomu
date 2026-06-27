@@ -2,9 +2,6 @@ package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,6 +62,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -111,7 +109,7 @@ internal fun ReaderControlsSheet(
             )
             AnimatedContent(
                 targetState = tab,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                transitionSpec = { yomuContentSwap() },
                 label = "readerSheetTab",
             ) { current ->
                 when (current) {
