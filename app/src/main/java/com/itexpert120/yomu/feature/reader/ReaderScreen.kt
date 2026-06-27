@@ -96,6 +96,12 @@ fun ReaderScreen(
     var brightnessPreview by remember { mutableStateOf<Float?>(null) }
     var dimPreview by remember { mutableStateOf<Float?>(null) }
 
+    // Keep the display awake while the reader is open; released when leaving the reader.
+    DisposableEffect(Unit) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+
     // Count foreground reading time toward statistics: accumulate between resume and pause.
     DisposableEffect(Unit) {
         val lifecycle = (view.context.findActivity() as? LifecycleOwner)?.lifecycle
@@ -263,9 +269,10 @@ fun ReaderScreen(
             .background(background),
     ) {
         when {
-            state.loading -> CenteredMessage("Opening…")
             state.failed -> CenteredMessage("This book couldn't be opened.")
             session != null -> {
+                // Host the navigator even while loading so it can paint and fire its ready signal;
+                // an opaque scrim below covers the half-rendered page until that first paint.
                 ReaderNavigatorHost(
                     session = session,
                     backgroundArgb = state.settings.backgroundArgb,
@@ -273,6 +280,18 @@ fun ReaderScreen(
                         .fillMaxSize()
                         .padding(top = topInset, bottom = bottomInset),
                 )
+
+                // Until the first page paints, cover the WebView with an opaque "Opening…" scrim.
+                // The top bar is drawn after it, so Back stays usable during a slow open.
+                if (state.loading) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(background),
+                    ) {
+                        CenteredMessage("Opening…")
+                    }
+                }
 
                 // Static top bar: back + chapter title + bookmark toggle, always visible.
                 ReaderTopBar(
@@ -286,6 +305,8 @@ fun ReaderScreen(
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
 
+                // Footer, overlays and all sheets only appear once the first page has painted.
+                if (!state.loading) {
                 if (state.settings.showFooter) {
                     ReaderFooter(
                         progressPercent = state.progressPercent,
@@ -428,7 +449,10 @@ fun ReaderScreen(
                     onJump = onJumpToSearchResult,
                     onDismiss = onCloseSearch,
                 )
+                }
             }
+
+            else -> CenteredMessage("Opening…")
         }
     }
 }

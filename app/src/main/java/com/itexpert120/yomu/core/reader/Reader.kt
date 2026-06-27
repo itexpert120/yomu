@@ -69,6 +69,13 @@ interface ReaderSession {
     val title: String
     val currentLocator: StateFlow<ReaderLocator?>
 
+    /**
+     * True once the navigator has rendered its first content (the WebView's first page has been laid
+     * out). Starts false. Gate the loading UI on this rather than on session creation, so "Opening…"
+     * stays up until the page is actually painted instead of flashing a blank/half-rendered view.
+     */
+    val ready: StateFlow<Boolean>
+
     /** Emits when the user taps the centre of the page (used to open the controls sheet). */
     val centerTaps: SharedFlow<Unit>
 

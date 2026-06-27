@@ -5,10 +5,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Bookmarks
@@ -66,6 +63,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
+import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -158,7 +158,8 @@ internal fun ReaderFooter(
                     BatteryIndicator(
                         level = battery.level,
                         charging = battery.charging,
-                        color = muted
+                        color = muted,
+                        background = bg,
                     )
                 }
                 if (settings.footerShowClock) {
@@ -195,8 +196,8 @@ internal fun BoxScope.ReaderChapterButtons(
     // Slides up into view as the chapter end is reached — the cue that tapping advances a chapter.
     AnimatedVisibility(
         visible = hasNext && chapterProgression >= 1.0 - CHAPTER_EDGE,
-        enter = slideInVertically { it } + fadeIn(),
-        exit = slideOutVertically { it } + fadeOut(),
+        enter = yomuChromeEnter(),
+        exit = yomuChromeExit(),
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .padding(bottom = bottomInset + 14.dp),
@@ -207,6 +208,7 @@ internal fun BoxScope.ReaderChapterButtons(
             background = background,
             content = content,
             onClick = onNext,
+            modifier = Modifier.yomuChromeBlur(this),
         )
     }
 }
@@ -236,14 +238,15 @@ internal fun BoxScope.ReaderChapterControlsBar(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically { it } + fadeIn(),
-        exit = slideOutVertically { it } + fadeOut(),
+        enter = yomuChromeEnter(),
+        exit = yomuChromeExit(),
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .padding(bottom = bottomInset + 14.dp),
     ) {
         Row(
             modifier = Modifier
+                .yomuChromeBlur(this)
                 // Keep the pill clear of the screen edges; on narrow devices the row scrolls
                 // horizontally instead of overflowing/clipping its buttons.
                 .padding(horizontal = 12.dp)
@@ -368,11 +371,11 @@ private fun ReaderBarButton(
     }
 }
 
-/** Horizontal battery icon: an outlined shell with a level-proportional fill + terminal nub. */
+/** Horizontal battery icon: an outlined shell with a level-proportional fill + terminal nub. While
+ *  charging, a bolt is cut into the icon (drawn in the page colour over the fill). */
 @Composable
-private fun BatteryIndicator(level: Int, charging: Boolean, color: Color) {
+private fun BatteryIndicator(level: Int, charging: Boolean, color: Color, background: Color) {
     val fill = (level.coerceIn(0, 100)) / 100f
-    val fillColor = if (charging) color.copy(alpha = 1f) else color
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -386,8 +389,18 @@ private fun BatteryIndicator(level: Int, charging: Boolean, color: Color) {
                     .fillMaxHeight()
                     .fillMaxWidth(fill)
                     .clip(RoundedCornerShape(1.5.dp))
-                    .background(fillColor),
+                    .background(color),
             )
+            if (charging) {
+                Icon(
+                    imageVector = Icons.Rounded.Bolt,
+                    contentDescription = "Charging",
+                    tint = background,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(10.dp),
+                )
+            }
         }
         Box(
             modifier = Modifier

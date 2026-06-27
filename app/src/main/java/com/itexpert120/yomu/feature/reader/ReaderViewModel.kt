@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
@@ -159,7 +160,13 @@ class ReaderViewModel @Inject constructor(
                 return@launch
             }
             _session.value = opened
-            _state.update { it.copy(loading = false, title = opened.title) }
+            _state.update { it.copy(title = opened.title) }
+            // Keep "Opening…" up until the navigator paints its first page (or an 8s fallback),
+            // instead of dropping it the instant the session is created.
+            launch {
+                withTimeoutOrNull(8_000) { opened.ready.first { it } }
+                _state.update { it.copy(loading = false) }
+            }
             // If timing already started during the loading spinner, re-arm from now so only actual
             // reading time (post-open) is counted.
             if (readingStart != null) readingStart = System.currentTimeMillis()

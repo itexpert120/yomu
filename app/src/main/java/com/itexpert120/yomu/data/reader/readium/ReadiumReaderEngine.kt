@@ -4,10 +4,15 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebView
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -166,6 +171,10 @@ private class ReadiumReaderSession(
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
+    // Flips true on the navigator's first onPageLoaded (real first paint) — the loading gate.
+    private val _ready = MutableStateFlow(false)
+    override val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
@@ -238,7 +247,12 @@ private class ReadiumReaderSession(
     // currentLocator settle, so the page doesn't briefly flash at the narrow default width first.
     private val paginationListener = object : EpubNavigatorFragment.PaginationListener {
         override fun onPageLoaded() {
-            scope.launch { runCatching { navigator?.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
+            // First real paint — release the "Opening…" gate. Idempotent (fires per resource).
+            _ready.value = true
+            scope.launch {
+                runCatching { navigator?.evaluateJavascript(SCROLL_WIDTH_FIX_JS) }
+                applyScrollbars(currentSettings)
+            }
         }
     }
 
@@ -559,6 +573,45 @@ private class ReadiumReaderSession(
         navigator?.submitPreferences(settings.toPreferences())
         // Re-style the injected button so its colours track a live theme/accent change.
         injectNextChapterButton()
+        // Re-toggle/re-theme the native scrollbar (it's scroll-mode only and tracks the text colour).
+        applyScrollbars(settings)
+    }
+
+    // Re-enable the WebView's native vertical scrollbar in scroll mode (Readium force-disables it),
+    // themed to the reading text colour on API 29+. The CSS route can't work — scroll mode is a
+    // native WebView scroll, not a CSS-overflow element. android.webkit.WebView is not a Readium
+    // type, so walking the navigator's view tree keeps the engine boundary intact.
+    private fun applyScrollbars(settings: ReaderSettings) {
+        val root = navigator?.view ?: return
+        val scroll = settings.layout == ReaderLayout.Scroll
+        forEachWebView(root) { wv ->
+            wv.isVerticalScrollBarEnabled = scroll
+            wv.isHorizontalScrollBarEnabled = false
+            wv.isScrollbarFadingEnabled = true
+            wv.scrollBarFadeDuration = 600
+            wv.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val c = settings.textArgb.toInt()
+                wv.verticalScrollbarThumbDrawable = GradientDrawable().apply {
+                    setColor(
+                        android.graphics.Color.argb(
+                            0x66,
+                            (c shr 16) and 0xFF,
+                            (c shr 8) and 0xFF,
+                            c and 0xFF,
+                        ),
+                    )
+                    cornerRadius = 3f * root.resources.displayMetrics.density
+                }
+            }
+        }
+    }
+
+    private fun forEachWebView(v: View, action: (WebView) -> Unit) {
+        when (v) {
+            is WebView -> action(v)
+            is ViewGroup -> for (i in 0 until v.childCount) forEachWebView(v.getChildAt(i), action)
+        }
     }
 
     // True when the current resource has a following resource in reading order.
