@@ -210,6 +210,10 @@ private class ReadiumReaderSession(
     // initial-locator emissions are ignored during this window so they can't clobber saved progress.
     private var restoring = false
 
+    // Per-resource page (position) progressions, sorted, for "pages left in chapter". Computed once,
+    // lazily (publication.positions() is layout-independent, so it works for paged and scroll).
+    private var positionsByHref: Map<String, List<Double>>? = null
+
     // The resource we last injected the scroll-width CSS override into (re-injected per resource).
     private var lastStyledHref: String? = null
 
@@ -261,6 +265,7 @@ private class ReadiumReaderSession(
             _ready.value = true
             scope.launch {
                 runCatching { navigator?.evaluateJavascript(SCROLL_WIDTH_FIX_JS) }
+                runCatching { navigator?.evaluateJavascript(VIEWPORT_FIT_JS) }
                 applyScrollbars(currentSettings)
             }
         }
@@ -432,6 +437,18 @@ private class ReadiumReaderSession(
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
         navigator = nav
         pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
+        // Index page boundaries per resource once (off the main path) for "pages left in chapter".
+        if (positionsByHref == null) {
+            scope.launch {
+                positionsByHref = runCatching {
+                    publication.positions()
+                        .groupBy { it.href.toString() }
+                        .mapValues { (_, locs) ->
+                            locs.mapNotNull { it.locations.progression }.sorted()
+                        }
+                }.getOrNull()
+            }
+        }
         // On a re-host (config change), the fresh fragment opens at the original initialLocator. If we
         // already have a position, restore it so the reader doesn't snap back to an earlier chapter —
         // and ignore the fragment's transient emissions until then so they can't overwrite progress.
@@ -458,9 +475,17 @@ private class ReadiumReaderSession(
                 } else {
                     null
                 }
+                // Page boundaries ahead of the current position within this resource.
+                val pagesLeft = positionsByHref?.get(hrefStr)?.let { positions ->
+                    val prog = locator.locations.progression ?: 0.0
+                    positions.count { it > prog + 1e-6 }
+                }
                 if (hrefStr != lastStyledHref) {
                     lastStyledHref = hrefStr
-                    scope.launch { runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
+                    scope.launch {
+                        runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) }
+                        runCatching { nav.evaluateJavascript(VIEWPORT_FIT_JS) }
+                    }
                     // Append the end-of-chapter "Next chapter" button + arm the rubberband gesture.
                     injectNextChapterButton()
                     injectOverscroll()
@@ -474,6 +499,7 @@ private class ReadiumReaderSession(
                     hasPreviousChapter = index > 0,
                     hasNextChapter = hasNext,
                     bookProgress = bookProgress,
+                    chapterPagesLeft = pagesLeft,
                 )
             }
         }
@@ -1025,6 +1051,26 @@ private class ReadiumReaderSession(
               s.id = id;
               s.textContent = ':root[style*="readium-scroll-on"] body{max-width:none!important}';
               (document.head || document.documentElement).appendChild(s);
+            })();
+        """.trimIndent()
+
+        // Lets EPUB pages render into the display-cutout area (true edge-to-edge). Android WebViews
+        // letterbox below the cutout unless the page's viewport declares viewport-fit=cover; this is the
+        // status-bar-height gap at the top in immersive mode. env(safe-area-inset-*) returns 0 on Android
+        // so no padding is re-added — the page simply fills to the screen edge. Paired with the window's
+        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES set while the reader is open.
+        val VIEWPORT_FIT_JS = """
+            (function() {
+              var m = document.querySelector('meta[name="viewport"]');
+              if (!m) {
+                m = document.createElement('meta');
+                m.setAttribute('name', 'viewport');
+                (document.head || document.documentElement).appendChild(m);
+              }
+              var c = m.getAttribute('content') || '';
+              if (c.indexOf('viewport-fit') === -1) {
+                m.setAttribute('content', c ? c + ', viewport-fit=cover' : 'viewport-fit=cover');
+              }
             })();
         """.trimIndent()
     }

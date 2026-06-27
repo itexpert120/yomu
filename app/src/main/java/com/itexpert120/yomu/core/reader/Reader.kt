@@ -23,6 +23,8 @@ data class ReaderLocator(
     // smoothly-advancing "% through book" display. Unlike the engine's totalProgression it never sits
     // near 0 through a whole early chapter of a many-chapter book.
     val bookProgress: Double? = null,
+    // Pages (content positions) remaining in the current chapter, or null until positions are indexed.
+    val chapterPagesLeft: Int? = null,
 )
 
 /**

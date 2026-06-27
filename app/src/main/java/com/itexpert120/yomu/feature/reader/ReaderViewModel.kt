@@ -47,6 +47,8 @@ data class ReaderUiState(
     val chapterTitle: String? = null,
     val progressPercent: Int? = null,
     val totalProgression: Double = 0.0,
+    // Pages left in the current chapter (null = unknown / not indexed yet).
+    val chapterPagesLeft: Int? = null,
     val coverImagePath: String? = null,
     val settings: ReaderSettings = ReaderSettings(),
     // The bottom chapter-controls bar, toggled by a center tap. The top bar stays static.
@@ -224,6 +226,7 @@ class ReaderViewModel @Inject constructor(
                                 chapterTitle = lastChapterTitle,
                                 totalProgression = progression ?: it.totalProgression,
                                 progressPercent = displayProgress?.let { p -> (p * 100).toInt() },
+                                chapterPagesLeft = locator.chapterPagesLeft,
                                 chapterProgression = locator.chapterProgression
                                     ?: it.chapterProgression,
                                 hasPreviousChapter = locator.hasPreviousChapter,

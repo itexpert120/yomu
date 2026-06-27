@@ -77,7 +77,6 @@ import java.util.Locale
 internal fun ReaderTopBar(
     chapter: String,
     font: ReaderFont,
-    progressPercent: Int?,
     background: Color,
     content: Color,
     isBookmarked: Boolean,
@@ -108,7 +107,7 @@ internal fun ReaderTopBar(
                     )
                     .background(bg),
             )
-            // Sleek, compact bar: chevron back · chapter title (reading font) · progress % · bookmark.
+            // Sleek, compact bar: chevron back · chapter title (reading font) · bookmark.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -126,13 +125,6 @@ internal fun ReaderTopBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (progressPercent != null) {
-                    Text(
-                        text = "$progressPercent%",
-                        color = content.copy(alpha = 0.55f),
-                        style = YomuTheme.type.mono,
-                    )
-                }
                 // Always-visible bookmark toggle: filled when the current page is bookmarked.
                 ReaderBarButton(
                     if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
@@ -148,6 +140,7 @@ internal fun ReaderTopBar(
 @Composable
 internal fun ReaderFooter(
     progressPercent: Int?,
+    chapterPagesLeft: Int?,
     settings: com.itexpert120.yomu.core.model.ReaderSettings,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -180,6 +173,16 @@ internal fun ReaderFooter(
                 if (settings.footerShowClock) {
                     if (settings.footerShowBattery) Spacer(Modifier.width(14.dp))
                     Text(text = time, color = muted, style = YomuTheme.type.mono)
+                }
+                if (settings.footerShowPagesLeft && chapterPagesLeft != null) {
+                    if (settings.footerShowBattery || settings.footerShowClock) {
+                        Spacer(Modifier.width(14.dp))
+                    }
+                    Text(
+                        text = if (chapterPagesLeft == 0) "Last page" else "$chapterPagesLeft pages left",
+                        color = muted,
+                        style = YomuTheme.type.mono,
+                    )
                 }
                 Spacer(Modifier.weight(1f))
                 // Reading progress on the right.

@@ -7,6 +7,7 @@ import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -153,6 +155,22 @@ fun ReaderScreen(
             window?.isStatusBarContrastEnforced = false
             window?.isNavigationBarContrastEnforced = false
         }
+        // Let the window (and the WebView page below) extend into the display cutout. Without this the
+        // WebView letterboxes below the cutout — the status-bar-height gap at the top seen in immersive
+        // mode. enableEdgeToEdge() alone does not set this. Paired with viewport-fit=cover in the page.
+        val prevCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window?.attributes?.layoutInDisplayCutoutMode
+        } else {
+            null
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window?.let {
+                val lp = it.attributes
+                lp.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                it.attributes = lp
+            }
+        }
         // Full-screen reading: hide both system bars (swipe to reveal). The footer already shows the
         // time + battery, so the status bar is redundant; the permanent top bar shows the chapter.
         controller?.let {
@@ -170,6 +188,15 @@ fun ReaderScreen(
                     }
                     prevNavContrast?.let { enforced ->
                         it.isNavigationBarContrastEnforced = enforced
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                prevCutoutMode?.let { mode ->
+                    window?.let { w ->
+                        val lp = w.attributes
+                        lp.layoutInDisplayCutoutMode = mode
+                        w.attributes = lp
                     }
                 }
             }
@@ -300,7 +327,7 @@ fun ReaderScreen(
                     backgroundArgb = state.settings.backgroundArgb,
                     modifier = Modifier
                         .fillMaxSize()
-//                        .padding(top = topInset, bottom = bottomInset),
+                        .padding(top = topInset, bottom = bottomInset),
                 )
 
                 // Until the first page paints, cover the WebView with an opaque "Opening…" scrim.
@@ -326,7 +353,6 @@ fun ReaderScreen(
                     ReaderTopBar(
                         chapter = state.chapterTitle ?: state.title,
                         font = state.settings.font,
-                        progressPercent = state.progressPercent,
                         background = background,
                         content = onBackground,
                         isBookmarked = state.currentPageBookmarked,
@@ -340,19 +366,23 @@ fun ReaderScreen(
                 // Footer, overlays and all sheets only appear once the first page has painted.
                 if (!state.loading) {
                 if (state.settings.showFooter) {
-                    AnimatedVisibility(
-                        visible = chromeShown,
-                        enter = yomuChromeEnter(),
-                        exit = yomuChromeExit(),
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    ) {
-                        ReaderFooter(
-                            progressPercent = state.progressPercent,
-                            settings = state.settings,
-                            onContentHeight = { footerPx = it },
-                            modifier = Modifier.yomuChromeBlur(this),
-                        )
-                    }
+                    // Keep the footer composed even while hidden so its measured height is always known —
+                    // the bottom controls bar reserves that height to sit above it. An unmounted footer
+                    // (immersive mode) reports height 0 on the first reveal and the controls overlap it.
+                    // Fade with alpha instead of mounting/unmounting.
+                    val footerAlpha by animateFloatAsState(
+                        targetValue = if (chromeShown) 1f else 0f,
+                        label = "readerFooterAlpha",
+                    )
+                    ReaderFooter(
+                        progressPercent = state.progressPercent,
+                        chapterPagesLeft = state.chapterPagesLeft,
+                        settings = state.settings,
+                        onContentHeight = { footerPx = it },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .graphicsLayer { alpha = footerAlpha },
+                    )
                 }
 
                 // Extra-dim scrim over the whole reading surface (content + chrome) for going darker

@@ -55,6 +55,8 @@ data class ReaderSettings(
     val footerShowBattery: Boolean = true,
     val footerShowClock: Boolean = true,
     val footerShowProgress: Boolean = true,
+    // "X pages left" in the current chapter, shown in the footer (off by default).
+    val footerShowPagesLeft: Boolean = false,
     // Keep the display awake while reading (on by default).
     val keepScreenOn: Boolean = true,
     // Immersive reading: hide the top bar + footer (with the controls) on a centre tap. Off keeps the
