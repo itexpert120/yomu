@@ -268,17 +268,18 @@ fun ReaderScreen(
     // Footer off: content flows under a fully transparent gesture bar. In scroll mode, reserve a
     // little extra end space so the last lines of a chapter don't sit tight against the footer.
     val baseBottomInset = footerHeight + scrollEndPadding
-    // Immersive mode: the top bar + footer hide with the controls on a centre tap, and the content
-    // reclaims their space (animated). The chrome always stays shown while loading or when immersive
-    // is off (so the title/Back/footer remain visible).
+    // Immersive mode: the page is always full-bleed (edge to edge, under the status-bar area) and the
+    // top bar + footer OVERLAY it — appearing/disappearing on a centre tap without reflowing the text.
+    // Non-immersive keeps the page inset below the bars (their height reserved). The chrome always
+    // stays shown while loading or when immersive is off (title/Back/footer visible).
     val immersive = state.settings.immersiveChrome
     val chromeShown = state.loading || !immersive || state.chapterControlsVisible
     val topInset by animateDpAsState(
-        targetValue = if (chromeShown) baseTopInset else 0.dp,
+        targetValue = if (immersive) 0.dp else baseTopInset,
         label = "readerTopInset",
     )
     val bottomInset by animateDpAsState(
-        targetValue = if (chromeShown) baseBottomInset else 0.dp,
+        targetValue = if (immersive) 0.dp else baseBottomInset,
         label = "readerBottomInset",
     )
     val background = Color(state.settings.backgroundArgb)

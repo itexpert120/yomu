@@ -274,8 +274,8 @@ internal fun BoxScope.ReaderChapterControlsBar(
             ControlButton(Icons.Rounded.Toc, "Browse", content, enabled = true, onBrowse)
             ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
             ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
-            ControlButton(Icons.Rounded.Tune, "Display", content, enabled = true, onDisplay)
             ControlButton(Icons.Rounded.MoreHoriz, "More", content, enabled = true, onMore)
+            ControlButton(Icons.Rounded.Tune, "Display", content, enabled = true, onDisplay)
         }
     }
 }
