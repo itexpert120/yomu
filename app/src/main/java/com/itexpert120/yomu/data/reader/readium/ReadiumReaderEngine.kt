@@ -451,6 +451,13 @@ private class ReadiumReaderSession(
                 val order = publication.readingOrder
                 val index = order.indexOfFirst { it.url().toString() == hrefStr }
                 val hasNext = index in 0 until order.lastIndex
+                // Chapter-weighted whole-book progress: advances smoothly even through an early
+                // chapter of a many-chapter book (where Readium's totalProgression barely moves).
+                val bookProgress = if (index >= 0 && order.isNotEmpty()) {
+                    ((index + (locator.locations.progression ?: 0.0)) / order.size).coerceIn(0.0, 1.0)
+                } else {
+                    null
+                }
                 if (hrefStr != lastStyledHref) {
                     lastStyledHref = hrefStr
                     scope.launch { runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
@@ -466,6 +473,7 @@ private class ReadiumReaderSession(
                     chapterProgression = locator.locations.progression,
                     hasPreviousChapter = index > 0,
                     hasNextChapter = hasNext,
+                    bookProgress = bookProgress,
                 )
             }
         }
@@ -859,8 +867,7 @@ private class ReadiumReaderSession(
               var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext,
                          startY: 0, dragging: false, dir: 0, armed: false, fired: false, svgDir: 0 };
               var THRESHOLD = 96, MAX = 160, DAMP = 0.45;
-              var ARROW_UP = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>';
-              var ARROW_DOWN = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>';
+              var SVGNS = 'http://www.w3.org/2000/svg';
               document.documentElement.style.overscrollBehaviorY = 'contain';
               var hint = document.createElement('div');
               hint.id = 'yomu-overscroll';
@@ -878,6 +885,23 @@ private class ReadiumReaderSession(
               // make a fixed element inside it page-relative (scrolling with the content) instead of
               // pinned to the viewport. As an <html> child it stays anchored to the screen edge.
               document.documentElement.appendChild(hint);
+              // Build the arrow with createElementNS so it renders in EPUB XHTML documents (where an
+              // innerHTML SVG string would land in the wrong namespace and not draw). currentColor
+              // inherits the pill's colour so it flips with the armed state.
+              function setArrow(up) {
+                var svg = document.createElementNS(SVGNS, 'svg');
+                svg.setAttribute('width', '22'); svg.setAttribute('height', '22');
+                svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+                svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2.4');
+                svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+                var p1 = document.createElementNS(SVGNS, 'path');
+                p1.setAttribute('d', up ? 'M12 19V5' : 'M12 5v14');
+                var p2 = document.createElementNS(SVGNS, 'path');
+                p2.setAttribute('d', up ? 'M6 11l6-6 6 6' : 'M6 13l6 6 6-6');
+                svg.appendChild(p1); svg.appendChild(p2);
+                while (hint.firstChild) hint.removeChild(hint.firstChild);
+                hint.appendChild(svg);
+              }
               function sc() { return document.scrollingElement || document.documentElement; }
               function atTop() { return sc().scrollTop <= 0; }
               function atBottom() { return sc().scrollTop + window.innerHeight >= sc().scrollHeight - 1; }
@@ -908,7 +932,7 @@ private class ReadiumReaderSession(
                 document.body.style.transition = 'none';
                 document.body.style.transform = 'translateY(' + (dir < 0 ? pull : -pull) + 'px)';
                 st.armed = pull >= THRESHOLD;
-                if (st.svgDir !== dir) { st.svgDir = dir; hint.innerHTML = dir < 0 ? ARROW_UP : ARROW_DOWN; }
+                if (st.svgDir !== dir) { st.svgDir = dir; setArrow(dir < 0); }
                 if (dir < 0) { hint.style.top = '18px'; hint.style.bottom = 'auto'; }
                 else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
                 var p = Math.min(pull / THRESHOLD, 1);

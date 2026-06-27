@@ -300,7 +300,7 @@ fun ReaderScreen(
                     backgroundArgb = state.settings.backgroundArgb,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = topInset, bottom = bottomInset),
+//                        .padding(top = topInset, bottom = bottomInset),
                 )
 
                 // Until the first page paints, cover the WebView with an opaque "Opening…" scrim.

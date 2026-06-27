@@ -19,6 +19,10 @@ data class ReaderLocator(
     // Whether a previous/next resource (chapter) exists in reading order.
     val hasPreviousChapter: Boolean = false,
     val hasNextChapter: Boolean = false,
+    // Chapter-weighted whole-book progress (chapterIndex + chapterProgression) / chapterCount, for a
+    // smoothly-advancing "% through book" display. Unlike the engine's totalProgression it never sits
+    // near 0 through a whole early chapter of a many-chapter book.
+    val bookProgress: Double? = null,
 )
 
 /**

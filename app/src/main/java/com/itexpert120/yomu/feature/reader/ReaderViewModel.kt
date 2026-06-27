@@ -212,6 +212,9 @@ class ReaderViewModel @Inject constructor(
                     if (locator != null) {
                         lastLocator = locator
                         val progression = locator.totalProgression
+                        // Smooth chapter-weighted book progress for the displayed percent (the engine
+                        // totalProgression barely moves through an early chapter of a long book).
+                        val displayProgress = locator.bookProgress ?: progression
                         // Prefer the TOC chapter title for the current resource; fall back to the
                         // engine's locator title, then the last known one (never the book name).
                         val resolved = locator.href?.let { tocTitles[it] } ?: locator.chapterTitle
@@ -220,7 +223,7 @@ class ReaderViewModel @Inject constructor(
                             it.copy(
                                 chapterTitle = lastChapterTitle,
                                 totalProgression = progression ?: it.totalProgression,
-                                progressPercent = progression?.let { p -> (p * 100).toInt() },
+                                progressPercent = displayProgress?.let { p -> (p * 100).toInt() },
                                 chapterProgression = locator.chapterProgression
                                     ?: it.chapterProgression,
                                 hasPreviousChapter = locator.hasPreviousChapter,
