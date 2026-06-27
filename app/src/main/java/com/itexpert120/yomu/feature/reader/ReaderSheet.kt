@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,6 +63,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
@@ -112,6 +114,9 @@ internal fun ReaderControlsSheet(
                 transitionSpec = { yomuContentSwap() },
                 label = "readerSheetTab",
             ) { current ->
+                // The blur (driven by this content's enter/exit transition) is what makes the swap
+                // read as smooth rather than a plain fade.
+                Box(modifier = Modifier.yomuChromeBlur(this)) {
                 when (current) {
                     SheetTab.Controls -> ControlsTab(
                         state = state,
@@ -132,6 +137,7 @@ internal fun ReaderControlsSheet(
                         onOpenCustomTheme = onOpenCustomTheme,
                         onApplyCustomTheme = onApplyCustomTheme,
                     )
+                }
                 }
             }
         }
