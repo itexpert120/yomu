@@ -202,8 +202,13 @@ private class ReadiumReaderSession(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
 
-    // Latest engine locator, used for reading-order (chapter) navigation.
+    // Latest engine locator, used for reading-order (chapter) navigation and for restoring position
+    // after a re-host (config change) so the reader doesn't snap back to where the book was opened.
     private var lastLocator: Locator? = null
+
+    // True while restoring [lastLocator] into a freshly re-hosted fragment; the fragment's transient
+    // initial-locator emissions are ignored during this window so they can't clobber saved progress.
+    private var restoring = false
 
     // The resource we last injected the scroll-width CSS override into (re-injected per resource).
     private var lastStyledHref: String? = null
@@ -422,8 +427,17 @@ private class ReadiumReaderSession(
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
         navigator = nav
         pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
+        // On a re-host (config change), the fresh fragment opens at the original initialLocator. If we
+        // already have a position, restore it so the reader doesn't snap back to an earlier chapter —
+        // and ignore the fragment's transient emissions until then so they can't overwrite progress.
+        val restoreTarget = lastLocator
+        if (restoreTarget != null) {
+            restoring = true
+            lastStyledHref = null
+        }
         scope.launch {
             nav.currentLocator.collect { locator ->
+                if (restoring) return@collect
                 lastLocator = locator
                 val hrefStr = locator.href.toString()
                 // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
@@ -447,6 +461,14 @@ private class ReadiumReaderSession(
                     hasPreviousChapter = index > 0,
                     hasNextChapter = hasNext,
                 )
+            }
+        }
+        // Restore the latest reading position into the freshly re-hosted fragment, then resume
+        // reporting locator changes (the suppression above kept the transient open-position out).
+        if (restoreTarget != null) {
+            scope.launch {
+                runCatching { nav.go(restoreTarget, animated = false) }
+                restoring = false
             }
         }
         // Tap zones: in PAGED mode the left/right thirds turn pages and the centre toggles the
