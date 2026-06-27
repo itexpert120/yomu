@@ -839,12 +839,17 @@ private class ReadiumReaderSession(
         settings: ReaderSettings,
     ): String {
         val text = settings.textArgb.toInt()
-        val r = (text shr 16) and 0xFF
-        val g = (text shr 8) and 0xFF
-        val b = text and 0xFF
-        val fill = "rgba($r,$g,$b,0.10)"
-        val border = "rgba($r,$g,$b,0.30)"
-        val label = "rgb($r,$g,$b)"
+        val tr = (text shr 16) and 0xFF
+        val tg = (text shr 8) and 0xFF
+        val tb = text and 0xFF
+        val pageBg = settings.backgroundArgb.toInt()
+        val br = (pageBg shr 16) and 0xFF
+        val bgG = (pageBg shr 8) and 0xFF
+        val bb = pageBg and 0xFF
+        val fill = "rgba($tr,$tg,$tb,0.12)"
+        val border = "rgba($tr,$tg,$tb,0.30)"
+        val accent = "rgb($tr,$tg,$tb)"
+        val onAccent = "rgb($br,$bgG,$bb)"
         return """
             (function() {
               if (window.__yomuOverscroll) {
@@ -858,14 +863,19 @@ private class ReadiumReaderSession(
               var hint = document.createElement('div');
               hint.id = 'yomu-overscroll';
               hint.style.cssText = [
-                'position:fixed', 'left:50%', 'transform:translateX(-50%)', 'z-index:2147483647',
-                'padding:8px 18px', 'border-radius:999px',
-                'font:600 14px system-ui,-apple-system,Roboto,sans-serif',
-                'background:$fill', 'border:1px solid $border', 'color:$label',
-                'opacity:0', 'transition:opacity .15s', 'pointer-events:none',
-                '-webkit-tap-highlight-color:transparent'
+                'position:fixed', 'left:50%', 'z-index:2147483647', 'box-sizing:border-box',
+                'width:42px', 'height:42px', 'border-radius:50%',
+                'display:flex', 'align-items:center', 'justify-content:center',
+                'font:600 22px system-ui,-apple-system,Roboto,sans-serif', 'line-height:1',
+                'background:$fill', 'border:1px solid $border', 'color:$accent',
+                'opacity:0', 'transform:translateX(-50%) scale(0.7)',
+                'transition:opacity .12s ease, background .12s ease, color .12s ease',
+                'pointer-events:none', '-webkit-tap-highlight-color:transparent'
               ].join(';');
-              document.body.appendChild(hint);
+              // Appended to <html>, NOT <body>: the body is transformed during the pull, which would
+              // make a fixed element inside it page-relative (scrolling with the content) instead of
+              // pinned to the viewport. As an <html> child it stays anchored to the screen edge.
+              document.documentElement.appendChild(hint);
               function sc() { return document.scrollingElement || document.documentElement; }
               function atTop() { return sc().scrollTop <= 0; }
               function atBottom() { return sc().scrollTop + window.innerHeight >= sc().scrollHeight - 1; }
@@ -874,6 +884,9 @@ private class ReadiumReaderSession(
                 document.body.style.transition = 'transform .22s ease-out';
                 document.body.style.transform = '';
                 hint.style.opacity = 0;
+                hint.style.background = '$fill';
+                hint.style.color = '$accent';
+                hint.style.transform = 'translateX(-50%) scale(0.7)';
                 st.dragging = false; st.dir = 0; st.armed = false;
               }
               window.addEventListener('touchstart', function(e) {
@@ -893,12 +906,20 @@ private class ReadiumReaderSession(
                 document.body.style.transition = 'none';
                 document.body.style.transform = 'translateY(' + (dir < 0 ? pull : -pull) + 'px)';
                 st.armed = pull >= THRESHOLD;
-                hint.textContent = dir < 0
-                  ? (st.armed ? 'Release for previous chapter' : 'Pull for previous chapter')
-                  : (st.armed ? 'Release for next chapter' : 'Pull for next chapter');
-                if (dir < 0) { hint.style.top = '16px'; hint.style.bottom = 'auto'; }
-                else { hint.style.bottom = '16px'; hint.style.top = 'auto'; }
-                hint.style.opacity = Math.min(pull / THRESHOLD, 1);
+                hint.textContent = dir < 0 ? '↑' : '↓';
+                if (dir < 0) { hint.style.top = '18px'; hint.style.bottom = 'auto'; }
+                else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
+                var p = Math.min(pull / THRESHOLD, 1);
+                hint.style.opacity = p;
+                if (st.armed) {
+                  hint.style.background = '$accent';
+                  hint.style.color = '$onAccent';
+                  hint.style.transform = 'translateX(-50%) scale(1)';
+                } else {
+                  hint.style.background = '$fill';
+                  hint.style.color = '$accent';
+                  hint.style.transform = 'translateX(-50%) scale(' + (0.7 + 0.3 * p) + ')';
+                }
               }, { capture: true, passive: false });
               window.addEventListener('touchend', function() {
                 if (st.dir && st.armed && !st.fired) {
