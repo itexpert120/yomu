@@ -10,11 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -82,51 +79,6 @@ internal fun HighlightEditSheet(
                     modifier = Modifier.size(18.dp),
                 )
                 Text(text = "Delete", color = YomuTheme.colors.danger, style = YomuTheme.type.control)
-            }
-        }
-    }
-}
-
-/** List of this book's highlights. Tap to jump to the position; per-row delete. */
-@Composable
-internal fun HighlightsSheet(
-    visible: Boolean,
-    highlights: List<ReaderHighlight>,
-    onJump: (String) -> Unit,
-    onDelete: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss, scrollable = false) { _ ->
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Highlights",
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body,
-            )
-            if (highlights.isEmpty()) {
-                Text(
-                    text = "No highlights yet. Select text and tap Highlight.",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 440.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(highlights, key = { it.id }) { item ->
-                        HighlightRow(
-                            highlight = item,
-                            onClick = { onJump(item.locatorJson) },
-                            onDelete = { onDelete(item.id) },
-                        )
-                    }
-                }
             }
         }
     }

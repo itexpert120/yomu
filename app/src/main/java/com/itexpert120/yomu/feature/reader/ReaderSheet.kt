@@ -11,19 +11,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,11 +27,9 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -487,85 +480,6 @@ private fun SavedThemeRow(theme: CustomReaderTheme, onApply: () -> Unit, onDelet
                 tint = YomuTheme.colors.textMuted,
                 modifier = Modifier.size(18.dp),
             )
-        }
-    }
-}
-
-/**
- * In-reader table of contents in its own sheet: a height-capped lazy list (TOCs can be thousands of
- * entries) of jumpable chapters; the current chapter is highlighted, tapping one navigates there.
- */
-@Composable
-internal fun ReaderTocSheet(
-    visible: Boolean,
-    toc: List<ReaderTocItem>,
-    loading: Boolean,
-    currentHref: String?,
-    onDismiss: () -> Unit,
-    onJump: (String) -> Unit,
-) {
-    // Only entries with a resolvable position are jumpable.
-    val entries = remember(toc) { toc.filter { it.locatorJson != null } }
-    val listState = rememberLazyListState()
-    // On open, jump the list to the chapter currently being read so the user lands in context.
-    LaunchedEffect(visible, entries, currentHref) {
-        if (visible) {
-            val index = entries.indexOfFirst { it.id == currentHref }
-            if (index >= 0) listState.scrollToItem(index)
-        }
-    }
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss, scrollable = false) { _ ->
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Contents",
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body
-            )
-            if (loading) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(
-                        color = YomuTheme.colors.accent,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = "Building contents…",
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.body,
-                    )
-                }
-            } else if (entries.isEmpty()) {
-                Text(
-                    text = "No table of contents.",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 440.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    items(entries) { item ->
-                        TocSheetRow(
-                            item = item,
-                            current = item.id == currentHref,
-                            onClick = { item.locatorJson?.let(onJump) },
-                        )
-                    }
-                }
-            }
         }
     }
 }

@@ -7,11 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,55 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 
-/** List of this book's bookmarks, in reading-position order. Tap to jump; per-row delete. */
-@Composable
-internal fun BookmarksSheet(
-    visible: Boolean,
-    bookmarks: List<ReaderBookmark>,
-    onJump: (String) -> Unit,
-    onDelete: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss, scrollable = false) { _ ->
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Bookmarks",
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body,
-            )
-            if (bookmarks.isEmpty()) {
-                Text(
-                    text = "No bookmarks yet. Tap the bookmark icon to save your place.",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 440.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(bookmarks, key = { it.id }) { item ->
-                        BookmarkRow(
-                            bookmark = item,
-                            onClick = { onJump(item.locatorJson) },
-                            onDelete = { onDelete(item.id) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
+/** A single bookmark row (jump on tap, delete on the trailing button). Used by the Browse sheet. */
 @Composable
 internal fun BookmarkRow(
     bookmark: ReaderBookmark,
