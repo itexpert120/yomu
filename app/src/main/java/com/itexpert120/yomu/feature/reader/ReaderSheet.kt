@@ -216,38 +216,15 @@ private fun ControlsTab(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        // Footer: quick per-book toggles for the bottom status strip.
+        // Footer + screen toggles, rendered by the SAME shared composable as the global Reading
+        // Defaults (ReaderChromeToggles) — a single renderer so the two surfaces can never drift out
+        // of sync and no option is missed in one place but not the other.
         Text(
             text = "Footer",
             color = YomuTheme.colors.textMuted,
             style = YomuTheme.type.caption,
         )
-        YomuSettingRow(title = "Show footer") {
-            YomuTogglePill(
-                checked = s.showFooter,
-                onCheckedChange = { onUpdateSettings(s.copy(showFooter = it)) },
-            )
-        }
-        if (s.showFooter) {
-            YomuSettingRow(title = "Clock") {
-                YomuTogglePill(
-                    checked = s.footerShowClock,
-                    onCheckedChange = { onUpdateSettings(s.copy(footerShowClock = it)) },
-                )
-            }
-            YomuSettingRow(title = "Battery") {
-                YomuTogglePill(
-                    checked = s.footerShowBattery,
-                    onCheckedChange = { onUpdateSettings(s.copy(footerShowBattery = it)) },
-                )
-            }
-            YomuSettingRow(title = "Progress") {
-                YomuTogglePill(
-                    checked = s.footerShowProgress,
-                    onCheckedChange = { onUpdateSettings(s.copy(footerShowProgress = it)) },
-                )
-            }
-        }
+        ReaderChromeToggles(settings = s, onUpdateSettings = onUpdateSettings)
     }
 }
 

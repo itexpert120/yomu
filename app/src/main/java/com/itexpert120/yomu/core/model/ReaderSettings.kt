@@ -55,6 +55,8 @@ data class ReaderSettings(
     val footerShowBattery: Boolean = true,
     val footerShowClock: Boolean = true,
     val footerShowProgress: Boolean = true,
+    // Keep the display awake while reading (on by default).
+    val keepScreenOn: Boolean = true,
 ) {
     /** Page background for the active theme (ARGB). Shared by the engine and the reader chrome
      *  so the area behind the system bars matches the page with no seam. Dark is a soft, non-OLED grey. */

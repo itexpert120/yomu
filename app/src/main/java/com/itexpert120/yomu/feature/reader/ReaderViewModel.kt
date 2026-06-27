@@ -148,6 +148,14 @@ class ReaderViewModel @Inject constructor(
                 target?.let { settingsRepository.effective(BookId(bookId)).first() }
                     ?: ReaderSettings()
             _state.update { it.copy(settings = initialSettings) }
+            // Prime the chapter-title lookup from the in-memory TOC cache (present if this book was
+            // opened earlier this session) so the top bar shows the correct chapter title on the very
+            // first frame instead of updating a moment after the reader opens.
+            repository.cachedTableOfContents(BookId(bookId))?.let { cached ->
+                val map = LinkedHashMap<String, String>()
+                cached.forEach { map.putIfAbsent(it.id, it.title) }
+                tocTitles = map
+            }
             val opened = target?.let {
                 engine.open(
                     filePath = it.storagePath,
@@ -179,7 +187,17 @@ class ReaderViewModel @Inject constructor(
                 val map = LinkedHashMap<String, String>()
                 items.forEach { map.putIfAbsent(it.id, it.title) }
                 tocTitles = map
-                _state.update { it.copy(toc = items, tocLoading = false) }
+                // If the locator already emitted before the TOC finished loading (first-ever open),
+                // correct the chapter title now instead of waiting for the next page change.
+                val resolved = currentHref?.let { map[it] }
+                if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
+                _state.update {
+                    it.copy(
+                        toc = items,
+                        tocLoading = false,
+                        chapterTitle = lastChapterTitle ?: it.chapterTitle,
+                    )
+                }
             }
 
             // Resolve effective settings (per-book override or global) and keep them applied live.

@@ -96,9 +96,9 @@ fun ReaderScreen(
     var brightnessPreview by remember { mutableStateOf<Float?>(null) }
     var dimPreview by remember { mutableStateOf<Float?>(null) }
 
-    // Keep the display awake while the reader is open; released when leaving the reader.
-    DisposableEffect(Unit) {
-        view.keepScreenOn = true
+    // Keep the display awake while reading, per the user's setting; released when leaving the reader.
+    DisposableEffect(state.settings.keepScreenOn) {
+        view.keepScreenOn = state.settings.keepScreenOn
         onDispose { view.keepScreenOn = false }
     }
 

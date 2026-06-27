@@ -257,6 +257,12 @@ internal fun ReaderChromeToggles(
             enabled = settings.showFooter,
         )
     }
+    YomuSettingRow(title = "Keep screen on") {
+        YomuTogglePill(
+            checked = settings.keepScreenOn,
+            onCheckedChange = { onUpdateSettings(settings.copy(keepScreenOn = it)) },
+        )
+    }
 }
 
 /**
