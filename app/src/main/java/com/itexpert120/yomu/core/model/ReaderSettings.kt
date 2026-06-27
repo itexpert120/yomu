@@ -57,6 +57,9 @@ data class ReaderSettings(
     val footerShowProgress: Boolean = true,
     // Keep the display awake while reading (on by default).
     val keepScreenOn: Boolean = true,
+    // Immersive reading: hide the top bar + footer (with the controls) on a centre tap. Off keeps the
+    // top bar visible at all times.
+    val immersiveChrome: Boolean = false,
 ) {
     /** Page background for the active theme (ARGB). Shared by the engine and the reader chrome
      *  so the area behind the system bars matches the page with no seam. Dark is a soft, non-OLED grey. */

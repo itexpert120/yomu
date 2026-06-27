@@ -31,7 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
@@ -57,11 +57,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import kotlinx.coroutines.delay
@@ -73,6 +76,8 @@ import java.util.Locale
 @Composable
 internal fun ReaderTopBar(
     chapter: String,
+    font: ReaderFont,
+    progressPercent: Int?,
     background: Color,
     content: Color,
     isBookmarked: Boolean,
@@ -82,6 +87,11 @@ internal fun ReaderTopBar(
     modifier: Modifier = Modifier,
 ) {
     val bg = background
+    // Render the chapter title in the active reading font for a true reader-first feel.
+    val assets = LocalContext.current.assets
+    val readerFamily = remember(font) {
+        FontFamily(Font(path = "fonts/${font.name}-Regular.ttf", assetManager = assets))
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         // The navigator draws edge-to-edge, so inset content by the full solid bar (status backdrop
         // + the controls row); the fade below is excluded so it bleeds over the page.
@@ -98,24 +108,31 @@ internal fun ReaderTopBar(
                     )
                     .background(bg),
             )
-            // Sleek, compact bar (always present).
+            // Sleek, compact bar: chevron back · chapter title (reading font) · progress % · bookmark.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(bg)
-                    .padding(bottom = 8.dp, start = 16.dp, end = 16.dp),
+                    .padding(bottom = 8.dp, start = 12.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ReaderBarButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", content, onBack)
+                ReaderBarButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Back", content, onBack)
                 Text(
                     text = chapter,
                     color = content,
-                    style = YomuTheme.type.caption,
+                    style = YomuTheme.type.body.copy(fontFamily = readerFamily),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (progressPercent != null) {
+                    Text(
+                        text = "$progressPercent%",
+                        color = content.copy(alpha = 0.55f),
+                        style = YomuTheme.type.mono,
+                    )
+                }
                 // Always-visible bookmark toggle: filled when the current page is bookmarked.
                 ReaderBarButton(
                     if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,

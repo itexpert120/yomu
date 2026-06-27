@@ -857,8 +857,10 @@ private class ReadiumReaderSession(
                 return;
               }
               var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext,
-                         startY: 0, dragging: false, dir: 0, armed: false, fired: false };
+                         startY: 0, dragging: false, dir: 0, armed: false, fired: false, svgDir: 0 };
               var THRESHOLD = 96, MAX = 160, DAMP = 0.45;
+              var ARROW_UP = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>';
+              var ARROW_DOWN = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>';
               document.documentElement.style.overscrollBehaviorY = 'contain';
               var hint = document.createElement('div');
               hint.id = 'yomu-overscroll';
@@ -887,7 +889,7 @@ private class ReadiumReaderSession(
                 hint.style.background = '$fill';
                 hint.style.color = '$accent';
                 hint.style.transform = 'translateX(-50%) scale(0.7)';
-                st.dragging = false; st.dir = 0; st.armed = false;
+                st.dragging = false; st.dir = 0; st.armed = false; st.svgDir = 0;
               }
               window.addEventListener('touchstart', function(e) {
                 if (!st.enabled || e.touches.length !== 1 || hasSel()) { st.dragging = false; return; }
@@ -906,7 +908,7 @@ private class ReadiumReaderSession(
                 document.body.style.transition = 'none';
                 document.body.style.transform = 'translateY(' + (dir < 0 ? pull : -pull) + 'px)';
                 st.armed = pull >= THRESHOLD;
-                hint.textContent = dir < 0 ? '↑' : '↓';
+                if (st.svgDir !== dir) { st.svgDir = dir; hint.innerHTML = dir < 0 ? ARROW_UP : ARROW_DOWN; }
                 if (dir < 0) { hint.style.top = '18px'; hint.style.bottom = 'auto'; }
                 else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
                 var p = Math.min(pull / THRESHOLD, 1);

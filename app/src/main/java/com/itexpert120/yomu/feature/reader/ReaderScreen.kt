@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.view.WindowManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -38,6 +40,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
+import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -246,7 +251,7 @@ fun ReaderScreen(
     val statusTop = WindowInsets.statusBarsIgnoringVisibility
         .asPaddingValues()
         .calculateTopPadding()
-    val topInset = if (state.settings.layout == ReaderLayout.Scroll && compactPortrait) {
+    val baseTopInset = if (state.settings.layout == ReaderLayout.Scroll && compactPortrait) {
         (fullTop - statusTop).coerceAtLeast(0.dp)
     } else {
         fullTop
@@ -262,7 +267,20 @@ fun ReaderScreen(
         }
     // Footer off: content flows under a fully transparent gesture bar. In scroll mode, reserve a
     // little extra end space so the last lines of a chapter don't sit tight against the footer.
-    val bottomInset = footerHeight + scrollEndPadding
+    val baseBottomInset = footerHeight + scrollEndPadding
+    // Immersive mode: the top bar + footer hide with the controls on a centre tap, and the content
+    // reclaims their space (animated). The chrome always stays shown while loading or when immersive
+    // is off (so the title/Back/footer remain visible).
+    val immersive = state.settings.immersiveChrome
+    val chromeShown = state.loading || !immersive || state.chapterControlsVisible
+    val topInset by animateDpAsState(
+        targetValue = if (chromeShown) baseTopInset else 0.dp,
+        label = "readerTopInset",
+    )
+    val bottomInset by animateDpAsState(
+        targetValue = if (chromeShown) baseBottomInset else 0.dp,
+        label = "readerBottomInset",
+    )
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
 
@@ -296,27 +314,44 @@ fun ReaderScreen(
                     }
                 }
 
-                // Static top bar: back + chapter title + bookmark toggle, always visible.
-                ReaderTopBar(
-                    chapter = state.chapterTitle ?: state.title,
-                    background = background,
-                    content = onBackground,
-                    isBookmarked = state.currentPageBookmarked,
-                    onBack = onBack,
-                    onToggleBookmark = onToggleBookmark,
-                    onContentHeight = { topBarPx = it },
+                // Top bar: chevron · chapter title (reading font) · progress % · bookmark. Hidden with
+                // the rest of the chrome in immersive mode; always shown otherwise.
+                AnimatedVisibility(
+                    visible = chromeShown,
+                    enter = yomuChromeEnter(fromBottom = false),
+                    exit = yomuChromeExit(toBottom = false),
                     modifier = Modifier.align(Alignment.TopCenter),
-                )
+                ) {
+                    ReaderTopBar(
+                        chapter = state.chapterTitle ?: state.title,
+                        font = state.settings.font,
+                        progressPercent = state.progressPercent,
+                        background = background,
+                        content = onBackground,
+                        isBookmarked = state.currentPageBookmarked,
+                        onBack = onBack,
+                        onToggleBookmark = onToggleBookmark,
+                        onContentHeight = { topBarPx = it },
+                        modifier = Modifier.yomuChromeBlur(this),
+                    )
+                }
 
                 // Footer, overlays and all sheets only appear once the first page has painted.
                 if (!state.loading) {
                 if (state.settings.showFooter) {
-                    ReaderFooter(
-                        progressPercent = state.progressPercent,
-                        settings = state.settings,
-                        onContentHeight = { footerPx = it },
+                    AnimatedVisibility(
+                        visible = chromeShown,
+                        enter = yomuChromeEnter(),
+                        exit = yomuChromeExit(),
                         modifier = Modifier.align(Alignment.BottomCenter),
-                    )
+                    ) {
+                        ReaderFooter(
+                            progressPercent = state.progressPercent,
+                            settings = state.settings,
+                            onContentHeight = { footerPx = it },
+                            modifier = Modifier.yomuChromeBlur(this),
+                        )
+                    }
                 }
 
                 // Extra-dim scrim over the whole reading surface (content + chrome) for going darker

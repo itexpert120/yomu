@@ -263,6 +263,15 @@ internal fun ReaderChromeToggles(
             onCheckedChange = { onUpdateSettings(settings.copy(keepScreenOn = it)) },
         )
     }
+    YomuSettingRow(
+        title = "Immersive",
+        subtitle = "Hide the bars on tap for a full-screen page",
+    ) {
+        YomuTogglePill(
+            checked = settings.immersiveChrome,
+            onCheckedChange = { onUpdateSettings(settings.copy(immersiveChrome = it)) },
+        )
+    }
 }
 
 /**
