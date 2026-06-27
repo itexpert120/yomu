@@ -2,7 +2,6 @@ package com.itexpert120.yomu.feature.stats
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +36,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.DailyReading
 import com.itexpert120.yomu.core.model.HeatmapDay
 import com.itexpert120.yomu.core.model.HourlyReading
@@ -132,22 +132,31 @@ private fun HeroCard(stats: ReadingStats) {
             color = YomuTheme.colors.textPrimary,
             style = YomuTheme.type.display,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (stats.currentStreakDays > 0) {
-                Text(
-                    text = "🔥 ${stats.currentStreakDays}-day streak",
-                    color = YomuTheme.colors.accent,
-                    style = YomuTheme.type.body,
-                )
+                HeroStatChip(text = "${stats.currentStreakDays}-day streak", accent = true)
             }
             if (stats.secondsLast7Days > 0L) {
-                Text(
-                    text = "${formatReadingTime(stats.secondsLast7Days)} this week",
-                    color = YomuTheme.colors.textSecondary,
-                    style = YomuTheme.type.body,
-                )
+                HeroStatChip(text = "${formatReadingTime(stats.secondsLast7Days)} this week")
             }
         }
+    }
+}
+
+/** A compact supporting stat under the hero number; accent variant highlights the active streak. */
+@Composable
+private fun HeroStatChip(text: String, accent: Boolean = false) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(YomuTheme.radius.pill))
+            .background(if (accent) YomuTheme.colors.accentSoft else YomuTheme.colors.surfaceSunken)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = text,
+            color = if (accent) YomuTheme.colors.accent else YomuTheme.colors.textSecondary,
+            style = YomuTheme.type.caption,
+        )
     }
 }
 
@@ -196,6 +205,7 @@ private fun TrendSection(
 
 @Composable
 private fun ColumnScope.StatTileGrid(stats: ReadingStats) {
+    SectionLabel("Overview")
     val tiles = buildList {
         add("${stats.longestStreakDays}" to "Longest streak")
         add("${stats.daysRead}" to "Days read")
@@ -226,7 +236,6 @@ private fun RowScope.StatTile(value: String, label: String) {
             .weight(1f)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -380,8 +389,8 @@ private fun ColumnScope.HistorySection(history: List<ReadingSessionItem>) {
             modifier = Modifier
                 .padding(top = 12.dp)
                 .align(Alignment.CenterHorizontally)
+                .yomuPressable(onClick = { visibleCount += HISTORY_PAGE })
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .clickable { visibleCount += HISTORY_PAGE }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }

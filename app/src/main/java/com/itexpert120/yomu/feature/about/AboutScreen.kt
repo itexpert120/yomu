@@ -36,13 +36,16 @@ fun AboutScreen(onBack: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .clip(RoundedCornerShape(YomuTheme.radius.lg))
+                .background(YomuTheme.colors.surfaceRaised)
+                .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
+                .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(84.dp)
                     .clip(RoundedCornerShape(YomuTheme.radius.lg))
                     .background(Color(0xFF050505))
                     .border(
@@ -56,10 +59,10 @@ fun AboutScreen(onBack: () -> Unit) {
                     painter = painterResource(R.drawable.ic_yomu_mark),
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(72.dp),
+                    modifier = Modifier.size(64.dp),
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Yomu",
                     color = YomuTheme.colors.textPrimary,
@@ -70,11 +73,18 @@ fun AboutScreen(onBack: () -> Unit) {
                     color = YomuTheme.colors.textSecondary,
                     style = YomuTheme.type.body,
                 )
-                Text(
-                    text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.mono,
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                        .background(YomuTheme.colors.surfaceSunken)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        color = YomuTheme.colors.textMuted,
+                        style = YomuTheme.type.mono,
+                    )
+                }
             }
         }
 

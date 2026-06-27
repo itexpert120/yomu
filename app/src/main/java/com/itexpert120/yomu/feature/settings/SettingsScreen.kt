@@ -2,14 +2,14 @@ package com.itexpert120.yomu.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,6 +48,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.AccentColor
 import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ThemePreference
@@ -143,23 +144,25 @@ fun SettingsScreen(
             }
         }
 
-        NavigationRow(
-            icon = rememberVectorPainter(Icons.Rounded.Tune),
-            label = "Reading defaults",
-            onClick = onOpenReaderDefaults,
-        )
-
-        NavigationRow(
-            icon = rememberVectorPainter(Icons.Rounded.Insights),
-            label = "Statistics",
-            onClick = onOpenStats,
-        )
-
-        NavigationRow(
-            icon = painterResource(R.drawable.ic_yomu_mark),
-            label = "About Yomu",
-            onClick = onOpenAbout,
-        )
+        NavigationGroup {
+            NavigationRow(
+                icon = rememberVectorPainter(Icons.Rounded.Tune),
+                label = "Reading defaults",
+                onClick = onOpenReaderDefaults,
+            )
+            NavigationDivider()
+            NavigationRow(
+                icon = rememberVectorPainter(Icons.Rounded.Insights),
+                label = "Statistics",
+                onClick = onOpenStats,
+            )
+            NavigationDivider()
+            NavigationRow(
+                icon = painterResource(R.drawable.ic_yomu_mark),
+                label = "About Yomu",
+                onClick = onOpenAbout,
+            )
+        }
 
         Text(
             text = "Yomu v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
@@ -197,13 +200,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp)
+                .yomuPressable(onClick = dismiss)
                 .clip(RoundedCornerShape(YomuTheme.radius.md))
                 .background(YomuTheme.colors.surface)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = dismiss,
-                )
                 .padding(vertical = 14.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -234,17 +233,13 @@ private fun ThemeOptionTile(
     val colors = YomuTheme.colors
     Column(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (selected) colors.surfaceSunken else colors.surfaceRaised)
             .border(
                 1.dp,
                 if (selected) colors.textPrimary else colors.border,
                 RoundedCornerShape(YomuTheme.radius.md),
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
             )
             .padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -264,28 +259,55 @@ private fun ThemeOptionTile(
     }
 }
 
+/** A single rounded card holding the settings navigation rows, separated by hairline dividers. */
+@Composable
+private fun NavigationGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YomuTheme.radius.lg))
+            .background(YomuTheme.colors.surfaceRaised)
+            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg)),
+        content = content,
+    )
+}
+
+/** Full-width hairline divider between navigation rows. */
+@Composable
+private fun NavigationDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(YomuTheme.colors.border.copy(alpha = 0.6f)),
+    )
+}
+
 @Composable
 private fun NavigationRow(icon: Painter, label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.surfaceRaised)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .yomuPressable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Icon(
-            painter = icon,
-            contentDescription = null,
-            tint = YomuTheme.colors.textSecondary,
-            modifier = Modifier.size(20.dp),
-        )
+        // Leading icon sits in a soft chip — a small, deliberate touch that reads more crafted.
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(YomuTheme.radius.sm))
+                .background(YomuTheme.colors.surfaceSunken),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = icon,
+                contentDescription = null,
+                tint = YomuTheme.colors.textSecondary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
         Text(
             text = label,
             color = YomuTheme.colors.textPrimary,

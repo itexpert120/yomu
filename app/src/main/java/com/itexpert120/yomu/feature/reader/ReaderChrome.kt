@@ -36,8 +36,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Highlight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Toc
@@ -73,7 +77,9 @@ internal fun ReaderTopBar(
     chapter: String,
     background: Color,
     content: Color,
+    isBookmarked: Boolean,
     onBack: () -> Unit,
+    onToggleBookmark: () -> Unit,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -111,6 +117,13 @@ internal fun ReaderTopBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
+                )
+                // Always-visible bookmark toggle: filled when the current page is bookmarked.
+                ReaderBarButton(
+                    if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                    if (isBookmarked) "Remove bookmark" else "Add bookmark",
+                    content,
+                    onToggleBookmark,
                 )
             }
         }
@@ -216,7 +229,9 @@ internal fun BoxScope.ReaderChapterControlsBar(
     onToc: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onBookmarks: () -> Unit,
     onHighlights: () -> Unit,
+    onSearch: () -> Unit,
     onSettings: () -> Unit,
 ) {
     AnimatedVisibility(
@@ -243,7 +258,9 @@ internal fun BoxScope.ReaderChapterControlsBar(
             ControlButton(Icons.Rounded.Toc, "Contents", content, enabled = true, onToc)
             ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
             ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
+            ControlButton(Icons.Rounded.Bookmarks, "Bookmarks", content, enabled = true, onBookmarks)
             ControlButton(Icons.Rounded.Highlight, "Highlights", content, enabled = true, onHighlights)
+            ControlButton(Icons.Rounded.Search, "Search", content, enabled = true, onSearch)
             ControlButton(Icons.Rounded.Tune, "Settings", content, enabled = true, onSettings)
         }
     }

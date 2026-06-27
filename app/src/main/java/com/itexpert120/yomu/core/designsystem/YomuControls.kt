@@ -68,14 +68,10 @@ fun YomuButton(
     }
     Box(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
             .background(background)
             .border(1.dp, border, RoundedCornerShape(YomuTheme.radius.pill))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -95,17 +91,13 @@ fun YomuChip(
     val colors = YomuTheme.colors
     Box(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
             .background(if (selected) colors.textPrimary else colors.surfaceRaised)
             .border(
                 1.dp,
                 if (selected) colors.textPrimary else colors.border,
                 RoundedCornerShape(YomuTheme.radius.pill)
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
             )
             .padding(horizontal = 13.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
@@ -275,15 +267,11 @@ fun YomuRangeRow(
 private fun YomuStepButton(text: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
+            .yomuPressable(onClick = onClick)
             .size(32.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
+            .border(1.dp, YomuTheme.colors.border, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(text = text, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.control)
@@ -301,17 +289,13 @@ fun YomuColorSwatch(
     val colors = YomuTheme.colors
     Column(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (selected) colors.surfaceSunken else colors.surfaceRaised)
             .border(
                 1.dp,
                 if (selected) colors.textPrimary else colors.border,
                 RoundedCornerShape(YomuTheme.radius.md)
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
             )
             .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

@@ -10,12 +10,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -85,6 +81,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.ReadingState
 import com.itexpert120.yomu.feature.library.ConfirmRemoveDialog
 import java.io.File
@@ -362,14 +359,14 @@ private fun BookHeader(
     onMarkUnread: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             DetailCover(book, onClick = onCoverClick, modifier = Modifier.width(116.dp))
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(top = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
                     text = book.title,
@@ -438,13 +435,13 @@ private fun ReadingTimeline(book: BookDetailsUi) {
         book.finishedDate?.let { add("Finished" to it) }
     }
     if (rows.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = "Timeline",
             color = YomuTheme.colors.textPrimary,
             style = YomuTheme.type.section,
         )
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             rows.forEach { (label, value) -> TimelineRow(label, value) }
         }
     }
@@ -481,7 +478,7 @@ private fun ExpandableBookDescription(description: String) {
 
     Column(
         modifier = Modifier.animateContentSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = description,
@@ -496,12 +493,8 @@ private fun ExpandableBookDescription(description: String) {
         if (expandable) {
             Row(
                 modifier = Modifier
+                    .yomuPressable(onClick = { expanded = !expanded })
                     .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { expanded = !expanded },
-                    )
                     .padding(horizontal = 2.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -541,7 +534,7 @@ private fun DetailActionBar(
             .clip(RoundedCornerShape(YomuTheme.radius.lg))
             .background(YomuTheme.colors.surfaceRaised)
             .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
-            .padding(vertical = 10.dp, horizontal = 4.dp),
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         ActionItem(Icons.Rounded.Edit, "Edit", onEdit)
@@ -566,13 +559,9 @@ private fun RowScope.ActionItem(
     Column(
         modifier = Modifier
             .weight(1f)
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(vertical = 8.dp),
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -595,13 +584,9 @@ private fun FloatingReadButton(
     val onAccent = YomuTheme.colors.appBackground
     Row(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.lg))
             .background(YomuTheme.colors.accent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -690,7 +675,6 @@ private fun ContentsHeader(toc: TocUiState, onTocSortChange: (TocSortMode) -> Un
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TocRow(
     entry: TocEntryUi,
@@ -703,20 +687,15 @@ private fun TocRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .yomuPressable(onClick = onTap, onLongClick = onLongPress)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(background)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onTap,
-                onLongClick = onLongPress,
-            )
             // Indent nested entries so the hierarchy reads at a glance in reading order.
             .padding(
                 start = 12.dp + (entry.depth * 16).dp,
                 end = 6.dp,
-                top = 12.dp,
-                bottom = 12.dp
+                top = 9.dp,
+                bottom = 9.dp
             ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -764,13 +743,9 @@ private fun TocRow(
 private fun ReadToggleButton(read: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
+            .yomuPressable(onClick = onClick)
             .size(36.dp)
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
+            .clip(CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -863,13 +838,8 @@ private fun RowScope.SelectionAction(
     Column(
         modifier = Modifier
             .weight(1f)
+            .yomuPressable(onClick = onClick, enabled = enabled)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            )
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -977,20 +947,17 @@ private fun DetailProgress(progress: Float) {
 private fun DetailCover(book: BookDetailsUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val clickable = book.coverImagePath != null
     val coverModifier = modifier
+        .then(
+            if (clickable) Modifier.yomuPressable(onClick = onClick) else Modifier,
+        )
         .aspectRatio(1f / 1.6f)
         .clip(RoundedCornerShape(YomuTheme.radius.md))
-        .then(
-            if (clickable) {
-                Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick,
-                )
-            } else {
-                Modifier
-            },
-        )
         .background(Brush.verticalGradient(book.coverColors))
+        .border(
+            1.dp,
+            YomuTheme.colors.border.copy(alpha = 0.35f),
+            RoundedCornerShape(YomuTheme.radius.md),
+        )
 
     if (book.coverImagePath != null) {
         AsyncImage(

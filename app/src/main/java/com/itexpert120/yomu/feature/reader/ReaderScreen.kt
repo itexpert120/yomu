@@ -77,7 +77,18 @@ fun ReaderScreen(
     onJumpToHighlight: (String) -> Unit,
     onDeleteHighlight: () -> Unit,
     onDeleteHighlightById: (String) -> Unit,
+    onSetHighlightColor: (Int) -> Unit,
     onCloseEditHighlight: () -> Unit,
+    onToggleBookmark: () -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onCloseBookmarks: () -> Unit,
+    onJumpToBookmark: (String) -> Unit,
+    onDeleteBookmarkById: (String) -> Unit,
+    onOpenSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onSubmitSearch: () -> Unit,
+    onJumpToSearchResult: (String) -> Unit,
     onReadingResumed: () -> Unit,
     onReadingPaused: () -> Unit,
 ) {
@@ -263,12 +274,14 @@ fun ReaderScreen(
                         .padding(top = topInset, bottom = bottomInset),
                 )
 
-                // Static top bar: back + chapter title, always visible.
+                // Static top bar: back + chapter title + bookmark toggle, always visible.
                 ReaderTopBar(
                     chapter = state.chapterTitle ?: state.title,
                     background = background,
                     content = onBackground,
+                    isBookmarked = state.currentPageBookmarked,
                     onBack = onBack,
+                    onToggleBookmark = onToggleBookmark,
                     onContentHeight = { topBarPx = it },
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
@@ -318,7 +331,9 @@ fun ReaderScreen(
                     onToc = onOpenToc,
                     onPrevious = onPreviousChapter,
                     onNext = onNextChapter,
+                    onBookmarks = onOpenBookmarks,
                     onHighlights = onOpenHighlights,
+                    onSearch = onOpenSearch,
                     onSettings = onOpenSheet,
                 )
 
@@ -389,8 +404,29 @@ fun ReaderScreen(
 
                 HighlightEditSheet(
                     highlight = state.editingHighlight,
+                    onSelectColor = onSetHighlightColor,
                     onDelete = onDeleteHighlight,
                     onDismiss = onCloseEditHighlight,
+                )
+
+                BookmarksSheet(
+                    visible = state.bookmarksSheetVisible,
+                    bookmarks = state.bookmarks,
+                    onJump = onJumpToBookmark,
+                    onDelete = onDeleteBookmarkById,
+                    onDismiss = onCloseBookmarks,
+                )
+
+                ReaderSearchSheet(
+                    visible = state.searchVisible,
+                    query = state.searchQuery,
+                    results = state.searchResults,
+                    inProgress = state.searchInProgress,
+                    performed = state.searchPerformed,
+                    onQueryChange = onSearchQueryChange,
+                    onSubmit = onSubmitSearch,
+                    onJump = onJumpToSearchResult,
+                    onDismiss = onCloseSearch,
                 )
             }
         }

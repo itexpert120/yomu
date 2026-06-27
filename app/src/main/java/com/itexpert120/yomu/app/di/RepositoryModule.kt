@@ -1,5 +1,7 @@
 package com.itexpert120.yomu.app.di
 
+import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
+import com.itexpert120.yomu.data.bookmarks.RoomBookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.RoomBookRepository
 import com.itexpert120.yomu.data.highlights.HighlightRepository
@@ -21,4 +23,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindHighlightRepository(impl: RoomHighlightRepository): HighlightRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBookmarkRepository(impl: RoomBookmarkRepository): BookmarkRepository
 }

@@ -1,10 +1,7 @@
 package com.itexpert120.yomu.feature.library
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -23,10 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,64 +32,86 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import java.io.File
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ContinueReadingCard(book: LibraryBook, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    // Laid out flush with the grid (no card inset) so the cover's left edge lines up with the
-    // book covers below it. Capped so the hero doesn't stretch across a wide tablet.
+fun ContinueReadingCard(
+    book: LibraryBook,
+    onClick: () -> Unit,
+    onResume: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Flush hero (no card chrome): a large cover anchors the most-recent book, with the title,
+    // progress and a clear Resume action beside it. Capped so it doesn't stretch on a wide tablet.
+    // Tapping the card opens details; the Resume pill jumps straight back into the reader.
+    val colors = YomuTheme.colors
     Row(
         modifier = modifier
             .widthIn(max = 560.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+            .yomuPressable(onClick = onClick),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BookCoverImage(book = book, modifier = Modifier.width(72.dp))
+        BookCoverImage(book = book, modifier = Modifier.width(96.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
-                text = "CONTINUE READING",
-                color = YomuTheme.colors.accent,
-                style = YomuTheme.type.caption.copy(letterSpacing = 1.sp),
-            )
-            Text(
                 text = book.title,
-                color = YomuTheme.colors.textPrimary,
+                color = colors.textPrimary,
                 style = YomuTheme.type.title,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = book.author,
-                color = YomuTheme.colors.textSecondary,
+                color = colors.textSecondary,
                 style = YomuTheme.type.body,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(8.dp))
             ProgressLine(progress = book.progress)
-            Spacer(Modifier.height(1.dp))
-            Text(
-                // remaining already reads as "5% read" / "Finished" — don't restate the percent.
-                text = book.remaining,
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.mono,
-            )
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    // remaining already reads as "5% read" / "Finished" — don't restate the percent.
+                    text = book.remaining,
+                    color = colors.textMuted,
+                    style = YomuTheme.type.mono,
+                    modifier = Modifier.weight(1f),
+                )
+                ResumePill(onClick = onResume)
+            }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/** The hero's primary call-to-action: a filled pill that resumes the book. */
+@Composable
+private fun ResumePill(onClick: () -> Unit) {
+    val colors = YomuTheme.colors
+    Row(
+        modifier = Modifier
+            .yomuPressable(onClick = onClick)
+            .clip(RoundedCornerShape(YomuTheme.radius.pill))
+            .background(colors.textPrimary)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = null,
+            tint = colors.appBackground,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(text = "Resume", color = colors.appBackground, style = YomuTheme.type.control, maxLines = 1)
+    }
+}
+
 @Composable
 fun GridBookCard(
     book: LibraryBook,
@@ -103,12 +122,7 @@ fun GridBookCard(
 ) {
     Column(
         modifier = modifier
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongPress,
-            ),
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -129,7 +143,6 @@ fun GridBookCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookListRow(
     book: LibraryBook,
@@ -141,14 +154,9 @@ fun BookListRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (selected) YomuTheme.colors.accentSoft else Color.Transparent)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongPress,
-            )
             .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -235,14 +243,10 @@ fun ImportEmptyCard(onImport: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .height(80.dp)
+            .yomuPressable(onClick = onImport)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(YomuTheme.colors.surface)
-            .border(1.5.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onImport,
-            ),
+            .border(1.5.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md)),
         contentAlignment = Alignment.Center,
     ) {
         Row(

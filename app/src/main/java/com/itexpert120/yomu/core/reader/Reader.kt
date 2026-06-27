@@ -35,6 +35,19 @@ data class ReaderTocItem(
     val depth: Int,
 )
 
+/**
+ * A single in-book search hit. [match] is the matched substring; [before]/[after] are the
+ * surrounding text for display context. [locatorJson] is the position to jump to. No engine types
+ * leak out.
+ */
+data class ReaderSearchResult(
+    val locatorJson: String,
+    val before: String,
+    val match: String,
+    val after: String,
+    val chapterTitle: String?,
+)
+
 /** Opens books for reading. Implemented by the Readium adapter; no engine types leak out. */
 interface ReaderEngine {
     suspend fun open(
@@ -107,6 +120,18 @@ interface ReaderSession {
      * navigator is hosted — the engine re-applies them once it is.
      */
     fun applyHighlights(highlights: List<ReaderHighlight>)
+
+    /**
+     * Full-text search across the whole publication. Returns a bounded list of hits (empty when the
+     * query is blank or the publication isn't searchable). Suspends while scanning; cancellable.
+     */
+    suspend fun search(query: String): List<ReaderSearchResult>
+
+    /** Underlines the given search hits on the page (replacing the previous search set). */
+    fun applySearchDecorations(results: List<ReaderSearchResult>)
+
+    /** Clears the on-page search underlines. */
+    fun clearSearch()
 
     fun close()
 }

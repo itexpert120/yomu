@@ -126,6 +126,7 @@ fun LibraryScreen(
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
                     onBookLongPress = onCardLongPress,
+                    onResumeContinue = { hero?.let { onOpenReader(it.id) } },
                 )
 
                 LibraryViewMode.List -> LibraryList(
@@ -135,6 +136,7 @@ fun LibraryScreen(
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
                     onBookLongPress = onCardLongPress,
+                    onResumeContinue = { hero?.let { onOpenReader(it.id) } },
                 )
             }
         }
@@ -321,6 +323,7 @@ private fun LibraryGrid(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
+    onResumeContinue: () -> Unit,
 ) {
     // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
     // wide tablet/desktop; on a phone this is a no-op (screen < max width).
@@ -352,6 +355,7 @@ private fun LibraryGrid(
                     ContinueReadingCard(
                         book = continueReading,
                         onClick = { onBookClick(continueReading) },
+                        onResume = onResumeContinue,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -385,6 +389,7 @@ private fun LibraryList(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
+    onResumeContinue: () -> Unit,
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
     // column centered on screen. Phones are unaffected (screen < max width).
@@ -403,6 +408,7 @@ private fun LibraryList(
                 ContinueReadingCard(
                     book = continueReading,
                     onClick = { onBookClick(continueReading) },
+                    onResume = onResumeContinue,
                     modifier = Modifier.animateItem(),
                 )
             }

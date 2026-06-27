@@ -234,22 +234,28 @@ internal fun ReaderChromeToggles(
             checked = settings.showFooter,
             onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) })
     }
-    if (settings.showFooter) {
-        YomuSettingRow(title = "Battery") {
-            YomuTogglePill(
-                checked = settings.footerShowBattery,
-                onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) })
-        }
-        YomuSettingRow(title = "Clock") {
-            YomuTogglePill(
-                checked = settings.footerShowClock,
-                onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) })
-        }
-        YomuSettingRow(title = "Reading progress") {
-            YomuTogglePill(
-                checked = settings.footerShowProgress,
-                onCheckedChange = { onUpdateSettings(settings.copy(footerShowProgress = it)) })
-        }
+    // The per-item toggles stay visible but disable when the footer is off, so the layout doesn't
+    // jump and it's clear what the footer would contain.
+    YomuSettingRow(title = "Battery") {
+        YomuTogglePill(
+            checked = settings.footerShowBattery,
+            onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) },
+            enabled = settings.showFooter,
+        )
+    }
+    YomuSettingRow(title = "Clock") {
+        YomuTogglePill(
+            checked = settings.footerShowClock,
+            onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) },
+            enabled = settings.showFooter,
+        )
+    }
+    YomuSettingRow(title = "Reading progress") {
+        YomuTogglePill(
+            checked = settings.footerShowProgress,
+            onCheckedChange = { onUpdateSettings(settings.copy(footerShowProgress = it)) },
+            enabled = settings.showFooter,
+        )
     }
 }
 

@@ -17,6 +17,7 @@ import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderLocator
+import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.DecorableNavigator
@@ -53,6 +55,8 @@ import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.positions
+import org.readium.r2.shared.publication.services.search.SearchIterator
+import org.readium.r2.shared.publication.services.search.search
 import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.getOrElse
@@ -180,6 +184,11 @@ private class ReadiumReaderSession(
 
     // Latest highlight set; remembered so it can be re-applied once the navigator is hosted.
     private var pendingHighlights: List<ReaderHighlight> = emptyList()
+
+    // Active search cursor (closed when a new query starts or the session closes), plus the latest
+    // search hits, remembered so the underlines can be re-applied once the navigator is hosted.
+    private var searchIterator: SearchIterator? = null
+    private var pendingSearchDecorations: List<ReaderSearchResult> = emptyList()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
@@ -466,8 +475,9 @@ private class ReadiumReaderSession(
             },
         )
 
-        // Re-apply any highlights requested before the navigator existed.
+        // Re-apply any highlights / search underlines requested before the navigator existed.
         if (pendingHighlights.isNotEmpty()) renderHighlights(pendingHighlights)
+        if (pendingSearchDecorations.isNotEmpty()) renderSearchDecorations(pendingSearchDecorations)
     }
 
     override fun applyHighlights(highlights: List<ReaderHighlight>) {
@@ -488,6 +498,59 @@ private class ReadiumReaderSession(
             )
         }
         scope.launch { nav.applyDecorations(decorations, HIGHLIGHTS_GROUP) }
+    }
+
+    override suspend fun search(query: String): List<ReaderSearchResult> {
+        if (query.isBlank()) return emptyList()
+        runCatching { searchIterator?.close() }
+        searchIterator = null
+        val iterator = publication.search(query) ?: return emptyList()
+        searchIterator = iterator
+        // Drain pages off the main thread, capped so a huge book can't produce thousands of rows.
+        return withContext(Dispatchers.IO) {
+            val out = ArrayList<ReaderSearchResult>()
+            while (out.size < MAX_SEARCH_RESULTS) {
+                // getOrNull() yields null at the end of the publication or on a read error — stop either way.
+                val page = iterator.next().getOrNull() ?: break
+                for (loc in page.locators) {
+                    out += ReaderSearchResult(
+                        locatorJson = loc.toJSON().toString(),
+                        before = loc.text.before.orEmpty(),
+                        match = loc.text.highlight.orEmpty(),
+                        after = loc.text.after.orEmpty(),
+                        chapterTitle = loc.title,
+                    )
+                    if (out.size >= MAX_SEARCH_RESULTS) break
+                }
+            }
+            out
+        }
+    }
+
+    override fun applySearchDecorations(results: List<ReaderSearchResult>) {
+        pendingSearchDecorations = results
+        renderSearchDecorations(results)
+    }
+
+    override fun clearSearch() {
+        pendingSearchDecorations = emptyList()
+        val nav = navigator as? DecorableNavigator ?: return
+        scope.launch { nav.applyDecorations(emptyList(), SEARCH_GROUP) }
+    }
+
+    private fun renderSearchDecorations(results: List<ReaderSearchResult>) {
+        val nav = navigator as? DecorableNavigator ?: return
+        val decorations = results.mapIndexedNotNull { index, result ->
+            val locator = runCatching {
+                Locator.fromJSON(JSONObject(result.locatorJson))
+            }.getOrNull() ?: return@mapIndexedNotNull null
+            Decoration(
+                id = "search-$index",
+                locator = locator,
+                style = Decoration.Style.Underline(tint = SEARCH_TINT),
+            )
+        }
+        scope.launch { nav.applyDecorations(decorations, SEARCH_GROUP) }
     }
 
     override fun applySettings(settings: ReaderSettings) {
@@ -564,6 +627,8 @@ private class ReadiumReaderSession(
 
     override fun close() {
         scope.cancel()
+        runCatching { searchIterator?.close() }
+        searchIterator = null
         tts?.shutdown()
         tts = null
         runCatching { publication.close() }
@@ -689,6 +754,13 @@ private class ReadiumReaderSession(
 
         // Decoration group name for user highlights.
         const val HIGHLIGHTS_GROUP = "highlights"
+
+        // Separate decoration group + tint for in-book search hits (replaced wholesale per query).
+        const val SEARCH_GROUP = "search"
+        val SEARCH_TINT = 0xFFE7C75B.toInt()
+
+        // Cap on collected search hits — bounds memory and scan time on large books.
+        const val MAX_SEARCH_RESULTS = 150
 
         // Custom-scheme URL behind the injected end-of-chapter "Next chapter" button.
         const val NEXT_CHAPTER_URL = "yomu://next-chapter"

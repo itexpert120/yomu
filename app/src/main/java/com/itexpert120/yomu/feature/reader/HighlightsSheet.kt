@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -26,16 +27,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 
-/** Edit popup for an existing highlight: delete it. */
+/** Edit popup for an existing highlight: recolour (optional) or delete it. */
 @Composable
 internal fun HighlightEditSheet(
     highlight: ReaderHighlight?,
+    onSelectColor: (Int) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -55,6 +58,10 @@ internal fun HighlightEditSheet(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            HighlightColorPalette(
+                selectedArgb = highlight.colorArgb,
+                onSelect = onSelectColor,
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -174,6 +181,44 @@ private fun HighlightRow(
                 contentDescription = "Delete",
                 tint = YomuTheme.colors.textMuted,
                 modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/** Optional tint chips for an existing highlight; the current colour is ringed. */
+@Composable
+private fun HighlightColorPalette(
+    selectedArgb: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val colors = listOf(
+        YomuTheme.colors.highlightYellow,
+        YomuTheme.colors.highlightGreen,
+        YomuTheme.colors.highlightBlue,
+        YomuTheme.colors.highlightPink,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        colors.forEach { color ->
+            val argb = color.toArgb()
+            val selected = argb == selectedArgb
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(color)
+                    .then(
+                        if (selected) {
+                            Modifier.border(2.dp, YomuTheme.colors.textPrimary, CircleShape)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onSelect(argb) },
+                    ),
             )
         }
     }

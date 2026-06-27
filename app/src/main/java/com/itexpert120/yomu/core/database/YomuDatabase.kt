@@ -14,13 +14,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingDayEntity::class,
         ReadingSessionEntity::class,
         HighlightEntity::class,
+        BookmarkEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun highlightDao(): HighlightDao
+    abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
         /** v2 adds chapter read-state tracking; books are preserved. */
@@ -117,6 +119,23 @@ abstract class YomuDatabase : RoomDatabase() {
                 db.execSQL(
                     "UPDATE books SET finishedAt = lastOpenedAt " +
                             "WHERE progress >= 0.999 AND lastOpenedAt > 0",
+                )
+            }
+        }
+
+        /** v9 adds user reading-position bookmarks. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `bookmarks` (" +
+                            "`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                            "`locatorJson` TEXT NOT NULL, `href` TEXT, `chapterTitle` TEXT, " +
+                            "`progression` REAL NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_bookmarks_bookId` " +
+                            "ON `bookmarks` (`bookId`)",
                 )
             }
         }

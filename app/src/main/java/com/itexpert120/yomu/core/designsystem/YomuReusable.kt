@@ -9,8 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +30,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,13 +90,9 @@ fun YomuDropdownMenuItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.sm))
             .background(if (selected) YomuTheme.colors.accentSoft else Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -145,14 +138,10 @@ fun YomuPillFilter(
 ) {
     Row(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
             .background(YomuTheme.colors.surfaceRaised)
             .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.pill))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -176,14 +165,10 @@ fun YomuCircleIconButton(
 ) {
     Box(
         modifier = modifier
+            .yomuPressable(onClick = onClick)
             .size(36.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(YomuTheme.colors.textPrimary)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
+            .background(YomuTheme.colors.textPrimary),
         contentAlignment = Alignment.Center,
     ) {
         icon()
@@ -304,16 +289,14 @@ fun <T> YomuOptionSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(YomuTheme.radius.md))
-                    .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
+                    .yomuPressable(
                         onClick = {
                             onSelect(option)
                             dismiss()
                         },
                     )
+                    .clip(RoundedCornerShape(YomuTheme.radius.md))
+                    .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
                     .padding(horizontal = 14.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -338,13 +321,9 @@ fun <T> YomuOptionSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp)
+                .yomuPressable(onClick = dismiss)
                 .clip(RoundedCornerShape(YomuTheme.radius.md))
                 .background(YomuTheme.colors.surface)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = dismiss,
-                )
                 .padding(vertical = 14.dp),
             contentAlignment = Alignment.Center,
         ) {

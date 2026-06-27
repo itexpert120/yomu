@@ -9,11 +9,15 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
+import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
+import com.itexpert120.yomu.core.reader.ReaderLocator
+import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
@@ -23,6 +27,7 @@ import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -67,6 +72,17 @@ data class ReaderUiState(
     val highlightsSheetVisible: Boolean = false,
     // An existing highlight the user tapped, shown in an edit/delete popup, or null.
     val editingHighlight: ReaderHighlight? = null,
+    // Reading-position bookmarks for this book, and whether the current page is bookmarked.
+    val bookmarks: List<ReaderBookmark> = emptyList(),
+    val bookmarksSheetVisible: Boolean = false,
+    val currentPageBookmarked: Boolean = false,
+    // In-book search: the query overlay, its query text, results, and progress/started flags.
+    val searchVisible: Boolean = false,
+    val searchQuery: String = "",
+    val searchResults: List<ReaderSearchResult> = emptyList(),
+    val searchInProgress: Boolean = false,
+    // True once a search has been run, so the UI can show "No results" vs. nothing yet.
+    val searchPerformed: Boolean = false,
 )
 
 /** State of the word-definition popup. [canGoBack] is true when a deeper word has been looked up
@@ -88,10 +104,17 @@ class ReaderViewModel @Inject constructor(
     private val dictionary: DictionaryRepository,
     private val stats: StatsRepository,
     private val highlights: HighlightRepository,
+    private val bookmarks: BookmarkRepository,
 ) : ViewModel() {
 
     // Wall-clock start of the current foreground reading stretch, or null when paused/closed.
     private var readingStart: Long? = null
+
+    // Latest reading position, captured for bookmark add/toggle (saved & restored via the locator).
+    private var lastLocator: ReaderLocator? = null
+
+    // The in-flight search coroutine, cancelled when a new query starts or search closes.
+    private var searchJob: Job? = null
 
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
     private val locatorOverride: String? = savedStateHandle["locator"]
@@ -162,6 +185,7 @@ class ReaderViewModel @Inject constructor(
             launch {
                 opened.currentLocator.collect { locator ->
                     if (locator != null) {
+                        lastLocator = locator
                         val progression = locator.totalProgression
                         // Prefer the TOC chapter title for the current resource; fall back to the
                         // engine's locator title, then the last known one (never the book name).
@@ -177,6 +201,7 @@ class ReaderViewModel @Inject constructor(
                                 hasPreviousChapter = locator.hasPreviousChapter,
                                 hasNextChapter = locator.hasNextChapter,
                                 currentHref = locator.href,
+                                currentPageBookmarked = isCurrentBookmarked(it.bookmarks),
                             )
                         }
                         if (progression != null) {
@@ -214,8 +239,8 @@ class ReaderViewModel @Inject constructor(
             launch {
                 opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
             }
-            // A "Highlight" tap on a selection: create the highlight immediately in the default
-            // yellow (highlights are single-colour now — no picker).
+            // A "Highlight" tap on a selection: create the highlight in the default colour and keep
+            // reading. Choosing a colour is optional — tap an existing highlight to recolour it.
             launch {
                 opened.highlightRequests.collect { draft ->
                     highlights.add(
@@ -238,6 +263,14 @@ class ReaderViewModel @Inject constructor(
                 highlights.observeForBook(BookId(bookId)).collect { list ->
                     _state.update { it.copy(highlights = list) }
                     opened.applyHighlights(list)
+                }
+            }
+            // Observe this book's bookmarks: keep the list and the current-page flag in sync.
+            launch {
+                bookmarks.observeForBook(BookId(bookId)).collect { list ->
+                    _state.update {
+                        it.copy(bookmarks = list, currentPageBookmarked = isCurrentBookmarked(list))
+                    }
                 }
             }
             launch {
@@ -443,6 +476,101 @@ class ReaderViewModel @Inject constructor(
     fun onJumpToHighlight(locatorJson: String) {
         _session.value?.goToLocator(locatorJson)
         _state.update { it.copy(highlightsSheetVisible = false) }
+    }
+
+    /** Recolour the highlight currently open in the edit popup. Updates the page decoration too. */
+    fun onSetHighlightColor(colorArgb: Int) {
+        val target = _state.value.editingHighlight ?: return
+        _state.update { it.copy(editingHighlight = target.copy(colorArgb = colorArgb)) }
+        viewModelScope.launch { highlights.updateColor(target.id, colorArgb) }
+    }
+
+    // --- Bookmarks ---
+
+    /** Whether the current reading position already has a bookmark (href + ~1% progression window). */
+    private fun isCurrentBookmarked(list: List<ReaderBookmark>): Boolean {
+        val loc = lastLocator ?: return false
+        val p = loc.totalProgression ?: 0.0
+        return list.any { it.href == loc.href && kotlin.math.abs(it.progression - p) < 0.01 }
+    }
+
+    /** Add or remove a bookmark at the current page (the always-visible top-bar toggle). */
+    fun onToggleBookmark() {
+        val loc = lastLocator ?: return
+        val p = loc.totalProgression ?: 0.0
+        viewModelScope.launch {
+            if (bookmarks.existsAt(BookId(bookId), loc.href, p)) {
+                bookmarks.deleteAt(BookId(bookId), loc.href, p)
+            } else {
+                bookmarks.add(
+                    BookId(bookId),
+                    loc.locatorJson,
+                    loc.href,
+                    loc.chapterTitle ?: lastChapterTitle,
+                    p,
+                )
+            }
+        }
+    }
+
+    fun onOpenBookmarks() = _state.update {
+        it.copy(bookmarksSheetVisible = true, chapterControlsVisible = false, sheetVisible = false)
+    }
+
+    fun onCloseBookmarks() = _state.update { it.copy(bookmarksSheetVisible = false) }
+
+    /** Jump to a bookmark's stored position from the list, and close the list. */
+    fun onJumpToBookmark(locatorJson: String) {
+        _session.value?.goToLocator(locatorJson)
+        _state.update { it.copy(bookmarksSheetVisible = false) }
+    }
+
+    fun onDeleteBookmarkById(id: String) {
+        viewModelScope.launch { bookmarks.delete(id) }
+    }
+
+    // --- In-book search ---
+
+    fun onOpenSearch() = _state.update {
+        it.copy(searchVisible = true, chapterControlsVisible = false, sheetVisible = false)
+    }
+
+    /** Close the search overlay and clear the on-page underlines + query/results. */
+    fun onCloseSearch() {
+        searchJob?.cancel()
+        _session.value?.clearSearch()
+        _state.update {
+            it.copy(
+                searchVisible = false,
+                searchQuery = "",
+                searchResults = emptyList(),
+                searchInProgress = false,
+                searchPerformed = false,
+            )
+        }
+    }
+
+    fun onSearchQueryChange(query: String) = _state.update { it.copy(searchQuery = query) }
+
+    /** Run the current query against the open publication and underline the hits on the page. */
+    fun onSubmitSearch() {
+        val query = _state.value.searchQuery.trim()
+        if (query.isBlank()) return
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _state.update {
+                it.copy(searchInProgress = true, searchPerformed = true, searchResults = emptyList())
+            }
+            val results = _session.value?.search(query).orEmpty()
+            _state.update { it.copy(searchInProgress = false, searchResults = results) }
+            _session.value?.applySearchDecorations(results)
+        }
+    }
+
+    /** Jump to a search hit; keep the underlines so the hits stay marked while reading. */
+    fun onJumpToSearchResult(locatorJson: String) {
+        _session.value?.goToLocator(locatorJson)
+        _state.update { it.copy(searchVisible = false) }
     }
 
     /** Start counting reading time (reader brought to the foreground). */
