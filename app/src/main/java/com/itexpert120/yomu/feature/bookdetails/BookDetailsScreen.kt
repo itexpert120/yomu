@@ -4,11 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +72,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
+import com.itexpert120.yomu.core.designsystem.yomuChromeExit
+import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
+import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -225,22 +225,24 @@ fun BookDetailsScreen(
             if (book != null) {
                 AnimatedVisibility(
                     visible = !toc.selectionMode,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
+                    enter = yomuChromeEnter(),
+                    exit = yomuChromeExit(),
                     modifier = Modifier.align(Alignment.BottomEnd),
                 ) {
                     FloatingReadButton(
                         reading = book.readingState == ReadingState.Reading,
                         onClick = onRead,
-                        modifier = Modifier.padding(end = 16.dp, bottom = navBottom + 16.dp),
+                        modifier = Modifier
+                            .yomuChromeBlur(this)
+                            .padding(end = 16.dp, bottom = navBottom + 16.dp),
                     )
                 }
             }
 
             AnimatedVisibility(
                 visible = toc.selectionMode,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
+                enter = yomuChromeEnter(),
+                exit = yomuChromeExit(),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 ChapterSelectionBar(
@@ -250,7 +252,9 @@ fun BookDetailsScreen(
                     onMarkPrevious = onMarkPreviousRead,
                     onSelectAll = onSelectAllChapters,
                     onClose = onExitChapterSelection,
-                    modifier = Modifier.padding(bottom = navBottom + 16.dp),
+                    modifier = Modifier
+                        .yomuChromeBlur(this)
+                        .padding(bottom = navBottom + 16.dp),
                 )
             }
         }
@@ -725,7 +729,7 @@ private fun TocRow(
             // per-chapter read toggle sits here.
             AnimatedContent(
                 targetState = selectionMode,
-                transitionSpec = { fadeIn() + scaleIn(initialScale = 0.6f) togetherWith fadeOut() },
+                transitionSpec = { yomuPopupEnter() togetherWith yomuPopupExit() },
                 label = "tocRowTrailing",
             ) { selecting ->
                 if (selecting) {

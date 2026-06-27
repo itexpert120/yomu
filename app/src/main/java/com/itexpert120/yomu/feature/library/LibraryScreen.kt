@@ -4,8 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +47,10 @@ import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuMotion
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
+import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
@@ -111,7 +113,7 @@ fun LibraryScreen(
     val libraryContent: @Composable () -> Unit = {
         Crossfade(
             targetState = state.viewMode,
-            animationSpec = tween(300),
+            animationSpec = tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel),
             label = "libraryViewMode",
         ) { mode ->
             // The continue-reading hero isn't a selectable item (it's excluded from select-all and
@@ -201,12 +203,19 @@ fun LibraryScreen(
             )
 
             val continueReading = state.continueReading
-            if (continueReading != null && !state.selectionMode) {
-                FloatingResumeButton(
-                    book = continueReading,
-                    onResume = { onOpenReader(continueReading.id) },
+            if (continueReading != null) {
+                AnimatedVisibility(
+                    visible = !state.selectionMode,
+                    enter = yomuChromeEnter(),
+                    exit = yomuChromeExit(),
                     modifier = Modifier.align(Alignment.BottomEnd),
-                )
+                ) {
+                    FloatingResumeButton(
+                        book = continueReading,
+                        onResume = { onOpenReader(continueReading.id) },
+                        modifier = Modifier.yomuChromeBlur(this),
+                    )
+                }
             }
 
             ImportNotice(
@@ -217,8 +226,8 @@ fun LibraryScreen(
 
             AnimatedVisibility(
                 visible = state.selectionMode,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = yomuChromeEnter(),
+                exit = yomuChromeExit(),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 LibrarySelectionDock(
@@ -236,6 +245,7 @@ fun LibraryScreen(
                     } else {
                         null
                     },
+                    modifier = Modifier.yomuChromeBlur(this),
                 )
             }
 

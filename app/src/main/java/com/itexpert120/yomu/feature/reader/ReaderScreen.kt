@@ -306,7 +306,7 @@ fun ReaderScreen(
         label = "readerTopInset",
     )
     val bottomInset by animateDpAsState(
-        targetValue = if (immersive) 0.dp else baseBottomInset,
+        targetValue = baseBottomInset,
         label = "readerBottomInset",
     )
     val background = Color(state.settings.backgroundArgb)

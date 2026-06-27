@@ -1,10 +1,6 @@
 package com.itexpert120.yomu.feature.library
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,6 +40,9 @@ import androidx.compose.ui.window.Dialog
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
+import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 
 @Composable
 internal fun ConfirmRemoveDialog(
@@ -110,12 +109,13 @@ internal fun ImportNotice(
 
     AnimatedVisibility(
         visible = text != null,
-        enter = fadeIn() + slideInVertically { it / 2 },
-        exit = fadeOut() + slideOutVertically { it / 2 },
+        enter = yomuChromeEnter(),
+        exit = yomuChromeExit(),
         modifier = modifier.padding(bottom = navBottom + 20.dp),
     ) {
         Row(
             modifier = Modifier
+                .yomuChromeBlur(this)
                 .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.pill))
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
                 .background(YomuTheme.colors.panel)
