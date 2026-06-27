@@ -230,10 +230,15 @@ private class ReadiumReaderSession(
 
     private val listener = object : EpubNavigatorFragment.Listener {
         override fun onExternalLinkActivated(url: AbsoluteUrl) {
-            // The in-content "Next chapter" button is an <a href="yomu://next-chapter"> injected at
-            // the end of each resource; Readium routes its tap here as an external link. Intercept the
-            // custom scheme and advance instead of opening a browser.
-            if (url.toString().startsWith(NEXT_CHAPTER_URL)) nextChapter()
+            // Custom-scheme links injected into the page — the end-of-chapter "Next chapter" button
+            // and the scroll-mode rubberband overscroll gesture — route here as external links;
+            // intercept them for chapter navigation instead of opening a browser. Pull-to-previous
+            // lands at the END of the previous chapter for a continuous-reading feel.
+            val s = url.toString()
+            when {
+                s.startsWith(PREV_CHAPTER_URL) -> goToPreviousResourceEnd()
+                s.startsWith(NEXT_CHAPTER_URL) -> nextChapter()
+            }
         }
 
         // Tapping a footnote reference: surface the note's content in a popup instead of letting the
@@ -449,8 +454,9 @@ private class ReadiumReaderSession(
                 if (hrefStr != lastStyledHref) {
                     lastStyledHref = hrefStr
                     scope.launch { runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) } }
-                    // Append the end-of-chapter "Next chapter" button for this resource.
+                    // Append the end-of-chapter "Next chapter" button + arm the rubberband gesture.
                     injectNextChapterButton()
+                    injectOverscroll()
                 }
                 _currentLocator.value = ReaderLocator(
                     locatorJson = locator.toJSON().toString(),
@@ -597,6 +603,8 @@ private class ReadiumReaderSession(
         injectNextChapterButton()
         // Re-toggle/re-theme the native scrollbar (it's scroll-mode only and tracks the text colour).
         applyScrollbars(settings)
+        // Re-arm or tear down the rubberband gesture on a scroll<->paged or theme change.
+        injectOverscroll()
     }
 
     // Re-enable the WebView's native vertical scrollbar in scroll mode (Readium force-disables it),
@@ -652,6 +660,22 @@ private class ReadiumReaderSession(
         scope.launch { runCatching { nav.evaluateJavascript(js) } }
     }
 
+    // Inject (or refresh) the scroll-mode rubberband overscroll gesture into the current resource:
+    // pulling past the top goes to the previous chapter, past the bottom to the next. A no-op
+    // teardown in paged mode (enabled = false).
+    private fun injectOverscroll() {
+        val nav = navigator ?: return
+        val hrefStr = lastLocator?.href?.toString()
+        val order = publication.readingOrder
+        val index =
+            if (hrefStr != null) order.indexOfFirst { it.url().toString() == hrefStr } else -1
+        val hasPrev = index > 0
+        val hasNext = index in 0 until order.lastIndex
+        val enabled = currentSettings.layout == ReaderLayout.Scroll
+        val js = overscrollJs(enabled, hasPrev, hasNext, currentSettings)
+        scope.launch { runCatching { nav.evaluateJavascript(js) } }
+    }
+
     override fun goForward() {
         (navigator as? OverflowableNavigator)?.goForward()
     }
@@ -669,6 +693,18 @@ private class ReadiumReaderSession(
         val order = publication.readingOrder
         val index = order.indexOfFirst { it.url().toString() == hrefStr }
         val target = order.getOrNull(index + delta) ?: return
+        scope.launch { navigator?.go(target, animated = false) }
+    }
+
+    // Navigate to the END of the previous resource (progression ~1), so pulling down past the top of
+    // a chapter reveals the text just before it — the continuous-reading "rubberband" behaviour.
+    private fun goToPreviousResourceEnd() {
+        val hrefStr = lastLocator?.href?.toString() ?: return
+        val order = publication.readingOrder
+        val index = order.indexOfFirst { it.url().toString() == hrefStr }
+        val prev = order.getOrNull(index - 1) ?: return
+        val base = publication.locatorFromLink(prev) ?: return
+        val target = base.copy(locations = Locator.Locations(progression = 0.999))
         scope.launch { navigator?.go(target, animated = false) }
     }
 
@@ -791,6 +827,96 @@ private class ReadiumReaderSession(
         """.trimIndent()
     }
 
+    // Builds the injected JS for the scroll-mode rubberband chapter gesture. Idempotent per document
+    // (guarded by window.__yomuOverscroll); re-running just updates enabled/hasPrev/hasNext. A
+    // capture-phase touch listener only takes over (preventDefault) while over-pulling at the very
+    // top/bottom, so normal scrolling, taps, links and text selection are untouched. Colours derive
+    // from the active reading theme so the hint pill matches the page.
+    private fun overscrollJs(
+        enabled: Boolean,
+        hasPrev: Boolean,
+        hasNext: Boolean,
+        settings: ReaderSettings,
+    ): String {
+        val text = settings.textArgb.toInt()
+        val r = (text shr 16) and 0xFF
+        val g = (text shr 8) and 0xFF
+        val b = text and 0xFF
+        val fill = "rgba($r,$g,$b,0.10)"
+        val border = "rgba($r,$g,$b,0.30)"
+        val label = "rgb($r,$g,$b)"
+        return """
+            (function() {
+              if (window.__yomuOverscroll) {
+                window.__yomuOverscroll.update($enabled, $hasPrev, $hasNext);
+                return;
+              }
+              var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext,
+                         startY: 0, dragging: false, dir: 0, armed: false, fired: false };
+              var THRESHOLD = 96, MAX = 160, DAMP = 0.45;
+              document.documentElement.style.overscrollBehaviorY = 'contain';
+              var hint = document.createElement('div');
+              hint.id = 'yomu-overscroll';
+              hint.style.cssText = [
+                'position:fixed', 'left:50%', 'transform:translateX(-50%)', 'z-index:2147483647',
+                'padding:8px 18px', 'border-radius:999px',
+                'font:600 14px system-ui,-apple-system,Roboto,sans-serif',
+                'background:$fill', 'border:1px solid $border', 'color:$label',
+                'opacity:0', 'transition:opacity .15s', 'pointer-events:none',
+                '-webkit-tap-highlight-color:transparent'
+              ].join(';');
+              document.body.appendChild(hint);
+              function sc() { return document.scrollingElement || document.documentElement; }
+              function atTop() { return sc().scrollTop <= 0; }
+              function atBottom() { return sc().scrollTop + window.innerHeight >= sc().scrollHeight - 1; }
+              function hasSel() { var s = window.getSelection(); return s && s.toString().length > 0; }
+              function reset() {
+                document.body.style.transition = 'transform .22s ease-out';
+                document.body.style.transform = '';
+                hint.style.opacity = 0;
+                st.dragging = false; st.dir = 0; st.armed = false;
+              }
+              window.addEventListener('touchstart', function(e) {
+                if (!st.enabled || e.touches.length !== 1 || hasSel()) { st.dragging = false; return; }
+                st.startY = e.touches[0].clientY;
+                st.dragging = true; st.dir = 0; st.armed = false; st.fired = false;
+              }, { capture: true, passive: true });
+              window.addEventListener('touchmove', function(e) {
+                if (!st.dragging || !st.enabled) return;
+                var dy = e.touches[0].clientY - st.startY;
+                var dir = (dy > 0 && atTop() && st.hasPrev) ? -1
+                        : (dy < 0 && atBottom() && st.hasNext) ? 1 : 0;
+                if (dir === 0) { if (st.dir) reset(); return; }
+                st.dir = dir;
+                e.preventDefault();
+                var pull = Math.min(Math.abs(dy) * DAMP, MAX);
+                document.body.style.transition = 'none';
+                document.body.style.transform = 'translateY(' + (dir < 0 ? pull : -pull) + 'px)';
+                st.armed = pull >= THRESHOLD;
+                hint.textContent = dir < 0
+                  ? (st.armed ? 'Release for previous chapter' : 'Pull for previous chapter')
+                  : (st.armed ? 'Release for next chapter' : 'Pull for next chapter');
+                if (dir < 0) { hint.style.top = '16px'; hint.style.bottom = 'auto'; }
+                else { hint.style.bottom = '16px'; hint.style.top = 'auto'; }
+                hint.style.opacity = Math.min(pull / THRESHOLD, 1);
+              }, { capture: true, passive: false });
+              window.addEventListener('touchend', function() {
+                if (st.dir && st.armed && !st.fired) {
+                  st.fired = true;
+                  window.location.href = st.dir < 0 ? '$PREV_CHAPTER_URL' : '$NEXT_CHAPTER_URL';
+                }
+                reset();
+              }, { capture: true, passive: true });
+              window.__yomuOverscroll = {
+                update: function(en, hp, hn) {
+                  st.enabled = en; st.hasPrev = hp; st.hasNext = hn;
+                  if (!en) reset();
+                }
+              };
+            })();
+        """.trimIndent()
+    }
+
     // Layout + size + theme colours (explicit bg/text so it matches the chrome) + the bundled font.
     private fun ReaderSettings.toPreferences(): EpubPreferences = EpubPreferences(
         scroll = layout == ReaderLayout.Scroll,
@@ -837,8 +963,10 @@ private class ReadiumReaderSession(
         // Cap on collected search hits — bounds memory and scan time on large books.
         const val MAX_SEARCH_RESULTS = 150
 
-        // Custom-scheme URL behind the injected end-of-chapter "Next chapter" button.
+        // Custom-scheme URLs behind the injected end-of-chapter "Next chapter" button and the
+        // scroll-mode rubberband overscroll gesture (intercepted in onExternalLinkActivated).
         const val NEXT_CHAPTER_URL = "yomu://next-chapter"
+        const val PREV_CHAPTER_URL = "yomu://prev-chapter"
 
         // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
         // the width like paged mode does. No-op in paged mode (the selector only matches scroll).
