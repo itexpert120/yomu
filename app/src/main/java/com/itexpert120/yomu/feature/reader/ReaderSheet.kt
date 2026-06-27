@@ -111,7 +111,9 @@ internal fun ReaderControlsSheet(
             )
             AnimatedContent(
                 targetState = tab,
-                transitionSpec = { yomuContentSwap() },
+                transitionSpec = {
+                    yomuContentSwap(forward = targetState.ordinal > initialState.ordinal)
+                },
                 label = "readerSheetTab",
             ) { current ->
                 // The blur (driven by this content's enter/exit transition) is what makes the swap

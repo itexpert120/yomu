@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.core.designsystem
 
 import android.os.Build
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
@@ -24,6 +25,7 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 /**
@@ -97,15 +99,27 @@ fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransit
             transformOrigin = origin,
         )
 
-/** A gentle in-place content swap for tab/segment changes: fade + a subtle settle scale, no slide. */
-fun yomuContentSwap(): ContentTransform =
-    (
+/**
+ * A directional content swap for tab/segment changes: the incoming content slides in horizontally
+ * (toward the left when moving forward, right when moving back) with a cross-fade, so the tabs feel
+ * like they move with the content. Pair with [yomuChromeBlur] on the content for the smooth
+ * blur-through. [forward] is true when switching to a later tab than the current one.
+ */
+fun <S> AnimatedContentTransitionScope<S>.yomuContentSwap(forward: Boolean = true): ContentTransform {
+    val direction = if (forward) {
+        AnimatedContentTransitionScope.SlideDirection.Left
+    } else {
+        AnimatedContentTransitionScope.SlideDirection.Right
+    }
+    val slide = spring<IntOffset>(dampingRatio = 0.9f, stiffness = 320f)
+    return (
         fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
-            scaleIn(spring(dampingRatio = 1f, stiffness = 420f), initialScale = 0.97f)
+            slideIntoContainer(direction, animationSpec = slide)
         ) togetherWith (
         fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
-            scaleOut(spring(dampingRatio = 1f, stiffness = 420f), targetScale = 0.97f)
+            slideOutOfContainer(direction, animationSpec = slide)
         )
+}
 
 /**
  * Animates a blur in lockstep with the SAME [AnimatedVisibilityScope] enter/exit transition, so the
