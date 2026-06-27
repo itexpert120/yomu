@@ -64,31 +64,34 @@ fun ReaderScreen(
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
     onSaveCustomTheme: (String) -> Unit,
     onDeleteCustomTheme: (String) -> Unit,
-    onOpenToc: () -> Unit,
-    onCloseToc: () -> Unit,
+    // Browse sheet (Contents / Bookmarks / Highlights / Search).
+    onOpenBrowse: () -> Unit,
+    onSelectBrowseTab: (BrowseTab) -> Unit,
+    onCloseBrowse: () -> Unit,
     onJumpToLocator: (String) -> Unit,
+    onJumpToBookmark: (String) -> Unit,
+    onJumpToHighlight: (String) -> Unit,
+    onJumpToSearchResult: (String) -> Unit,
+    onDeleteBookmarkById: (String) -> Unit,
+    onDeleteHighlightById: (String) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onSubmitSearch: () -> Unit,
+    // More overflow sheet.
+    onOpenMore: () -> Unit,
+    onCloseMore: () -> Unit,
+    onChapterStart: () -> Unit,
+    onChapterEnd: () -> Unit,
+    // Word lookup + footnote popups.
     onCloseLookup: () -> Unit,
     onLookUpWord: (String) -> Unit,
     onLookupBack: () -> Unit,
     onPronounce: (String) -> Unit,
     onCloseFootnote: () -> Unit,
-    onOpenHighlights: () -> Unit,
-    onCloseHighlights: () -> Unit,
-    onJumpToHighlight: (String) -> Unit,
+    // Highlight edit popup + bookmark toggle.
     onDeleteHighlight: () -> Unit,
-    onDeleteHighlightById: (String) -> Unit,
     onSetHighlightColor: (Int) -> Unit,
     onCloseEditHighlight: () -> Unit,
     onToggleBookmark: () -> Unit,
-    onOpenBookmarks: () -> Unit,
-    onCloseBookmarks: () -> Unit,
-    onJumpToBookmark: (String) -> Unit,
-    onDeleteBookmarkById: (String) -> Unit,
-    onOpenSearch: () -> Unit,
-    onCloseSearch: () -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onSubmitSearch: () -> Unit,
-    onJumpToSearchResult: (String) -> Unit,
     onReadingResumed: () -> Unit,
     onReadingPaused: () -> Unit,
 ) {
@@ -349,13 +352,11 @@ fun ReaderScreen(
                     content = onBackground,
                     hasPrevious = state.hasPreviousChapter,
                     hasNext = state.hasNextChapter,
-                    onToc = onOpenToc,
+                    onBrowse = onOpenBrowse,
                     onPrevious = onPreviousChapter,
                     onNext = onNextChapter,
-                    onBookmarks = onOpenBookmarks,
-                    onHighlights = onOpenHighlights,
-                    onSearch = onOpenSearch,
-                    onSettings = onOpenSheet,
+                    onDisplay = onOpenSheet,
+                    onMore = onOpenMore,
                 )
 
                 ReaderControlsSheet(
@@ -396,13 +397,34 @@ fun ReaderScreen(
                     onDelete = onDeleteCustomTheme,
                 )
 
-                ReaderTocSheet(
-                    visible = state.tocSheetVisible,
+                ReaderBrowseSheet(
+                    tab = state.browseTab,
                     toc = state.toc,
-                    loading = state.tocLoading,
+                    tocLoading = state.tocLoading,
                     currentHref = state.currentHref,
-                    onDismiss = onCloseToc,
-                    onJump = onJumpToLocator,
+                    onJumpToLocator = onJumpToLocator,
+                    bookmarks = state.bookmarks,
+                    onJumpToBookmark = onJumpToBookmark,
+                    onDeleteBookmark = onDeleteBookmarkById,
+                    highlights = state.highlights,
+                    onJumpToHighlight = onJumpToHighlight,
+                    onDeleteHighlight = onDeleteHighlightById,
+                    searchQuery = state.searchQuery,
+                    searchResults = state.searchResults,
+                    searchInProgress = state.searchInProgress,
+                    searchPerformed = state.searchPerformed,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onSubmitSearch = onSubmitSearch,
+                    onJumpToSearchResult = onJumpToSearchResult,
+                    onSelectTab = onSelectBrowseTab,
+                    onDismiss = onCloseBrowse,
+                )
+
+                ReaderMoreSheet(
+                    visible = state.moreSheetVisible,
+                    onChapterStart = onChapterStart,
+                    onChapterEnd = onChapterEnd,
+                    onDismiss = onCloseMore,
                 )
 
                 WordLookupSheet(
@@ -415,14 +437,6 @@ fun ReaderScreen(
 
                 FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)
 
-                HighlightsSheet(
-                    visible = state.highlightsSheetVisible,
-                    highlights = state.highlights,
-                    onJump = onJumpToHighlight,
-                    onDelete = onDeleteHighlightById,
-                    onDismiss = onCloseHighlights,
-                )
-
                 HighlightEditSheet(
                     highlight = state.editingHighlight,
                     onSelectColor = onSetHighlightColor,
@@ -430,25 +444,6 @@ fun ReaderScreen(
                     onDismiss = onCloseEditHighlight,
                 )
 
-                BookmarksSheet(
-                    visible = state.bookmarksSheetVisible,
-                    bookmarks = state.bookmarks,
-                    onJump = onJumpToBookmark,
-                    onDelete = onDeleteBookmarkById,
-                    onDismiss = onCloseBookmarks,
-                )
-
-                ReaderSearchSheet(
-                    visible = state.searchVisible,
-                    query = state.searchQuery,
-                    results = state.searchResults,
-                    inProgress = state.searchInProgress,
-                    performed = state.searchPerformed,
-                    onQueryChange = onSearchQueryChange,
-                    onSubmit = onSubmitSearch,
-                    onJump = onJumpToSearchResult,
-                    onDismiss = onCloseSearch,
-                )
                 }
             }
 

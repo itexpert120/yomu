@@ -133,7 +133,7 @@ internal fun HighlightsSheet(
 }
 
 @Composable
-private fun HighlightRow(
+internal fun HighlightRow(
     highlight: ReaderHighlight,
     onClick: () -> Unit,
     onDelete: () -> Unit,

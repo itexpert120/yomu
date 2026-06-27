@@ -76,7 +76,7 @@ internal fun BookmarksSheet(
 }
 
 @Composable
-private fun BookmarkRow(
+internal fun BookmarkRow(
     bookmark: ReaderBookmark,
     onClick: () -> Unit,
     onDelete: () -> Unit,

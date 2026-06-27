@@ -571,7 +571,7 @@ internal fun ReaderTocSheet(
 }
 
 @Composable
-private fun TocSheetRow(item: ReaderTocItem, current: Boolean, onClick: () -> Unit) {
+internal fun TocSheetRow(item: ReaderTocItem, current: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

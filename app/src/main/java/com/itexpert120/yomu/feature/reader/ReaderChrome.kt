@@ -35,10 +35,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.Bookmarks
-import androidx.compose.material.icons.rounded.Highlight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Toc
@@ -228,13 +226,11 @@ internal fun BoxScope.ReaderChapterControlsBar(
     content: Color,
     hasPrevious: Boolean,
     hasNext: Boolean,
-    onToc: () -> Unit,
+    onBrowse: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onBookmarks: () -> Unit,
-    onHighlights: () -> Unit,
-    onSearch: () -> Unit,
-    onSettings: () -> Unit,
+    onDisplay: () -> Unit,
+    onMore: () -> Unit,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -258,13 +254,11 @@ internal fun BoxScope.ReaderChapterControlsBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            ControlButton(Icons.Rounded.Toc, "Contents", content, enabled = true, onToc)
+            ControlButton(Icons.Rounded.Toc, "Browse", content, enabled = true, onBrowse)
             ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
             ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
-            ControlButton(Icons.Rounded.Bookmarks, "Bookmarks", content, enabled = true, onBookmarks)
-            ControlButton(Icons.Rounded.Highlight, "Highlights", content, enabled = true, onHighlights)
-            ControlButton(Icons.Rounded.Search, "Search", content, enabled = true, onSearch)
-            ControlButton(Icons.Rounded.Tune, "Settings", content, enabled = true, onSettings)
+            ControlButton(Icons.Rounded.Tune, "Display", content, enabled = true, onDisplay)
+            ControlButton(Icons.Rounded.MoreHoriz, "More", content, enabled = true, onMore)
         }
     }
 }

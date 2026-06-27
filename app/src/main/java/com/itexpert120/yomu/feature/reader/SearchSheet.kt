@@ -100,7 +100,7 @@ internal fun ReaderSearchSheet(
 }
 
 @Composable
-private fun SearchResultRow(
+internal fun SearchResultRow(
     result: ReaderSearchResult,
     accent: Color,
     onClick: () -> Unit,

@@ -54,6 +54,8 @@ data class ReaderUiState(
     val sheetVisible: Boolean = false,
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val customSheetVisible: Boolean = false,
+    // The bottom bar's "More" overflow sheet.
+    val moreSheetVisible: Boolean = false,
     // Chapter-boundary state, for the next/previous-chapter buttons.
     val chapterProgression: Double = 0.0,
     val hasPreviousChapter: Boolean = false,
@@ -61,8 +63,9 @@ data class ReaderUiState(
     // In-reader table of contents.
     val toc: List<ReaderTocItem> = emptyList(),
     val tocLoading: Boolean = true,
-    val tocSheetVisible: Boolean = false,
     val currentHref: String? = null,
+    // The consolidated Browse sheet (Contents/Bookmarks/Highlights/Search); null = closed.
+    val browseTab: BrowseTab? = null,
     // Word lookup: the active lookup sheet (null = closed). Triggered from the native "Look up"
     // text-selection menu item.
     val lookup: WordLookupUiState? = null,
@@ -70,15 +73,12 @@ data class ReaderUiState(
     val footnoteHtml: String? = null,
     // All of this book's highlights (newest first), for the list sheet.
     val highlights: List<ReaderHighlight> = emptyList(),
-    val highlightsSheetVisible: Boolean = false,
     // An existing highlight the user tapped, shown in an edit/delete popup, or null.
     val editingHighlight: ReaderHighlight? = null,
     // Reading-position bookmarks for this book, and whether the current page is bookmarked.
     val bookmarks: List<ReaderBookmark> = emptyList(),
-    val bookmarksSheetVisible: Boolean = false,
     val currentPageBookmarked: Boolean = false,
-    // In-book search: the query overlay, its query text, results, and progress/started flags.
-    val searchVisible: Boolean = false,
+    // In-book search (shown in the Browse > Search tab): query text, results, progress/started flags.
     val searchQuery: String = "",
     val searchResults: List<ReaderSearchResult> = emptyList(),
     val searchInProgress: Boolean = false,
@@ -325,14 +325,53 @@ class ReaderViewModel @Inject constructor(
         _state.update { it.copy(chapterControlsVisible = false) }
     }
 
-    fun onOpenToc() =
-        _state.update { it.copy(tocSheetVisible = true, sheetVisible = false, chapterControlsVisible = false) }
-    fun onCloseToc() = _state.update { it.copy(tocSheetVisible = false) }
+    // --- Browse sheet (Contents / Bookmarks / Highlights / Search) ---
 
-    /** Jump to a TOC entry and close the contents sheet. */
+    /** Open the Browse sheet on the Contents tab (the bottom bar's "Browse" button). */
+    fun onOpenBrowse() = openBrowse(BrowseTab.Contents)
+
+    fun onSelectBrowseTab(tab: BrowseTab) = _state.update { it.copy(browseTab = tab) }
+
+    private fun openBrowse(tab: BrowseTab) = _state.update {
+        it.copy(browseTab = tab, sheetVisible = false, chapterControlsVisible = false)
+    }
+
+    /** Close the Browse sheet and clear the in-page search underlines + query/results. */
+    fun onCloseBrowse() {
+        searchJob?.cancel()
+        _session.value?.clearSearch()
+        _state.update {
+            it.copy(
+                browseTab = null,
+                searchQuery = "",
+                searchResults = emptyList(),
+                searchInProgress = false,
+                searchPerformed = false,
+            )
+        }
+    }
+
+    /** Jump to a TOC entry and close the Browse sheet. */
     fun onJumpToLocator(locatorJson: String) {
         _session.value?.goToLocator(locatorJson)
-        _state.update { it.copy(tocSheetVisible = false) }
+        _state.update { it.copy(browseTab = null) }
+    }
+
+    // --- More sheet (bottom-bar overflow) ---
+
+    fun onOpenMore() = _state.update {
+        it.copy(moreSheetVisible = true, chapterControlsVisible = false, sheetVisible = false)
+    }
+    fun onCloseMore() = _state.update { it.copy(moreSheetVisible = false) }
+
+    fun onChapterStart() {
+        _session.value?.scrollToChapterStart()
+        _state.update { it.copy(moreSheetVisible = false) }
+    }
+
+    fun onChapterEnd() {
+        _session.value?.scrollToChapterEnd()
+        _state.update { it.copy(moreSheetVisible = false) }
     }
 
     /** Reader edits write this book's per-book override; global defaults live in Settings. */
@@ -478,11 +517,7 @@ class ReaderViewModel @Inject constructor(
 
     // --- Highlights ---
 
-    fun onOpenHighlights() = _state.update {
-        it.copy(highlightsSheetVisible = true, chapterControlsVisible = false, sheetVisible = false)
-    }
-
-    fun onCloseHighlights() = _state.update { it.copy(highlightsSheetVisible = false) }
+    fun onOpenHighlights() = openBrowse(BrowseTab.Highlights)
 
     fun onCloseEditHighlight() = _state.update { it.copy(editingHighlight = null) }
 
@@ -497,10 +532,10 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch { highlights.delete(id) }
     }
 
-    /** Jump to a highlight's stored position from the list, and close the list. */
+    /** Jump to a highlight's stored position from the list, and close the Browse sheet. */
     fun onJumpToHighlight(locatorJson: String) {
         _session.value?.goToLocator(locatorJson)
-        _state.update { it.copy(highlightsSheetVisible = false) }
+        _state.update { it.copy(browseTab = null) }
     }
 
     /** Recolour the highlight currently open in the edit popup. Updates the page decoration too. */
@@ -538,16 +573,12 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    fun onOpenBookmarks() = _state.update {
-        it.copy(bookmarksSheetVisible = true, chapterControlsVisible = false, sheetVisible = false)
-    }
+    fun onOpenBookmarks() = openBrowse(BrowseTab.Bookmarks)
 
-    fun onCloseBookmarks() = _state.update { it.copy(bookmarksSheetVisible = false) }
-
-    /** Jump to a bookmark's stored position from the list, and close the list. */
+    /** Jump to a bookmark's stored position from the list, and close the Browse sheet. */
     fun onJumpToBookmark(locatorJson: String) {
         _session.value?.goToLocator(locatorJson)
-        _state.update { it.copy(bookmarksSheetVisible = false) }
+        _state.update { it.copy(browseTab = null) }
     }
 
     fun onDeleteBookmarkById(id: String) {
@@ -556,24 +587,7 @@ class ReaderViewModel @Inject constructor(
 
     // --- In-book search ---
 
-    fun onOpenSearch() = _state.update {
-        it.copy(searchVisible = true, chapterControlsVisible = false, sheetVisible = false)
-    }
-
-    /** Close the search overlay and clear the on-page underlines + query/results. */
-    fun onCloseSearch() {
-        searchJob?.cancel()
-        _session.value?.clearSearch()
-        _state.update {
-            it.copy(
-                searchVisible = false,
-                searchQuery = "",
-                searchResults = emptyList(),
-                searchInProgress = false,
-                searchPerformed = false,
-            )
-        }
-    }
+    fun onOpenSearch() = openBrowse(BrowseTab.Search)
 
     fun onSearchQueryChange(query: String) = _state.update { it.copy(searchQuery = query) }
 
@@ -595,7 +609,7 @@ class ReaderViewModel @Inject constructor(
     /** Jump to a search hit; keep the underlines so the hits stay marked while reading. */
     fun onJumpToSearchResult(locatorJson: String) {
         _session.value?.goToLocator(locatorJson)
-        _state.update { it.copy(searchVisible = false) }
+        _state.update { it.copy(browseTab = null) }
     }
 
     /** Start counting reading time (reader brought to the foreground). */
