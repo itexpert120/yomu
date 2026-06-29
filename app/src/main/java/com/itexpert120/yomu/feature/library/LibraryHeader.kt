@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -89,81 +88,81 @@ internal fun LibraryHeader(
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
         contentAlignment = Alignment.TopCenter,
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Library",
-                    color = YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.display,
-                )
-                Text(
-                    text = "$bookCount books",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YomuCircleIconButton(
-                    onClick = onImport,
-                    icon = Icons.Rounded.Add,
-                    contentDescription = "Import EPUB",
-                )
-                YomuCircleIconButton(
-                    onClick = onThemeToggle,
-                    icon = themePreference.themeIcon(),
-                    contentDescription = "Toggle theme",
-                )
-                YomuCircleIconButton(
-                    onClick = onOpenStats,
-                    icon = Icons.Rounded.Insights,
-                    contentDescription = "Statistics",
-                )
-                YomuCircleIconButton(
-                    onClick = onOpenSettings,
-                    icon = Icons.Rounded.Settings,
-                    contentDescription = "Settings",
-                )
-            }
-        }
-
-        if (searchActive) {
-            SearchField(
-                query = searchQuery,
-                onQueryChange = onSearchQueryChange,
-                onClose = onSearchToggle,
-            )
-        } else {
-            SearchHint(onClick = onSearchToggle)
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            YomuPillFilter(
-                label = "Sort",
-                value = sortMode.label,
-                onClick = onSortSheetToggle,
-            )
-            YomuPillFilter(
-                label = "Group",
-                value = groupMode.label,
-                onClick = onGroupSheetToggle,
-            )
-            YomuPillFilter(
-                label = "View",
-                value = viewMode.label,
-                onClick = onDisplaySheetToggle,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Library",
+                        color = YomuTheme.colors.textPrimary,
+                        style = YomuTheme.type.display,
+                    )
+                    Text(
+                        text = "$bookCount books",
+                        color = YomuTheme.colors.textMuted,
+                        style = YomuTheme.type.caption,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    YomuCircleIconButton(
+                        onClick = onImport,
+                        icon = Icons.Rounded.Add,
+                        contentDescription = "Import EPUB",
+                    )
+                    YomuCircleIconButton(
+                        onClick = onThemeToggle,
+                        icon = themePreference.themeIcon(),
+                        contentDescription = "Toggle theme",
+                    )
+                    YomuCircleIconButton(
+                        onClick = onOpenStats,
+                        icon = Icons.Rounded.Insights,
+                        contentDescription = "Statistics",
+                    )
+                    YomuCircleIconButton(
+                        onClick = onOpenSettings,
+                        icon = Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                    )
+                }
+            }
+
+            if (searchActive) {
+                SearchField(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange,
+                    onClose = onSearchToggle,
+                )
+            } else {
+                SearchHint(onClick = onSearchToggle)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                YomuPillFilter(
+                    label = "Sort",
+                    value = sortMode.label,
+                    onClick = onSortSheetToggle,
+                )
+                YomuPillFilter(
+                    label = "Group",
+                    value = groupMode.label,
+                    onClick = onGroupSheetToggle,
+                )
+                YomuPillFilter(
+                    label = "View",
+                    value = viewMode.label,
+                    onClick = onDisplaySheetToggle,
+                )
+            }
         }
-    }
     }
 }
 
@@ -246,7 +245,7 @@ private fun SearchField(
                     }
                     inner()
                 }
-            }
+            },
         )
         Spacer(Modifier.width(8.dp))
         Box(

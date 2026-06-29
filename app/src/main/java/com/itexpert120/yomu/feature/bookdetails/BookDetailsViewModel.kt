@@ -123,7 +123,11 @@ class BookDetailsViewModel @Inject constructor(
     private val configFlow = combine(tocLoading, tocSort) { loading, sort -> loading to sort }
 
     val toc: StateFlow<TocUiState> = combine(
-        configFlow, tocItems, readChapters, selectionFlow, positionFlow,
+        configFlow,
+        tocItems,
+        readChapters,
+        selectionFlow,
+        positionFlow,
     ) { config, items, read, selection, position ->
         val (loading, sort) = config
         val (selected, inSelection) = selection
@@ -211,8 +215,7 @@ class BookDetailsViewModel @Inject constructor(
         onExitChapterSelection()
     }
 
-    private fun allChapterHrefs(): List<String> =
-        tocItems.value.mapNotNull { if (it.locatorJson != null) it.id else null }.distinct()
+    private fun allChapterHrefs(): List<String> = tocItems.value.mapNotNull { if (it.locatorJson != null) it.id else null }.distinct()
 
     // endregion
 

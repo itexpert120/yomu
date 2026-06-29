@@ -56,13 +56,11 @@ class LibraryPrefsRepository @Inject constructor(
     }
 }
 
-private fun <E : Enum<E>> String?.toEnum(entries: List<E>, default: E): E =
-    this?.let { name -> entries.firstOrNull { it.name == name } } ?: default
+private fun <E : Enum<E>> String?.toEnum(entries: List<E>, default: E): E = this?.let { name -> entries.firstOrNull { it.name == name } } ?: default
 
 /** Keep Auto (0) as-is; clamp any explicit count into the supported range. */
-private fun Int.coerceColumns(): Int =
-    if (this <= LibraryPreferences.AUTO_COLUMNS) {
-        LibraryPreferences.AUTO_COLUMNS
-    } else {
-        coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS)
-    }
+private fun Int.coerceColumns(): Int = if (this <= LibraryPreferences.AUTO_COLUMNS) {
+    LibraryPreferences.AUTO_COLUMNS
+} else {
+    coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS)
+}

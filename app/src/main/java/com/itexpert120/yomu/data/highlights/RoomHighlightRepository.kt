@@ -15,8 +15,7 @@ class RoomHighlightRepository @Inject constructor(
     private val dao: HighlightDao,
 ) : HighlightRepository {
 
-    override fun observeForBook(bookId: BookId): Flow<List<ReaderHighlight>> =
-        dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
+    override fun observeForBook(bookId: BookId): Flow<List<ReaderHighlight>> = dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
 
     override suspend fun add(
         bookId: BookId,

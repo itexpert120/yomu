@@ -30,8 +30,8 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `chapter_reads` (" +
-                            "`bookId` TEXT NOT NULL, `chapterId` TEXT NOT NULL, " +
-                            "PRIMARY KEY(`bookId`, `chapterId`))",
+                        "`bookId` TEXT NOT NULL, `chapterId` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`bookId`, `chapterId`))",
                 )
             }
         }
@@ -41,8 +41,8 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `reader_settings` (" +
-                            "`bookId` TEXT NOT NULL, `json` TEXT NOT NULL, " +
-                            "PRIMARY KEY(`bookId`))",
+                        "`bookId` TEXT NOT NULL, `json` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`bookId`))",
                 )
             }
         }
@@ -52,8 +52,8 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `book_toc` (" +
-                            "`bookId` TEXT NOT NULL, `json` TEXT NOT NULL, " +
-                            "PRIMARY KEY(`bookId`))",
+                        "`bookId` TEXT NOT NULL, `json` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`bookId`))",
                 )
             }
         }
@@ -63,8 +63,8 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `reading_days` (" +
-                            "`date` TEXT NOT NULL, `seconds` INTEGER NOT NULL, " +
-                            "PRIMARY KEY(`date`))",
+                        "`date` TEXT NOT NULL, `seconds` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`date`))",
                 )
             }
         }
@@ -74,9 +74,9 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `reading_sessions` (" +
-                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                            "`bookId` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, " +
-                            "`seconds` INTEGER NOT NULL)",
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`bookId` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, " +
+                        "`seconds` INTEGER NOT NULL)",
                 )
             }
         }
@@ -86,14 +86,14 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `highlights` (" +
-                            "`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
-                            "`locatorJson` TEXT NOT NULL, `text` TEXT NOT NULL, " +
-                            "`colorArgb` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
-                            "PRIMARY KEY(`id`))",
+                        "`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                        "`locatorJson` TEXT NOT NULL, `text` TEXT NOT NULL, " +
+                        "`colorArgb` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_highlights_bookId` " +
-                            "ON `highlights` (`bookId`)",
+                        "ON `highlights` (`bookId`)",
                 )
             }
         }
@@ -109,16 +109,16 @@ abstract class YomuDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `books` ADD COLUMN `finishedAt` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL(
                     "UPDATE books SET startedAt = COALESCE(" +
-                            "(SELECT MIN(startedAt) FROM reading_sessions " +
-                            "WHERE reading_sessions.bookId = books.id), 0)",
+                        "(SELECT MIN(startedAt) FROM reading_sessions " +
+                        "WHERE reading_sessions.bookId = books.id), 0)",
                 )
                 db.execSQL(
                     "UPDATE books SET startedAt = lastOpenedAt " +
-                            "WHERE startedAt = 0 AND lastOpenedAt > 0",
+                        "WHERE startedAt = 0 AND lastOpenedAt > 0",
                 )
                 db.execSQL(
                     "UPDATE books SET finishedAt = lastOpenedAt " +
-                            "WHERE progress >= 0.999 AND lastOpenedAt > 0",
+                        "WHERE progress >= 0.999 AND lastOpenedAt > 0",
                 )
             }
         }
@@ -128,14 +128,14 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `bookmarks` (" +
-                            "`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
-                            "`locatorJson` TEXT NOT NULL, `href` TEXT, `chapterTitle` TEXT, " +
-                            "`progression` REAL NOT NULL, `createdAt` INTEGER NOT NULL, " +
-                            "PRIMARY KEY(`id`))",
+                        "`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                        "`locatorJson` TEXT NOT NULL, `href` TEXT, `chapterTitle` TEXT, " +
+                        "`progression` REAL NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_bookmarks_bookId` " +
-                            "ON `bookmarks` (`bookId`)",
+                        "ON `bookmarks` (`bookId`)",
                 )
             }
         }

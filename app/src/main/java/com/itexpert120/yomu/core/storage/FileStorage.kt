@@ -22,8 +22,23 @@ class FileStorage @Inject constructor(
 ) {
     private val epubsDir: File = File(context.filesDir, "epubs").apply { mkdirs() }
     private val coversDir: File = File(context.filesDir, "covers").apply { mkdirs() }
+    private val fontsDir: File = File(context.filesDir, "fonts").apply { mkdirs() }
 
     data class CopiedFile(val file: File, val sha256: String, val sizeBytes: Long)
+
+    /** Writes raw [bytes] (a downloaded font file) to app storage under [name], returning its path. */
+    suspend fun saveFont(name: String, bytes: ByteArray): String = withContext(Dispatchers.IO) {
+        val target = File(fontsDir, name)
+        target.writeBytes(bytes)
+        target.absolutePath
+    }
+
+    /** Deletes a stored font file by absolute path (best-effort; ignores files outside the fonts dir). */
+    suspend fun deleteFont(path: String) = withContext(Dispatchers.IO) {
+        val file = File(path)
+        if (file.parentFile == fontsDir) runCatching { file.delete() }
+        Unit
+    }
 
     /** Copies the EPUB at [uri] into app storage under [bookId], returning its path + sha256. */
     suspend fun copyEpub(bookId: String, uri: Uri): CopiedFile = withContext(Dispatchers.IO) {
@@ -55,26 +70,23 @@ class FileStorage @Inject constructor(
      * Copies a user-picked image as a new cover for [bookId]. Uses a fresh filename so Coil
      * doesn't serve a cached old cover for the same path.
      */
-    suspend fun saveCoverFromUri(bookId: String, uri: Uri, stamp: Long): String =
-        withContext(Dispatchers.IO) {
-            val target = File(coversDir, "$bookId-$stamp.png")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
-            } ?: error("Unable to open input stream for $uri")
-            target.absolutePath
-        }
+    suspend fun saveCoverFromUri(bookId: String, uri: Uri, stamp: Long): String = withContext(Dispatchers.IO) {
+        val target = File(coversDir, "$bookId-$stamp.png")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        } ?: error("Unable to open input stream for $uri")
+        target.absolutePath
+    }
 
     /** The original display name from the SAF document, used as a title fallback. */
-    fun displayName(uri: Uri): String? {
-        return context.contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME),
-            null,
-            null,
-            null
-        )
-            ?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            }
-    }
+    fun displayName(uri: Uri): String? = context.contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null,
+    )
+        ?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
 }

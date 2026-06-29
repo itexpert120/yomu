@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Yomu is a native Android EPUB reader (Kotlin + Jetpack Compose). The product intent is a polished, reader-first, tablet-optimized app that deliberately does **not** look like a default Material app. See `docs/` for the full product/design/architecture specs — `docs/README.md` is the entry point.
 
-Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Also built: a **reading-statistics** dashboard (Vico charts + GitHub-style activity heatmap + session history), **external "Open with"/share** EPUB import, and two **Glance home-screen widgets** (library grid + activity heatmap — present but currently disabled in the manifest). **Hilt, Room, DataStore, Navigation Compose, Coil, Vico (charts), Glance (widgets), and Readium are all present and wired.**
+Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Also built: a **reading-statistics** dashboard (Vico charts + GitHub-style activity heatmap + session history) and **external "Open with"/share** EPUB import. **Hilt, Room, DataStore, Navigation Compose, Coil, Vico (charts), and Readium are all present and wired.** (Home-screen Glance widgets were removed.)
 
 The only network feature is the dictionary lookup (Free Dictionary API; the reason for the `INTERNET` permission); everything else is offline. Remaining gaps are later-phase roadmap items (e.g. OPDS catalogs, non-EPUB formats like PDF/audiobook, cross-device sync) — see `docs/roadmap.md`. The `docs/` describe the product/design intent and are kept current — each doc has an "Implementation status (current)" note, and `docs/roadmap.md` (Phases 0–12) is the authoritative done-vs-pending source. **Keep this CLAUDE.md in sync with the code as features land.**
 
@@ -37,7 +37,7 @@ Toolchain: AGP 9.2.1, Kotlin 2.4.0, Compose BOM 2026.06.00, **Java 17** (+ core-
 ```
 com.itexpert120.yomu
 ├── MainActivity.kt              # @AndroidEntryPoint, extends FragmentActivity (hosts the Readium
-│                                #   navigator); splash; edge-to-edge; external-open + widget deep links
+│                                #   navigator); splash; edge-to-edge; external-open deep links
 ├── YomuApplication.kt           # @HiltAndroidApp
 ├── app/                         # shell: YomuApp (theme resolution), navigation/{YomuNavHost,
 │                                #   YomuDestinations}, di/*, AppViewModel, ExternalOpenViewModel,
@@ -63,9 +63,9 @@ com.itexpert120.yomu
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
 │   ├── stats/                   # StatsRepository (reading-time sessions + derived stats/heatmap)
 │   └── dictionary/              # DictionaryRepository (Free Dictionary API — the only network call)
-├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline)
-├── feature/                     # library, bookdetails, bookedit, reader, settings, stats, about
-└── widget/                      # Glance home-screen widgets (library grid + activity heatmap; disabled)
+├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; also
+│                                #   kicks off background TOC extraction on insert)
+└── feature/                     # library, bookdetails, bookedit, reader, settings, stats, about
 ```
 Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`, `Settings`, `Stats`, `ReaderDefaults`, `About`, `Reader(bookId, locator?)`. Bookmarks and in-book search are built **behind the `core/reader` boundary** (search via Readium's `SearchService`, surfaced as `ReaderSession.search`/`applySearchDecorations`; bookmarks are Room-backed and reuse `currentLocator`/`goToLocator`). New reader capabilities should follow the same boundary pattern — the sibling Readium test-app under "Related projects" below has worked references.
 
@@ -122,5 +122,5 @@ Another single-module native EPUB reader (`io.github.piyushdaiya.vaachak`, v2.0.
 
 - `index.html`, `script.js`, `styles.css` at the repo root are an exported IntelliJ inspection report — not application code; ignore them.
 - `docs/roadmap.md` defines implementation phases and acceptance criteria; consult it before starting a new feature area.
-- The two Glance widgets in `widget/` are committed but currently **disabled** in `AndroidManifest.xml` (`android:enabled="false"`) — re-enable the receivers to ship them.
-- The version catalog also includes **Vico** (stats charts), **Glance** (widgets), `androidx.core-splashscreen`, and `kotlinx-serialization-json`. The `INTERNET` permission exists solely for the dictionary lookup; the app is otherwise offline.
+- Code style is enforced with **Spotless + ktlint** (`./gradlew spotlessApply` to format, `spotlessCheck` to verify), configured in the root `build.gradle.kts` with `.editorconfig` (IntelliJ style; `function-naming`/`property-naming` disabled for Compose/design-system PascalCase). Kotlin sources are LF (`.gitattributes`).
+- The version catalog also includes **Vico** (stats charts), `androidx.core-splashscreen`, and `kotlinx-serialization-json`. The `INTERNET` permission exists solely for the dictionary lookup; the app is otherwise offline.

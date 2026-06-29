@@ -82,6 +82,22 @@ interface ReaderSession {
      */
     val ready: StateFlow<Boolean>
 
+    /**
+     * True once the current resource's layout CSS — including the immersive chapter-start top padding —
+     * has actually been applied, so the page can be shown without that padding popping in a few frames
+     * after it appears. Flips back to false at the start of a chapter change and true again once the
+     * new resource has been styled. Gate a per-chapter content cover on this so a chapter never paints
+     * in its unstyled (padding-less) state.
+     */
+    val styled: StateFlow<Boolean>
+
+    /**
+     * Direction of the in-progress chapter change: true when moving forward (next chapter), false when
+     * moving back (previous chapter). Set before [styled] flips, so the UI can play a directional
+     * fade-slide as the new chapter is revealed.
+     */
+    val transitionForward: StateFlow<Boolean>
+
     /** Emits when the user taps the centre of the page (used to open the controls sheet). */
     val centerTaps: SharedFlow<Unit>
 

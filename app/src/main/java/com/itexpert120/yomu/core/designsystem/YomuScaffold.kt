@@ -169,6 +169,12 @@ fun YomuScreenScaffold(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    // Bottom edge fade so content dissolves into the surface instead of hard-cutting
+                    // at the screen/nav-bar edge (the top edge is handled by the header's shadow).
+                    .yomuScrollEdgeShadow(
+                        color = YomuTheme.colors.appBackground,
+                        bottom = scrollState.canScrollForward,
+                    )
                     .verticalScroll(scrollState),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {

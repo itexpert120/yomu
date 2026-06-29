@@ -15,8 +15,7 @@ class RoomBookmarkRepository @Inject constructor(
     private val dao: BookmarkDao,
 ) : BookmarkRepository {
 
-    override fun observeForBook(bookId: BookId): Flow<List<ReaderBookmark>> =
-        dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
+    override fun observeForBook(bookId: BookId): Flow<List<ReaderBookmark>> = dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
 
     override suspend fun add(
         bookId: BookId,
@@ -40,11 +39,9 @@ class RoomBookmarkRepository @Inject constructor(
 
     override suspend fun delete(id: String) = dao.deleteById(id)
 
-    override suspend fun existsAt(bookId: BookId, href: String?, progression: Double): Boolean =
-        dao.existsAt(bookId.value, href, progression)
+    override suspend fun existsAt(bookId: BookId, href: String?, progression: Double): Boolean = dao.existsAt(bookId.value, href, progression)
 
-    override suspend fun deleteAt(bookId: BookId, href: String?, progression: Double) =
-        dao.deleteAt(bookId.value, href, progression)
+    override suspend fun deleteAt(bookId: BookId, href: String?, progression: Double) = dao.deleteAt(bookId.value, href, progression)
 
     private fun BookmarkEntity.toModel() = ReaderBookmark(
         id = id,

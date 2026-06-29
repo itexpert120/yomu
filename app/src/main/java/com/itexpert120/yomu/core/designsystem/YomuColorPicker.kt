@@ -109,5 +109,11 @@ fun YomuColorPicker(
 }
 
 private val HueColors = listOf(
-    Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red,
+    Color.Red,
+    Color.Yellow,
+    Color.Green,
+    Color.Cyan,
+    Color.Blue,
+    Color.Magenta,
+    Color.Red,
 )

@@ -298,15 +298,17 @@ private fun BookCoverImage(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+            ) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .fillMaxWidth(0.42f)
                         .height(2.dp)
-                        .background(Color.White.copy(alpha = 0.72f))
+                        .background(Color.White.copy(alpha = 0.72f)),
                 )
                 Column(
                     modifier = Modifier.align(Alignment.BottomStart),
@@ -357,13 +359,13 @@ fun ProgressLine(progress: Float) {
             .fillMaxWidth()
             .height(2.dp)
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.border)
+            .background(YomuTheme.colors.border),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(progress.coerceIn(0f, 1f))
                 .height(2.dp)
-                .background(YomuTheme.colors.textPrimary)
+                .background(YomuTheme.colors.textPrimary),
         )
     }
 }

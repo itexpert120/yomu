@@ -11,9 +11,6 @@ import com.itexpert120.yomu.core.model.HourlyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import com.itexpert120.yomu.core.model.WeekdayReading
-import android.content.Context
-import com.itexpert120.yomu.widget.WidgetUpdater
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,13 +34,11 @@ import javax.inject.Singleton
 @Singleton
 class StatsRepository @Inject constructor(
     private val dao: BookDao,
-    @ApplicationContext private val context: Context,
 ) {
     private val writeMutex = Mutex()
 
     /** Total time spent reading a single book (seconds), as a live flow. */
-    fun bookReadingSeconds(bookId: BookId): Flow<Long> =
-        dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
+    fun bookReadingSeconds(bookId: BookId): Flow<Long> = dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
 
     /** Logs a finished reading session and folds its time into the day it started. */
     suspend fun recordSession(bookId: BookId, startedAtMillis: Long, seconds: Long) {
@@ -53,7 +48,7 @@ class StatsRepository @Inject constructor(
                 ReadingSessionEntity(
                     bookId = bookId.value,
                     startedAt = startedAtMillis,
-                    seconds = seconds
+                    seconds = seconds,
                 ),
             )
             // Bucket by the session's start day (local) so a session that crosses midnight isn't
@@ -65,8 +60,6 @@ class StatsRepository @Inject constructor(
             val current = dao.getReadingDaySeconds(date) ?: 0L
             dao.upsertReadingDay(ReadingDayEntity(date, current + seconds))
         }
-        // Reflect the new session in the home-screen reading-activity widget.
-        WidgetUpdater.refreshActivity(context)
     }
 
     // Day-derived figures recompute only when reading-day data actually changes (not on every book
@@ -125,7 +118,7 @@ class StatsRepository @Inject constructor(
             longestSessionSeconds = session.longestSeconds,
             daysRead = day.daysRead,
             averageSecondsPerActiveDay =
-                if (day.daysRead > 0) day.totalSeconds / day.daysRead else 0L,
+            if (day.daysRead > 0) day.totalSeconds / day.daysRead else 0L,
             secondsLast7Days = day.secondsLast7Days,
             secondsLast30Days = day.secondsLast30Days,
         )
@@ -137,17 +130,16 @@ class StatsRepository @Inject constructor(
     /** Reading time per day for the last 30 days (zero-filled), oldest first. */
     val monthlyBuckets: Flow<List<DailyReading>> = dailyBucketsFlow(MONTH_DAYS)
 
-    private fun dailyBucketsFlow(days: Int): Flow<List<DailyReading>> =
-        dao.observeReadingDays()
-            .map { rows ->
-                val byDate = rows.associate { it.date to it.seconds }
-                val today = LocalDate.now()
-                (days - 1 downTo 0).map { offset ->
-                    val date = today.minusDays(offset.toLong()).toString()
-                    DailyReading(date = date, seconds = byDate[date] ?: 0L)
-                }
+    private fun dailyBucketsFlow(days: Int): Flow<List<DailyReading>> = dao.observeReadingDays()
+        .map { rows ->
+            val byDate = rows.associate { it.date to it.seconds }
+            val today = LocalDate.now()
+            (days - 1 downTo 0).map { offset ->
+                val date = today.minusDays(offset.toLong()).toString()
+                DailyReading(date = date, seconds = byDate[date] ?: 0L)
             }
-            .distinctUntilChanged()
+        }
+        .distinctUntilChanged()
 
     /** Total reading time per day-of-week (Mon..Sun), over the whole session history. */
     val weekdayBuckets: Flow<List<WeekdayReading>> = dao.observeSessionTimes()
@@ -206,7 +198,7 @@ class StatsRepository @Inject constructor(
                             seconds = seconds,
                             level = intensityLevel(seconds, max),
                             inMonth = d.month == currentMonth,
-                        )
+                        ),
                     )
                     d = d.plusDays(1)
                 }
@@ -230,8 +222,7 @@ class StatsRepository @Inject constructor(
         }
     }
 
-    private fun startZoned(session: SessionTime) =
-        Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault())
+    private fun startZoned(session: SessionTime) = Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault())
 
     private fun total(active: List<Pair<LocalDate, Long>>, windowDays: Int): Long {
         val cutoff = LocalDate.now().minusDays((windowDays - 1).toLong())

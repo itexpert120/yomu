@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -44,16 +43,16 @@ import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import com.itexpert120.yomu.core.model.WeekdayReading
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisGuidelineComponent
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisLabelComponent
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisLineComponent
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisTickComponent
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisGuidelineComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisLabelComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisLineComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisTickComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
 import com.patrykandpatrick.vico.compose.common.fill
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
@@ -507,11 +506,10 @@ private fun ColumnChart(
     )
 }
 
-private fun minutesAxisFormatter(): CartesianValueFormatter =
-    CartesianValueFormatter { _, value, _ ->
-        val minutes = value.toInt()
-        if (minutes >= 60) "${minutes / 60}h" else "${minutes}m"
-    }
+private fun minutesAxisFormatter(): CartesianValueFormatter = CartesianValueFormatter { _, value, _ ->
+    val minutes = value.toInt()
+    if (minutes >= 60) "${minutes / 60}h" else "${minutes}m"
+}
 
 /** Labels every few days so the 30-day window isn't a wall of text. */
 private fun dayAxisFormatter(trend: List<DailyReading>): CartesianValueFormatter {
@@ -530,19 +528,17 @@ private fun dayAxisFormatter(trend: List<DailyReading>): CartesianValueFormatter
     }
 }
 
-private fun hourAxisFormatter(): CartesianValueFormatter =
-    CartesianValueFormatter { _, value, _ ->
-        when (value.toInt()) {
-            0 -> "12a"
-            6 -> "6a"
-            12 -> "12p"
-            18 -> "6p"
-            else -> " "
-        }
+private fun hourAxisFormatter(): CartesianValueFormatter = CartesianValueFormatter { _, value, _ ->
+    when (value.toInt()) {
+        0 -> "12a"
+        6 -> "6a"
+        12 -> "12p"
+        18 -> "6p"
+        else -> " "
     }
+}
 
-private fun labelFormatter(labels: List<String>): CartesianValueFormatter =
-    CartesianValueFormatter { _, value, _ -> labels.getOrElse(value.toInt()) { " " } }
+private fun labelFormatter(labels: List<String>): CartesianValueFormatter = CartesianValueFormatter { _, value, _ -> labels.getOrElse(value.toInt()) { " " } }
 
 private val WEEKDAY_LABELS = listOf("M", "T", "W", "T", "F", "S", "S")
 
@@ -606,8 +602,7 @@ private fun formatDayHeader(day: LocalDate): String {
     }
 }
 
-private fun formatClock(millis: Long): String =
-    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
+private fun formatClock(millis: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
 
 private fun formatReadingTime(seconds: Long): String {
     val totalMinutes = seconds / 60

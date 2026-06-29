@@ -103,8 +103,13 @@ internal fun ReaderBrowseSheet(
                             HighlightsBody(highlights, onJumpToHighlight, onDeleteHighlight)
 
                         BrowseTab.Search -> SearchBody(
-                            searchQuery, searchResults, searchInProgress, searchPerformed,
-                            onSearchQueryChange, onSubmitSearch, onJumpToSearchResult,
+                            searchQuery,
+                            searchResults,
+                            searchInProgress,
+                            searchPerformed,
+                            onSearchQueryChange,
+                            onSubmitSearch,
+                            onJumpToSearchResult,
                         )
                     }
                 }

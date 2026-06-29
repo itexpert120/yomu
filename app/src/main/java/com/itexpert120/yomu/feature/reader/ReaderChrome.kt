@@ -63,9 +63,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
-import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
+import com.itexpert120.yomu.core.model.ReaderFont
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -93,9 +93,11 @@ internal fun ReaderTopBar(
     Column(modifier = modifier.fillMaxWidth()) {
         // The navigator draws edge-to-edge, so inset content by the full solid bar (status backdrop
         // + the controls row); the fade below is excluded so it bleeds over the page.
-        Column(modifier = Modifier
-            .fillMaxWidth()
-            .onSizeChanged { onContentHeight(it.height) }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onSizeChanged { onContentHeight(it.height) },
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -149,9 +151,11 @@ internal fun ReaderFooter(
     val time = rememberClock()
     val battery = rememberBattery()
     Column(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier
-            .fillMaxWidth()
-            .onSizeChanged { onContentHeight(it.height) }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onSizeChanged { onContentHeight(it.height) },
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -196,7 +200,6 @@ internal fun ReaderFooter(
         }
     }
 }
-
 
 /**
  * Bottom chapter-controls bar, revealed by a centre tap. Holds quick navigation: table of contents,
@@ -294,7 +297,7 @@ private fun ReaderBarButton(
     icon: ImageVector,
     description: String,
     tint: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -384,6 +387,6 @@ private fun batteryFrom(intent: Intent?): BatteryStatus? {
     if (level < 0 || scale <= 0) return null
     val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
     val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL
+        status == BatteryManager.BATTERY_STATUS_FULL
     return BatteryStatus(level = (level * 100 / scale), charging = charging)
 }

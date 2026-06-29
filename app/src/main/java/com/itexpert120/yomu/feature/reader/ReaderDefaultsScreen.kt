@@ -34,6 +34,8 @@ fun ReaderDefaultsRoute(onBack: () -> Unit) {
                 onUpdateSettings = viewModel::onUpdate,
                 onOpenCustomTheme = viewModel::onOpenCustomTheme,
                 onApplyCustomTheme = viewModel::onApplyCustomTheme,
+                customFonts = state.installedFonts,
+                onManageFonts = viewModel::onOpenFontLibrary,
             )
         }
     }
@@ -47,5 +49,16 @@ fun ReaderDefaultsRoute(onBack: () -> Unit) {
         onSave = viewModel::onSaveCustomTheme,
         onApply = viewModel::onApplyCustomTheme,
         onDelete = viewModel::onDeleteCustomTheme,
+    )
+
+    FontLibrarySheet(
+        visible = state.fontSheetVisible,
+        installed = state.installedFonts,
+        downloading = state.downloadingFonts,
+        error = state.fontError,
+        catalog = state.fontCatalog,
+        onDismiss = viewModel::onCloseFontLibrary,
+        onInstall = viewModel::onInstallFont,
+        onRemove = viewModel::onRemoveFont,
     )
 }

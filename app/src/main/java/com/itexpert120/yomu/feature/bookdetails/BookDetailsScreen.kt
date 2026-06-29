@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -28,15 +29,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -44,9 +46,9 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.Replay
@@ -71,16 +73,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
+import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
+import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
+import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
+import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
-import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
-import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
-import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.ReadingState
 import com.itexpert120.yomu.feature.library.ConfirmRemoveDialog
@@ -113,6 +116,16 @@ fun BookDetailsScreen(
     val listState = rememberLazyListState()
     var showCover by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
+    var showTimeline by remember { mutableStateOf(false) }
+    // The timeline button only appears once there's at least one date to show (mirrors
+    // ReadingTimeline, which renders nothing when empty).
+    val hasTimeline = book != null &&
+        (
+            book.addedDate != null ||
+                book.startedDate != null ||
+                book.lastReadDate != null ||
+                book.finishedDate != null
+            )
     // The Remove action opens a confirmation first; only the dialog's confirm performs the removal.
     val requestRemove = { showRemoveConfirm = true }
     // Reveal the title in the bar only once the in-content header (item 0) has scrolled away, so
@@ -134,6 +147,15 @@ fun BookDetailsScreen(
                     onBack = onBack,
                     elevated = listState.canScrollBackward,
                     titleVisible = showHeaderTitle && book != null,
+                    trailing = {
+                        if (hasTimeline) {
+                            HeaderIconButton(
+                                icon = Icons.Rounded.History,
+                                contentDescription = "Reading timeline",
+                                onClick = { showTimeline = true },
+                            )
+                        }
+                    },
                 )
 
                 BoxWithConstraints(
@@ -278,6 +300,39 @@ fun BookDetailsScreen(
             onRemove()
         },
     )
+
+    if (book != null) {
+        YomuBottomSheet(
+            visible = showTimeline,
+            onDismiss = { showTimeline = false },
+        ) {
+            ReadingTimeline(book)
+        }
+    }
+}
+
+/** Circular header action in the [YomuScreenHeader] trailing slot, matching the back button. */
+@Composable
+private fun HeaderIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(YomuTheme.colors.surfaceRaised)
+            .yomuPressable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = YomuTheme.colors.textPrimary,
+            modifier = Modifier.size(18.dp),
+        )
+    }
 }
 
 /**
@@ -303,53 +358,53 @@ private fun TwoPaneDetails(
     onToggleChapterSelection: (Int) -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-    Row(
-        modifier = Modifier
-            .widthIn(max = 1080.dp)
-            .fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
-    ) {
-        // Left pane: book identity + actions + description, independently scrollable.
-        Column(
+        Row(
             modifier = Modifier
-                .width(360.dp)
-                .fillMaxHeight()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, top = 4.dp, bottom = navBottom + 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .widthIn(max = 1080.dp)
+                .fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            BookHeader(
-                book = book,
-                onCoverClick = onCoverClick,
-                onEdit = onEdit,
-                onMarkRead = onMarkRead,
-                onMarkUnread = onMarkUnread,
-                onRemove = onRemove,
-            )
-        }
+            // Left pane: book identity + actions + description, independently scrollable.
+            Column(
+                modifier = Modifier
+                    .width(360.dp)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, top = 4.dp, bottom = navBottom + 28.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                BookHeader(
+                    book = book,
+                    onCoverClick = onCoverClick,
+                    onEdit = onEdit,
+                    onMarkRead = onMarkRead,
+                    onMarkUnread = onMarkUnread,
+                    onRemove = onRemove,
+                )
+            }
 
-        // Right pane: the contents list (virtualized).
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(end = 20.dp),
-            contentPadding = PaddingValues(top = 4.dp, bottom = navBottom + 28.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            tocSection(
-                toc = toc,
-                onTocSortChange = onTocSortChange,
-                onOpenChapter = onOpenChapter,
-                onSetChapterRead = onSetChapterRead,
-                onEnterSelection = onEnterChapterSelection,
-                onToggleSelection = onToggleChapterSelection,
-            )
-            // Trailing room for the floating Read button / selection bar.
-            item { Spacer(Modifier.height(72.dp)) }
+            // Right pane: the contents list (virtualized).
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(end = 20.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = navBottom + 28.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                tocSection(
+                    toc = toc,
+                    onTocSortChange = onTocSortChange,
+                    onOpenChapter = onOpenChapter,
+                    onSetChapterRead = onSetChapterRead,
+                    onEnterSelection = onEnterChapterSelection,
+                    onToggleSelection = onToggleChapterSelection,
+                )
+                // Trailing room for the floating Read button / selection bar.
+                item { Spacer(Modifier.height(72.dp)) }
+            }
         }
-    }
     }
 }
 
@@ -406,9 +461,6 @@ private fun BookHeader(
             }
         }
 
-        // Full-width below the cover/metadata block so the dates have room on narrow screens.
-        ReadingTimeline(book)
-
         DetailActionBar(
             book = book,
             onEdit = onEdit,
@@ -424,7 +476,6 @@ private fun BookHeader(
         }
     }
 }
-
 
 /**
  * Reading timeline (Added / Started / Last read / Finished). Rendered full-width below the header so
@@ -573,7 +624,7 @@ private fun RowScope.ActionItem(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.dp),
         )
         Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
     }
@@ -583,7 +634,7 @@ private fun RowScope.ActionItem(
 private fun FloatingReadButton(
     reading: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val onAccent = YomuTheme.colors.appBackground
     Row(
@@ -610,6 +661,7 @@ private fun FloatingReadButton(
 }
 
 /** Contents header (with sort control) followed by the flattened, virtualized TOC entries. */
+@OptIn(ExperimentalFoundationApi::class)
 private fun LazyListScope.tocSection(
     toc: TocUiState,
     onTocSortChange: (TocSortMode) -> Unit,
@@ -618,7 +670,9 @@ private fun LazyListScope.tocSection(
     onEnterSelection: (Int) -> Unit,
     onToggleSelection: (Int) -> Unit,
 ) {
-    item {
+    // Pin the "Contents" header + sort switcher so it stays reachable while the (potentially long)
+    // chapter list scrolls underneath, instead of scrolling away with the first rows.
+    stickyHeader {
         ContentsHeader(toc = toc, onTocSortChange = onTocSortChange)
     }
 
@@ -649,7 +703,11 @@ private fun LazyListScope.tocSection(
 @Composable
 private fun ContentsHeader(toc: TocUiState, onTocSortChange: (TocSortMode) -> Unit) {
     Column(
-        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+        // Opaque background: as a pinned sticky header, scrolling TOC rows must not show through it.
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(YomuTheme.colors.appBackground)
+            .padding(top = 16.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -699,7 +757,7 @@ private fun TocRow(
                 start = 12.dp + (entry.depth * 16).dp,
                 end = 6.dp,
                 top = 9.dp,
-                bottom = 9.dp
+                bottom = 9.dp,
             ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -775,8 +833,11 @@ private fun SelectionDot(selected: Boolean) {
                 .clip(CircleShape)
                 .background(if (selected) YomuTheme.colors.accent else Color.Transparent)
                 .then(
-                    if (selected) Modifier
-                    else Modifier.border(1.5.dp, YomuTheme.colors.textMuted, CircleShape),
+                    if (selected) {
+                        Modifier
+                    } else {
+                        Modifier.border(1.5.dp, YomuTheme.colors.textMuted, CircleShape)
+                    },
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -819,14 +880,14 @@ private fun ChapterSelectionBar(
             Icons.Rounded.RemoveDone,
             "Unread",
             onMarkUnread,
-            enabled = selectedCount > 0
+            enabled = selectedCount > 0,
         )
         // Mark every chapter up to (and including) the selected one as read.
         SelectionAction(
             Icons.AutoMirrored.Rounded.PlaylistAddCheck,
             "To here",
             onMarkPrevious,
-            enabled = selectedCount > 0
+            enabled = selectedCount > 0,
         )
         SelectionAction(Icons.Rounded.DoneAll, "All", onSelectAll)
     }
@@ -853,7 +914,7 @@ private fun RowScope.SelectionAction(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.dp),
         )
         Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
     }

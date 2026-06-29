@@ -7,7 +7,6 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
@@ -18,6 +17,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -83,21 +83,19 @@ fun yomuChromeExit(toBottom: Boolean = true): ExitTransition {
 }
 
 /** Enter for popups/menus that should "materialize" in place — scale + fade, no slide. */
-fun yomuPopupEnter(origin: TransformOrigin = TransformOrigin.Center): EnterTransition =
-    fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
-        scaleIn(
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
-            initialScale = YomuMotion.PopupScaleFrom,
-            transformOrigin = origin,
-        )
+fun yomuPopupEnter(origin: TransformOrigin = TransformOrigin.Center): EnterTransition = fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
+    scaleIn(
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
+        initialScale = YomuMotion.PopupScaleFrom,
+        transformOrigin = origin,
+    )
 
-fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransition =
-    fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
-        scaleOut(
-            animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
-            targetScale = YomuMotion.PopupScaleFrom,
-            transformOrigin = origin,
-        )
+fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransition = fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
+    scaleOut(
+        animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
+        targetScale = YomuMotion.PopupScaleFrom,
+        transformOrigin = origin,
+    )
 
 /**
  * A directional content swap for tab/segment changes: the incoming content slides in horizontally

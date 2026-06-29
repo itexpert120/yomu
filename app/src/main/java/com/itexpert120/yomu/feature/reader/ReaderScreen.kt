@@ -7,8 +7,10 @@ import android.os.Build
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -41,6 +43,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
@@ -191,25 +194,39 @@ fun ReaderScreen(
             }
         }
     }
-    LaunchedEffect(Unit) {
-        val window = view.context.findActivity()?.window ?: return@LaunchedEffect
-        val controller = WindowCompat.getInsetsController(window, view)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val lp = window.attributes
-            lp.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            window.attributes = lp
-        }
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_IMMERSIVE or
+    // Hide both system bars for full-screen reading. Android re-shows the bars whenever the window
+    // loses and regains focus (returning from background, multi-window, etc.), so this must be
+    // re-applied on every ON_RESUME — not just once. A one-shot effect here is why content used to
+    // reappear below the status bar after the app came back from the background.
+    DisposableEffect(Unit) {
+        val window = view.context.findActivity()?.window
+        fun hideSystemBars() {
+            window ?: return
+            val controller = WindowCompat.getInsetsController(window, view)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val lp = window.attributes
+                lp.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                window.attributes = lp
+            }
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_IMMERSIVE or
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_FULLSCREEN
-        controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        val lifecycle = (view.context.findActivity() as? LifecycleOwner)?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hideSystemBars()
+        }
+        lifecycle?.addObserver(observer)
+        hideSystemBars()
+        onDispose { lifecycle?.removeObserver(observer) }
     }
     // Colour the system bars to the reading background so the status area matches the page on every
     // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).
@@ -225,7 +242,7 @@ fun ReaderScreen(
     LaunchedEffect(
         state.settings.useSystemBrightness,
         state.settings.brightness,
-        brightnessPreview
+        brightnessPreview,
     ) {
         val preview = brightnessPreview
         if (state.settings.useSystemBrightness) {
@@ -306,11 +323,30 @@ fun ReaderScreen(
 
     val controlBarBottomInset by animateDpAsState(
         targetValue = baseBottomInset,
-        label = "readerControlBarBottomInset"
+        label = "readerControlBarBottomInset",
     )
 
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
+
+    // Reveal animation for chapter switches (immersive scroll only): while the new chapter loads it's
+    // held at 0 (hidden behind the transition cover), then fades + slides into place once styled — up
+    // when moving forward, down when moving back — so a rubberband chapter change reads as a motion
+    // rather than a hard cut.
+    val immersiveScroll = immersive && state.settings.layout == ReaderLayout.Scroll
+    val reveal = remember { Animatable(1f) }
+    LaunchedEffect(state.contentStyled, immersiveScroll) {
+        when {
+            !immersiveScroll -> reveal.snapTo(1f)
+            !state.contentStyled -> reveal.snapTo(0f)
+            else -> reveal.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 300, easing = YomuMotion.EmphasizedDecel),
+            )
+        }
+    }
+    val revealSlidePx = with(density) { 36.dp.toPx() }
+    val revealDir = if (state.transitionForward) 1f else -1f
 
     Box(
         modifier = Modifier
@@ -328,7 +364,11 @@ fun ReaderScreen(
                     immersive = immersive,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = topInset, bottom = bottomInset),
+                        .padding(top = topInset, bottom = bottomInset)
+                        .graphicsLayer {
+                            alpha = reveal.value
+                            translationY = (1f - reveal.value) * revealSlidePx * revealDir
+                        },
                 )
 
                 // Until the first page paints, cover the WebView with an opaque "Opening…" scrim.
@@ -341,6 +381,22 @@ fun ReaderScreen(
                     ) {
                         CenteredMessage("Opening…")
                     }
+                }
+
+                // Between chapters in immersive scroll mode, hold an opaque cover (no message) until the
+                // new chapter's layout CSS — chiefly the chapter-start top padding — has applied, so the
+                // page is revealed already-padded instead of the padding popping in a few frames later
+                // (the jolt seen when the rubberband loads the next/previous chapter).
+                val coverChapterTransition = !state.loading &&
+                    !state.contentStyled &&
+                    immersive &&
+                    state.settings.layout == ReaderLayout.Scroll
+                if (coverChapterTransition) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(background),
+                    )
                 }
 
                 // Top bar: chevron · chapter title (reading font) · progress % · bookmark. Hidden with
@@ -366,138 +422,137 @@ fun ReaderScreen(
 
                 // Footer, overlays and all sheets only appear once the first page has painted.
                 if (!state.loading) {
-                if (state.settings.showFooter) {
-                    // Keep the footer composed even while hidden so its measured height is always known —
-                    // the bottom controls bar reserves that height to sit above it. An unmounted footer
-                    // (immersive mode) reports height 0 on the first reveal and the controls overlap it.
-                    // Fade with alpha instead of mounting/unmounting.
-                    val footerAlpha by animateFloatAsState(
-                        targetValue = if (chromeShown) 1f else 0f,
-                        label = "readerFooterAlpha",
+                    if (state.settings.showFooter) {
+                        // Keep the footer composed even while hidden so its measured height is always known —
+                        // the bottom controls bar reserves that height to sit above it. An unmounted footer
+                        // (immersive mode) reports height 0 on the first reveal and the controls overlap it.
+                        // Fade with alpha instead of mounting/unmounting.
+                        val footerAlpha by animateFloatAsState(
+                            targetValue = if (chromeShown) 1f else 0f,
+                            label = "readerFooterAlpha",
+                        )
+                        ReaderFooter(
+                            progressPercent = state.progressPercent,
+                            chapterPagesLeft = state.chapterPagesLeft,
+                            settings = state.settings,
+                            onContentHeight = { footerPx = it },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .graphicsLayer { alpha = footerAlpha },
+                        )
+                    }
+
+                    // Extra-dim scrim over the whole reading surface (content + chrome) for going darker
+                    // than the device minimum. Decorative only — no pointerInput, so taps pass through.
+                    if (effectiveDim > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Color.Black.copy(alpha = effectiveDim * ReaderSettings.MAX_DIM_ALPHA),
+                                ),
+                        )
+                    }
+
+                    // Bottom chapter-controls bar, toggled by a centre tap.
+                    ReaderChapterControlsBar(
+                        visible = state.chapterControlsVisible,
+                        bottomInset = controlBarBottomInset,
+                        background = background,
+                        content = onBackground,
+                        hasPrevious = state.hasPreviousChapter,
+                        hasNext = state.hasNextChapter,
+                        onBrowse = onOpenBrowse,
+                        onPrevious = onPreviousChapter,
+                        onNext = onNextChapter,
+                        onDisplay = onOpenSheet,
+                        onMore = onOpenMore,
                     )
-                    ReaderFooter(
-                        progressPercent = state.progressPercent,
-                        chapterPagesLeft = state.chapterPagesLeft,
-                        settings = state.settings,
-                        onContentHeight = { footerPx = it },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .graphicsLayer { alpha = footerAlpha },
+
+                    ReaderControlsSheet(
+                        visible = state.sheetVisible,
+                        state = sheetState,
+                        onDismiss = onCloseSheet,
+                        onSeek = onSeek,
+                        onNextChapter = onNextChapter,
+                        onPreviousChapter = onPreviousChapter,
+                        onUpdateSettings = onUpdateSettings,
+                        onResetSettings = onResetSettings,
+                        onOpenCustomTheme = onOpenCustomTheme,
+                        onApplyCustomTheme = onApplyCustomTheme,
+                        onPreviewBrightness = { brightness ->
+                            brightnessPreview = brightness.coerceIn(0f, 1f)
+                        },
+                        onCommitBrightness = { brightness ->
+                            val value = brightness.coerceIn(0f, 1f)
+                            brightnessPreview = value
+                            onUpdateSettings(state.settings.copy(brightness = value))
+                        },
+                        onPreviewDim = { dim -> dimPreview = dim.coerceIn(0f, 1f) },
+                        onCommitDim = { dim ->
+                            val value = dim.coerceIn(0f, 1f)
+                            dimPreview = value
+                            onUpdateSettings(state.settings.copy(dimLevel = value))
+                        },
                     )
-                }
 
-                // Extra-dim scrim over the whole reading surface (content + chrome) for going darker
-                // than the device minimum. Decorative only — no pointerInput, so taps pass through.
-                if (effectiveDim > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(
-                                Color.Black.copy(alpha = effectiveDim * ReaderSettings.MAX_DIM_ALPHA),
-                            ),
+                    CustomThemeSheet(
+                        visible = state.customSheetVisible,
+                        settings = sheetState.settings,
+                        customThemes = state.customThemes,
+                        onDismiss = onCloseCustomTheme,
+                        onUpdateSettings = onUpdateSettings,
+                        onSave = onSaveCustomTheme,
+                        onApply = onApplyCustomTheme,
+                        onDelete = onDeleteCustomTheme,
                     )
-                }
 
-                // Bottom chapter-controls bar, toggled by a centre tap.
-                ReaderChapterControlsBar(
-                    visible = state.chapterControlsVisible,
-                    bottomInset = controlBarBottomInset,
-                    background = background,
-                    content = onBackground,
-                    hasPrevious = state.hasPreviousChapter,
-                    hasNext = state.hasNextChapter,
-                    onBrowse = onOpenBrowse,
-                    onPrevious = onPreviousChapter,
-                    onNext = onNextChapter,
-                    onDisplay = onOpenSheet,
-                    onMore = onOpenMore,
-                )
+                    ReaderBrowseSheet(
+                        tab = state.browseTab,
+                        toc = state.toc,
+                        tocLoading = state.tocLoading,
+                        currentHref = state.currentHref,
+                        onJumpToLocator = onJumpToLocator,
+                        bookmarks = state.bookmarks,
+                        onJumpToBookmark = onJumpToBookmark,
+                        onDeleteBookmark = onDeleteBookmarkById,
+                        highlights = state.highlights,
+                        onJumpToHighlight = onJumpToHighlight,
+                        onDeleteHighlight = onDeleteHighlightById,
+                        searchQuery = state.searchQuery,
+                        searchResults = state.searchResults,
+                        searchInProgress = state.searchInProgress,
+                        searchPerformed = state.searchPerformed,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onSubmitSearch = onSubmitSearch,
+                        onJumpToSearchResult = onJumpToSearchResult,
+                        onSelectTab = onSelectBrowseTab,
+                        onDismiss = onCloseBrowse,
+                    )
 
-                ReaderControlsSheet(
-                    visible = state.sheetVisible,
-                    state = sheetState,
-                    onDismiss = onCloseSheet,
-                    onSeek = onSeek,
-                    onNextChapter = onNextChapter,
-                    onPreviousChapter = onPreviousChapter,
-                    onUpdateSettings = onUpdateSettings,
-                    onResetSettings = onResetSettings,
-                    onOpenCustomTheme = onOpenCustomTheme,
-                    onApplyCustomTheme = onApplyCustomTheme,
-                    onPreviewBrightness = { brightness ->
-                        brightnessPreview = brightness.coerceIn(0f, 1f)
-                    },
-                    onCommitBrightness = { brightness ->
-                        val value = brightness.coerceIn(0f, 1f)
-                        brightnessPreview = value
-                        onUpdateSettings(state.settings.copy(brightness = value))
-                    },
-                    onPreviewDim = { dim -> dimPreview = dim.coerceIn(0f, 1f) },
-                    onCommitDim = { dim ->
-                        val value = dim.coerceIn(0f, 1f)
-                        dimPreview = value
-                        onUpdateSettings(state.settings.copy(dimLevel = value))
-                    },
-                )
+                    ReaderMoreSheet(
+                        visible = state.moreSheetVisible,
+                        onChapterStart = onChapterStart,
+                        onChapterEnd = onChapterEnd,
+                        onDismiss = onCloseMore,
+                    )
 
-                CustomThemeSheet(
-                    visible = state.customSheetVisible,
-                    settings = sheetState.settings,
-                    customThemes = state.customThemes,
-                    onDismiss = onCloseCustomTheme,
-                    onUpdateSettings = onUpdateSettings,
-                    onSave = onSaveCustomTheme,
-                    onApply = onApplyCustomTheme,
-                    onDelete = onDeleteCustomTheme,
-                )
+                    WordLookupSheet(
+                        state = state.lookup,
+                        onDismiss = onCloseLookup,
+                        onPronounce = onPronounce,
+                        onLookUpWord = onLookUpWord,
+                        onBack = onLookupBack,
+                    )
 
-                ReaderBrowseSheet(
-                    tab = state.browseTab,
-                    toc = state.toc,
-                    tocLoading = state.tocLoading,
-                    currentHref = state.currentHref,
-                    onJumpToLocator = onJumpToLocator,
-                    bookmarks = state.bookmarks,
-                    onJumpToBookmark = onJumpToBookmark,
-                    onDeleteBookmark = onDeleteBookmarkById,
-                    highlights = state.highlights,
-                    onJumpToHighlight = onJumpToHighlight,
-                    onDeleteHighlight = onDeleteHighlightById,
-                    searchQuery = state.searchQuery,
-                    searchResults = state.searchResults,
-                    searchInProgress = state.searchInProgress,
-                    searchPerformed = state.searchPerformed,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onSubmitSearch = onSubmitSearch,
-                    onJumpToSearchResult = onJumpToSearchResult,
-                    onSelectTab = onSelectBrowseTab,
-                    onDismiss = onCloseBrowse,
-                )
+                    FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)
 
-                ReaderMoreSheet(
-                    visible = state.moreSheetVisible,
-                    onChapterStart = onChapterStart,
-                    onChapterEnd = onChapterEnd,
-                    onDismiss = onCloseMore,
-                )
-
-                WordLookupSheet(
-                    state = state.lookup,
-                    onDismiss = onCloseLookup,
-                    onPronounce = onPronounce,
-                    onLookUpWord = onLookUpWord,
-                    onBack = onLookupBack,
-                )
-
-                FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)
-
-                HighlightEditSheet(
-                    highlight = state.editingHighlight,
-                    onSelectColor = onSetHighlightColor,
-                    onDelete = onDeleteHighlight,
-                    onDismiss = onCloseEditHighlight,
-                )
-
+                    HighlightEditSheet(
+                        highlight = state.editingHighlight,
+                        onSelectColor = onSetHighlightColor,
+                        onDelete = onDeleteHighlight,
+                        onDismiss = onCloseEditHighlight,
+                    )
                 }
             }
 

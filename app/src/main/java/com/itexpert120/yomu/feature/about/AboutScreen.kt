@@ -66,7 +66,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 Text(
                     text = "Yomu",
                     color = YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.display
+                    style = YomuTheme.type.display,
                 )
                 Text(
                     text = "読む · EPUB reader",
@@ -91,7 +91,7 @@ fun AboutScreen(onBack: () -> Unit) {
         YomuSettingGroup(title = "About") {
             Text(
                 text = "Yomu is a native Android EPUB reader focused on a calm, reader-first " +
-                        "experience with deep typography and theme control.",
+                    "experience with deep typography and theme control.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )
@@ -100,17 +100,17 @@ fun AboutScreen(onBack: () -> Unit) {
         YomuSettingGroup(title = "Privacy") {
             Text(
                 text = "Yomu keeps your library, reading progress, highlights, and statistics on " +
-                        "this device only. There are no accounts, ads, or analytics, and nothing " +
-                        "about your reading is collected or shared. The books you add never leave " +
-                        "your device.",
+                    "this device only. There are no accounts, ads, or analytics, and nothing " +
+                    "about your reading is collected or shared. The books you add never leave " +
+                    "your device.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )
             Text(
                 text = "The only feature that uses the internet is dictionary “Look up”: the " +
-                        "selected word is sent to a third-party dictionary service " +
-                        "(freedictionaryapi.com) to fetch its definition. Pronunciation is spoken " +
-                        "on-device by your system text-to-speech. No other data is transmitted.",
+                    "selected word is sent to a third-party dictionary service " +
+                    "(freedictionaryapi.com) to fetch its definition. Pronunciation is spoken " +
+                    "on-device by your system text-to-speech. No other data is transmitted.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.caption,
             )
@@ -119,9 +119,9 @@ fun AboutScreen(onBack: () -> Unit) {
         YomuSettingGroup(title = "Terms of use") {
             Text(
                 text = "Yomu is provided “as is”, without warranty of any kind, to the fullest " +
-                        "extent permitted by law. You are responsible for the books you import and " +
-                        "for complying with their licenses and applicable copyright law. Yomu does " +
-                        "not provide, sell, or distribute any books.",
+                    "extent permitted by law. You are responsible for the books you import and " +
+                    "for complying with their licenses and applicable copyright law. Yomu does " +
+                    "not provide, sell, or distribute any books.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )
@@ -130,10 +130,10 @@ fun AboutScreen(onBack: () -> Unit) {
         YomuSettingGroup(title = "Acknowledgements") {
             Text(
                 text = "EPUB parsing and rendering by the Readium Kotlin toolkit (BSD-3-Clause). " +
-                        "Charts by Vico (Apache-2.0). Cover loading by Coil. Built with Jetpack " +
-                        "Compose. Bundled reading fonts are used under the SIL Open Font License. " +
-                        "Dictionary definitions from freedictionaryapi.com, sourced from Wiktionary " +
-                        "(CC BY-SA).",
+                    "Charts by Vico (Apache-2.0). Cover loading by Coil. Built with Jetpack " +
+                    "Compose. Bundled reading fonts are used under the SIL Open Font License. " +
+                    "Dictionary definitions from freedictionaryapi.com, sourced from Wiktionary " +
+                    "(CC BY-SA).",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )

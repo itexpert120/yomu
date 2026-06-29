@@ -71,7 +71,7 @@ internal fun ConfirmRemoveDialog(
             )
             Text(
                 text = "This deletes the imported file${if (count == 1) "" else "s"} and cover from " +
-                        "the device. It can't be undone.",
+                    "the device. It can't be undone.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.body,
             )
@@ -229,7 +229,7 @@ internal fun SystemBarTopScrim(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(statusTop + 18.dp)
             // Full peak: status-bar content must stay legible over scrolling covers.
-            .background(Brush.verticalGradient(*fadeOutStops(background)))
+            .background(Brush.verticalGradient(*fadeOutStops(background))),
     )
 }
 
@@ -243,6 +243,6 @@ internal fun SystemBarBottomScrim(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(navBottom + 22.dp)
-            .background(Brush.verticalGradient(*fadeInStops(background)))
+            .background(Brush.verticalGradient(*fadeInStops(background))),
     )
 }

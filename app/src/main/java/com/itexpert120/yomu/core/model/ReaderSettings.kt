@@ -14,7 +14,8 @@ enum class ReaderThemeMode { Light, Dark, Sepia, Black, Custom }
 @Serializable
 enum class ReaderTextAlign(val label: String) { Default("Auto"), Left("Left"), Justify("Justify") }
 
-/** Bundled reading fonts (custom user fonts are out of scope for now). [Lora] is the default. */
+/** Bundled reading fonts. [Lora] is the default. Users may also install custom fonts; see
+ *  [ReaderSettings.customFont]. */
 @Serializable
 enum class ReaderFont(val displayName: String, val cssFamily: String) {
     Lora("Lora", "Lora"),
@@ -24,6 +25,19 @@ enum class ReaderFont(val displayName: String, val cssFamily: String) {
     Nunito("Nunito", "Nunito"),
     Merriweather("Merriweather", "Merriweather"),
 }
+
+/**
+ * A user-installed custom reading font (e.g. downloaded from Google Fonts). [family] is the CSS font
+ * family the engine renders; [regularPath]/[italicPath] are absolute paths to the app-private font
+ * files (woff2) the engine embeds as @font-face. When [ReaderSettings.customFont] is set it takes
+ * precedence over the bundled [ReaderSettings.font].
+ */
+@Serializable
+data class CustomFontRef(
+    val family: String,
+    val regularPath: String,
+    val italicPath: String? = null,
+)
 
 /**
  * Resolved reading preferences applied to the reader. A single global instance is the default;
@@ -37,6 +51,9 @@ data class ReaderSettings(
     val customBackground: Long? = null,
     val customText: Long? = null,
     val font: ReaderFont = ReaderFont.Lora,
+    // A user-installed custom font; when non-null it supersedes [font]. Selecting a bundled font
+    // clears it. Round-trips in the settings JSON blob like everything else here.
+    val customFont: CustomFontRef? = null,
     val fontScale: Float = 1.0f,
     // Advanced typography. null means "leave to the engine" (Auto); a value forces the setting.
     val lineHeight: Float? = null,
@@ -59,6 +76,8 @@ data class ReaderSettings(
     val footerShowPagesLeft: Boolean = false,
     // Keep the display awake while reading (on by default).
     val keepScreenOn: Boolean = true,
+    // Show the native vertical scrollbar in scroll mode (on by default; scroll-mode only).
+    val showScrollbar: Boolean = true,
     // Immersive reading: hide the top bar + footer (with the controls) on a centre tap. Off keeps the
     // top bar visible at all times.
     val immersiveChrome: Boolean = false,

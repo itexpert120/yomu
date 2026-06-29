@@ -19,19 +19,18 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): YomuDatabase =
-        Room.databaseBuilder(context, YomuDatabase::class.java, "yomu.db")
-            .addMigrations(
-                YomuDatabase.MIGRATION_1_2,
-                YomuDatabase.MIGRATION_2_3,
-                YomuDatabase.MIGRATION_3_4,
-                YomuDatabase.MIGRATION_4_5,
-                YomuDatabase.MIGRATION_5_6,
-                YomuDatabase.MIGRATION_6_7,
-                YomuDatabase.MIGRATION_7_8,
-                YomuDatabase.MIGRATION_8_9,
-            )
-            .build()
+    fun provideDatabase(@ApplicationContext context: Context): YomuDatabase = Room.databaseBuilder(context, YomuDatabase::class.java, "yomu.db")
+        .addMigrations(
+            YomuDatabase.MIGRATION_1_2,
+            YomuDatabase.MIGRATION_2_3,
+            YomuDatabase.MIGRATION_3_4,
+            YomuDatabase.MIGRATION_4_5,
+            YomuDatabase.MIGRATION_5_6,
+            YomuDatabase.MIGRATION_6_7,
+            YomuDatabase.MIGRATION_7_8,
+            YomuDatabase.MIGRATION_8_9,
+        )
+        .build()
 
     @Provides
     fun provideBookDao(database: YomuDatabase): BookDao = database.bookDao()

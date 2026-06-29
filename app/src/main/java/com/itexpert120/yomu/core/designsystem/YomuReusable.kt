@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -239,12 +242,17 @@ fun YomuBottomSheet(
     val maxHeight = with(LocalDensity.current) {
         (LocalWindowInfo.current.containerSize.height * 0.60f).toDp()
     }
+    val scrollState = rememberScrollState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = YomuTheme.colors.panel,
         contentColor = YomuTheme.colors.textPrimary,
         dragHandle = { YomuSheetDragHandle() },
+        // Draw the panel edge-to-edge under the (transparent) gesture nav bar instead of reserving it
+        // as bottom inset — otherwise the panel stops above the bar, leaving a coloured band. The nav
+        // clearance is moved onto the content below so text/controls still sit above the bar.
+        contentWindowInsets = { WindowInsets(0) },
     ) {
         Column(
             modifier = Modifier
@@ -253,12 +261,20 @@ fun YomuBottomSheet(
                     if (scrollable) {
                         Modifier
                             .heightIn(max = maxHeight)
-                            .verticalScroll(rememberScrollState())
+                            // Fade content into the panel at whichever edge has more to scroll, so a
+                            // tall sheet doesn't hard-cut under the drag handle or at its bottom.
+                            .yomuScrollEdgeShadow(
+                                color = YomuTheme.colors.panel,
+                                top = scrollState.canScrollBackward,
+                                bottom = scrollState.canScrollForward,
+                            )
+                            .verticalScroll(scrollState)
                     } else {
                         Modifier
                     },
                 )
                 .padding(horizontal = 20.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {

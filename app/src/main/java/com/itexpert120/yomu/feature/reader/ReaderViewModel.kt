@@ -6,13 +6,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
-import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
@@ -21,6 +21,7 @@ import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
+import com.itexpert120.yomu.data.fonts.FontRepository
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.StatsRepository
@@ -42,6 +43,11 @@ import javax.inject.Inject
 
 data class ReaderUiState(
     val loading: Boolean = true,
+    // False while a chapter is (re)loading until its layout CSS (incl. the immersive chapter-start
+    // padding) has applied, so the reader can keep it covered and reveal it already-padded.
+    val contentStyled: Boolean = false,
+    // Direction of the current chapter change (true = next, false = previous), for the reveal slide.
+    val transitionForward: Boolean = true,
     val failed: Boolean = false,
     val title: String = "",
     val chapterTitle: String? = null,
@@ -55,6 +61,7 @@ data class ReaderUiState(
     val chapterControlsVisible: Boolean = false,
     val sheetVisible: Boolean = false,
     val customThemes: List<CustomReaderTheme> = emptyList(),
+    val installedFonts: List<CustomFontRef> = emptyList(),
     val customSheetVisible: Boolean = false,
     // The bottom bar's "More" overflow sheet.
     val moreSheetVisible: Boolean = false,
@@ -108,6 +115,7 @@ class ReaderViewModel @Inject constructor(
     private val stats: StatsRepository,
     private val highlights: HighlightRepository,
     private val bookmarks: BookmarkRepository,
+    private val fonts: FontRepository,
 ) : ViewModel() {
 
     // Wall-clock start of the current foreground reading stretch, or null when paused/closed.
@@ -138,6 +146,10 @@ class ReaderViewModel @Inject constructor(
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
 
     init {
+        // App-global installed custom fonts, so the in-reader font picker can offer them.
+        viewModelScope.launch {
+            fonts.installed.collect { list -> _state.update { it.copy(installedFonts = list) } }
+        }
         // App-global saved custom themes, independent of the reading session.
         viewModelScope.launch {
             settingsRepository.customThemes.collect { themes ->
@@ -176,6 +188,16 @@ class ReaderViewModel @Inject constructor(
             launch {
                 withTimeoutOrNull(8_000) { opened.ready.first { it } }
                 _state.update { it.copy(loading = false) }
+            }
+            // Keep the page covered across chapter changes until its layout CSS has applied, so the
+            // chapter-start padding is present in the first visible frame instead of popping in.
+            launch {
+                opened.styled.collect { styled -> _state.update { it.copy(contentStyled = styled) } }
+            }
+            launch {
+                opened.transitionForward.collect { fwd ->
+                    _state.update { it.copy(transitionForward = fwd) }
+                }
             }
             // If timing already started during the loading spinner, re-arm from now so only actual
             // reading time (post-open) is counted.
@@ -239,7 +261,7 @@ class ReaderViewModel @Inject constructor(
                             repository.saveProgress(
                                 BookId(bookId),
                                 locator.locatorJson,
-                                progression
+                                progression,
                             )
                         }
                         val href = locator.href
@@ -249,7 +271,7 @@ class ReaderViewModel @Inject constructor(
                                 repository.setChaptersRead(
                                     BookId(bookId),
                                     listOf(left),
-                                    read = true
+                                    read = true,
                                 )
                             }
                             currentHref = href
@@ -312,8 +334,7 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    fun onOpenSheet() =
-        _state.update { it.copy(sheetVisible = true, chapterControlsVisible = false) }
+    fun onOpenSheet() = _state.update { it.copy(sheetVisible = true, chapterControlsVisible = false) }
 
     fun onCloseSheet() = _state.update { it.copy(sheetVisible = false) }
 
@@ -390,8 +411,7 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.clearForBook(BookId(bookId)) }
     }
 
-    fun onOpenCustomTheme() =
-        _state.update { it.copy(customSheetVisible = true, sheetVisible = false) }
+    fun onOpenCustomTheme() = _state.update { it.copy(customSheetVisible = true, sheetVisible = false) }
 
     fun onCloseCustomTheme() = _state.update { it.copy(customSheetVisible = false) }
 
@@ -637,13 +657,12 @@ class ReaderViewModel @Inject constructor(
     }
 
     /** Reduces a selection to a single, punctuation-free word the dictionary API can resolve. */
-    private fun sanitizeWord(raw: String): String? =
-        raw.trim()
-            .split(Regex("\\s+"))
-            .firstOrNull()
-            ?.lowercase()
-            ?.filter { it.isLetter() || it == '-' || it == '\'' }
-            ?.takeIf { it.isNotBlank() }
+    private fun sanitizeWord(raw: String): String? = raw.trim()
+        .split(Regex("\\s+"))
+        .firstOrNull()
+        ?.lowercase()
+        ?.filter { it.isLetter() || it == '-' || it == '\'' }
+        ?.takeIf { it.isNotBlank() }
 
     override fun onCleared() {
         onReadingPaused()

@@ -87,7 +87,6 @@ fun List<Book>.groupedBy(mode: GroupMode): List<LibraryGroup> = when (mode) {
     GroupMode.Author -> groupToSections { it.author.lastNameKey() }
 }
 
-private inline fun List<Book>.groupToSections(key: (Book) -> String): List<LibraryGroup> =
-    groupBy(key).map { (label, books) -> LibraryGroup(label, books.map { it.toLibraryBook() }) }
+private inline fun List<Book>.groupToSections(key: (Book) -> String): List<LibraryGroup> = groupBy(key).map { (label, books) -> LibraryGroup(label, books.map { it.toLibraryBook() }) }
 
 // endregion

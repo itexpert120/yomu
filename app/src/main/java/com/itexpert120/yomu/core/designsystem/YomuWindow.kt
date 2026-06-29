@@ -16,7 +16,8 @@ import androidx.compose.ui.unit.dp
 enum class YomuWidthClass {
     Compact,
     Medium,
-    Expanded;
+    Expanded,
+    ;
 
     val isExpanded: Boolean get() = this == Expanded
 

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.speech.tts.TextToSpeech
+import android.util.Base64
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
@@ -17,6 +18,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
+import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
@@ -30,8 +32,10 @@ import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -41,8 +45,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.DecorableNavigator
+import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.HyperlinkNavigator
 import org.readium.r2.navigator.OverflowableNavigator
 import org.readium.r2.navigator.SelectableNavigator
@@ -72,9 +76,9 @@ import org.readium.r2.shared.util.toUrl
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
-import kotlin.math.roundToInt
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 
@@ -116,7 +120,7 @@ class ReadiumReaderEngine @Inject constructor(
                     publication,
                     publication.tableOfContents,
                     depth = 0,
-                    out = this
+                    out = this,
                 )
             }
         } finally {
@@ -178,6 +182,21 @@ private class ReadiumReaderSession(
     private val _ready = MutableStateFlow(false)
     override val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
+    // Flips false at the start of a chapter change and true once the new resource's layout CSS (incl.
+    // the immersive chapter-start top padding) has applied — so the page is revealed already padded
+    // instead of jolting when the spacer pops in a few frames after first paint.
+    private val _styled = MutableStateFlow(false)
+    override val styled: StateFlow<Boolean> = _styled.asStateFlow()
+    private val _transitionForward = MutableStateFlow(true)
+    override val transitionForward: StateFlow<Boolean> = _transitionForward.asStateFlow()
+    private var revealWatchdog: Job? = null
+
+    // Cached @font-face CSS (base64 data URLs) for the active custom font, keyed by its family+paths so
+    // the (largish) base64 is built once per font rather than per chapter. Readium can only serve
+    // fonts from bundled assets, so custom fonts are embedded inline instead.
+    private var customFontKey: String? = null
+    private var customFontCss: String? = null
+
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
@@ -218,6 +237,7 @@ private class ReadiumReaderSession(
     private var positionsByHref: Map<String, List<Double>>? = null
 
     private var latestVisualPage: VisualPageState? = null
+
     // The resource we last injected the scroll-width CSS override into (re-injected per resource).
     private var lastStyledHref: String? = null
 
@@ -266,9 +286,25 @@ private class ReadiumReaderSession(
         override fun onPageLoaded() {
             // First real paint — release the "Opening…" gate. Idempotent (fires per resource).
             _ready.value = true
+            // Readium builds a fresh WebView per resource, so every script must be re-injected here —
+            // this is the one authoritative per-resource hook.
             scope.launch {
-                injectScrollCss()
+                // Apply the layout CSS (incl. the immersive chapter-start top padding) and reveal the
+                // page only AFTER it lands, so the padding is part of the first visible frame instead
+                // of shoving the content down a few frames later. Best-effort: reveal anyway if the
+                // injection can't be confirmed, rather than leaving the page covered.
+                evalWithRetry(scrollCssJsForCurrent())
+                // Embed the custom font (if any) before revealing, so text paints in it directly
+                // rather than flashing a fallback and re-flowing.
+                applyCustomFontInline()
+                revealWatchdog?.cancel()
+                _styled.value = true
+                // Non-visual injections can follow once the page is shown.
                 injectViewportFit()
+                // Overscroll used to be injected ONLY from the currentLocator path (gated on href
+                // change), so a chapter that loaded without a fresh locator emission could be left
+                // without the rubberband gesture; inject it here too.
+                injectOverscroll()
                 applyScrollbars(currentSettings)
                 clearImmersiveScrollTopPadding()
             }
@@ -496,10 +532,12 @@ private class ReadiumReaderSession(
                 val paged = currentSettings.layout == ReaderLayout.Paged
                 if (currentSettings.tapNavigation && paged) {
                     if (x <= TAP_LEFT) {
-                        goBackward(); return true
+                        goBackward()
+                        return true
                     }
                     if (x >= TAP_RIGHT) {
-                        goForward(); return true
+                        goForward()
+                        return true
                     }
                 }
                 // Centre third (paged) or anywhere (scroll) toggles the chapter-controls bar.
@@ -677,17 +715,111 @@ private class ReadiumReaderSession(
         clearImmersiveScrollTopPadding(settings)
         // Re-arm or tear down the rubberband gesture on a scroll<->paged or theme change.
         injectOverscroll()
+        // Embed/clear the custom font live so switching fonts in the sheet applies without reopening.
+        scope.launch { applyCustomFontInline() }
     }
 
-    private fun injectScrollCss() {
-        val nav = navigator ?: return
+    // Inject the active custom font's @font-face (or clear it when switching back to a bundled font)
+    // into the current resource. The family is set via EpubPreferences.fontFamily; this just provides
+    // the glyphs. Builds the base64 CSS once per font (cached) on first use.
+    private suspend fun applyCustomFontInline() {
+        navigator ?: return
+        val ref = currentSettings.customFont
+        if (ref == null) {
+            customFontKey = null
+            customFontCss = null
+            evalWithRetry(CUSTOM_FONT_CLEAR_JS)
+            return
+        }
+        val css = ensureCustomFontCss(ref) ?: return
+        evalWithRetry(customFontInjectJs(css))
+    }
+
+    private suspend fun ensureCustomFontCss(ref: CustomFontRef): String? {
+        val key = "${ref.family}|${ref.regularPath}|${ref.italicPath}"
+        if (key == customFontKey && customFontCss != null) return customFontCss
+        val css = withContext(Dispatchers.IO) { buildFontFaceCss(ref) }
+        customFontKey = key
+        customFontCss = css
+        return css
+    }
+
+    private fun buildFontFaceCss(ref: CustomFontRef): String? {
+        val regular = runCatching { File(ref.regularPath).readBytes() }.getOrNull() ?: return null
+        val regularB64 = Base64.encodeToString(regular, Base64.NO_WRAP)
+        val sb = StringBuilder()
+        // Declared at weight 400; the browser synthesizes bold for headings (no bold file is fetched).
+        sb.append(
+            "@font-face{font-family:'${ref.family}';font-style:normal;font-weight:400;" +
+                "src:url(data:font/woff2;base64,$regularB64) format('woff2');}",
+        )
+        ref.italicPath
+            ?.let { runCatching { File(it).readBytes() }.getOrNull() }
+            ?.let { italic ->
+                val italicB64 = Base64.encodeToString(italic, Base64.NO_WRAP)
+                sb.append(
+                    "@font-face{font-family:'${ref.family}';font-style:italic;font-weight:400;" +
+                        "src:url(data:font/woff2;base64,$italicB64) format('woff2');}",
+                )
+            }
+        return sb.toString()
+    }
+
+    private fun customFontInjectJs(css: String): String = """
+        (function() {
+          var id = 'yomu-custom-font';
+          var s = document.getElementById(id);
+          if (!s) { s = document.createElement('style'); s.id = id; (document.head || document.documentElement).appendChild(s); }
+          s.textContent = "$css";
+        })();
+    """.trimIndent()
+
+    // Readium's evaluateJavascript targets only the currently-visible reflowable page fragment and
+    // silently returns Kotlin null when that fragment isn't current yet (a race against page load).
+    // Fire-and-forget therefore drops injections permanently for a resource. Retry a few times with a
+    // short backoff until the script actually executes (any non-null result, even "null"/undefined,
+    // means it ran). All injected scripts are idempotent, so a retry that lands twice is harmless.
+    private fun injectJs(js: String) {
+        scope.launch { evalWithRetry(js) }
+    }
+
+    // Evaluate [js] in the current resource, retrying through the load race. Returns true once it
+    // actually executed (any non-null result, even "null"/undefined), false if it never landed.
+    private suspend fun evalWithRetry(js: String): Boolean {
+        repeat(JS_INJECT_ATTEMPTS) { attempt ->
+            val nav = navigator ?: return false
+            val result = runCatching { nav.evaluateJavascript(js) }.getOrNull()
+            if (result != null) return true
+            delay(JS_INJECT_RETRY_DELAY_MS * (attempt + 1))
+        }
+        return false
+    }
+
+    private fun scrollCssJsForCurrent(): String {
         val immersiveScroll = currentSettings.immersiveChrome &&
             currentSettings.layout == ReaderLayout.Scroll
-        val js = scrollCssJs(
+        return scrollCssJs(
             immersiveScroll = immersiveScroll,
             chapterStartPaddingPx = if (immersiveScroll) chapterStartPaddingPx() else 0,
         )
-        scope.launch { runCatching { nav.evaluateJavascript(js) } }
+    }
+
+    private fun injectScrollCss() {
+        navigator ?: return
+        injectJs(scrollCssJsForCurrent())
+    }
+
+    // Cover the page during a chapter change so it is revealed only once the new resource is re-styled
+    // (see [styled]). A watchdog guarantees we never stay covered if the new page somehow never fires
+    // onPageLoaded (e.g. a failed load), since a stuck cover would mean a blank reader.
+    private fun beginChapterTransition(forward: Boolean = true) {
+        _transitionForward.value = forward
+        _styled.value = false
+        revealWatchdog?.cancel()
+        revealWatchdog = scope.launch {
+            delay(STYLE_REVEAL_TIMEOUT_MS)
+            _styled.value = true
+        }
     }
 
     private fun chapterStartPaddingPx(): Int {
@@ -723,11 +855,11 @@ private class ReadiumReaderSession(
         return (maxOf(statusTop, cutoutTop) / density).roundToInt()
     }
     private fun injectViewportFit() {
-        val nav = navigator ?: return
+        navigator ?: return
         val js = viewportFitJs(
             enabled = currentSettings.immersiveChrome && currentSettings.layout == ReaderLayout.Scroll,
         )
-        scope.launch { runCatching { nav.evaluateJavascript(js) } }
+        injectJs(js)
     }
 
     private fun clearImmersiveScrollTopPadding(settings: ReaderSettings = currentSettings) {
@@ -753,7 +885,7 @@ private class ReadiumReaderSession(
         val root = navigator?.view ?: return
         val scroll = settings.layout == ReaderLayout.Scroll
         forEachWebView(root) { wv ->
-            wv.isVerticalScrollBarEnabled = scroll
+            wv.isVerticalScrollBarEnabled = scroll && settings.showScrollbar
             wv.isHorizontalScrollBarEnabled = false
             wv.isScrollbarFadingEnabled = true
             wv.scrollBarFadeDuration = 600
@@ -782,12 +914,11 @@ private class ReadiumReaderSession(
         }
     }
 
-
     // Inject (or refresh) the scroll-mode rubberband overscroll gesture into the current resource:
     // pulling past the top goes to the previous chapter, past the bottom to the next. A no-op
     // teardown in paged mode (enabled = false).
     private fun injectOverscroll() {
-        val nav = navigator ?: return
+        navigator ?: return
         val hrefStr = lastLocator?.href?.toString()
         val order = publication.readingOrder
         val index =
@@ -796,7 +927,7 @@ private class ReadiumReaderSession(
         val hasNext = index in 0 until order.lastIndex
         val enabled = currentSettings.layout == ReaderLayout.Scroll
         val js = overscrollJs(enabled, hasPrev, hasNext, currentSettings, rubberbandTopOffsetPx())
-        scope.launch { runCatching { nav.evaluateJavascript(js) } }
+        injectJs(js)
     }
 
     override fun goForward() {
@@ -816,6 +947,7 @@ private class ReadiumReaderSession(
         val order = publication.readingOrder
         val index = order.indexOfFirst { it.url().toString() == hrefStr }
         val target = order.getOrNull(index + delta) ?: return
+        beginChapterTransition(forward = delta > 0)
         scope.launch { navigator?.go(target, animated = false) }
     }
 
@@ -828,6 +960,7 @@ private class ReadiumReaderSession(
         val prev = order.getOrNull(index - 1) ?: return
         val base = publication.locatorFromLink(prev) ?: return
         val target = base.copy(locations = Locator.Locations(progression = 0.999))
+        beginChapterTransition(forward = false)
         scope.launch { navigator?.go(target, animated = false) }
     }
 
@@ -838,6 +971,13 @@ private class ReadiumReaderSession(
             val target = positions.minByOrNull {
                 kotlin.math.abs((it.locations.totalProgression ?: 0.0) - totalProgression)
             } ?: return@launch
+            // Cover only when landing on a different resource (a same-resource jump doesn't reload, so
+            // onPageLoaded wouldn't fire to lift the cover).
+            if (target.href.toString() != lastLocator?.href?.toString()) {
+                val forward = (target.locations.totalProgression ?: 0.0) >=
+                    (lastLocator?.locations?.totalProgression ?: 0.0)
+                beginChapterTransition(forward = forward)
+            }
             navigator?.go(target, animated = false)
         }
     }
@@ -856,6 +996,12 @@ private class ReadiumReaderSession(
     override fun goToLocator(locatorJson: String) {
         val locator =
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
+        // Cover only on a cross-resource jump (same-resource jumps don't reload to lift the cover).
+        if (locator.href.toString() != lastLocator?.href?.toString()) {
+            val forward = (locator.locations.totalProgression ?: 0.0) >=
+                (lastLocator?.locations?.totalProgression ?: 0.0)
+            beginChapterTransition(forward = forward)
+        }
         scope.launch { navigator?.go(locator, animated = false) }
     }
 
@@ -900,7 +1046,6 @@ private class ReadiumReaderSession(
         runCatching { context.startActivity(chooser) }
     }
 
-
     // Builds the injected JS for the scroll-mode rubberband chapter gesture. Idempotent per document
     // (guarded by window.__yomuOverscroll); re-running just updates enabled/hasPrev/hasNext. A
     // capture-phase touch listener only takes over (preventDefault) while over-pulling at the very
@@ -932,9 +1077,15 @@ private class ReadiumReaderSession(
                 window.__yomuOverscroll.update($enabled, $hasPrev, $hasNext, $topHintOffset);
                 return;
               }
-              var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext,
-                         startY: 0, dragging: false, dir: 0, armed: false, fired: false, svgDir: 0, topHint: $topHintOffset };
-              var THRESHOLD = 96, MAX = 160, DAMP = 0.45;
+              var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext, topHint: $topHintOffset,
+                         startY: 0, dragging: false, engaged: false, dir: 0, engageY: 0,
+                         offset: 0, armed: false, fired: false, svgDir: 0,
+                         lastT: 0, lastOffset: 0, vel: 0, raf: 0 };
+              // THRESHOLD: armed (release navigates) once the stretch passes this. MAX: asymptotic
+              // ceiling. INITIAL: stretch-per-pixel near the boundary (the curve eases off from here to
+              // MAX so there's no hard wall). SPRING: a lightly under-damped return (ratio ~0.9).
+              var THRESHOLD = 80, MAX = 170, INITIAL = 0.6;
+              var STIFFNESS = 170, DAMPING = 24;
               var SVGNS = 'http://www.w3.org/2000/svg';
               document.documentElement.style.overscrollBehaviorY = 'contain';
               var hint = document.createElement('div');
@@ -946,7 +1097,9 @@ private class ReadiumReaderSession(
                 'font:600 22px system-ui,-apple-system,Roboto,sans-serif', 'line-height:1',
                 'background:$fill', 'border:1px solid $border', 'color:$accent',
                 'opacity:0', 'transform:translateX(-50%) scale(0.7)',
-                'transition:opacity .12s ease, background .12s ease, color .12s ease',
+                // Transform is intentionally NOT transitioned: the pill's scale tracks the pull 1:1
+                // during the drag. Only the colour/opacity ease (incl. the fade-out on release).
+                'transition:opacity .18s ease, background .18s ease, color .18s ease',
                 'pointer-events:none', '-webkit-tap-highlight-color:transparent'
               ].join(';');
               // Appended to <html>, NOT <body>: the body is transformed during the pull, which would
@@ -970,39 +1123,35 @@ private class ReadiumReaderSession(
                 while (hint.firstChild) hint.removeChild(hint.firstChild);
                 hint.appendChild(svg);
               }
+              function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
               function sc() { return document.scrollingElement || document.documentElement; }
               function atTop() { return sc().scrollTop <= 0; }
               function atBottom() { return sc().scrollTop + window.innerHeight >= sc().scrollHeight - 1; }
               function hasSel() { var s = window.getSelection(); return s && s.toString().length > 0; }
-              function reset() {
-                document.body.style.transition = 'transform .22s ease-out';
+              // Asymptotic resistance: linear (slope INITIAL) at the boundary, easing smoothly toward MAX
+              // so a firm pull meets diminishing give instead of the old hard cap.
+              function resist(raw) {
+                if (raw <= 0) return 0;
+                return MAX * (1 - 1 / (1 + raw * INITIAL / MAX));
+              }
+              function setBody(off) {
+                document.body.style.transition = 'none';
+                document.body.style.transform = off ? 'translateY(' + off + 'px)' : '';
+                st.offset = off;
+              }
+              function clearTransform() {
+                if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
+                document.body.style.transition = 'none';
                 document.body.style.transform = '';
+                st.offset = 0;
+              }
+              function fadeHint() {
                 hint.style.opacity = 0;
                 hint.style.background = '$fill';
                 hint.style.color = '$accent';
                 hint.style.transform = 'translateX(-50%) scale(0.7)';
-                st.dragging = false; st.dir = 0; st.armed = false; st.svgDir = 0;
               }
-              window.addEventListener('touchstart', function(e) {
-                if (!st.enabled || e.touches.length !== 1 || hasSel()) { st.dragging = false; return; }
-                st.startY = e.touches[0].clientY;
-                st.dragging = true; st.dir = 0; st.armed = false; st.fired = false;
-              }, { capture: true, passive: true });
-              window.addEventListener('touchmove', function(e) {
-                if (!st.dragging || !st.enabled) return;
-                var dy = e.touches[0].clientY - st.startY;
-                var dir = (dy > 0 && atTop() && st.hasPrev) ? -1
-                        : (dy < 0 && atBottom() && st.hasNext) ? 1 : 0;
-                if (dir === 0) { if (st.dir) reset(); return; }
-                st.dir = dir;
-                e.preventDefault();
-                var pull = Math.min(Math.abs(dy) * DAMP, MAX);
-                document.body.style.transition = 'none';
-                document.body.style.transform = 'translateY(' + (dir < 0 ? pull : -pull) + 'px)';
-                st.armed = pull >= THRESHOLD;
-                if (st.svgDir !== dir) { st.svgDir = dir; setArrow(dir < 0); }
-                if (dir < 0) { hint.style.top = st.topHint + 'px'; hint.style.bottom = 'auto'; }
-                else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
+              function updateHint(pull) {
                 var p = Math.min(pull / THRESHOLD, 1);
                 hint.style.opacity = p;
                 if (st.armed) {
@@ -1014,13 +1163,89 @@ private class ReadiumReaderSession(
                   hint.style.color = '$accent';
                   hint.style.transform = 'translateX(-50%) scale(' + (0.7 + 0.3 * p) + ')';
                 }
+              }
+              // Velocity-seeded spring back to rest: the return scales with how far/fast the finger
+              // left, instead of a fixed-duration tween that snaps the same way every time.
+              function springBack(fromOff, vel) {
+                if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
+                var x = fromOff, v = vel || 0, last = now();
+                document.body.style.transition = 'none';
+                function frame(t) {
+                  var n = t || now();
+                  var dt = Math.min((n - last) / 1000, 0.032); last = n;
+                  var a = (-STIFFNESS * x - DAMPING * v);
+                  v += a * dt; x += v * dt;
+                  if (Math.abs(x) < 0.4 && Math.abs(v) < 6) {
+                    document.body.style.transform = ''; st.offset = 0; st.raf = 0; return;
+                  }
+                  document.body.style.transform = 'translateY(' + x + 'px)';
+                  st.offset = x;
+                  st.raf = requestAnimationFrame(frame);
+                }
+                st.raf = requestAnimationFrame(frame);
+              }
+              // Full teardown (used when the gesture is disabled or a fresh touch starts).
+              function reset() {
+                clearTransform();
+                fadeHint();
+                st.dragging = false; st.engaged = false; st.dir = 0; st.armed = false; st.svgDir = 0;
+              }
+              window.addEventListener('touchstart', function(e) {
+                if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
+                if (!st.enabled || e.touches.length !== 1 || hasSel()) {
+                  st.dragging = false; st.engaged = false; return;
+                }
+                st.startY = e.touches[0].clientY;
+                st.dragging = true; st.engaged = false; st.dir = 0;
+                st.armed = false; st.fired = false; st.offset = 0;
+              }, { capture: true, passive: true });
+              window.addEventListener('touchmove', function(e) {
+                if (!st.dragging || !st.enabled) return;
+                var y = e.touches[0].clientY;
+                if (!st.engaged) {
+                  // Stay out of the way until the finger reaches a chapter edge and pulls past it; only
+                  // then take over. Anchoring at this moment (engageY) means the stretch starts from
+                  // zero — no jump as the native scroll slack at the chapter end hands off to us.
+                  var dy = y - st.startY;
+                  var cand = (dy > 0 && atTop() && st.hasPrev) ? -1
+                           : (dy < 0 && atBottom() && st.hasNext) ? 1 : 0;
+                  if (cand === 0) return;
+                  st.engaged = true; st.dir = cand; st.engageY = y;
+                  st.lastT = now(); st.lastOffset = 0; st.vel = 0;
+                  if (st.svgDir !== cand) { st.svgDir = cand; setArrow(cand < 0); }
+                  if (cand < 0) { hint.style.top = st.topHint + 'px'; hint.style.bottom = 'auto'; }
+                  else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
+                }
+                e.preventDefault();
+                // Clamp at 0: pulling back past the boundary just relaxes the stretch — it never flips
+                // direction or resumes scrolling mid-gesture, which is what used to cause the jitter.
+                var raw = Math.max(0, (st.dir < 0) ? (y - st.engageY) : (st.engageY - y));
+                var pull = resist(raw);
+                var off = -st.dir * pull;
+                var t = now();
+                var dt = (t - st.lastT) / 1000;
+                if (dt > 0) { st.vel = (off - st.lastOffset) / dt; st.lastT = t; st.lastOffset = off; }
+                setBody(off);
+                st.armed = pull >= THRESHOLD;
+                updateHint(pull);
               }, { capture: true, passive: false });
               window.addEventListener('touchend', function() {
-                if (st.dir && st.armed && !st.fired) {
+                if (!st.engaged) { fadeHint(); st.dragging = false; return; }
+                // Snapshot the gesture, then clear state so nothing lingers regardless of which branch
+                // runs below.
+                var off = st.offset, vel = st.vel, dir = st.dir, armed = st.armed, fired = st.fired;
+                st.dragging = false; st.engaged = false; st.dir = 0; st.armed = false; st.svgDir = 0;
+                // Always hide the arrow on release. Before navigating this matters: the next chapter can
+                // render in the same WebView document, which would otherwise leave the pill pinned at
+                // the edge.
+                fadeHint();
+                if (dir && armed && !fired) {
                   st.fired = true;
-                  window.location.href = st.dir < 0 ? '$PREV_CHAPTER_URL' : '$NEXT_CHAPTER_URL';
+                  clearTransform();
+                  window.location.href = dir < 0 ? '$PREV_CHAPTER_URL' : '$NEXT_CHAPTER_URL';
+                  return;
                 }
-                reset();
+                springBack(off, vel);
               }, { capture: true, passive: true });
               window.__yomuOverscroll = {
                 update: function(en, hp, hn, topHint) {
@@ -1036,8 +1261,9 @@ private class ReadiumReaderSession(
     private fun ReaderSettings.toPreferences(): EpubPreferences = EpubPreferences(
         scroll = layout == ReaderLayout.Scroll,
         fontSize = fontScale.toDouble(),
-        // The family name must match a declaration registered on the navigator factory above.
-        fontFamily = FontFamily(font.cssFamily),
+        // The family name must match a registered declaration (bundled fonts) OR a custom @font-face
+        // we inject inline (custom fonts) — see applyCustomFontInline().
+        fontFamily = FontFamily(customFont?.family ?: font.cssFamily),
         // Advanced typography (active because publisherStyles is disabled). null = engine default.
         lineHeight = lineHeight?.toDouble(),
         pageMargins = pageMargins?.toDouble(),
@@ -1083,6 +1309,20 @@ private class ReadiumReaderSession(
         const val NEXT_CHAPTER_URL = "yomu://next-chapter"
         const val PREV_CHAPTER_URL = "yomu://prev-chapter"
 
+        // Removes the injected custom-font @font-face when switching back to a bundled font.
+        val CUSTOM_FONT_CLEAR_JS =
+            "(function(){var s=document.getElementById('yomu-custom-font');" +
+                "if(s&&s.parentNode)s.parentNode.removeChild(s);})();"
+
+        // Retry budget for evaluateJavascript: it silently no-ops until the resource's page fragment
+        // is current. ~4 tries over a rising backoff (80,160,240,320ms) covers a slow paint.
+        const val JS_INJECT_ATTEMPTS = 4
+        const val JS_INJECT_RETRY_DELAY_MS = 80L
+
+        // Safety cap: reveal a transitioning chapter even if its onPageLoaded never arrives, so a
+        // failed/stalled load can't leave the reader stuck behind the transition cover.
+        const val STYLE_REVEAL_TIMEOUT_MS = 3000L
+
         const val CHAPTER_START_FALLBACK_PADDING_DP = 20f
         const val CHAPTER_START_EXTRA_PADDING_DP = 4f
         const val RUBBERBAND_EDGE_MARGIN_DP = 18f
@@ -1092,10 +1332,14 @@ private class ReadiumReaderSession(
         // permanent safe-area top padding and inserts a chapter-start spacer into the content itself.
         fun scrollCssJs(immersiveScroll: Boolean, chapterStartPaddingPx: Int): String {
             val spacerHeight = chapterStartPaddingPx.coerceAtLeast(0)
-            val topPaddingFix = if (immersiveScroll) """
+            val topPaddingFix = if (immersiveScroll) {
+                """
                 ':root[style*="readium-scroll-on"]{--RS__scrollPaddingTop:0px!important}',
                 ':root[style*="readium-scroll-on"] body{padding-top:0!important}',
-            """.trimIndent() else ""
+                """.trimIndent()
+            } else {
+                ""
+            }
             val spacerCss = if (immersiveScroll && spacerHeight > 0) {
                 "':root[style*=\"readium-scroll-on\"] #yomu-chapter-start-padding{display:block!important;height:${spacerHeight}px!important;min-height:${spacerHeight}px!important;margin:0!important;padding:0!important;border:0!important;pointer-events:none!important;}'"
             } else {
@@ -1113,6 +1357,11 @@ private class ReadiumReaderSession(
               }
               s.textContent = [
                 ':root[style*="readium-scroll-on"] body{max-width:none!important}',
+                // Short chapters that don't fill the viewport leave the page background covering only
+                // the text height — so the area below reads as empty/odd and the overscroll
+                // (rubberband) bottom detection sits mid-screen. Force the page to at least fill the
+                // viewport so the reading background covers it and bottom-of-chapter is the screen edge.
+                ':root[style*="readium-scroll-on"] body{min-height:100vh!important}',
                 $topPaddingFix
                 $spacerCss
               ].filter(Boolean).join('\n');

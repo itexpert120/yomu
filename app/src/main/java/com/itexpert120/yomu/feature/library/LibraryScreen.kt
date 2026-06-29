@@ -48,12 +48,13 @@ import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuMotion
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
-import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
-import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
+import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
+import com.itexpert120.yomu.core.designsystem.yomuChromeExit
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
@@ -169,9 +170,11 @@ fun LibraryScreen(
                         onOpenSettings = onOpenSettings,
                         elevated = elevated,
                     )
-                    Box(Modifier
-                        .weight(1f)
-                        .fillMaxWidth()) { libraryContent() }
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) { libraryContent() }
                 }
             }
 
@@ -232,7 +235,7 @@ fun LibraryScreen(
             ) {
                 LibrarySelectionDock(
                     allSelected = state.selectedIds.isNotEmpty() &&
-                            state.selectedIds.size == state.selectableCount,
+                        state.selectedIds.size == state.selectableCount,
                     onClose = onExitSelection,
                     onSelectAll = onSelectAll,
                     onDeselectAll = onDeselectAll,
@@ -282,7 +285,7 @@ private fun EmptyLibrary(onImport: () -> Unit) {
                 .border(
                     1.dp,
                     YomuTheme.colors.border.copy(alpha = 0.6f),
-                    RoundedCornerShape(YomuTheme.radius.lg)
+                    RoundedCornerShape(YomuTheme.radius.lg),
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -303,7 +306,7 @@ private fun EmptyLibrary(onImport: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text(
             text = "A calm, reader-first EPUB library. Import a book to begin — your themes, fonts, " +
-                    "reading position and stats all live here.",
+                "reading position and stats all live here.",
             color = YomuTheme.colors.textSecondary,
             style = YomuTheme.type.body,
             textAlign = TextAlign.Center,
@@ -355,7 +358,12 @@ private fun LibraryGrid(
             } else {
                 GridCells.Fixed(columns)
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .yomuScrollEdgeShadow(
+                    color = YomuTheme.colors.appBackground,
+                    bottom = state.canScrollForward,
+                ),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -403,42 +411,46 @@ private fun LibraryList(
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
     // column centered on screen. Phones are unaffected (screen < max width).
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-    LazyColumn(
-        state = state,
-        modifier = Modifier
-            .widthIn(max = 720.dp)
-            .fillMaxSize()
-            .align(Alignment.TopCenter),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (continueReading != null) {
-            item {
-                ContinueReadingCard(
-                    book = continueReading,
-                    onClick = { onBookClick(continueReading) },
-                    onResume = onResumeContinue,
-                    modifier = Modifier.animateItem(),
-                )
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = state,
+            modifier = Modifier
+                .widthIn(max = 720.dp)
+                .fillMaxSize()
+                .align(Alignment.TopCenter)
+                .yomuScrollEdgeShadow(
+                    color = YomuTheme.colors.appBackground,
+                    bottom = state.canScrollForward,
+                ),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (continueReading != null) {
+                item {
+                    ContinueReadingCard(
+                        book = continueReading,
+                        onClick = { onBookClick(continueReading) },
+                        onResume = onResumeContinue,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
-        }
 
-        groups.forEach { group ->
-            if (group.label.isNotEmpty()) {
-                item { GroupSectionHeader(title = group.label, modifier = Modifier.animateItem()) }
-            }
-            lazyListItems(group.books, key = { it.id }) { book ->
-                BookListRow(
-                    book = book,
-                    onClick = { onBookClick(book) },
-                    onLongPress = { onBookLongPress(book) },
-                    selected = book.id in selectedIds,
-                    modifier = Modifier.animateItem(),
-                )
+            groups.forEach { group ->
+                if (group.label.isNotEmpty()) {
+                    item { GroupSectionHeader(title = group.label, modifier = Modifier.animateItem()) }
+                }
+                lazyListItems(group.books, key = { it.id }) { book ->
+                    BookListRow(
+                        book = book,
+                        onClick = { onBookClick(book) },
+                        onLongPress = { onBookLongPress(book) },
+                        selected = book.id in selectedIds,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
         }
-    }
     }
 }
 

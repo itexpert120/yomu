@@ -86,7 +86,6 @@ fun YomuGalleryScreen(
     }
 }
 
-
 @Composable
 private fun yomuScreenPadding(
     horizontal: androidx.compose.ui.unit.Dp,
@@ -152,7 +151,7 @@ private fun ExpandedGalleryLayout(
                     "Reader",
                     "Library",
                     "Themes",
-                    "Settings"
+                    "Settings",
                 ).forEachIndexed { index, label ->
                     YomuChip(label, selected = index == 0, onClick = {})
                 }
@@ -215,7 +214,7 @@ private fun ControlGallery() {
             SectionTitle("Controls")
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 YomuButton("Read", onClick = {})
                 YomuButton("Library", onClick = {}, emphasis = YomuButtonEmphasis.Secondary)
@@ -228,19 +227,20 @@ private fun ControlGallery() {
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 listOf(
                     "TOC",
                     "Brightness",
                     "Font",
                     "Bookmark",
-                    "Highlight"
+                    "Highlight",
                 ).forEachIndexed { index, label ->
                     YomuChip(
                         label,
                         selected = selectedChip == index,
-                        onClick = { selectedChip = index })
+                        onClick = { selectedChip = index },
+                    )
                 }
             }
             YomuRangeRow(
@@ -284,13 +284,13 @@ private fun ReaderGallery() {
                     YomuFloatingPanel(modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(
                                 "42%",
                                 color = YomuTheme.colors.textPrimary,
                                 style = YomuTheme.type.mono,
-                                modifier = Modifier.align(Alignment.CenterVertically)
+                                modifier = Modifier.align(Alignment.CenterVertically),
                             )
                             YomuChip("TOC", selected = false, onClick = {})
                             YomuChip("Aa", selected = true, onClick = {})
@@ -310,19 +310,19 @@ private fun BookGallery() {
             "Deep Work",
             "Cal Newport",
             0.64f,
-            listOf(Color(0xFF263A30), Color(0xFF587A5F))
+            listOf(Color(0xFF263A30), Color(0xFF587A5F)),
         ),
         GalleryBook(
             "The Left Hand",
             "Ursula K. Le Gun",
             0.28f,
-            listOf(Color(0xFF1A2736), Color(0xFF526982))
+            listOf(Color(0xFF1A2736), Color(0xFF526982)),
         ),
         GalleryBook(
             "Designing Type",
             "Karen Cheng",
             0.83f,
-            listOf(Color(0xFF35211E), Color(0xFF9B5948))
+            listOf(Color(0xFF35211E), Color(0xFF9B5948)),
         ),
     )
     YomuPanel {
@@ -330,7 +330,7 @@ private fun BookGallery() {
             SectionTitle("Library Cards")
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 books.forEach { book ->
                     YomuBookCard(
@@ -363,7 +363,7 @@ private fun ThemeGallery() {
             SectionTitle("Theme Swatches")
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 swatches.forEach { (name, color) ->
                     YomuColorSwatch(
@@ -390,7 +390,7 @@ private fun ThemeGallery() {
                         Text(
                             "Ready",
                             color = YomuTheme.colors.textMuted,
-                            style = YomuTheme.type.caption
+                            style = YomuTheme.type.caption,
                         )
                     }
                 }
@@ -414,7 +414,7 @@ private fun SectionTitle(text: String) {
             modifier = Modifier
                 .width(32.dp)
                 .height(1.dp)
-                .background(YomuTheme.colors.textPrimary)
+                .background(YomuTheme.colors.textPrimary),
         )
     }
 }

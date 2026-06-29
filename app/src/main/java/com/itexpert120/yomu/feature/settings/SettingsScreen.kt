@@ -120,7 +120,7 @@ fun SettingsScreen(
                                         if (accentIsDark) choice.accent.dark else choice.accent.light,
                                     ),
                                     selected = accentSelection is AccentSelection.Preset &&
-                                            accentSelection.accent == choice.accent,
+                                        accentSelection.accent == choice.accent,
                                     onClick = { onSelectAccent(choice.accent) },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -184,7 +184,7 @@ fun SettingsScreen(
     YomuBottomSheet(
         visible = showCustomPicker,
         onDismiss = { showCustomPicker = false },
-        scrollable = false
+        scrollable = false,
     ) { dismiss ->
         Text(
             text = "Custom accent",

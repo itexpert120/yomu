@@ -58,11 +58,13 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
+import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import java.io.File
 import kotlin.math.round
 import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontFamily as ComposeFontFamily
@@ -112,27 +114,27 @@ internal fun ReaderControlsSheet(
                 // The blur (driven by this content's enter/exit transition) is what makes the swap
                 // read as smooth rather than a plain fade.
                 Box(modifier = Modifier.yomuChromeBlur(this)) {
-                when (current) {
-                    SheetTab.Controls -> ControlsTab(
-                        state = state,
-                        onSeek = onSeek,
-                        onNextChapter = onNextChapter,
-                        onPreviousChapter = onPreviousChapter,
-                        onUpdateSettings = onUpdateSettings,
-                        onPreviewBrightness = onPreviewBrightness,
-                        onCommitBrightness = onCommitBrightness,
-                        onPreviewDim = onPreviewDim,
-                        onCommitDim = onCommitDim,
-                    )
+                    when (current) {
+                        SheetTab.Controls -> ControlsTab(
+                            state = state,
+                            onSeek = onSeek,
+                            onNextChapter = onNextChapter,
+                            onPreviousChapter = onPreviousChapter,
+                            onUpdateSettings = onUpdateSettings,
+                            onPreviewBrightness = onPreviewBrightness,
+                            onCommitBrightness = onCommitBrightness,
+                            onPreviewDim = onPreviewDim,
+                            onCommitDim = onCommitDim,
+                        )
 
-                    SheetTab.Display -> DisplayTab(
-                        state = state,
-                        onUpdateSettings = onUpdateSettings,
-                        onResetSettings = onResetSettings,
-                        onOpenCustomTheme = onOpenCustomTheme,
-                        onApplyCustomTheme = onApplyCustomTheme,
-                    )
-                }
+                        SheetTab.Display -> DisplayTab(
+                            state = state,
+                            onUpdateSettings = onUpdateSettings,
+                            onResetSettings = onResetSettings,
+                            onOpenCustomTheme = onOpenCustomTheme,
+                            onApplyCustomTheme = onApplyCustomTheme,
+                        )
+                    }
                 }
             }
         }
@@ -155,12 +157,12 @@ private fun ControlsTab(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             RoundIcon(
                 Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                 "Previous chapter",
-                onPreviousChapter
+                onPreviousChapter,
             )
             ReaderSlider(
                 fraction = state.totalProgression.toFloat(),
@@ -179,7 +181,7 @@ private fun ControlsTab(
         Text(
             text = "Brightness",
             color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption
+            style = YomuTheme.type.caption,
         )
         YomuSettingRow(title = "Use system brightness") {
             YomuTogglePill(
@@ -244,7 +246,7 @@ private fun DisplayTab(
         Text(
             text = "Theme · this book",
             color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption
+            style = YomuTheme.type.caption,
         )
         ReaderThemeRow(s, onUpdateSettings)
         if (s.theme == ReaderThemeMode.Custom) {
@@ -253,7 +255,8 @@ private fun DisplayTab(
         Text(text = "Layout", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
         ReaderLayoutControl(s, onUpdateSettings)
         Text(text = "Font", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        ReaderFontRow(s, onUpdateSettings)
+        // In-reader: switch among installed fonts; adding/removing is on the Reading Defaults screen.
+        ReaderFontRow(s, onUpdateSettings, customFonts = state.installedFonts)
         ReaderFontSizeControl(s, onUpdateSettings)
         Text(text = "Text", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
         ReaderTextAlignControl(s, onUpdateSettings)
@@ -353,13 +356,13 @@ internal fun CustomThemeSheet(
             Text(
                 text = "Custom theme",
                 color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body
+                style = YomuTheme.type.body,
             )
 
             Text(
                 text = "Background colour",
                 color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption
+                style = YomuTheme.type.caption,
             )
             YomuColorPicker(
                 color = Color(settings.backgroundArgb),
@@ -367,8 +370,8 @@ internal fun CustomThemeSheet(
                 onColorChange = { color ->
                     onUpdateSettings(
                         settings.copy(
-                            customBackground = color.toArgb().toLong() and 0xFFFFFFFFL
-                        )
+                            customBackground = color.toArgb().toLong() and 0xFFFFFFFFL,
+                        ),
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -376,15 +379,15 @@ internal fun CustomThemeSheet(
             Text(
                 text = "Text colour",
                 color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption
+                style = YomuTheme.type.caption,
             )
             YomuColorPicker(
                 color = Color(settings.textArgb),
                 onColorChange = { color ->
                     onUpdateSettings(
                         settings.copy(
-                            customText = color.toArgb().toLong() and 0xFFFFFFFFL
-                        )
+                            customText = color.toArgb().toLong() and 0xFFFFFFFFL,
+                        ),
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -409,7 +412,7 @@ internal fun CustomThemeSheet(
                 Text(
                     text = "Saved themes",
                     color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption
+                    style = YomuTheme.type.caption,
                 )
                 customThemes.forEach { theme ->
                     SavedThemeRow(
@@ -541,6 +544,65 @@ internal fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) 
     }
 }
 
+/** Font picker chip for a user-installed custom font, previewed in that font (loaded from its file). */
+@Composable
+internal fun CustomFontChip(font: CustomFontRef, selected: Boolean, onClick: () -> Unit) {
+    val family = remember(font.regularPath) {
+        runCatching { ComposeFontFamily(Font(file = File(font.regularPath))) }.getOrNull()
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(YomuTheme.radius.pill))
+            .background(if (selected) YomuTheme.colors.accentSoft else YomuTheme.colors.surface)
+            .border(
+                width = 1.dp,
+                color = if (selected) YomuTheme.colors.accent else YomuTheme.colors.border,
+                shape = RoundedCornerShape(YomuTheme.radius.pill),
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+    ) {
+        Text(
+            text = font.family,
+            color = if (selected) YomuTheme.colors.textPrimary else YomuTheme.colors.textSecondary,
+            style = family?.let { YomuTheme.type.body.copy(fontFamily = it) } ?: YomuTheme.type.body,
+        )
+    }
+}
+
+/** "+ Add" chip in the font picker that opens the font-library sheet (Reading Defaults only). */
+@Composable
+internal fun AddFontChip(onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(YomuTheme.radius.pill))
+            .border(
+                width = 1.dp,
+                color = YomuTheme.colors.border,
+                shape = RoundedCornerShape(YomuTheme.radius.pill),
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = null,
+            tint = YomuTheme.colors.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(text = "Add", color = YomuTheme.colors.textSecondary, style = YomuTheme.type.body)
+    }
+}
 
 @Composable
 internal fun RoundIcon(
@@ -564,7 +626,7 @@ internal fun RoundIcon(
             imageVector = icon,
             contentDescription = description,
             tint = YomuTheme.colors.textPrimary,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(22.dp),
         )
     }
 }
@@ -616,7 +678,10 @@ internal fun ReaderSlider(
                         currentOnDrag?.invoke(value)
                         change.consume()
                     },
-                    onDragEnd = { drag?.let { currentOnSeek(it) }; drag = null },
+                    onDragEnd = {
+                        drag?.let { currentOnSeek(it) }
+                        drag = null
+                    },
                     onDragCancel = { drag = null },
                 )
             },
@@ -649,10 +714,12 @@ internal fun ReaderSlider(
                 modifier = Modifier
                     .offset {
                         IntOffset(
-                            (m.coerceIn(
-                                0f,
-                                1f
-                            ) * trackWidthPx + thumbPx / 2f - markerWidthPx / 2f).roundToInt(),
+                            (
+                                m.coerceIn(
+                                    0f,
+                                    1f,
+                                ) * trackWidthPx + thumbPx / 2f - markerWidthPx / 2f
+                                ).roundToInt(),
                             0,
                         )
                     }

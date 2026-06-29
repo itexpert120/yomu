@@ -26,21 +26,22 @@ class ReaderSettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val dao: BookDao,
 ) {
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     val global: Flow<ReaderSettings> = dataStore.data.map { prefs ->
         prefs[KeyGlobal]?.let { decode(it) } ?: ReaderSettings()
     }
 
     /** Whether [bookId] currently carries its own override. */
-    fun hasOverride(id: BookId): Flow<Boolean> =
-        dao.observeReaderSettings(id.value).map { it != null }
+    fun hasOverride(id: BookId): Flow<Boolean> = dao.observeReaderSettings(id.value).map { it != null }
 
     /** The settings actually applied to [bookId]: its override if present, else the global default. */
-    fun effective(id: BookId): Flow<ReaderSettings> =
-        combine(global, dao.observeReaderSettings(id.value)) { global, override ->
-            override?.json?.let { decode(it) } ?: global
-        }
+    fun effective(id: BookId): Flow<ReaderSettings> = combine(global, dao.observeReaderSettings(id.value)) { global, override ->
+        override?.json?.let { decode(it) } ?: global
+    }
 
     suspend fun setGlobal(settings: ReaderSettings) {
         dataStore.edit { it[KeyGlobal] = json.encodeToString(settings) }
@@ -81,13 +82,11 @@ class ReaderSettingsRepository @Inject constructor(
         }
     }
 
-    private fun decodeThemes(raw: String): List<CustomReaderTheme> =
-        runCatching { json.decodeFromString(customThemeSerializer, raw) }.getOrDefault(emptyList())
+    private fun decodeThemes(raw: String): List<CustomReaderTheme> = runCatching { json.decodeFromString(customThemeSerializer, raw) }.getOrDefault(emptyList())
 
     // endregion
 
-    private fun decode(raw: String): ReaderSettings =
-        runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrDefault(ReaderSettings())
+    private fun decode(raw: String): ReaderSettings = runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrDefault(ReaderSettings())
 
     private companion object {
         val KeyGlobal = stringPreferencesKey("reader_settings_global")

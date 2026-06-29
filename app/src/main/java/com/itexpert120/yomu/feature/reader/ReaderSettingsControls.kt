@@ -27,6 +27,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -94,7 +95,7 @@ internal fun ReaderCustomThemeRow(
 @Composable
 internal fun ReaderLayoutControl(
     settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit
+    onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     val modes = ReaderLayout.entries
     YomuSegmentedControl(
@@ -106,7 +107,12 @@ internal fun ReaderLayoutControl(
 }
 
 @Composable
-internal fun ReaderFontRow(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
+internal fun ReaderFontRow(
+    settings: ReaderSettings,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    customFonts: List<CustomFontRef> = emptyList(),
+    onManageFonts: (() -> Unit)? = null,
+) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -115,17 +121,26 @@ internal fun ReaderFontRow(settings: ReaderSettings, onUpdateSettings: (ReaderSe
         ReaderFont.entries.forEach { font ->
             FontChip(
                 font = font,
-                selected = settings.font == font,
-                onClick = { onUpdateSettings(settings.copy(font = font)) },
+                // A bundled font is selected only when no custom font is active.
+                selected = settings.customFont == null && settings.font == font,
+                onClick = { onUpdateSettings(settings.copy(font = font, customFont = null)) },
             )
         }
+        customFonts.forEach { custom ->
+            CustomFontChip(
+                font = custom,
+                selected = settings.customFont?.family == custom.family,
+                onClick = { onUpdateSettings(settings.copy(customFont = custom)) },
+            )
+        }
+        if (onManageFonts != null) AddFontChip(onClick = onManageFonts)
     }
 }
 
 @Composable
 internal fun ReaderFontSizeControl(
     settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit
+    onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     val min = ReaderSettings.MIN_FONT_SCALE
     val max = ReaderSettings.MAX_FONT_SCALE
@@ -175,7 +190,7 @@ internal fun ReaderFontSizeControl(
 @Composable
 internal fun ReaderTextAlignControl(
     settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit
+    onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     val aligns = ReaderTextAlign.entries
     YomuSegmentedControl(
@@ -190,7 +205,7 @@ internal fun ReaderTextAlignControl(
 @Composable
 internal fun ReaderTypographySliders(
     settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit
+    onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     AutoSlider(
         label = "Line height",
@@ -227,12 +242,13 @@ internal fun ReaderTypographySliders(
 @Composable
 internal fun ReaderChromeToggles(
     settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit
+    onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     YomuSettingRow(title = "Show footer") {
         YomuTogglePill(
             checked = settings.showFooter,
-            onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) })
+            onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
+        )
     }
     // The per-item toggles stay visible but disable when the footer is off, so the layout doesn't
     // jump and it's clear what the footer would contain.
@@ -270,6 +286,14 @@ internal fun ReaderChromeToggles(
             onCheckedChange = { onUpdateSettings(settings.copy(keepScreenOn = it)) },
         )
     }
+    // The scrollbar only exists in scroll mode (a native WebView scroll), so disable the row in paged.
+    YomuSettingRow(title = "Show scrollbar") {
+        YomuTogglePill(
+            checked = settings.showScrollbar,
+            onCheckedChange = { onUpdateSettings(settings.copy(showScrollbar = it)) },
+            enabled = settings.layout == ReaderLayout.Scroll,
+        )
+    }
     YomuSettingRow(
         title = "Immersive",
         subtitle = "Hide the bars on tap for a full-screen page",
@@ -293,6 +317,8 @@ internal fun ReaderPreferenceControls(
     onOpenCustomTheme: () -> Unit,
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
     modifier: Modifier = Modifier,
+    customFonts: List<CustomFontRef> = emptyList(),
+    onManageFonts: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         SectionLabel("Theme")
@@ -305,7 +331,7 @@ internal fun ReaderPreferenceControls(
         ReaderLayoutControl(settings, onUpdateSettings)
 
         SectionLabel("Font")
-        ReaderFontRow(settings, onUpdateSettings)
+        ReaderFontRow(settings, onUpdateSettings, customFonts = customFonts, onManageFonts = onManageFonts)
         ReaderFontSizeControl(settings, onUpdateSettings)
 
         SectionLabel("Text")

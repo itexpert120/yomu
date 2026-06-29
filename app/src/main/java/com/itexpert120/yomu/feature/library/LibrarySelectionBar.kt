@@ -127,7 +127,7 @@ private fun LabeledAction(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(22.dp),
         )
         Text(text = label, color = tint, style = YomuTheme.type.caption)
     }

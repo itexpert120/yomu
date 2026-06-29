@@ -97,7 +97,7 @@ fun YomuChip(
             .border(
                 1.dp,
                 if (selected) colors.textPrimary else colors.border,
-                RoundedCornerShape(YomuTheme.radius.pill)
+                RoundedCornerShape(YomuTheme.radius.pill),
             )
             .padding(horizontal = 13.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
@@ -170,7 +170,7 @@ fun YomuSegmentedControl(
                             text = option,
                             color = textColor,
                             style = YomuTheme.type.caption,
-                            maxLines = 1
+                            maxLines = 1,
                         )
                     }
                 }
@@ -202,7 +202,8 @@ fun YomuRangeRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             YomuStepButton(
                 text = "-",
-                onClick = { onValueChange((value - 0.05f).coerceIn(0f, 1f)) })
+                onClick = { onValueChange((value - 0.05f).coerceIn(0f, 1f)) },
+            )
             Spacer(Modifier.width(12.dp))
             var sliderSize by remember { mutableStateOf(IntSize.Zero) }
             Canvas(
@@ -224,7 +225,7 @@ fun YomuRangeRow(
                                 updateValue(change.position.x)
                             },
                         )
-                    }
+                    },
             ) {
                 val trackHeight = 3.dp.toPx()
                 val handleRadius = 7.dp.toPx()
@@ -258,7 +259,8 @@ fun YomuRangeRow(
             Spacer(Modifier.width(12.dp))
             YomuStepButton(
                 text = "+",
-                onClick = { onValueChange((value + 0.05f).coerceIn(0f, 1f)) })
+                onClick = { onValueChange((value + 0.05f).coerceIn(0f, 1f)) },
+            )
         }
     }
 }
@@ -295,7 +297,7 @@ fun YomuColorSwatch(
             .border(
                 1.dp,
                 if (selected) colors.textPrimary else colors.border,
-                RoundedCornerShape(YomuTheme.radius.md)
+                RoundedCornerShape(YomuTheme.radius.md),
             )
             .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -305,7 +307,7 @@ fun YomuColorSwatch(
                 .size(38.dp)
                 .clip(CircleShape)
                 .background(color)
-                .border(1.dp, Color.Black.copy(alpha = 0.18f), CircleShape)
+                .border(1.dp, Color.Black.copy(alpha = 0.18f), CircleShape),
         )
         Spacer(Modifier.height(8.dp))
         Text(

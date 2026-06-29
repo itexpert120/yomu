@@ -43,7 +43,7 @@ fun YomuBookCard(
                 .border(
                     1.dp,
                     colors.border.copy(alpha = 0.35f),
-                    RoundedCornerShape(YomuTheme.radius.md)
+                    RoundedCornerShape(YomuTheme.radius.md),
                 )
                 .padding(14.dp),
         ) {
@@ -52,7 +52,7 @@ fun YomuBookCard(
                     .align(Alignment.TopStart)
                     .fillMaxWidth(0.42f)
                     .height(3.dp)
-                    .background(Color.White.copy(alpha = 0.7f))
+                    .background(Color.White.copy(alpha = 0.7f)),
             )
             Column(modifier = Modifier.align(Alignment.BottomStart)) {
                 Text(
@@ -79,13 +79,13 @@ fun YomuBookCard(
                     .weight(1f)
                     .height(3.dp)
                     .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .background(colors.border)
+                    .background(colors.border),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(progress.coerceIn(0f, 1f))
                         .height(3.dp)
-                        .background(colors.textPrimary)
+                        .background(colors.textPrimary),
                 )
             }
             Spacer(Modifier.size(10.dp))
