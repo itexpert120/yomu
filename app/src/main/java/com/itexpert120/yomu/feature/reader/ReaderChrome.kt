@@ -35,7 +35,6 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -198,40 +197,6 @@ internal fun ReaderFooter(
     }
 }
 
-/**
- * A "Next chapter" button that slides up at the end of a chapter. Styled to the reading theme so it
- * reads clearly on any page; opaque so text doesn't bleed through.
- */
-@Composable
-internal fun BoxScope.ReaderChapterButtons(
-    chapterProgression: Double,
-    hasNext: Boolean,
-    bottomInset: Dp,
-    background: Color,
-    content: Color,
-    onNext: () -> Unit,
-) {
-    // Slides up into view as the chapter end is reached — the cue that tapping advances a chapter.
-    AnimatedVisibility(
-        visible = hasNext && chapterProgression >= 1.0 - CHAPTER_EDGE,
-        enter = yomuChromeEnter(),
-        exit = yomuChromeExit(),
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = bottomInset + 14.dp),
-    ) {
-        ChapterPill(
-            text = "Next chapter",
-            icon = Icons.Rounded.KeyboardArrowDown,
-            background = background,
-            content = content,
-            onClick = onNext,
-            modifier = Modifier.yomuChromeBlur(this),
-        )
-    }
-}
-
-private const val CHAPTER_EDGE = 0.01
 
 /**
  * Bottom chapter-controls bar, revealed by a centre tap. Holds quick navigation: table of contents,
@@ -307,40 +272,6 @@ private fun ControlButton(
     ) {
         Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
         Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
-    }
-}
-
-@Composable
-private fun ChapterPill(
-    text: String,
-    icon: ImageVector,
-    background: Color,
-    content: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            // Opaque page-coloured fill + subtle border, so text never bleeds through the pill.
-            .background(background)
-            .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(50))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 16.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = content,
-            modifier = Modifier.size(18.dp)
-        )
-        Text(text = text, color = content, style = YomuTheme.type.caption, maxLines = 1)
     }
 }
 

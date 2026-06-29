@@ -28,6 +28,7 @@ import com.itexpert120.yomu.core.reader.ReaderSession
 fun ReaderNavigatorHost(
     session: ReaderSession,
     backgroundArgb: Long,
+    immersive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current.findFragmentActivity()
@@ -42,9 +43,7 @@ fun ReaderNavigatorHost(
             FragmentContainerView(context).apply {
                 id = containerId
                 setBackgroundColor(backgroundArgb.toInt())
-                // Draw edge-to-edge: consume insets so the navigator's WebView doesn't pad itself
-                // for the status/nav bars (which left a solid strip). Yomu's chrome handles spacing.
-                ViewCompat.setOnApplyWindowInsetsListener(this) { _, _ -> WindowInsetsCompat.CONSUMED }
+                applyReadiumInsetMode(immersive)
                 doOnAttach {
                     // After a config change a placeholder navigator may have been restored (via the
                     // activity's restore factory). Remove whatever is there and add a fresh fragment
@@ -66,7 +65,10 @@ fun ReaderNavigatorHost(
                 }
             }
         },
-        update = { it.setBackgroundColor(backgroundArgb.toInt()) },
+        update = { container ->
+            container.setBackgroundColor(backgroundArgb.toInt())
+            container.applyReadiumInsetMode(immersive)
+        },
     )
 
     DisposableEffect(session) {
@@ -76,6 +78,20 @@ fun ReaderNavigatorHost(
             }
         }
     }
+}
+
+private fun FragmentContainerView.applyReadiumInsetMode(immersive: Boolean) {
+    if (immersive) {
+        // Install before the Readium fragment is attached; otherwise R2WebView can cache a first
+        // layout with the status/cutout inset already reserved.
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, _ ->
+            WindowInsetsCompat.CONSUMED
+        }
+    } else {
+        // Let Readium's own R2WebView inset dispatcher see the status/nav bars.
+        ViewCompat.setOnApplyWindowInsetsListener(this, null)
+    }
+    ViewCompat.requestApplyInsets(this)
 }
 
 private fun Context.findFragmentActivity(): FragmentActivity {

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -30,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
@@ -137,6 +137,7 @@ fun ReaderScreen(
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         val prevStatus = window?.statusBarColor
         val prevNav = window?.navigationBarColor
+        val prevSystemUi = window?.decorView?.systemUiVisibility
         // Capture the app's bar-icon appearance so leaving the reader restores legible icons for the
         // app theme (the reader flips these to match the reading page).
         val prevLightStatus = controller?.isAppearanceLightStatusBars
@@ -155,33 +156,16 @@ fun ReaderScreen(
             window?.isStatusBarContrastEnforced = false
             window?.isNavigationBarContrastEnforced = false
         }
-        // Let the window (and the WebView page below) extend into the display cutout. Without this the
-        // WebView letterboxes below the cutout — the status-bar-height gap at the top seen in immersive
-        // mode. enableEdgeToEdge() alone does not set this. Paired with viewport-fit=cover in the page.
         val prevCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window?.attributes?.layoutInDisplayCutoutMode
         } else {
             null
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window?.let {
-                val lp = it.attributes
-                lp.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                it.attributes = lp
-            }
-        }
-        // Full-screen reading: hide both system bars (swipe to reveal). The footer already shows the
-        // time + battery, so the status bar is redundant; the permanent top bar shows the chapter.
-        controller?.let {
-            it.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            it.hide(WindowInsetsCompat.Type.systemBars())
-        }
         onDispose {
             window?.let {
                 prevStatus?.let { c -> it.statusBarColor = c }
                 prevNav?.let { c -> it.navigationBarColor = c }
+                prevSystemUi?.let { flags -> it.decorView.systemUiVisibility = flags }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     prevStatusContrast?.let { enforced ->
                         it.isStatusBarContrastEnforced = enforced
@@ -206,6 +190,26 @@ fun ReaderScreen(
                 c.show(WindowInsetsCompat.Type.systemBars())
             }
         }
+    }
+    LaunchedEffect(Unit) {
+        val window = view.context.findActivity()?.window ?: return@LaunchedEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val lp = window.attributes
+            lp.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            window.attributes = lp
+        }
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_IMMERSIVE or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+        controller.hide(WindowInsetsCompat.Type.systemBars())
     }
     // Colour the system bars to the reading background so the status area matches the page on every
     // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).
@@ -266,23 +270,13 @@ fun ReaderScreen(
     val density = LocalDensity.current
     var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    // The top bar is static, so content needs an explicit inset: the navigator host consumes system
-    // insets, so the WebView won't add a safe area for us. Wide / landscape layouts need the full bar
-    // reserved to keep chapter headings clear of the chrome. Compact portrait already has generous
-    // EPUB top whitespace; reserving the status/cutout strip as well creates the large blank gap seen
-    // on phones, so there we reserve just the controls row.
-    val configuration = LocalConfiguration.current
-    val compactPortrait =
-        configuration.screenWidthDp < 600 && configuration.screenHeightDp > configuration.screenWidthDp
+    // In non-immersive mode Readium receives system-bar insets and reserves the status strip inside
+    // the WebView. Yomu only reserves the visible controls row, avoiding a double top gap.
     val fullTop = with(density) { topBarPx.toDp() }
     val statusTop = WindowInsets.statusBarsIgnoringVisibility
         .asPaddingValues()
         .calculateTopPadding()
-    val baseTopInset = if (state.settings.layout == ReaderLayout.Scroll && compactPortrait) {
-        (fullTop - statusTop).coerceAtLeast(0.dp)
-    } else {
-        fullTop
-    }
+    val baseTopInset = (fullTop - statusTop).coerceAtLeast(0.dp)
     val footerHeight = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
     val scrollEndPadding =
         if (state.settings.layout == ReaderLayout.Scroll && state.settings.showFooter) {
@@ -306,9 +300,15 @@ fun ReaderScreen(
         label = "readerTopInset",
     )
     val bottomInset by animateDpAsState(
-        targetValue = baseBottomInset,
+        targetValue = if (immersive) 0.dp else baseBottomInset,
         label = "readerBottomInset",
     )
+
+    val controlBarBottomInset by animateDpAsState(
+        targetValue = baseBottomInset,
+        label = "readerControlBarBottomInset"
+    )
+
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
 
@@ -325,6 +325,7 @@ fun ReaderScreen(
                 ReaderNavigatorHost(
                     session = session,
                     backgroundArgb = state.settings.backgroundArgb,
+                    immersive = immersive,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = topInset, bottom = bottomInset),
@@ -397,23 +398,10 @@ fun ReaderScreen(
                     )
                 }
 
-                // Next-chapter button at the chapter end (above the dim scrim so it stays legible).
-                // Hidden while a lookup popup or the chapter-controls bar is open, to avoid overlap.
-                if (state.lookup == null && !state.chapterControlsVisible) {
-                    ReaderChapterButtons(
-                        chapterProgression = state.chapterProgression,
-                        hasNext = state.hasNextChapter,
-                        bottomInset = bottomInset,
-                        background = background,
-                        content = onBackground,
-                        onNext = onNextChapter,
-                    )
-                }
-
                 // Bottom chapter-controls bar, toggled by a centre tap.
                 ReaderChapterControlsBar(
                     visible = state.chapterControlsVisible,
-                    bottomInset = bottomInset,
+                    bottomInset = controlBarBottomInset,
                     background = background,
                     content = onBackground,
                     hasPrevious = state.hasPreviousChapter,

@@ -13,6 +13,8 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -70,6 +72,7 @@ import org.readium.r2.shared.util.toUrl
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
+import kotlin.math.roundToInt
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
@@ -210,10 +213,11 @@ private class ReadiumReaderSession(
     // initial-locator emissions are ignored during this window so they can't clobber saved progress.
     private var restoring = false
 
-    // Per-resource page (position) progressions, sorted, for "pages left in chapter". Computed once,
-    // lazily (publication.positions() is layout-independent, so it works for paged and scroll).
+    // Per-resource reading-position progressions. Used as a scroll-mode fallback for "pages left";
+    // paged mode uses Readium's visual page callback so the count changes on every page turn.
     private var positionsByHref: Map<String, List<Double>>? = null
 
+    private var latestVisualPage: VisualPageState? = null
     // The resource we last injected the scroll-width CSS override into (re-injected per resource).
     private var lastStyledHref: String? = null
 
@@ -234,10 +238,9 @@ private class ReadiumReaderSession(
 
     private val listener = object : EpubNavigatorFragment.Listener {
         override fun onExternalLinkActivated(url: AbsoluteUrl) {
-            // Custom-scheme links injected into the page — the end-of-chapter "Next chapter" button
-            // and the scroll-mode rubberband overscroll gesture — route here as external links;
-            // intercept them for chapter navigation instead of opening a browser. Pull-to-previous
-            // lands at the END of the previous chapter for a continuous-reading feel.
+            // Custom-scheme links injected by the scroll-mode rubberband overscroll gesture route
+            // here as external links; intercept them for chapter navigation instead of opening a
+            // browser. Pull-to-previous lands at the END of the previous chapter for continuity.
             val s = url.toString()
             when {
                 s.startsWith(PREV_CHAPTER_URL) -> goToPreviousResourceEnd()
@@ -264,10 +267,22 @@ private class ReadiumReaderSession(
             // First real paint — release the "Opening…" gate. Idempotent (fires per resource).
             _ready.value = true
             scope.launch {
-                runCatching { navigator?.evaluateJavascript(SCROLL_WIDTH_FIX_JS) }
-                runCatching { navigator?.evaluateJavascript(VIEWPORT_FIT_JS) }
+                injectScrollCss()
+                injectViewportFit()
                 applyScrollbars(currentSettings)
+                clearImmersiveScrollTopPadding()
             }
+        }
+
+        override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
+            updateCurrentLocator(
+                locator,
+                visualPage = VisualPageState(
+                    href = locator.href.toString(),
+                    pageIndex = pageIndex,
+                    totalPages = totalPages,
+                ),
+            )
         }
     }
 
@@ -459,48 +474,7 @@ private class ReadiumReaderSession(
         }
         scope.launch {
             nav.currentLocator.collect { locator ->
-                if (restoring) return@collect
-                lastLocator = locator
-                val hrefStr = locator.href.toString()
-                // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
-                // RsProperties maxLineLength can't override (it's set per-resource on body). Inject a
-                // style override so scroll mode fills the width too. Re-applied per resource.
-                val order = publication.readingOrder
-                val index = order.indexOfFirst { it.url().toString() == hrefStr }
-                val hasNext = index in 0 until order.lastIndex
-                // Chapter-weighted whole-book progress: advances smoothly even through an early
-                // chapter of a many-chapter book (where Readium's totalProgression barely moves).
-                val bookProgress = if (index >= 0 && order.isNotEmpty()) {
-                    ((index + (locator.locations.progression ?: 0.0)) / order.size).coerceIn(0.0, 1.0)
-                } else {
-                    null
-                }
-                // Page boundaries ahead of the current position within this resource.
-                val pagesLeft = positionsByHref?.get(hrefStr)?.let { positions ->
-                    val prog = locator.locations.progression ?: 0.0
-                    positions.count { it > prog + 1e-6 }
-                }
-                if (hrefStr != lastStyledHref) {
-                    lastStyledHref = hrefStr
-                    scope.launch {
-                        runCatching { nav.evaluateJavascript(SCROLL_WIDTH_FIX_JS) }
-                        runCatching { nav.evaluateJavascript(VIEWPORT_FIT_JS) }
-                    }
-                    // Append the end-of-chapter "Next chapter" button + arm the rubberband gesture.
-                    injectNextChapterButton()
-                    injectOverscroll()
-                }
-                _currentLocator.value = ReaderLocator(
-                    locatorJson = locator.toJSON().toString(),
-                    totalProgression = locator.locations.totalProgression,
-                    chapterTitle = locator.title,
-                    href = hrefStr,
-                    chapterProgression = locator.locations.progression,
-                    hasPreviousChapter = index > 0,
-                    hasNextChapter = hasNext,
-                    bookProgress = bookProgress,
-                    chapterPagesLeft = pagesLeft,
-                )
+                updateCurrentLocator(locator)
             }
         }
         // Restore the latest reading position into the freshly re-hosted fragment, then resume
@@ -629,16 +603,146 @@ private class ReadiumReaderSession(
         scope.launch { nav.applyDecorations(decorations, SEARCH_GROUP) }
     }
 
+    private data class VisualPageState(
+        val href: String,
+        val pageIndex: Int,
+        val totalPages: Int,
+    )
+
+    private fun updateCurrentLocator(locator: Locator, visualPage: VisualPageState? = null) {
+        if (restoring) return
+        visualPage?.let { latestVisualPage = it }
+        lastLocator = locator
+        val hrefStr = locator.href.toString()
+        // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
+        // RsProperties maxLineLength can't override (it's set per-resource on body). Inject a
+        // style override so scroll mode fills the width too. Re-applied per resource.
+        val order = publication.readingOrder
+        val index = order.indexOfFirst { it.url().toString() == hrefStr }
+        val hasNext = index in 0 until order.lastIndex
+        // Chapter-weighted whole-book progress: advances smoothly even through an early chapter of a
+        // many-chapter book (where Readium's totalProgression barely moves).
+        val bookProgress = if (index >= 0 && order.isNotEmpty()) {
+            ((index + (locator.locations.progression ?: 0.0)) / order.size).coerceIn(0.0, 1.0)
+        } else {
+            null
+        }
+        val visualPagesLeft = latestVisualPage
+            ?.takeIf {
+                currentSettings.layout == ReaderLayout.Paged &&
+                    it.href == hrefStr &&
+                    it.totalPages > 0
+            }
+            ?.let {
+                val pageIndex = it.pageIndex.coerceIn(0, it.totalPages - 1)
+                (it.totalPages - pageIndex - 1).coerceAtLeast(0)
+            }
+        // In scroll mode there is no visual page index, so fall back to Readium positions.
+        val pagesLeft = visualPagesLeft ?: positionsByHref?.get(hrefStr)?.let { positions ->
+            val prog = locator.locations.progression ?: 0.0
+            positions.count { it > prog + 1e-6 }
+        }
+        if (hrefStr != lastStyledHref) {
+            lastStyledHref = hrefStr
+            scope.launch {
+                injectScrollCss()
+                injectViewportFit()
+                clearImmersiveScrollTopPadding()
+            }
+            // Arm the scroll-mode rubberband chapter gesture.
+            injectOverscroll()
+        }
+        _currentLocator.value = ReaderLocator(
+            locatorJson = locator.toJSON().toString(),
+            totalProgression = locator.locations.totalProgression,
+            chapterTitle = locator.title,
+            href = hrefStr,
+            chapterProgression = locator.locations.progression,
+            hasPreviousChapter = index > 0,
+            hasNextChapter = hasNext,
+            bookProgress = bookProgress,
+            chapterPagesLeft = pagesLeft,
+        )
+    }
     override fun applySettings(settings: ReaderSettings) {
         pendingSettings = settings
         currentSettings = settings
         navigator?.submitPreferences(settings.toPreferences())
-        // Re-style the injected button so its colours track a live theme/accent change.
-        injectNextChapterButton()
         // Re-toggle/re-theme the native scrollbar (it's scroll-mode only and tracks the text colour).
         applyScrollbars(settings)
+        // Refresh scroll-only CSS overrides when layout or immersive mode changes.
+        injectScrollCss()
+        // Toggle viewport-fit=cover with immersive scroll mode so normal reading keeps status-bar space.
+        injectViewportFit()
+        clearImmersiveScrollTopPadding(settings)
         // Re-arm or tear down the rubberband gesture on a scroll<->paged or theme change.
         injectOverscroll()
+    }
+
+    private fun injectScrollCss() {
+        val nav = navigator ?: return
+        val immersiveScroll = currentSettings.immersiveChrome &&
+            currentSettings.layout == ReaderLayout.Scroll
+        val js = scrollCssJs(
+            immersiveScroll = immersiveScroll,
+            chapterStartPaddingPx = if (immersiveScroll) chapterStartPaddingPx() else 0,
+        )
+        scope.launch { runCatching { nav.evaluateJavascript(js) } }
+    }
+
+    private fun chapterStartPaddingPx(): Int {
+        val topInset = topSystemInsetCssPx()
+        val fallbackTop = CHAPTER_START_FALLBACK_PADDING_DP.roundToInt()
+        val breathingRoom = CHAPTER_START_EXTRA_PADDING_DP.roundToInt()
+        return maxOf(topInset, fallbackTop) + breathingRoom
+    }
+
+    private fun rubberbandTopOffsetPx(): Int {
+        val margin = RUBBERBAND_EDGE_MARGIN_DP.roundToInt()
+        if (!currentSettings.immersiveChrome) return margin
+        val topInset = topSystemInsetCssPx()
+        val fallbackTop = CHAPTER_START_FALLBACK_PADDING_DP.roundToInt()
+        return maxOf(topInset, fallbackTop) + margin
+    }
+
+    private fun topSystemInsetCssPx(): Int {
+        // Android window insets are physical view pixels; injected WebView CSS wants CSS pixels.
+        val root = navigator?.view
+        val density = root?.resources?.displayMetrics?.density
+            ?: context.resources.displayMetrics.density
+        val statusTop = root?.let {
+            ViewCompat.getRootWindowInsets(it)
+                ?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())
+                ?.top
+        } ?: 0
+        val cutoutTop = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            root?.rootWindowInsets?.displayCutout?.safeInsetTop ?: 0
+        } else {
+            0
+        }
+        return (maxOf(statusTop, cutoutTop) / density).roundToInt()
+    }
+    private fun injectViewportFit() {
+        val nav = navigator ?: return
+        val js = viewportFitJs(
+            enabled = currentSettings.immersiveChrome && currentSettings.layout == ReaderLayout.Scroll,
+        )
+        scope.launch { runCatching { nav.evaluateJavascript(js) } }
+    }
+
+    private fun clearImmersiveScrollTopPadding(settings: ReaderSettings = currentSettings) {
+        if (!settings.immersiveChrome || settings.layout != ReaderLayout.Scroll) return
+        val root = navigator?.view ?: return
+        fun clear() {
+            forEachWebView(root) { wv ->
+                val parent = wv.parent as? View ?: return@forEachWebView
+                if (parent.paddingTop != 0) {
+                    parent.setPadding(parent.paddingLeft, 0, parent.paddingRight, parent.paddingBottom)
+                }
+            }
+        }
+        clear()
+        root.post { clear() }
     }
 
     // Re-enable the WebView's native vertical scrollbar in scroll mode (Readium force-disables it),
@@ -678,21 +782,6 @@ private class ReadiumReaderSession(
         }
     }
 
-    // True when the current resource has a following resource in reading order.
-    private fun currentHasNext(): Boolean {
-        val hrefStr = lastLocator?.href?.toString() ?: return false
-        val order = publication.readingOrder
-        val index = order.indexOfFirst { it.url().toString() == hrefStr }
-        return index in 0 until order.lastIndex
-    }
-
-    // Inject (or refresh) the end-of-chapter "Next chapter" button into the current resource, styled
-    // from the active theme + accent. Removes it on the final chapter (nothing to advance to).
-    private fun injectNextChapterButton() {
-        val nav = navigator ?: return
-        val js = nextChapterButtonJs(currentHasNext(), currentSettings)
-        scope.launch { runCatching { nav.evaluateJavascript(js) } }
-    }
 
     // Inject (or refresh) the scroll-mode rubberband overscroll gesture into the current resource:
     // pulling past the top goes to the previous chapter, past the bottom to the next. A no-op
@@ -706,7 +795,7 @@ private class ReadiumReaderSession(
         val hasPrev = index > 0
         val hasNext = index in 0 until order.lastIndex
         val enabled = currentSettings.layout == ReaderLayout.Scroll
-        val js = overscrollJs(enabled, hasPrev, hasNext, currentSettings)
+        val js = overscrollJs(enabled, hasPrev, hasNext, currentSettings, rubberbandTopOffsetPx())
         scope.launch { runCatching { nav.evaluateJavascript(js) } }
     }
 
@@ -811,55 +900,6 @@ private class ReadiumReaderSession(
         runCatching { context.startActivity(chooser) }
     }
 
-    // Builds the JS that appends a "Next chapter" pill to the end of the resource body. Colours are
-    // derived from the active reading theme (the page's own text colour) — never the app accent — so
-    // the button always harmonises with the page: a soft filled background, a defined border, and a
-    // text-coloured label. System font, fixed px size. The button is an anchor to a custom scheme;
-    // its tap is caught in onExternalLinkActivated. Removed on the final chapter.
-    private fun nextChapterButtonJs(hasNext: Boolean, settings: ReaderSettings): String {
-        val text = settings.textArgb.toInt()
-        val r = (text shr 16) and 0xFF
-        val g = (text shr 8) and 0xFF
-        val b = text and 0xFF
-        val fill = "rgba($r,$g,$b,0.10)"
-        val border = "rgba($r,$g,$b,0.30)"
-        val label = "rgb($r,$g,$b)"
-        return """
-            (function() {
-              var id = 'yomu-next-chapter';
-              var prev = document.getElementById(id);
-              if (prev) prev.remove();
-              if (!$hasNext) return;
-              var a = document.createElement('a');
-              a.id = id;
-              a.href = '$NEXT_CHAPTER_URL';
-              a.textContent = 'Next chapter';
-              // Fixed px (not em/rem) so the button keeps its size regardless of reading font scale.
-              a.style.cssText = [
-                'display:block',
-                'box-sizing:border-box',
-                'width:fit-content',
-                'max-width:100%',
-                'margin:2.75em auto 1.75em',
-                'padding:14px 28px',
-                'border:1px solid $border',
-                'border-radius:14px',
-                'background:$fill',
-                'color:$label',
-                'font-family:system-ui,-apple-system,Roboto,sans-serif',
-                'font-size:16px',
-                'font-weight:600',
-                'line-height:1',
-                'letter-spacing:0.01em',
-                'text-align:center',
-                'text-decoration:none',
-                'cursor:pointer',
-                '-webkit-tap-highlight-color:transparent'
-              ].join(';');
-              document.body.appendChild(a);
-            })();
-        """.trimIndent()
-    }
 
     // Builds the injected JS for the scroll-mode rubberband chapter gesture. Idempotent per document
     // (guarded by window.__yomuOverscroll); re-running just updates enabled/hasPrev/hasNext. A
@@ -871,6 +911,7 @@ private class ReadiumReaderSession(
         hasPrev: Boolean,
         hasNext: Boolean,
         settings: ReaderSettings,
+        topHintOffsetPx: Int,
     ): String {
         val text = settings.textArgb.toInt()
         val tr = (text shr 16) and 0xFF
@@ -884,14 +925,15 @@ private class ReadiumReaderSession(
         val border = "rgba($tr,$tg,$tb,0.30)"
         val accent = "rgb($tr,$tg,$tb)"
         val onAccent = "rgb($br,$bgG,$bb)"
+        val topHintOffset = topHintOffsetPx.coerceAtLeast(0)
         return """
             (function() {
               if (window.__yomuOverscroll) {
-                window.__yomuOverscroll.update($enabled, $hasPrev, $hasNext);
+                window.__yomuOverscroll.update($enabled, $hasPrev, $hasNext, $topHintOffset);
                 return;
               }
               var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext,
-                         startY: 0, dragging: false, dir: 0, armed: false, fired: false, svgDir: 0 };
+                         startY: 0, dragging: false, dir: 0, armed: false, fired: false, svgDir: 0, topHint: $topHintOffset };
               var THRESHOLD = 96, MAX = 160, DAMP = 0.45;
               var SVGNS = 'http://www.w3.org/2000/svg';
               document.documentElement.style.overscrollBehaviorY = 'contain';
@@ -959,7 +1001,7 @@ private class ReadiumReaderSession(
                 document.body.style.transform = 'translateY(' + (dir < 0 ? pull : -pull) + 'px)';
                 st.armed = pull >= THRESHOLD;
                 if (st.svgDir !== dir) { st.svgDir = dir; setArrow(dir < 0); }
-                if (dir < 0) { hint.style.top = '18px'; hint.style.bottom = 'auto'; }
+                if (dir < 0) { hint.style.top = st.topHint + 'px'; hint.style.bottom = 'auto'; }
                 else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
                 var p = Math.min(pull / THRESHOLD, 1);
                 hint.style.opacity = p;
@@ -981,8 +1023,8 @@ private class ReadiumReaderSession(
                 reset();
               }, { capture: true, passive: true });
               window.__yomuOverscroll = {
-                update: function(en, hp, hn) {
-                  st.enabled = en; st.hasPrev = hp; st.hasNext = hn;
+                update: function(en, hp, hn, topHint) {
+                  st.enabled = en; st.hasPrev = hp; st.hasNext = hn; st.topHint = topHint;
                   if (!en) reset();
                 }
               };
@@ -1036,41 +1078,79 @@ private class ReadiumReaderSession(
         // Cap on collected search hits — bounds memory and scan time on large books.
         const val MAX_SEARCH_RESULTS = 150
 
-        // Custom-scheme URLs behind the injected end-of-chapter "Next chapter" button and the
-        // scroll-mode rubberband overscroll gesture (intercepted in onExternalLinkActivated).
+        // Custom-scheme URLs behind the scroll-mode rubberband overscroll gesture (intercepted in
+        // onExternalLinkActivated).
         const val NEXT_CHAPTER_URL = "yomu://next-chapter"
         const val PREV_CHAPTER_URL = "yomu://prev-chapter"
 
-        // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
-        // the width like paged mode does. No-op in paged mode (the selector only matches scroll).
-        val SCROLL_WIDTH_FIX_JS = """
-            (function() {
-              var id = 'yomu-scroll-width';
-              if (document.getElementById(id)) return;
-              var s = document.createElement('style');
-              s.id = id;
-              s.textContent = ':root[style*="readium-scroll-on"] body{max-width:none!important}';
-              (document.head || document.documentElement).appendChild(s);
-            })();
-        """.trimIndent()
+        const val CHAPTER_START_FALLBACK_PADDING_DP = 20f
+        const val CHAPTER_START_EXTRA_PADDING_DP = 4f
+        const val RUBBERBAND_EDGE_MARGIN_DP = 18f
 
-        // Lets EPUB pages render into the display-cutout area (true edge-to-edge). Android WebViews
-        // letterbox below the cutout unless the page's viewport declares viewport-fit=cover; this is the
-        // status-bar-height gap at the top in immersive mode. env(safe-area-inset-*) returns 0 on Android
-        // so no padding is re-added — the page simply fills to the screen edge. Paired with the window's
-        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES set while the reader is open.
-        val VIEWPORT_FIT_JS = """
+        // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
+        // the width like paged mode does. In immersive scroll mode it also neutralizes Readium's
+        // permanent safe-area top padding and inserts a chapter-start spacer into the content itself.
+        fun scrollCssJs(immersiveScroll: Boolean, chapterStartPaddingPx: Int): String {
+            val spacerHeight = chapterStartPaddingPx.coerceAtLeast(0)
+            val topPaddingFix = if (immersiveScroll) """
+                ':root[style*="readium-scroll-on"]{--RS__scrollPaddingTop:0px!important}',
+                ':root[style*="readium-scroll-on"] body{padding-top:0!important}',
+            """.trimIndent() else ""
+            val spacerCss = if (immersiveScroll && spacerHeight > 0) {
+                "':root[style*=\"readium-scroll-on\"] #yomu-chapter-start-padding{display:block!important;height:${spacerHeight}px!important;min-height:${spacerHeight}px!important;margin:0!important;padding:0!important;border:0!important;pointer-events:none!important;}'"
+            } else {
+                "''"
+            }
+            return """
+            (function() {
+              var styleId = 'yomu-scroll-css';
+              var spacerId = 'yomu-chapter-start-padding';
+              var s = document.getElementById(styleId);
+              if (!s) {
+                s = document.createElement('style');
+                s.id = styleId;
+                (document.head || document.documentElement).appendChild(s);
+              }
+              s.textContent = [
+                ':root[style*="readium-scroll-on"] body{max-width:none!important}',
+                $topPaddingFix
+                $spacerCss
+              ].filter(Boolean).join('\n');
+
+              var body = document.body;
+              if (!body) return;
+              var staleNext = document.getElementById('yomu-next-chapter');
+              if (staleNext && staleNext.parentNode) staleNext.parentNode.removeChild(staleNext);
+              var spacer = document.getElementById(spacerId);
+              if ($immersiveScroll && $spacerHeight > 0) {
+                if (!spacer) {
+                  spacer = document.createElementNS(body.namespaceURI || 'http://www.w3.org/1999/xhtml', 'div');
+                  spacer.id = spacerId;
+                  spacer.setAttribute('aria-hidden', 'true');
+                }
+                spacer.style.cssText = 'display:block;height:${spacerHeight}px;min-height:${spacerHeight}px;margin:0;padding:0;border:0;pointer-events:none;';
+                if (body.firstChild !== spacer) body.insertBefore(spacer, body.firstChild);
+              } else if (spacer && spacer.parentNode) {
+                spacer.parentNode.removeChild(spacer);
+              }
+            })();
+            """.trimIndent()
+        }
+
+        fun viewportFitJs(enabled: Boolean): String = """
             (function() {
               var m = document.querySelector('meta[name="viewport"]');
               if (!m) {
+                if (!$enabled) return;
                 m = document.createElement('meta');
                 m.setAttribute('name', 'viewport');
                 (document.head || document.documentElement).appendChild(m);
               }
               var c = m.getAttribute('content') || '';
-              if (c.indexOf('viewport-fit') === -1) {
-                m.setAttribute('content', c ? c + ', viewport-fit=cover' : 'viewport-fit=cover');
-              }
+              var parts = c.split(',').map(function(part) { return part.trim(); })
+                .filter(function(part) { return part && part.indexOf('viewport-fit') !== 0; });
+              if ($enabled) parts.push('viewport-fit=cover');
+              m.setAttribute('content', parts.join(', '));
             })();
         """.trimIndent()
     }
