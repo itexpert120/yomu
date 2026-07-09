@@ -145,10 +145,7 @@ class LibraryViewModel @Inject constructor(
         } else {
             null
         }
-        // The continue-reading book is surfaced as the hero, so hide it from the grid to avoid
-        // showing the same cover twice.
         val gridBooks = books
-            .filterNot { it.id == continueBook?.id }
             .matching(query)
             .sortedBy(prefs.sortMode)
         return LibraryUiState(

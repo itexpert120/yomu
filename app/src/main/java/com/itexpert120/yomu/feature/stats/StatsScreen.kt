@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,10 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -62,6 +65,7 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
 import com.patrykandpatrick.vico.core.cartesian.layer.ColumnCartesianLayer
 import com.patrykandpatrick.vico.core.common.shape.CorneredShape
+import java.io.File
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -278,14 +282,6 @@ private fun HourOfDaySection(hourly: List<HourlyReading>) {
                 .fillMaxWidth()
                 .height(160.dp),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            CaptionMuted("12 AM")
-            CaptionMuted("12 PM")
-            CaptionMuted("11 PM")
-        }
     }
 }
 
@@ -296,7 +292,13 @@ private fun HourOfDaySection(hourly: List<HourlyReading>) {
 @Composable
 private fun HeatmapSection(heatmap: List<HeatmapDay>) {
     StatCard {
-        SectionLabel("Activity")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            SectionLabel("Activity")
+            heatmapRangeLabel(heatmap)?.let { CaptionMuted(it) }
+        }
         // Columns are weeks (7 rows, Monday on top). The repository emits week-aligned full weeks.
         val weeks = heatmap.chunked(7)
         Row(
@@ -369,8 +371,9 @@ private const val HISTORY_PAGE = 12
 private fun ColumnScope.HistorySection(history: List<ReadingSessionItem>) {
     SectionLabel("Recent reading", modifier = Modifier.padding(top = 8.dp))
 
+    val consolidated = remember(history) { consolidateSessions(history) }
     var visibleCount by remember { mutableIntStateOf(HISTORY_PAGE) }
-    val shown = history.take(visibleCount)
+    val shown = consolidated.take(visibleCount)
     // groupBy keeps key order; history is newest-first, so days come newest-first too.
     val byDay = shown.groupBy {
         Instant.ofEpochMilli(it.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -380,7 +383,7 @@ private fun ColumnScope.HistorySection(history: List<ReadingSessionItem>) {
         byDay.forEach { (day, sessions) -> DayGroup(day, sessions) }
     }
 
-    if (history.size > visibleCount) {
+    if (consolidated.size > visibleCount) {
         Text(
             text = "Show more",
             color = YomuTheme.colors.accent,
@@ -393,6 +396,35 @@ private fun ColumnScope.HistorySection(history: List<ReadingSessionItem>) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }
+}
+
+private const val MERGE_GAP_SECONDS = 20 * 60L
+private const val SHORT_SESSION_SECONDS = 3 * 60L
+
+/**
+ * Merges consecutive short sessions of the same book that happened close together in time, so a
+ * flurry of app-switch-triggered mini-sessions reads as one entry instead of cluttering the list.
+ */
+private fun consolidateSessions(history: List<ReadingSessionItem>): List<ReadingSessionItem> {
+    if (history.size < 2) return history
+    val merged = mutableListOf<ReadingSessionItem>()
+    var current = history.first()
+    for (next in history.drop(1)) {
+        // history is newest-first, so `current` started after `next` ended.
+        val gapSeconds = current.startedAt / 1000 - (next.startedAt / 1000 + next.seconds)
+        val bothShort = current.seconds <= SHORT_SESSION_SECONDS && next.seconds <= SHORT_SESSION_SECONDS
+        current = if (current.bookTitle == next.bookTitle && bothShort && gapSeconds <= MERGE_GAP_SECONDS) {
+            current.copy(
+                seconds = current.seconds + next.seconds,
+                sessionCount = current.sessionCount + next.sessionCount,
+            )
+        } else {
+            merged += current
+            next
+        }
+    }
+    merged += current
+    return merged
 }
 
 @Composable
@@ -421,30 +453,56 @@ private fun SessionTimelineRow(session: ReadingSessionItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // When it was read, first.
+        SessionCoverThumb(session.coverImagePath)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = session.bookTitle,
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.body,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = formatClock(session.startedAt),
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+            )
+        }
         Text(
-            text = formatClock(session.startedAt),
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.mono,
-            modifier = Modifier.width(68.dp),
-        )
-        Text(
-            text = session.bookTitle,
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.body,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = formatReadingTime(session.seconds),
+            text = formatMinutesRead(session.seconds),
             color = YomuTheme.colors.textSecondary,
-            style = YomuTheme.type.mono,
+            style = YomuTheme.type.caption,
         )
+    }
+}
+
+/** "5 min read" / "<1 min read" — plain-language duration for a Recent reading row. */
+private fun formatMinutesRead(seconds: Long): String {
+    val minutes = seconds / 60
+    return if (minutes > 0) "$minutes min read" else "<1 min read"
+}
+
+@Composable
+private fun SessionCoverThumb(path: String?) {
+    Box(
+        modifier = Modifier
+            .width(44.dp)
+            .aspectRatio(1f / 1.5f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(YomuTheme.colors.surfaceSunken),
+    ) {
+        if (path != null) {
+            AsyncImage(
+                model = File(path),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -506,9 +564,14 @@ private fun ColumnChart(
     )
 }
 
+/** Seconds→label: under a minute reads as seconds, under an hour as minutes, else hours. */
 private fun minutesAxisFormatter(): CartesianValueFormatter = CartesianValueFormatter { _, value, _ ->
-    val minutes = value.toInt()
-    if (minutes >= 60) "${minutes / 60}h" else "${minutes}m"
+    val totalSeconds = (value * 60).toLong()
+    when {
+        totalSeconds < 60 -> "${totalSeconds}s"
+        totalSeconds < 3600 -> "${totalSeconds / 60}m"
+        else -> "${totalSeconds / 3600}h"
+    }
 }
 
 /** Labels every few days so the 30-day window isn't a wall of text. */
@@ -540,7 +603,7 @@ private fun hourAxisFormatter(): CartesianValueFormatter = CartesianValueFormatt
 
 private fun labelFormatter(labels: List<String>): CartesianValueFormatter = CartesianValueFormatter { _, value, _ -> labels.getOrElse(value.toInt()) { " " } }
 
-private val WEEKDAY_LABELS = listOf("M", "T", "W", "T", "F", "S", "S")
+private val WEEKDAY_LABELS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 // endregion
 
@@ -589,6 +652,18 @@ private fun EmptyChartHint(text: String) {
 
 // endregion
 
+/** "Jun 1 – Aug 24" span the heatmap grid covers, so the weeks-of-cells read as a real calendar. */
+private fun heatmapRangeLabel(heatmap: List<HeatmapDay>): String? {
+    val first = heatmap.firstOrNull()?.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    val last = heatmap.lastOrNull()?.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    if (first == null || last == null) return null
+    val fmt = SimpleDateFormat("MMM d", Locale.getDefault())
+    fun fmt(date: LocalDate) = fmt.format(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()))
+    return "${fmt(first)} – ${fmt(last)}"
+}
+
+private fun formatClock(millis: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
+
 /** "Today" / "Yesterday" / "Jun 20, 2026" for a session-group day heading. */
 private fun formatDayHeader(day: LocalDate): String {
     val today = LocalDate.now()
@@ -601,8 +676,6 @@ private fun formatDayHeader(day: LocalDate): String {
         }
     }
 }
-
-private fun formatClock(millis: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
 
 private fun formatReadingTime(seconds: Long): String {
     val totalMinutes = seconds / 60

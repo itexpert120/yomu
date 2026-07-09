@@ -111,35 +111,48 @@ fun LibraryScreen(
         BackHandler(onBack = onExitSelection)
     }
 
+    // Search + Sort/Group/View: scrolls away with the list rather than staying pinned in the
+    // sticky top bar. Rendered as the first item inside each layout below.
+    val filtersBar: @Composable (Modifier) -> Unit = { mod ->
+        LibrarySearchAndFilters(
+            searchActive = state.searchActive,
+            searchQuery = state.searchQuery,
+            sortMode = state.sortMode,
+            groupMode = state.groupMode,
+            viewMode = state.viewMode,
+            onSearchToggle = onSearchToggle,
+            onSearchQueryChange = onSearchQueryChange,
+            onSortSheetToggle = { showSortSheet = !showSortSheet },
+            onGroupSheetToggle = { showGroupSheet = !showGroupSheet },
+            onDisplaySheetToggle = { showDisplaySheet = !showDisplaySheet },
+            modifier = mod,
+        )
+    }
+
     val libraryContent: @Composable () -> Unit = {
         Crossfade(
             targetState = state.viewMode,
             animationSpec = tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel),
             label = "libraryViewMode",
         ) { mode ->
-            // The continue-reading hero isn't a selectable item (it's excluded from select-all and
-            // counts), so hide it while selecting to avoid an invisible, inconsistent toggle.
-            val hero = state.continueReading?.takeIf { !state.selectionMode }
             when (mode) {
                 LibraryViewMode.Grid -> LibraryGrid(
                     state = gridState,
-                    continueReading = hero,
                     columns = state.gridColumns,
                     groups = state.groups,
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
                     onBookLongPress = onCardLongPress,
-                    onResumeContinue = { hero?.let { onOpenReader(it.id) } },
+                    filtersBar = filtersBar,
                 )
 
                 LibraryViewMode.List -> LibraryList(
                     state = listState,
-                    continueReading = hero,
                     groups = state.groups,
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
                     onBookLongPress = onCardLongPress,
-                    onResumeContinue = { hero?.let { onOpenReader(it.id) } },
+                    filtersBar = filtersBar,
                 )
             }
         }
@@ -151,19 +164,9 @@ fun LibraryScreen(
                 EmptyLibrary(onImport = onImport)
             } else {
                 Column(Modifier.fillMaxSize()) {
-                    LibraryHeader(
+                    LibraryTopBar(
                         bookCount = state.totalCount,
-                        searchActive = state.searchActive,
-                        searchQuery = state.searchQuery,
-                        sortMode = state.sortMode,
-                        groupMode = state.groupMode,
                         themePreference = themePreference,
-                        onSearchToggle = onSearchToggle,
-                        onSearchQueryChange = onSearchQueryChange,
-                        viewMode = state.viewMode,
-                        onSortSheetToggle = { showSortSheet = !showSortSheet },
-                        onGroupSheetToggle = { showGroupSheet = !showGroupSheet },
-                        onDisplaySheetToggle = { showDisplaySheet = !showDisplaySheet },
                         onImport = onImport,
                         onThemeToggle = onThemeToggle,
                         onOpenStats = onOpenStats,
@@ -330,13 +333,12 @@ private fun EmptyLibrary(onImport: () -> Unit) {
 @Composable
 private fun LibraryGrid(
     state: LazyGridState,
-    continueReading: LibraryBook?,
     columns: Int,
     groups: List<LibraryGroup>,
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    onResumeContinue: () -> Unit,
+    filtersBar: @Composable (Modifier) -> Unit,
 ) {
     // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
     // wide tablet/desktop; on a phone this is a no-op (screen < max width).
@@ -368,15 +370,8 @@ private fun LibraryGrid(
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (continueReading != null) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    ContinueReadingCard(
-                        book = continueReading,
-                        onClick = { onBookClick(continueReading) },
-                        onResume = onResumeContinue,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                filtersBar(Modifier.animateItem())
             }
 
             groups.forEach { group ->
@@ -402,12 +397,11 @@ private fun LibraryGrid(
 @Composable
 private fun LibraryList(
     state: LazyListState,
-    continueReading: LibraryBook?,
     groups: List<LibraryGroup>,
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    onResumeContinue: () -> Unit,
+    filtersBar: @Composable (Modifier) -> Unit,
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
     // column centered on screen. Phones are unaffected (screen < max width).
@@ -425,16 +419,7 @@ private fun LibraryList(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (continueReading != null) {
-                item {
-                    ContinueReadingCard(
-                        book = continueReading,
-                        onClick = { onBookClick(continueReading) },
-                        onResume = onResumeContinue,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-            }
+            item { filtersBar(Modifier.animateItem()) }
 
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {

@@ -51,35 +51,24 @@ import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.core.model.ThemePreference
 
+/** The persistently-visible strip: title/count + the primary icon actions. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun LibraryHeader(
+internal fun LibraryTopBar(
     bookCount: Int,
-    searchActive: Boolean,
-    searchQuery: String,
-    sortMode: SortMode,
-    groupMode: GroupMode,
-    viewMode: LibraryViewMode,
     themePreference: ThemePreference,
-    onSearchToggle: () -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onSortSheetToggle: () -> Unit,
-    onGroupSheetToggle: () -> Unit,
-    onDisplaySheetToggle: () -> Unit,
     onImport: () -> Unit,
     onThemeToggle: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenSettings: () -> Unit,
     elevated: Boolean,
 ) {
-    // Lift the header onto its own plane once the grid scrolls beneath it; the
+    // Lift the bar onto its own plane once the content scrolls beneath it; the
     // shadow defines the seam instead of fading the content under it.
     val elevation by animateDpAsState(
         targetValue = if (elevated) 4.dp else 0.dp,
         label = "headerElevation",
     )
-    // The shadowed plane spans full width (so the seam runs edge-to-edge), but its content is
-    // capped to the same max width as the grid below and centered, so they stay aligned on tablets.
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -88,80 +77,102 @@ internal fun LibraryHeader(
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
         contentAlignment = Alignment.TopCenter,
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Library",
-                        color = YomuTheme.colors.textPrimary,
-                        style = YomuTheme.type.display,
-                    )
-                    Text(
-                        text = "$bookCount books",
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.caption,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    YomuCircleIconButton(
-                        onClick = onImport,
-                        icon = Icons.Rounded.Add,
-                        contentDescription = "Import EPUB",
-                    )
-                    YomuCircleIconButton(
-                        onClick = onThemeToggle,
-                        icon = themePreference.themeIcon(),
-                        contentDescription = "Toggle theme",
-                    )
-                    YomuCircleIconButton(
-                        onClick = onOpenStats,
-                        icon = Icons.Rounded.Insights,
-                        contentDescription = "Statistics",
-                    )
-                    YomuCircleIconButton(
-                        onClick = onOpenSettings,
-                        icon = Icons.Rounded.Settings,
-                        contentDescription = "Settings",
-                    )
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Library",
+                    color = YomuTheme.colors.textPrimary,
+                    style = YomuTheme.type.display,
+                )
+                Text(
+                    text = "$bookCount books",
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption,
+                )
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YomuCircleIconButton(
+                    onClick = onImport,
+                    icon = Icons.Rounded.Add,
+                    contentDescription = "Import EPUB",
+                )
+                YomuCircleIconButton(
+                    onClick = onThemeToggle,
+                    icon = themePreference.themeIcon(),
+                    contentDescription = "Toggle theme",
+                )
+                YomuCircleIconButton(
+                    onClick = onOpenStats,
+                    icon = Icons.Rounded.Insights,
+                    contentDescription = "Statistics",
+                )
+                YomuCircleIconButton(
+                    onClick = onOpenSettings,
+                    icon = Icons.Rounded.Settings,
+                    contentDescription = "Settings",
+                )
+            }
+        }
+    }
+}
 
-            if (searchActive) {
-                SearchField(
-                    query = searchQuery,
-                    onQueryChange = onSearchQueryChange,
-                    onClose = onSearchToggle,
-                )
-            } else {
-                SearchHint(onClick = onSearchToggle)
-            }
+/** Search + Sort/Group/View pills — scrolls away with the list instead of staying pinned. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun LibrarySearchAndFilters(
+    searchActive: Boolean,
+    searchQuery: String,
+    sortMode: SortMode,
+    groupMode: GroupMode,
+    viewMode: LibraryViewMode,
+    onSearchToggle: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onSortSheetToggle: () -> Unit,
+    onGroupSheetToggle: () -> Unit,
+    onDisplaySheetToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 0.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (searchActive) {
+            SearchField(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                onClose = onSearchToggle,
+            )
+        } else {
+            SearchHint(onClick = onSearchToggle)
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                YomuPillFilter(
-                    label = "Sort",
-                    value = sortMode.label,
-                    onClick = onSortSheetToggle,
-                )
-                YomuPillFilter(
-                    label = "Group",
-                    value = groupMode.label,
-                    onClick = onGroupSheetToggle,
-                )
-                YomuPillFilter(
-                    label = "View",
-                    value = viewMode.label,
-                    onClick = onDisplaySheetToggle,
-                )
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            YomuPillFilter(
+                label = "Sort",
+                value = sortMode.label,
+                onClick = onSortSheetToggle,
+            )
+            YomuPillFilter(
+                label = "Group",
+                value = groupMode.label,
+                onClick = onGroupSheetToggle,
+            )
+            YomuPillFilter(
+                label = "View",
+                value = viewMode.label,
+                onClick = onDisplaySheetToggle,
+            )
         }
     }
 }

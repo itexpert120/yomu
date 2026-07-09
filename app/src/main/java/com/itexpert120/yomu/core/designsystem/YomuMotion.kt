@@ -46,40 +46,27 @@ object YomuMotion {
     const val FadeInMillis = 220
     const val FadeOutMillis = 160
 
-    const val ChromeScaleFrom = 0.92f
     const val PopupScaleFrom = 0.90f
 
     val ChromeBlur = 12.dp
     val PopupBlur = 16.dp
 }
 
-/** Enter for bottom-anchored chrome (bars, pills): fade + settle-up scale (+ a small slide). */
+/**
+ * Enter for edge-anchored chrome (bars, pills): fade + slide from its own edge — bottom-anchored
+ * bars slide up from below, top-anchored bars slide down from above — so it reads as sliding off
+ * its edge rather than materializing in place.
+ */
 fun yomuChromeEnter(fromBottom: Boolean = true): EnterTransition {
-    val enter = fadeIn(spring(stiffness = 380f)) +
-        scaleIn(
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
-            initialScale = YomuMotion.ChromeScaleFrom,
-            transformOrigin = TransformOrigin(0.5f, 1f),
-        )
-    return if (fromBottom) {
-        enter + slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f)) { it / 4 }
-    } else {
-        enter
-    }
+    val offset: (Int) -> Int = if (fromBottom) { h -> h / 3 } else { h -> -h / 3 }
+    return fadeIn(spring(stiffness = 380f)) +
+        slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f), initialOffsetY = offset)
 }
 
 fun yomuChromeExit(toBottom: Boolean = true): ExitTransition {
-    val exit = fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
-        scaleOut(
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
-            targetScale = YomuMotion.ChromeScaleFrom,
-            transformOrigin = TransformOrigin(0.5f, 1f),
-        )
-    return if (toBottom) {
-        exit + slideOutVertically(spring(dampingRatio = 0.85f, stiffness = 380f)) { it / 4 }
-    } else {
-        exit
-    }
+    val offset: (Int) -> Int = if (toBottom) { h -> h / 3 } else { h -> -h / 3 }
+    return fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
+        slideOutVertically(spring(dampingRatio = 0.85f, stiffness = 380f), targetOffsetY = offset)
 }
 
 /** Enter for popups/menus that should "materialize" in place — scale + fade, no slide. */

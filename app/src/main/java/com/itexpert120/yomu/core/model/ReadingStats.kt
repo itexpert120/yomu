@@ -6,12 +6,16 @@ data class DailyReading(
     val seconds: Long,
 )
 
-/** One past reading session, projected for the history list. */
+/**
+ * One past reading session, projected for the history list. [sessionCount] is >1 when several
+ * short, close-together sessions of the same book were consolidated into one row for display.
+ */
 data class ReadingSessionItem(
     val bookTitle: String,
     val coverImagePath: String?,
     val startedAt: Long,
     val seconds: Long,
+    val sessionCount: Int = 1,
 )
 
 /**

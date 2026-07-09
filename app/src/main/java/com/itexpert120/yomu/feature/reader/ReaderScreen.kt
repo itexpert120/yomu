@@ -12,6 +12,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -362,15 +363,15 @@ fun ReaderScreen(
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
 
-    // Reveal animation for chapter switches (immersive scroll only): while the new chapter loads it's
-    // held at 0 (hidden behind the transition cover), then fades + slides into place once styled — up
-    // when moving forward, down when moving back — so a rubberband chapter change reads as a motion
-    // rather than a hard cut.
-    val immersiveScroll = immersive && state.settings.layout == ReaderLayout.Scroll
+    // Reveal animation for chapter switches (scroll mode, immersive or not): while the new chapter
+    // loads it's held at 0 (hidden behind the transition cover), then fades + slides into place once
+    // styled — up when moving forward, down when moving back — so a rubberband chapter change reads
+    // as a motion rather than a hard cut.
+    val scrollReveal = state.settings.layout == ReaderLayout.Scroll
     val reveal = remember { Animatable(1f) }
-    LaunchedEffect(state.contentStyled, immersiveScroll) {
+    LaunchedEffect(state.contentStyled, scrollReveal) {
         when {
-            !immersiveScroll -> reveal.snapTo(1f)
+            !scrollReveal -> reveal.snapTo(1f)
             !state.contentStyled -> reveal.snapTo(0f)
             else -> reveal.animateTo(
                 targetValue = 1f,
@@ -416,14 +417,13 @@ fun ReaderScreen(
                     }
                 }
 
-                // Between chapters in immersive scroll mode, hold an opaque cover (no message) until the
-                // new chapter's layout CSS — chiefly the chapter-start top padding — has applied, so the
+                // Between chapters in scroll mode, hold an opaque cover (no message) until the new
+                // chapter's layout CSS — chiefly the chapter-start top padding — has applied, so the
                 // page is revealed already-padded instead of the padding popping in a few frames later
                 // (the jolt seen when the rubberband loads the next/previous chapter).
                 val coverChapterTransition = !state.loading &&
                     !state.contentStyled &&
-                    immersive &&
-                    state.settings.layout == ReaderLayout.Scroll
+                    scrollReveal
                 if (coverChapterTransition) {
                     Box(
                         modifier = Modifier
@@ -459,10 +459,15 @@ fun ReaderScreen(
                         // Keep the footer composed even while hidden so its measured height is always known —
                         // the bottom controls bar reserves that height to sit above it. An unmounted footer
                         // (immersive mode) reports height 0 on the first reveal and the controls overlap it.
-                        // Fade with alpha instead of mounting/unmounting.
+                        // Animate alpha + a slide off its own (bottom) edge instead of mounting/unmounting.
                         val footerAlpha by animateFloatAsState(
                             targetValue = if (chromeShown) 1f else 0f,
                             label = "readerFooterAlpha",
+                        )
+                        val footerSlidePx by animateFloatAsState(
+                            targetValue = if (chromeShown) 0f else footerPx / 3f,
+                            animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
+                            label = "readerFooterSlide",
                         )
                         ReaderFooter(
                             progressPercent = state.progressPercent,
@@ -471,7 +476,10 @@ fun ReaderScreen(
                             onContentHeight = { footerPx = it },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .graphicsLayer { alpha = footerAlpha },
+                                .graphicsLayer {
+                                    alpha = footerAlpha
+                                    translationY = footerSlidePx
+                                },
                         )
                     }
 

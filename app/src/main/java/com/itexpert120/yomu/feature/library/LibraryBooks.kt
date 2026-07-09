@@ -15,12 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,81 +34,6 @@ import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import java.io.File
-
-@Composable
-fun ContinueReadingCard(
-    book: LibraryBook,
-    onClick: () -> Unit,
-    onResume: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // Flush hero (no card chrome): a large cover anchors the most-recent book, with the title,
-    // progress and a clear Resume action beside it. Capped so it doesn't stretch on a wide tablet.
-    // Tapping the card opens details; the Resume pill jumps straight back into the reader.
-    val colors = YomuTheme.colors
-    Row(
-        modifier = modifier
-            .widthIn(max = 560.dp)
-            .fillMaxWidth()
-            .yomuPressable(onClick = onClick),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BookCoverImage(book = book, modifier = Modifier.width(96.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(
-                text = book.title,
-                color = colors.textPrimary,
-                style = YomuTheme.type.title,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = book.author,
-                color = colors.textSecondary,
-                style = YomuTheme.type.body,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(8.dp))
-            ProgressLine(progress = book.progress)
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    // remaining already reads as "5% read" / "Finished" — don't restate the percent.
-                    text = book.remaining,
-                    color = colors.textMuted,
-                    style = YomuTheme.type.mono,
-                    modifier = Modifier.weight(1f),
-                )
-                ResumePill(onClick = onResume)
-            }
-        }
-    }
-}
-
-/** The hero's primary call-to-action: a filled pill that resumes the book. */
-@Composable
-private fun ResumePill(onClick: () -> Unit) {
-    val colors = YomuTheme.colors
-    Row(
-        modifier = Modifier
-            .yomuPressable(onClick = onClick)
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(colors.textPrimary)
-            .padding(horizontal = 16.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.PlayArrow,
-            contentDescription = null,
-            tint = colors.appBackground,
-            modifier = Modifier.size(16.dp),
-        )
-        Text(text = "Resume", color = colors.appBackground, style = YomuTheme.type.control, maxLines = 1)
-    }
-}
 
 @Composable
 fun GridBookCard(
