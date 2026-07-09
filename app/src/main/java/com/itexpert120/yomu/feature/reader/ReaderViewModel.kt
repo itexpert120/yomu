@@ -641,6 +641,10 @@ class ReaderViewModel @Inject constructor(
     /** Start counting reading time (reader brought to the foreground). */
     fun onReadingResumed() {
         if (!state.value.failed) readingStart = System.currentTimeMillis()
+        // The Readium page fragment can leave a stray native top-padding on its WebView's parent when
+        // its Fragment/WebView is reattached after the Activity backgrounds and resumes — outside CSS
+        // and outside window insets, so it isn't caught by anything else. Clear it defensively.
+        _session.value?.refreshImmersiveLayout()
     }
 
     /** Stop counting and bank the elapsed foreground time toward today's stats. */

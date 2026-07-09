@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -37,6 +39,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.view.OnApplyWindowInsetsListener
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -225,8 +229,37 @@ fun ReaderScreen(
             if (event == Lifecycle.Event.ON_RESUME) hideSystemBars()
         }
         lifecycle?.addObserver(observer)
+        // ON_RESUME/focus-regain fire too late: Android shows the bars as a "courtesy" the moment the
+        // window regains focus (unlock, return from launcher/recents), and by the time either callback
+        // runs the system has already animated them in — re-hiding from there just produces a brief
+        // visible flash before hideSystemBars() catches up. Listen for the inset-visibility change
+        // itself instead: it fires the instant the system shows the bars, so we can re-hide immediately.
+        // Setting a listener on decorView REPLACES its default dispatch behaviour, so it must forward
+        // insets on (view.onApplyWindowInsets + dispatch to children) or every descendant downstream —
+        // Compose's own WindowInsets tracking, the Readium FragmentContainerView's inset consumer —
+        // stops receiving updates entirely.
+        val decorView = window?.decorView
+        val insetsListener = OnApplyWindowInsetsListener { v, insets ->
+            if (insets.isVisible(WindowInsetsCompat.Type.systemBars())) hideSystemBars()
+            val applied = ViewCompat.onApplyWindowInsets(v, insets)
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    ViewCompat.dispatchApplyWindowInsets(v.getChildAt(i), applied)
+                }
+            }
+            applied
+        }
+        decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, insetsListener) }
+        val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (hasFocus) hideSystemBars()
+        }
+        view.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
         hideSystemBars()
-        onDispose { lifecycle?.removeObserver(observer) }
+        onDispose {
+            lifecycle?.removeObserver(observer)
+            view.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
+            decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
+        }
     }
     // Colour the system bars to the reading background so the status area matches the page on every
     // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).

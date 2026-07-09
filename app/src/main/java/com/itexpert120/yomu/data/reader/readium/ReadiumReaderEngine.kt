@@ -719,6 +719,10 @@ private class ReadiumReaderSession(
         scope.launch { applyCustomFontInline() }
     }
 
+    override fun refreshImmersiveLayout() {
+        clearImmersiveScrollTopPadding()
+    }
+
     // Inject the active custom font's @font-face (or clear it when switching back to a bundled font)
     // into the current resource. The family is set via EpubPreferences.fontFamily; this just provides
     // the glyphs. Builds the base64 CSS once per font (cached) on first use.

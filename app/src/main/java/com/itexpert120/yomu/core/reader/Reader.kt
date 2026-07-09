@@ -130,6 +130,16 @@ interface ReaderSession {
     /** Applies reading preferences (layout/theme/font/size). Safe to call before/after hosting. */
     fun applySettings(settings: ReaderSettings)
 
+    /**
+     * Re-asserts the immersive-mode layout without a full [applySettings] pass (no preference
+     * resubmission/reflow). The Readium page fragment can set a stray native top-padding on its
+     * WebView's parent view when its Fragment/WebView is reattached (e.g. after the Activity backgrounds
+     * and resumes) — this padding sits outside CSS and outside window insets entirely, so it survives
+     * even when the window's own edge-to-edge/inset state is completely correct. Call on foreground
+     * resume to clear it.
+     */
+    fun refreshImmersiveLayout()
+
     // Navigation, driven by the custom chrome (tap zones, slider arrows, progress slider).
     fun goForward()
     fun goBackward()
