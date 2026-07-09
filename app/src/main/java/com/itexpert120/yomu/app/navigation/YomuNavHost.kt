@@ -23,6 +23,7 @@ import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
 import com.itexpert120.yomu.feature.library.LibraryRoute
+import com.itexpert120.yomu.feature.reader.FontLibraryRoute
 import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
@@ -109,7 +110,13 @@ fun YomuNavHost(
             )
         }
         composable<ReaderDefaults> {
-            ReaderDefaultsRoute(onBack = navController::popBackStack)
+            ReaderDefaultsRoute(
+                onBack = navController::popBackStack,
+                onOpenFontLibrary = { navController.navigate(FontLibrary) },
+            )
+        }
+        composable<FontLibrary> {
+            FontLibraryRoute(onBack = navController::popBackStack)
         }
         composable<Stats> {
             StatsRoute(onBack = navController::popBackStack)

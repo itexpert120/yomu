@@ -22,6 +22,9 @@ object Stats
 object ReaderDefaults
 
 @Serializable
+object FontLibrary
+
+@Serializable
 object About
 
 /**

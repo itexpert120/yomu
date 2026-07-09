@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -72,6 +73,10 @@ internal fun LibraryTopBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            // Draw above the scrollable content below it in the parent Column — otherwise the
+            // shadow's blur, which bleeds past this composable's own bounds, gets painted over by
+            // the later (higher-index) sibling instead of sitting on top of it.
+            .zIndex(1f)
             .shadow(elevation)
             .background(YomuTheme.colors.appBackground)
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),

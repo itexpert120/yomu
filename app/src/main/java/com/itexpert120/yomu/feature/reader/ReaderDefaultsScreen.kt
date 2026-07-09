@@ -14,7 +14,7 @@ import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
-fun ReaderDefaultsRoute(onBack: () -> Unit) {
+fun ReaderDefaultsRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit) {
     val viewModel: ReaderDefaultsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
     YomuScreenScaffold(title = "Reading defaults", onBack = onBack) {
@@ -35,7 +35,7 @@ fun ReaderDefaultsRoute(onBack: () -> Unit) {
                 onOpenCustomTheme = viewModel::onOpenCustomTheme,
                 onApplyCustomTheme = viewModel::onApplyCustomTheme,
                 customFonts = state.installedFonts,
-                onManageFonts = viewModel::onOpenFontLibrary,
+                onManageFonts = onOpenFontLibrary,
             )
         }
     }
@@ -49,16 +49,5 @@ fun ReaderDefaultsRoute(onBack: () -> Unit) {
         onSave = viewModel::onSaveCustomTheme,
         onApply = viewModel::onApplyCustomTheme,
         onDelete = viewModel::onDeleteCustomTheme,
-    )
-
-    FontLibrarySheet(
-        visible = state.fontSheetVisible,
-        installed = state.installedFonts,
-        downloading = state.downloadingFonts,
-        error = state.fontError,
-        catalog = state.fontCatalog,
-        onDismiss = viewModel::onCloseFontLibrary,
-        onInstall = viewModel::onInstallFont,
-        onRemove = viewModel::onRemoveFont,
     )
 }

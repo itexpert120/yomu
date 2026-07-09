@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -33,6 +34,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +43,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
@@ -254,6 +258,17 @@ fun YomuBottomSheet(
         // clearance is moved onto the content below so text/controls still sit above the bar.
         contentWindowInsets = { WindowInsets(0) },
     ) {
+        // ModalBottomSheet hosts its content in its own Dialog window, which by default resizes
+        // (adjustResize) when the IME opens. That shrinks the window below our 60%-of-screen max
+        // height, so the sheet fills whatever's left near the top instead of staying put — reads as
+        // the whole sheet jumping up. Pan mode keeps the window's size fixed and only shifts content
+        // enough to keep the focused field visible, so a focused input scrolls into view without the
+        // sheet itself resizing/relocating.
+        val dialogView = LocalView.current
+        SideEffect {
+            (dialogView.parent as? DialogWindowProvider)?.window
+                ?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()

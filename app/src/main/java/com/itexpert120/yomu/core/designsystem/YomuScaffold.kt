@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 
 /**
  * Custom (non-Material) top bar for detail/settings screens: optional back affordance, title,
@@ -71,6 +72,10 @@ fun YomuScreenHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Draw above the content column below it in the parent Column — otherwise the shadow's
+            // blur, which bleeds past this composable's own bounds, gets painted over by the later
+            // (higher-index) sibling instead of sitting on top of it.
+            .zIndex(1f)
             .shadow(elevation)
             .background(YomuTheme.colors.appBackground)
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)

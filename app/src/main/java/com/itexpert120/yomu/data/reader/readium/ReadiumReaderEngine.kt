@@ -1091,7 +1091,16 @@ private class ReadiumReaderSession(
               var THRESHOLD = 80, MAX = 170, INITIAL = 0.6;
               var STIFFNESS = 170, DAMPING = 24;
               var SVGNS = 'http://www.w3.org/2000/svg';
-              document.documentElement.style.overscrollBehaviorY = 'contain';
+              // 'contain' only stops scroll-chaining to the parent — Chromium/Android WebView still
+              // plays its own native overscroll glow/rubber-band content-stretch at the boundary, which
+              // fires the instant the finger pulls past the edge (before our touchmove handler below
+              // even gets to preventDefault it). That native stretch fights our own transform-driven
+              // pull, and releasing it reads as the trailing gap between text and the screen edge
+              // snapping shut. 'none' suppresses that native effect entirely so only our JS-driven pull
+              // animates. Set on both html and body since Android WebView's overscroll effect can attach
+              // to either depending on which one ends up as the scrolling element.
+              document.documentElement.style.overscrollBehaviorY = 'none';
+              if (document.body) document.body.style.overscrollBehaviorY = 'none';
               var hint = document.createElement('div');
               hint.id = 'yomu-overscroll';
               hint.style.cssText = [

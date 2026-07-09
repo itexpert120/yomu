@@ -16,6 +16,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,42 +25,53 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.CURATED_GOOGLE_FONTS
 import com.itexpert120.yomu.core.model.CuratedFont
-import com.itexpert120.yomu.core.model.CustomFontRef
 
 // Cap search results so filtering/rendering the ~1900-family catalog stays snappy.
 private const val MAX_FONT_RESULTS = 40
 
+@Composable
+fun FontLibraryRoute(onBack: () -> Unit) {
+    val viewModel: FontLibraryViewModel = hiltViewModel()
+    val state by viewModel.state.collectAsState()
+    FontLibraryScreen(
+        state = state,
+        onBack = onBack,
+        onInstall = viewModel::onInstallFont,
+        onRemove = viewModel::onRemoveFont,
+    )
+}
+
 /**
- * Bottom sheet for adding reading fonts from Google Fonts. Shows a curated shortlist by default and a
- * search box over the full bundled catalog; tapping a not-yet-installed font downloads it, installed
- * fonts show a remove action. Downloads run in the ViewModel.
+ * Full screen (not a bottom sheet) for adding reading fonts from Google Fonts. Shows a curated
+ * shortlist by default and a search box over the full bundled catalog; tapping a not-yet-installed
+ * font downloads it, installed fonts show a remove action. Downloads run in the ViewModel.
+ *
+ * A real screen rather than a `YomuBottomSheet`: Material3's `ModalBottomSheet` hosts its content in
+ * its own Dialog window, which resizes under the keyboard in a way that fought this screen's search
+ * field badly enough to warrant a dedicated destination instead.
  */
 @Composable
-internal fun FontLibrarySheet(
-    visible: Boolean,
-    installed: List<CustomFontRef>,
-    downloading: Set<String>,
-    error: String?,
-    catalog: List<CuratedFont>,
-    onDismiss: () -> Unit,
+fun FontLibraryScreen(
+    state: FontLibraryUiState,
+    onBack: () -> Unit,
     onInstall: (String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    if (!visible) return
-    val installedFamilies = installed.map { it.family }.toSet()
+    val installedFamilies = state.installedFonts.map { it.family }.toSet()
     var query by remember { mutableStateOf("") }
     val trimmed = query.trim()
-    val results = remember(trimmed, catalog) {
+    val results = remember(trimmed, state.catalog) {
         if (trimmed.isEmpty()) {
             CURATED_GOOGLE_FONTS
         } else {
-            catalog.asSequence()
+            state.catalog.asSequence()
                 .filter { it.family.contains(trimmed, ignoreCase = true) }
                 // Prefix matches first, then the rest alphabetically.
                 .sortedWith(compareByDescending<CuratedFont> { it.family.startsWith(trimmed, true) }.thenBy { it.family })
@@ -67,8 +79,7 @@ internal fun FontLibrarySheet(
                 .toList()
         }
     }
-    YomuBottomSheet(visible = true, onDismiss = onDismiss) { _ ->
-        Text(text = "Add fonts", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.section)
+    YomuScreenScaffold(title = "Add fonts", onBack = onBack) {
         Text(
             text = "Search Google Fonts, or pick a suggested reading font.",
             color = YomuTheme.colors.textMuted,
@@ -82,9 +93,9 @@ internal fun FontLibrarySheet(
             placeholder = "e.g. Merriweather",
             modifier = Modifier.fillMaxWidth(),
         )
-        if (error != null) {
+        if (state.error != null) {
             Text(
-                text = error,
+                text = state.error,
                 color = YomuTheme.colors.danger,
                 style = YomuTheme.type.caption,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -110,7 +121,7 @@ internal fun FontLibrarySheet(
                 family = font.family,
                 subtitle = font.category.ifBlank { "Font" },
                 installed = font.family in installedFamilies,
-                downloading = font.family in downloading,
+                downloading = font.family in state.downloadingFonts,
                 onInstall = { onInstall(font.family) },
                 onRemove = { onRemove(font.family) },
             )
