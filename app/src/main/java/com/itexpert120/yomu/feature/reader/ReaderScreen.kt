@@ -363,10 +363,6 @@ fun ReaderScreen(
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
 
-    // Reveal animation for chapter switches (scroll mode, immersive or not): while the new chapter
-    // loads it's held at 0 (hidden behind the transition cover), then fades + slides into place once
-    // styled — up when moving forward, down when moving back — so a rubberband chapter change reads
-    // as a motion rather than a hard cut.
     val scrollReveal = state.settings.layout == ReaderLayout.Scroll
     val reveal = remember { Animatable(1f) }
     LaunchedEffect(state.contentStyled, scrollReveal) {

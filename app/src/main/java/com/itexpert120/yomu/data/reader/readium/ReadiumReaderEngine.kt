@@ -800,11 +800,13 @@ private class ReadiumReaderSession(
     }
 
     private fun scrollCssJsForCurrent(): String {
-        val immersiveScroll = currentSettings.immersiveChrome &&
-            currentSettings.layout == ReaderLayout.Scroll
+        val scrollMode = currentSettings.layout == ReaderLayout.Scroll
+        val immersiveScroll = currentSettings.immersiveChrome && scrollMode
+        val chapterPaddingPx = if (immersiveScroll) chapterStartPaddingPx() else 0
         return scrollCssJs(
             immersiveScroll = immersiveScroll,
-            chapterStartPaddingPx = if (immersiveScroll) chapterStartPaddingPx() else 0,
+            chapterStartPaddingPx = chapterPaddingPx,
+            chapterEndPaddingPx = chapterPaddingPx,
         )
     }
 
@@ -858,6 +860,7 @@ private class ReadiumReaderSession(
         }
         return (maxOf(statusTop, cutoutTop) / density).roundToInt()
     }
+
     private fun injectViewportFit() {
         navigator ?: return
         val js = viewportFitJs(
@@ -1083,21 +1086,23 @@ private class ReadiumReaderSession(
               }
               var st = { enabled: $enabled, hasPrev: $hasPrev, hasNext: $hasNext, topHint: $topHintOffset,
                          startY: 0, dragging: false, engaged: false, dir: 0, engageY: 0,
-                         offset: 0, armed: false, fired: false, svgDir: 0,
-                         lastT: 0, lastOffset: 0, vel: 0, raf: 0 };
+                         armed: false, fired: false, svgDir: 0, raf: 0,
+                         targetOffset: 0, renderedOffset: 0, hintScale: 0.7 };
               // THRESHOLD: armed (release navigates) once the stretch passes this. MAX: asymptotic
               // ceiling. INITIAL: stretch-per-pixel near the boundary (the curve eases off from here to
-              // MAX so there's no hard wall). SPRING: a lightly under-damped return (ratio ~0.9).
+              // MAX so there's no hard wall).
               var THRESHOLD = 80, MAX = 170, INITIAL = 0.6;
-              var STIFFNESS = 170, DAMPING = 24;
+              var STIFFNESS = 190, DAMPING = 28;
               var SVGNS = 'http://www.w3.org/2000/svg';
+              var body = document.body;
+              var baseTransform = body ? body.style.transform : '';
+              var baseWillChange = body ? body.style.willChange : '';
               // 'contain' only stops scroll-chaining to the parent — Chromium/Android WebView still
               // plays its own native overscroll glow/rubber-band content-stretch at the boundary, which
               // fires the instant the finger pulls past the edge (before our touchmove handler below
-              // even gets to preventDefault it). That native stretch fights our own transform-driven
-              // pull, and releasing it reads as the trailing gap between text and the screen edge
-              // snapping shut. 'none' suppresses that native effect entirely so only our JS-driven pull
-              // animates. Set on both html and body since Android WebView's overscroll effect can attach
+              // even gets to preventDefault it). 'none' suppresses that native effect so the fixed
+              // hint is the only gesture feedback. Set on both html and body since Android WebView
+              // can attach its overscroll effect
               // to either depending on which one ends up as the scrolling element.
               document.documentElement.style.overscrollBehaviorY = 'none';
               if (document.body) document.body.style.overscrollBehaviorY = 'none';
@@ -1115,10 +1120,9 @@ private class ReadiumReaderSession(
                 'transition:opacity .18s ease, background .18s ease, color .18s ease',
                 'pointer-events:none', '-webkit-tap-highlight-color:transparent'
               ].join(';');
-              // Appended to <html>, NOT <body>: the body is transformed during the pull, which would
-              // make a fixed element inside it page-relative (scrolling with the content) instead of
-              // pinned to the viewport. As an <html> child it stays anchored to the screen edge.
-              document.documentElement.appendChild(hint);
+              // A fixed element is valid inside EPUB XHTML body and stays outside normal flow. Adding
+              // it directly under <html> made WebView include it in root overflow calculations.
+              if (body) body.appendChild(hint);
               // Build the arrow with createElementNS so it renders in EPUB XHTML documents (where an
               // innerHTML SVG string would land in the wrong namespace and not draw). currentColor
               // inherits the pill's colour so it flips with the armed state.
@@ -1136,10 +1140,10 @@ private class ReadiumReaderSession(
                 while (hint.firstChild) hint.removeChild(hint.firstChild);
                 hint.appendChild(svg);
               }
-              function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
               function sc() { return document.scrollingElement || document.documentElement; }
+              function maxScroll() { var e = sc(); return Math.max(0, e.scrollHeight - e.clientHeight); }
               function atTop() { return sc().scrollTop <= 0; }
-              function atBottom() { return sc().scrollTop + window.innerHeight >= sc().scrollHeight - 1; }
+              function atBottom() { return sc().scrollTop >= maxScroll() - 1; }
               function hasSel() { var s = window.getSelection(); return s && s.toString().length > 0; }
               // Asymptotic resistance: linear (slope INITIAL) at the boundary, easing smoothly toward MAX
               // so a firm pull meets diminishing give instead of the old hard cap.
@@ -1147,22 +1151,41 @@ private class ReadiumReaderSession(
                 if (raw <= 0) return 0;
                 return MAX * (1 - 1 / (1 + raw * INITIAL / MAX));
               }
+              function bodyTransform(off) {
+                var base = baseTransform && baseTransform !== 'none' ? baseTransform + ' ' : '';
+                return base + 'translate3d(0,' + off + 'px,0)';
+              }
+              function renderHintTransform() {
+                hint.style.transform = 'translate3d(-50%,' + (-st.renderedOffset) + 'px,0) scale(' + st.hintScale + ')';
+              }
+              function renderBody() {
+                st.raf = 0;
+                st.renderedOffset = st.targetOffset;
+                if (body) {
+                  body.style.willChange = 'transform';
+                  body.style.transform = bodyTransform(st.renderedOffset);
+                }
+                renderHintTransform();
+              }
               function setBody(off) {
-                document.body.style.transition = 'none';
-                document.body.style.transform = off ? 'translateY(' + off + 'px)' : '';
-                st.offset = off;
+                st.targetOffset = off;
+                if (!st.raf) st.raf = requestAnimationFrame(renderBody);
               }
               function clearTransform() {
                 if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
-                document.body.style.transition = 'none';
-                document.body.style.transform = '';
-                st.offset = 0;
+                st.targetOffset = 0; st.renderedOffset = 0;
+                if (body) {
+                  body.style.transform = baseTransform;
+                  body.style.willChange = baseWillChange;
+                }
+                renderHintTransform();
               }
               function fadeHint() {
                 hint.style.opacity = 0;
                 hint.style.background = '$fill';
                 hint.style.color = '$accent';
-                hint.style.transform = 'translateX(-50%) scale(0.7)';
+                st.hintScale = 0.7;
+                renderHintTransform();
               }
               function updateHint(pull) {
                 var p = Math.min(pull / THRESHOLD, 1);
@@ -1170,29 +1193,27 @@ private class ReadiumReaderSession(
                 if (st.armed) {
                   hint.style.background = '$accent';
                   hint.style.color = '$onAccent';
-                  hint.style.transform = 'translateX(-50%) scale(1)';
+                  st.hintScale = 1;
                 } else {
                   hint.style.background = '$fill';
                   hint.style.color = '$accent';
-                  hint.style.transform = 'translateX(-50%) scale(' + (0.7 + 0.3 * p) + ')';
+                  st.hintScale = 0.7 + 0.3 * p;
                 }
+                renderHintTransform();
               }
-              // Velocity-seeded spring back to rest: the return scales with how far/fast the finger
-              // left, instead of a fixed-duration tween that snaps the same way every time.
-              function springBack(fromOff, vel) {
+              function springBack() {
                 if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
-                var x = fromOff, v = vel || 0, last = now();
-                document.body.style.transition = 'none';
+                var x = st.renderedOffset, v = 0;
+                var last = (window.performance && performance.now) ? performance.now() : Date.now();
                 function frame(t) {
-                  var n = t || now();
-                  var dt = Math.min((n - last) / 1000, 0.032); last = n;
-                  var a = (-STIFFNESS * x - DAMPING * v);
+                  var now = t || Date.now();
+                  var dt = Math.min((now - last) / 1000, 0.032); last = now;
+                  var a = -STIFFNESS * x - DAMPING * v;
                   v += a * dt; x += v * dt;
-                  if (Math.abs(x) < 0.4 && Math.abs(v) < 6) {
-                    document.body.style.transform = ''; st.offset = 0; st.raf = 0; return;
-                  }
-                  document.body.style.transform = 'translateY(' + x + 'px)';
-                  st.offset = x;
+                  if (Math.abs(x) < 0.35 && Math.abs(v) < 5) { clearTransform(); return; }
+                  st.renderedOffset = x; st.targetOffset = x;
+                  if (body) body.style.transform = bodyTransform(x);
+                  renderHintTransform();
                   st.raf = requestAnimationFrame(frame);
                 }
                 st.raf = requestAnimationFrame(frame);
@@ -1204,13 +1225,13 @@ private class ReadiumReaderSession(
                 st.dragging = false; st.engaged = false; st.dir = 0; st.armed = false; st.svgDir = 0;
               }
               window.addEventListener('touchstart', function(e) {
-                if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
+                if (st.raf || st.renderedOffset) clearTransform();
                 if (!st.enabled || e.touches.length !== 1 || hasSel()) {
                   st.dragging = false; st.engaged = false; return;
                 }
                 st.startY = e.touches[0].clientY;
                 st.dragging = true; st.engaged = false; st.dir = 0;
-                st.armed = false; st.fired = false; st.offset = 0;
+                st.armed = false; st.fired = false;
               }, { capture: true, passive: true });
               window.addEventListener('touchmove', function(e) {
                 if (!st.dragging || !st.enabled) return;
@@ -1224,7 +1245,6 @@ private class ReadiumReaderSession(
                            : (dy < 0 && atBottom() && st.hasNext) ? 1 : 0;
                   if (cand === 0) return;
                   st.engaged = true; st.dir = cand; st.engageY = y;
-                  st.lastT = now(); st.lastOffset = 0; st.vel = 0;
                   if (st.svgDir !== cand) { st.svgDir = cand; setArrow(cand < 0); }
                   if (cand < 0) { hint.style.top = st.topHint + 'px'; hint.style.bottom = 'auto'; }
                   else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
@@ -1234,11 +1254,7 @@ private class ReadiumReaderSession(
                 // direction or resumes scrolling mid-gesture, which is what used to cause the jitter.
                 var raw = Math.max(0, (st.dir < 0) ? (y - st.engageY) : (st.engageY - y));
                 var pull = resist(raw);
-                var off = -st.dir * pull;
-                var t = now();
-                var dt = (t - st.lastT) / 1000;
-                if (dt > 0) { st.vel = (off - st.lastOffset) / dt; st.lastT = t; st.lastOffset = off; }
-                setBody(off);
+                setBody(-st.dir * pull);
                 st.armed = pull >= THRESHOLD;
                 updateHint(pull);
               }, { capture: true, passive: false });
@@ -1246,7 +1262,7 @@ private class ReadiumReaderSession(
                 if (!st.engaged) { fadeHint(); st.dragging = false; return; }
                 // Snapshot the gesture, then clear state so nothing lingers regardless of which branch
                 // runs below.
-                var off = st.offset, vel = st.vel, dir = st.dir, armed = st.armed, fired = st.fired;
+                var dir = st.dir, armed = st.armed, fired = st.fired;
                 st.dragging = false; st.engaged = false; st.dir = 0; st.armed = false; st.svgDir = 0;
                 // Always hide the arrow on release. Before navigating this matters: the next chapter can
                 // render in the same WebView document, which would otherwise leave the pill pinned at
@@ -1254,11 +1270,18 @@ private class ReadiumReaderSession(
                 fadeHint();
                 if (dir && armed && !fired) {
                   st.fired = true;
-                  clearTransform();
                   window.location.href = dir < 0 ? '$PREV_CHAPTER_URL' : '$NEXT_CHAPTER_URL';
+                  // Let Yomu's opaque chapter-change cover appear before cleaning the old page.
+                  window.setTimeout(clearTransform, 180);
                   return;
                 }
-                springBack(off, vel);
+                springBack();
+              }, { capture: true, passive: true });
+              window.addEventListener('touchcancel', function() {
+                if (!st.engaged) { reset(); return; }
+                st.dragging = false; st.engaged = false; st.dir = 0; st.armed = false; st.svgDir = 0;
+                fadeHint();
+                springBack();
               }, { capture: true, passive: true });
               window.__yomuOverscroll = {
                 update: function(en, hp, hn, topHint) {
@@ -1343,12 +1366,17 @@ private class ReadiumReaderSession(
         // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
         // the width like paged mode does. In immersive scroll mode it also neutralizes Readium's
         // permanent safe-area top padding and inserts a chapter-start spacer into the content itself.
-        fun scrollCssJs(immersiveScroll: Boolean, chapterStartPaddingPx: Int): String {
+        fun scrollCssJs(
+            immersiveScroll: Boolean,
+            chapterStartPaddingPx: Int,
+            chapterEndPaddingPx: Int,
+        ): String {
             val spacerHeight = chapterStartPaddingPx.coerceAtLeast(0)
+            val endSpacerHeight = chapterEndPaddingPx.coerceAtLeast(0)
             val topPaddingFix = if (immersiveScroll) {
                 """
-                ':root[style*="readium-scroll-on"]{--RS__scrollPaddingTop:0px!important}',
-                ':root[style*="readium-scroll-on"] body{padding-top:0!important}',
+                ':root[style*="readium-scroll-on"]{--RS__scrollPaddingTop:0px!important;--RS__scrollPaddingBottom:0px!important}',
+                ':root[style*="readium-scroll-on"] body{padding-top:0!important;padding-bottom:0!important}',
                 """.trimIndent()
             } else {
                 ""
@@ -1362,6 +1390,7 @@ private class ReadiumReaderSession(
             (function() {
               var styleId = 'yomu-scroll-css';
               var spacerId = 'yomu-chapter-start-padding';
+              var endSpacerId = 'yomu-chapter-end-padding';
               var s = document.getElementById(styleId);
               if (!s) {
                 s = document.createElement('style');
@@ -1384,6 +1413,7 @@ private class ReadiumReaderSession(
               var staleNext = document.getElementById('yomu-next-chapter');
               if (staleNext && staleNext.parentNode) staleNext.parentNode.removeChild(staleNext);
               var spacer = document.getElementById(spacerId);
+              var endSpacer = document.getElementById(endSpacerId);
               if ($immersiveScroll && $spacerHeight > 0) {
                 if (!spacer) {
                   spacer = document.createElementNS(body.namespaceURI || 'http://www.w3.org/1999/xhtml', 'div');
@@ -1394,6 +1424,17 @@ private class ReadiumReaderSession(
                 if (body.firstChild !== spacer) body.insertBefore(spacer, body.firstChild);
               } else if (spacer && spacer.parentNode) {
                 spacer.parentNode.removeChild(spacer);
+              }
+              if ($endSpacerHeight > 0) {
+                if (!endSpacer) {
+                  endSpacer = document.createElementNS(body.namespaceURI || 'http://www.w3.org/1999/xhtml', 'div');
+                  endSpacer.id = endSpacerId;
+                  endSpacer.setAttribute('aria-hidden', 'true');
+                }
+                endSpacer.style.cssText = 'display:block;height:${endSpacerHeight}px;min-height:${endSpacerHeight}px;margin:0;padding:0;border:0;pointer-events:none;';
+                if (body.lastChild !== endSpacer) body.appendChild(endSpacer);
+              } else if (endSpacer && endSpacer.parentNode) {
+                endSpacer.parentNode.removeChild(endSpacer);
               }
             })();
             """.trimIndent()
