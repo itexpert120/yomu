@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -158,9 +159,11 @@ fun SettingsScreen(
             )
             NavigationDivider()
             NavigationRow(
+                // The splash-ready drawable includes safe-area padding around the visible mark.
                 icon = painterResource(R.drawable.ic_yomu_mark),
                 label = "About Yomu",
                 onClick = onOpenAbout,
+                iconScale = 2.25f,
             )
         }
 
@@ -284,7 +287,12 @@ private fun NavigationDivider() {
 }
 
 @Composable
-private fun NavigationRow(icon: Painter, label: String, onClick: () -> Unit) {
+private fun NavigationRow(
+    icon: Painter,
+    label: String,
+    onClick: () -> Unit,
+    iconScale: Float = 1f,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -305,7 +313,12 @@ private fun NavigationRow(icon: Painter, label: String, onClick: () -> Unit) {
                 painter = icon,
                 contentDescription = null,
                 tint = YomuTheme.colors.textSecondary,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier
+                    .size(18.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
             )
         }
         Text(

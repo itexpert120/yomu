@@ -130,8 +130,8 @@ fun AboutScreen(onBack: () -> Unit) {
         YomuSettingGroup(title = "Acknowledgements") {
             Text(
                 text = "EPUB parsing and rendering by the Readium Kotlin toolkit (BSD-3-Clause). " +
-                    "Charts by Vico (Apache-2.0). Cover loading by Coil. Built with Jetpack " +
-                    "Compose. Bundled reading fonts are used under the SIL Open Font License. " +
+                    "Cover loading by Coil. Built with Jetpack Compose. Bundled reading fonts " +
+                    "are used under the SIL Open Font License. " +
                     "Dictionary definitions from freedictionaryapi.com, sourced from Wiktionary " +
                     "(CC BY-SA).",
                 color = YomuTheme.colors.textSecondary,

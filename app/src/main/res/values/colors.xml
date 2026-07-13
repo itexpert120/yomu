@@ -2,7 +2,14 @@
 <resources>
     <color name="yomu_launcher_background">#050505</color>
     <color name="yomu_launcher_mark">#FFFFFF</color>
-    <color name="yomu_splash_background">#F8F8F6</color>
-    <color name="yomu_splash_icon_background">#050505</color>
-    <color name="yomu_splash_mark">#FFFFFF</color>
+    <color name="yomu_splash_background">#FFFFFF</color>
+    <color name="yomu_splash_mark">#10110F</color>
+    <color name="yomu_splash_background_light">#FFFFFF</color>
+    <color name="yomu_splash_mark_light">#10110F</color>
+    <color name="yomu_splash_background_dark">#111210</color>
+    <color name="yomu_splash_mark_dark">#F4F4EF</color>
+    <color name="yomu_splash_background_oled">#000000</color>
+    <color name="yomu_splash_mark_oled">#EDE9DE</color>
+    <color name="yomu_splash_background_system_oled">#FFFFFF</color>
+    <color name="yomu_splash_mark_system_oled">#10110F</color>
 </resources>

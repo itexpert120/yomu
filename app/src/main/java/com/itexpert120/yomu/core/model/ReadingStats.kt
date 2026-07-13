@@ -58,6 +58,7 @@ data class ReadingStats(
     val booksFinished: Int = 0,
     val chaptersRead: Int = 0,
     val estimatedWordsRead: Long = 0L,
+    val estimatedReadingSpeedWpm: Int = 0,
     val sessionCount: Int = 0,
     val averageSessionSeconds: Long = 0L,
     val longestSessionSeconds: Long = 0L,

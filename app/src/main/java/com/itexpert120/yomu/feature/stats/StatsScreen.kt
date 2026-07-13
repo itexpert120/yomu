@@ -8,18 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,43 +25,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
-import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
-import com.itexpert120.yomu.core.model.DailyReading
-import com.itexpert120.yomu.core.model.HeatmapDay
-import com.itexpert120.yomu.core.model.HourlyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
-import com.itexpert120.yomu.core.model.WeekdayReading
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisGuidelineComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisLabelComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisLineComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisTickComponent
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
-import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
-import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
-import com.patrykandpatrick.vico.compose.common.fill
-import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
-import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
-import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
-import com.patrykandpatrick.vico.core.cartesian.layer.ColumnCartesianLayer
-import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import java.io.File
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -77,379 +48,139 @@ import java.util.Locale
 fun StatsRoute(onBack: () -> Unit) {
     val viewModel: StatsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
-    StatsScreen(
-        state = state,
-        onBack = onBack,
-        onSelectTrendRange = viewModel::onSelectTrendRange,
-    )
+    StatsScreen(state = state, onBack = onBack)
 }
 
 @Composable
-fun StatsScreen(
-    state: StatsUiState,
-    onBack: () -> Unit,
-    onSelectTrendRange: (TrendRange) -> Unit,
-) {
-    val stats = state.stats
+fun StatsScreen(state: StatsUiState, onBack: () -> Unit) {
     YomuScreenScaffold(title = "Statistics", onBack = onBack) {
-        HeroCard(stats)
-
-        TrendSection(
-            range = state.trendRange,
-            trend = state.trend,
-            onSelectRange = onSelectTrendRange,
-        )
-
-        StatTileGrid(stats)
-
-        if (state.weekday.any { it.seconds > 0L }) {
-            WeekdaySection(state.weekday)
-        }
-
-        if (state.hourly.any { it.seconds > 0L }) {
-            HourOfDaySection(state.hourly)
-        }
-
-        if (state.heatmap.any { it.seconds > 0L }) {
-            HeatmapSection(state.heatmap)
-        }
-
-        if (state.history.isNotEmpty()) {
-            HistorySection(state.history)
-        }
+        Overview(state.stats)
+        Entries(state.stats)
+        if (state.history.isNotEmpty()) History(state.history)
     }
 }
 
-// region Hero
-
 @Composable
-private fun HeroCard(stats: ReadingStats) {
-    StatCard(padding = 20.dp) {
-        Text(
-            text = "Total reading time",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
-        )
-        Text(
-            text = formatReadingTime(stats.totalReadingSeconds),
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.display,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (stats.currentStreakDays > 0) {
-                HeroStatChip(text = "${stats.currentStreakDays}-day streak", accent = true)
-            }
-            if (stats.secondsLast7Days > 0L) {
-                HeroStatChip(text = "${formatReadingTime(stats.secondsLast7Days)} this week")
-            }
-        }
-    }
-}
-
-/** A compact supporting stat under the hero number; accent variant highlights the active streak. */
-@Composable
-private fun HeroStatChip(text: String, accent: Boolean = false) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(if (accent) YomuTheme.colors.accentSoft else YomuTheme.colors.surfaceSunken)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+private fun ColumnScope.Overview(stats: ReadingStats) {
+    SectionTitle("Overview")
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = text,
-            color = if (accent) YomuTheme.colors.accent else YomuTheme.colors.textSecondary,
-            style = YomuTheme.type.caption,
-        )
+        MetricCard(value = stats.booksInLibrary.toString(), label = "Library items")
+        MetricCard(value = formatReadingTime(stats.totalReadingSeconds), label = "Read duration")
+        MetricCard(value = stats.booksFinished.toString(), label = "Completed")
     }
 }
 
-// endregion
-
-// region Daily trend chart
-
 @Composable
-private fun TrendSection(
-    range: TrendRange,
-    trend: List<DailyReading>,
-    onSelectRange: (TrendRange) -> Unit,
-) {
-    StatCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            SectionLabel("Reading per day")
-            YomuSegmentedControl(
-                options = TrendRange.entries.map { it.label },
-                selectedIndex = TrendRange.entries.indexOf(range),
-                onSelected = { onSelectRange(TrendRange.entries[it]) },
-                modifier = Modifier.width(168.dp),
-            )
-        }
-        if (trend.all { it.seconds == 0L }) {
-            EmptyChartHint("No reading recorded yet")
+private fun ColumnScope.Entries(stats: ReadingStats) {
+    SectionTitle("Entries")
+    val metrics = listOf(
+        stats.chaptersRead.toString() to "Chapters read",
+        stats.sessionCount.toString() to "Reading sessions",
+        stats.daysRead.toString() to "Active days",
+        formatReadingTime(stats.averageSessionSeconds) to "Average session",
+        formatReadingTime(stats.longestSessionSeconds) to "Longest session",
+        formatReadingTime(stats.averageSecondsPerActiveDay) to "Average per day",
+        formatCount(stats.estimatedWordsRead) to "Estimated words",
+        if (stats.estimatedReadingSpeedWpm > 0) {
+            "${stats.estimatedReadingSpeedWpm} wpm" to "Estimated speed"
         } else {
-            ColumnChart(
-                values = trend.map { it.seconds / 60.0 },
-                bottomFormatter = dayAxisFormatter(trend),
-                startFormatter = minutesAxisFormatter(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
-            )
-        }
-    }
-}
-
-// endregion
-
-// region Stat tiles
-
-@Composable
-private fun ColumnScope.StatTileGrid(stats: ReadingStats) {
-    SectionLabel("Overview")
-    val tiles = buildList {
-        add("${stats.longestStreakDays}" to "Longest streak")
-        add("${stats.daysRead}" to "Days read")
-        add("${stats.booksFinished}" to "Books finished")
-        add("${stats.booksStarted}" to "Books started")
-        add("${stats.chaptersRead}" to "Chapters read")
-        add("~${formatCount(stats.estimatedWordsRead)}" to "Words read")
-        add("${stats.sessionCount}" to "Sessions")
-        add(formatReadingTime(stats.averageSessionSeconds) to "Avg. session")
-        add(formatReadingTime(stats.averageSecondsPerActiveDay) to "Avg. per day")
-        add("${stats.booksInLibrary}" to "In library")
-    }
-    tiles.chunked(2).forEach { row ->
+            "—" to "Estimated speed"
+        },
+    )
+    metrics.chunked(2).forEach { row ->
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            row.forEach { (value, label) -> StatTile(value = value, label = label) }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
+            row.forEach { (value, label) -> MetricCard(value = value, label = label) }
         }
     }
 }
 
 @Composable
-private fun RowScope.StatTile(value: String, label: String) {
+private fun RowScope.MetricCard(value: String, label: String) {
     Column(
         modifier = Modifier
             .weight(1f)
+            .heightIn(min = 80.dp)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(YomuTheme.colors.surfaceRaised)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
+            .padding(horizontal = 10.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {
-        Text(text = value, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.title)
-        Text(text = label, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-    }
-}
-
-// endregion
-
-// region Weekday chart
-
-@Composable
-private fun WeekdaySection(weekday: List<WeekdayReading>) {
-    StatCard {
-        SectionLabel("By day of week")
-        ColumnChart(
-            values = weekday.map { it.seconds / 60.0 },
-            bottomFormatter = labelFormatter(WEEKDAY_LABELS),
-            startFormatter = minutesAxisFormatter(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
+        Text(
+            text = value,
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.title,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = label,
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            minLines = 2,
+            maxLines = 2,
         )
     }
 }
 
-// endregion
-
-// region Hour-of-day chart
-
 @Composable
-private fun HourOfDaySection(hourly: List<HourlyReading>) {
-    StatCard {
-        SectionLabel("When you read")
-        ColumnChart(
-            values = hourly.map { it.seconds / 60.0 },
-            bottomFormatter = hourAxisFormatter(),
-            startFormatter = minutesAxisFormatter(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
-        )
-    }
-}
-
-// endregion
-
-// region Activity heatmap
-
-@Composable
-private fun HeatmapSection(heatmap: List<HeatmapDay>) {
-    StatCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            SectionLabel("Activity")
-            heatmapRangeLabel(heatmap)?.let { CaptionMuted(it) }
-        }
-        // Columns are weeks (7 rows, Monday on top). The repository emits week-aligned full weeks.
-        val weeks = heatmap.chunked(7)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            weeks.forEach { week ->
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    week.forEach { day -> HeatCell(day) }
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            CaptionMuted("Less")
-            (0..4).forEach { level ->
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(heatColor(level)),
-                )
-            }
-            CaptionMuted("More")
-        }
-    }
-}
-
-@Composable
-private fun ColumnScope.HeatCell(day: HeatmapDay) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(3.dp))
-            .background(heatColor(day.level)),
-    )
-}
-
-@Composable
-private fun heatColor(level: Int): Color {
-    val colors = YomuTheme.colors
-    return when (level) {
-        0 -> colors.surfaceSunken
-        1 -> colors.accent.copy(alpha = 0.25f)
-        2 -> colors.accent.copy(alpha = 0.45f)
-        3 -> colors.accent.copy(alpha = 0.7f)
-        else -> colors.accent
-    }
-}
-
-// endregion
-
-// region History
-
-/** How many sessions to reveal per "Show more" press. */
-private const val HISTORY_PAGE = 12
-
-/**
- * Recent reading, grouped by day: a date heading, then a compact timeline of that day's sessions
- * (when it was read · how long). Paginated so a long history stays tidy instead of an endless list.
- */
-@Composable
-private fun ColumnScope.HistorySection(history: List<ReadingSessionItem>) {
-    SectionLabel("Recent reading", modifier = Modifier.padding(top = 8.dp))
-
+private fun ColumnScope.History(history: List<ReadingSessionItem>) {
+    SectionTitle("History")
     val consolidated = remember(history) { consolidateSessions(history) }
-    var visibleCount by remember { mutableIntStateOf(HISTORY_PAGE) }
-    val shown = consolidated.take(visibleCount)
-    // groupBy keeps key order; history is newest-first, so days come newest-first too.
-    val byDay = shown.groupBy {
-        Instant.ofEpochMilli(it.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
+    var visibleCount by remember { mutableIntStateOf(HistoryPage) }
+    val byDay = consolidated.take(visibleCount).groupBy { session ->
+        Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
     }
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        byDay.forEach { (day, sessions) -> DayGroup(day, sessions) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        byDay.forEach { (day, sessions) -> HistoryCard(day, sessions) }
     }
-
     if (consolidated.size > visibleCount) {
         Text(
             text = "Show more",
             color = YomuTheme.colors.accent,
             style = YomuTheme.type.control,
             modifier = Modifier
-                .padding(top = 12.dp)
                 .align(Alignment.CenterHorizontally)
-                .yomuPressable(onClick = { visibleCount += HISTORY_PAGE })
+                .yomuPressable(onClick = { visibleCount += HistoryPage })
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }
 }
 
-private const val MERGE_GAP_SECONDS = 20 * 60L
-private const val SHORT_SESSION_SECONDS = 3 * 60L
-
-/**
- * Merges consecutive short sessions of the same book that happened close together in time, so a
- * flurry of app-switch-triggered mini-sessions reads as one entry instead of cluttering the list.
- */
-private fun consolidateSessions(history: List<ReadingSessionItem>): List<ReadingSessionItem> {
-    if (history.size < 2) return history
-    val merged = mutableListOf<ReadingSessionItem>()
-    var current = history.first()
-    for (next in history.drop(1)) {
-        // history is newest-first, so `current` started after `next` ended.
-        val gapSeconds = current.startedAt / 1000 - (next.startedAt / 1000 + next.seconds)
-        val bothShort = current.seconds <= SHORT_SESSION_SECONDS && next.seconds <= SHORT_SESSION_SECONDS
-        current = if (current.bookTitle == next.bookTitle && bothShort && gapSeconds <= MERGE_GAP_SECONDS) {
-            current.copy(
-                seconds = current.seconds + next.seconds,
-                sessionCount = current.sessionCount + next.sessionCount,
-            )
-        } else {
-            merged += current
-            next
-        }
-    }
-    merged += current
-    return merged
-}
-
 @Composable
-private fun DayGroup(day: LocalDate, sessions: List<ReadingSessionItem>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun HistoryCard(day: LocalDate, sessions: List<ReadingSessionItem>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YomuTheme.radius.lg))
+            .background(YomuTheme.colors.surfaceRaised)
+            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
+            .padding(vertical = 8.dp),
+    ) {
         Text(
             text = formatDayHeader(day),
             color = YomuTheme.colors.textSecondary,
             style = YomuTheme.type.control,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
         )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(YomuTheme.radius.lg))
-                .background(YomuTheme.colors.surfaceRaised)
-                .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
-                .padding(vertical = 4.dp),
-        ) {
-            sessions.forEach { session -> SessionTimelineRow(session) }
-        }
+        sessions.forEach { session -> HistoryRow(session) }
     }
 }
 
 @Composable
-private fun SessionTimelineRow(session: ReadingSessionItem) {
+private fun HistoryRow(session: ReadingSessionItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -457,7 +188,7 @@ private fun SessionTimelineRow(session: ReadingSessionItem) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SessionCoverThumb(session.coverImagePath)
+        CoverThumbnail(session.coverImagePath)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = session.bookTitle,
@@ -480,19 +211,13 @@ private fun SessionTimelineRow(session: ReadingSessionItem) {
     }
 }
 
-/** "5 min read" / "<1 min read" — plain-language duration for a Recent reading row. */
-private fun formatMinutesRead(seconds: Long): String {
-    val minutes = seconds / 60
-    return if (minutes > 0) "$minutes min read" else "<1 min read"
-}
-
 @Composable
-private fun SessionCoverThumb(path: String?) {
+private fun CoverThumbnail(path: String?) {
     Box(
         modifier = Modifier
-            .width(44.dp)
+            .width(40.dp)
             .aspectRatio(1f / 1.5f)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(7.dp))
             .background(YomuTheme.colors.surfaceSunken),
     ) {
         if (path != null) {
@@ -506,175 +231,30 @@ private fun SessionCoverThumb(path: String?) {
     }
 }
 
-// endregion
-
-// region Vico column chart (themed)
-
-/**
- * A reusable, Yomu-themed Vico column chart. Columns use the accent colour, axes/labels use the
- * design-system muted/border tokens, and the y-axis values are minutes.
- */
 @Composable
-private fun ColumnChart(
-    values: List<Double>,
-    bottomFormatter: CartesianValueFormatter,
-    startFormatter: CartesianValueFormatter,
-    modifier: Modifier = Modifier,
-) {
-    val colors = YomuTheme.colors
-    val modelProducer = remember { CartesianChartModelProducer() }
-    LaunchedEffect(values) {
-        modelProducer.runTransaction {
-            columnSeries { series(values.ifEmpty { listOf(0.0) }) }
-        }
-    }
-    val column = rememberLineComponent(
-        fill = fill(colors.accent),
-        thickness = 12.dp,
-        shape = CorneredShape.rounded(topLeftPercent = 30, topRightPercent = 30),
-    )
-    val labelComponent = rememberAxisLabelComponent(color = colors.textMuted)
-    val lineComponent = rememberAxisLineComponent(fill = fill(colors.border))
-    val tickComponent = rememberAxisTickComponent(fill = fill(colors.border))
-    val guidelineComponent = rememberAxisGuidelineComponent(fill = fill(colors.border))
-    CartesianChartHost(
-        chart = rememberCartesianChart(
-            rememberColumnCartesianLayer(
-                columnProvider = ColumnCartesianLayer.ColumnProvider.series(column),
-            ),
-            startAxis = VerticalAxis.rememberStart(
-                label = labelComponent,
-                line = lineComponent,
-                tick = tickComponent,
-                guideline = guidelineComponent,
-                valueFormatter = startFormatter,
-            ),
-            bottomAxis = HorizontalAxis.rememberBottom(
-                label = labelComponent,
-                line = lineComponent,
-                tick = tickComponent,
-                guideline = null,
-                valueFormatter = bottomFormatter,
-            ),
-        ),
-        modelProducer = modelProducer,
-        modifier = modifier,
-        scrollState = rememberVicoScrollState(scrollEnabled = true),
-        zoomState = rememberVicoZoomState(zoomEnabled = false),
-    )
+private fun SectionTitle(text: String) {
+    Text(text = text, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.section)
 }
 
-/** Seconds→label: under a minute reads as seconds, under an hour as minutes, else hours. */
-private fun minutesAxisFormatter(): CartesianValueFormatter = CartesianValueFormatter { _, value, _ ->
-    val totalSeconds = (value * 60).toLong()
-    when {
-        totalSeconds < 60 -> "${totalSeconds}s"
-        totalSeconds < 3600 -> "${totalSeconds / 60}m"
-        else -> "${totalSeconds / 3600}h"
-    }
-}
-
-/** Labels every few days so the 30-day window isn't a wall of text. */
-private fun dayAxisFormatter(trend: List<DailyReading>): CartesianValueFormatter {
-    val labels = trend.map { runCatching { LocalDate.parse(it.date) }.getOrNull() }
-    val step = if (trend.size > 10) 5 else 1
-    val fmt = SimpleDateFormat("d", Locale.getDefault())
-    return CartesianValueFormatter { _, value, _ ->
-        val index = value.toInt()
-        val date = labels.getOrNull(index)
-        if (date != null && index % step == 0) {
-            fmt.format(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()))
+private fun consolidateSessions(history: List<ReadingSessionItem>): List<ReadingSessionItem> {
+    if (history.size < 2) return history
+    val merged = mutableListOf<ReadingSessionItem>()
+    var current = history.first()
+    for (next in history.drop(1)) {
+        val gapSeconds = current.startedAt / 1000 - (next.startedAt / 1000 + next.seconds)
+        val bothShort = current.seconds <= ShortSessionSeconds && next.seconds <= ShortSessionSeconds
+        current = if (current.bookTitle == next.bookTitle && bothShort && gapSeconds <= MergeGapSeconds) {
+            current.copy(
+                seconds = current.seconds + next.seconds,
+                sessionCount = current.sessionCount + next.sessionCount,
+            )
         } else {
-            // Vico forbids empty labels; a blank space hides the label without crashing.
-            " "
+            merged += current
+            next
         }
     }
-}
-
-private fun hourAxisFormatter(): CartesianValueFormatter = CartesianValueFormatter { _, value, _ ->
-    when (value.toInt()) {
-        0 -> "12a"
-        6 -> "6a"
-        12 -> "12p"
-        18 -> "6p"
-        else -> " "
-    }
-}
-
-private fun labelFormatter(labels: List<String>): CartesianValueFormatter = CartesianValueFormatter { _, value, _ -> labels.getOrElse(value.toInt()) { " " } }
-
-private val WEEKDAY_LABELS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-
-// endregion
-
-// region Shared primitives
-
-@Composable
-private fun StatCard(padding: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
-            .padding(padding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        content = content,
-    )
-}
-
-@Composable
-private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        color = YomuTheme.colors.textMuted,
-        style = YomuTheme.type.caption,
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun CaptionMuted(text: String) {
-    Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-}
-
-@Composable
-private fun EmptyChartHint(text: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
-    }
-}
-
-// endregion
-
-/** "Jun 1 – Aug 24" span the heatmap grid covers, so the weeks-of-cells read as a real calendar. */
-private fun heatmapRangeLabel(heatmap: List<HeatmapDay>): String? {
-    val first = heatmap.firstOrNull()?.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    val last = heatmap.lastOrNull()?.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    if (first == null || last == null) return null
-    val fmt = SimpleDateFormat("MMM d", Locale.getDefault())
-    fun fmt(date: LocalDate) = fmt.format(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()))
-    return "${fmt(first)} – ${fmt(last)}"
-}
-
-private fun formatClock(millis: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
-
-/** "Today" / "Yesterday" / "Jun 20, 2026" for a session-group day heading. */
-private fun formatDayHeader(day: LocalDate): String {
-    val today = LocalDate.now()
-    return when (day) {
-        today -> "Today"
-        today.minusDays(1) -> "Yesterday"
-        else -> {
-            val date = Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())
-            SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(date)
-        }
-    }
+    merged += current
+    return merged
 }
 
 private fun formatReadingTime(seconds: Long): String {
@@ -689,8 +269,31 @@ private fun formatReadingTime(seconds: Long): String {
     }
 }
 
+private fun formatMinutesRead(seconds: Long): String {
+    val minutes = seconds / 60
+    return if (minutes > 0) "$minutes min" else "<1 min"
+}
+
+private fun formatClock(millis: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
+
+private fun formatDayHeader(day: LocalDate): String {
+    val today = LocalDate.now()
+    return when (day) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> {
+            val date = Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())
+            SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(date)
+        }
+    }
+}
+
 private fun formatCount(value: Long): String = when {
     value >= 1_000_000 -> String.format(Locale.US, "%.1fM", value / 1_000_000.0)
     value >= 1_000 -> String.format(Locale.US, "%.1fk", value / 1_000.0)
     else -> value.toString()
 }
+
+private const val HistoryPage = 12
+private const val MergeGapSeconds = 20 * 60L
+private const val ShortSessionSeconds = 3 * 60L

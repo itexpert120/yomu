@@ -113,6 +113,7 @@ class StatsRepository @Inject constructor(
             booksFinished = books.count { it.progress >= 0.999f },
             chaptersRead = chaptersRead,
             estimatedWordsRead = (day.totalSeconds / 60.0 * WORDS_PER_MINUTE).toLong(),
+            estimatedReadingSpeedWpm = if (day.totalSeconds > 0L) WORDS_PER_MINUTE else 0,
             sessionCount = session.count,
             averageSessionSeconds = session.averageSeconds,
             longestSessionSeconds = session.longestSeconds,

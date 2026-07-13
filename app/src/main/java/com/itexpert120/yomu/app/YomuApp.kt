@@ -26,10 +26,12 @@ fun YomuApp(
     appViewModel: AppViewModel,
     externalOpenViewModel: ExternalOpenViewModel,
     onResolvedThemeChange: (YomuThemeMode) -> Unit,
+    onSplashThemeChange: (ThemePreference, Boolean) -> Unit,
 ) {
-    val preference by appViewModel.themePreference.collectAsState()
-    val oledDark by appViewModel.oledDark.collectAsState()
-    val accentSelection by appViewModel.accentSelection.collectAsState()
+    val appearance by appViewModel.appearance.collectAsState()
+    val preference = appearance.themePreference
+    val oledDark = appearance.oledDark
+    val accentSelection = appearance.accentSelection
     val systemDark = isSystemInDarkTheme()
 
     val dark = when (preference) {
@@ -45,6 +47,7 @@ fun YomuApp(
     val accentColor = Color(accentSelection.resolve(dark))
 
     LaunchedEffect(resolved) { onResolvedThemeChange(resolved) }
+    LaunchedEffect(preference, oledDark) { onSplashThemeChange(preference, oledDark) }
 
     YomuDesignTheme(themeMode = resolved, accent = accentColor) {
         // Opaque app-coloured backing so the shared-axis transition never reveals the window

@@ -9,10 +9,19 @@ import com.itexpert120.yomu.data.settings.AppSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class AppAppearance(
+    val themePreference: ThemePreference = ThemePreference.System,
+    val oledDark: Boolean = false,
+    val accentSelection: AccentSelection = AccentSelection.Default,
+    val isLoaded: Boolean = false,
+)
 
 /**
  * Holds app-shell theme state, persisted through [AppSettingsRepository]. The concrete
@@ -22,15 +31,16 @@ import javax.inject.Inject
 class AppViewModel @Inject constructor(
     private val settings: AppSettingsRepository,
 ) : ViewModel() {
-
-    val themePreference: StateFlow<ThemePreference> = settings.themePreference
-        .stateIn(viewModelScope, SharingStarted.Eagerly, ThemePreference.System)
-
-    val oledDark: StateFlow<Boolean> = settings.oledDark
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    val accentSelection: StateFlow<AccentSelection> = settings.accentSelection
-        .stateIn(viewModelScope, SharingStarted.Eagerly, AccentSelection.Default)
+    val appearance: StateFlow<AppAppearance> = combine(
+        settings.themePreference,
+        settings.oledDark,
+        settings.accentSelection,
+    ) { themePreference, oledDark, accentSelection ->
+        AppAppearance(themePreference, oledDark, accentSelection, isLoaded = true)
+    }.catch {
+        // Never strand the Android splash if preferences cannot be read; use safe defaults.
+        emit(AppAppearance(isLoaded = true))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AppAppearance())
 
     /** Quick toggle (library header): System → Light → Dark → System. */
     fun onCycleTheme() = viewModelScope.launch {

@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.app.navigation
 
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -13,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -77,10 +80,17 @@ fun YomuNavHost(
             slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
         },
     ) {
-        composable<Library> {
-            val themePreference by appViewModel.themePreference.collectAsState()
+        composable<Library>(
+            // Avoid replaying the page entrance over the platform splash on a cold launch, while
+            // keeping the reverse shared-axis motion when Library is revealed by a back action.
+            enterTransition = { EnterTransition.None },
+            popEnterTransition = {
+                slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
+            },
+        ) {
+            val appearance by appViewModel.appearance.collectAsState()
             LibraryRoute(
-                themePreference = themePreference,
+                themePreference = appearance.themePreference,
                 onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
                 onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
                 onThemeToggle = appViewModel::onCycleTheme,
@@ -91,19 +101,19 @@ fun YomuNavHost(
         composable<BookDetails> { entry ->
             val args = entry.toRoute<BookDetails>()
             BookDetailsRoute(
-                onBack = navController::popBackStack,
+                onBack = navController::popBackStackIfResumed,
                 onRead = { navController.navigate(Reader(args.bookId)) },
                 onEdit = { navController.navigate(EditBook(args.bookId)) },
                 onOpenChapter = { locator -> navController.navigate(Reader(args.bookId, locator)) },
             )
         }
         composable<EditBook> {
-            EditBookRoute(onBack = navController::popBackStack)
+            EditBookRoute(onBack = navController::popBackStackIfResumed)
         }
         composable<Settings> {
             SettingsRoute(
                 appViewModel = appViewModel,
-                onBack = navController::popBackStack,
+                onBack = navController::popBackStackIfResumed,
                 onOpenStats = { navController.navigate(Stats) },
                 onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
                 onOpenAbout = { navController.navigate(About) },
@@ -111,21 +121,28 @@ fun YomuNavHost(
         }
         composable<ReaderDefaults> {
             ReaderDefaultsRoute(
-                onBack = navController::popBackStack,
+                onBack = navController::popBackStackIfResumed,
                 onOpenFontLibrary = { navController.navigate(FontLibrary) },
             )
         }
         composable<FontLibrary> {
-            FontLibraryRoute(onBack = navController::popBackStack)
+            FontLibraryRoute(onBack = navController::popBackStackIfResumed)
         }
         composable<Stats> {
-            StatsRoute(onBack = navController::popBackStack)
+            StatsRoute(onBack = navController::popBackStackIfResumed)
         }
         composable<About> {
-            AboutRoute(onBack = navController::popBackStack)
+            AboutRoute(onBack = navController::popBackStackIfResumed)
         }
         composable<Reader> {
-            ReaderRoute(onBack = navController::popBackStack)
+            ReaderRoute(onBack = navController::popBackStackIfResumed)
         }
+    }
+}
+
+/** Ignore repeat taps while the current destination is already leaving the screen. */
+private fun NavHostController.popBackStackIfResumed() {
+    if (currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+        popBackStack()
     }
 }

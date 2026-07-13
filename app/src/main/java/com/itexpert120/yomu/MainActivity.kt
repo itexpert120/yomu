@@ -8,12 +8,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
+import com.itexpert120.yomu.app.SplashThemeStore
 import com.itexpert120.yomu.app.YomuApp
+import com.itexpert120.yomu.app.YomuSplashTheme
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
+import com.itexpert120.yomu.app.toSplashTheme
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
+import com.itexpert120.yomu.core.model.ThemePreference
 import com.itexpert120.yomu.data.reader.readium.readiumRestoreFragmentFactory
 import com.itexpert120.yomu.data.reader.readium.removeRestoredReadiumNavigatorFragments
 import dagger.hilt.android.AndroidEntryPoint
@@ -24,14 +27,20 @@ class MainActivity : FragmentActivity() {
 
     // Activity-scoped so the same instance drives both the import (triggered here) and the
     // navigation to the imported book (collected inside the Compose nav host).
+    private val appViewModel: AppViewModel by viewModels()
     private val externalOpenViewModel: ExternalOpenViewModel by viewModels()
+    private val splashThemeStore by lazy { SplashThemeStore(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashTheme = splashThemeStore.read()
+        setTheme(splashTheme.styleRes)
+        persistPlatformSplashTheme(splashTheme)
+        val splashScreen = installSplashScreen()
         // Set before super.onCreate so a navigator fragment saved before a config change (rotation)
         // can be re-instantiated during restore instead of crashing; the reader replaces it.
         supportFragmentManager.fragmentFactory = readiumRestoreFragmentFactory()
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition { !appViewModel.appearance.value.isLoaded }
         // Readium navigator fragments cannot be resumed from FragmentManager-saved state. If the
         // activity was relaunched (rotation/process recreation) while the reader was open, discard
         // the restored dummy before FragmentActivity dispatches onResume to it.
@@ -40,11 +49,11 @@ class MainActivity : FragmentActivity() {
         // Cold start from an external "Open with"/share.
         handleExternalIntent(intent)
         setContent {
-            val appViewModel: AppViewModel = hiltViewModel()
             YomuApp(
                 appViewModel = appViewModel,
                 externalOpenViewModel = externalOpenViewModel,
                 onResolvedThemeChange = { updateYomuSystemBarIcons(it) },
+                onSplashThemeChange = ::updateSplashTheme,
             )
         }
     }
@@ -60,6 +69,17 @@ class MainActivity : FragmentActivity() {
     private fun handleExternalIntent(intent: Intent?) {
         val uri = intent.extractEpubUri() ?: return
         externalOpenViewModel.onExternalUri(uri)
+    }
+
+    private fun updateSplashTheme(preference: ThemePreference, oledDark: Boolean) {
+        val splashTheme = preference.toSplashTheme(oledDark)
+        if (splashThemeStore.write(splashTheme)) persistPlatformSplashTheme(splashTheme)
+    }
+
+    private fun persistPlatformSplashTheme(theme: YomuSplashTheme) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setSplashScreenTheme(theme.styleRes)
+        }
     }
 }
 

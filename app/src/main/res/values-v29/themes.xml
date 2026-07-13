@@ -10,12 +10,13 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="yomuSplashMarkColor">@color/yomu_splash_mark</item>
     </style>
 
-    <style name="Theme.Yomu.Starting" parent="Theme.SplashScreen.IconBackground">
+    <style name="Theme.Yomu.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_yomu_mark</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/yomu_splash_icon_background</item>
+        <item name="yomuSplashMarkColor">@color/yomu_splash_mark</item>
         <item name="postSplashScreenTheme">@style/Theme.Yomu</item>
         <item name="android:windowLightStatusBar">@bool/yomu_splash_light_system_bars</item>
         <item name="android:windowLightNavigationBar">@bool/yomu_splash_light_system_bars</item>
@@ -24,5 +25,39 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+
+    <style name="Theme.Yomu.Starting.Light" parent="Theme.Yomu.Starting">
+        <item name="windowSplashScreenBackground">@color/yomu_splash_background_light</item>
+        <item name="yomuSplashMarkColor">@color/yomu_splash_mark_light</item>
+        <item name="android:windowLightStatusBar">@bool/yomu_splash_force_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/yomu_splash_force_light_system_bars</item>
+        <item name="android:statusBarColor">@color/yomu_splash_background_light</item>
+        <item name="android:navigationBarColor">@color/yomu_splash_background_light</item>
+    </style>
+
+    <style name="Theme.Yomu.Starting.Dark" parent="Theme.Yomu.Starting">
+        <item name="windowSplashScreenBackground">@color/yomu_splash_background_dark</item>
+        <item name="yomuSplashMarkColor">@color/yomu_splash_mark_dark</item>
+        <item name="android:windowLightStatusBar">@bool/yomu_splash_force_dark_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/yomu_splash_force_dark_system_bars</item>
+        <item name="android:statusBarColor">@color/yomu_splash_background_dark</item>
+        <item name="android:navigationBarColor">@color/yomu_splash_background_dark</item>
+    </style>
+
+    <style name="Theme.Yomu.Starting.Oled" parent="Theme.Yomu.Starting">
+        <item name="windowSplashScreenBackground">@color/yomu_splash_background_oled</item>
+        <item name="yomuSplashMarkColor">@color/yomu_splash_mark_oled</item>
+        <item name="android:windowLightStatusBar">@bool/yomu_splash_force_dark_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/yomu_splash_force_dark_system_bars</item>
+        <item name="android:statusBarColor">@color/yomu_splash_background_oled</item>
+        <item name="android:navigationBarColor">@color/yomu_splash_background_oled</item>
+    </style>
+
+    <style name="Theme.Yomu.Starting.SystemOled" parent="Theme.Yomu.Starting">
+        <item name="windowSplashScreenBackground">@color/yomu_splash_background_system_oled</item>
+        <item name="yomuSplashMarkColor">@color/yomu_splash_mark_system_oled</item>
+        <item name="android:statusBarColor">@color/yomu_splash_background_system_oled</item>
+        <item name="android:navigationBarColor">@color/yomu_splash_background_system_oled</item>
     </style>
 </resources>
