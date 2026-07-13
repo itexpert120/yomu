@@ -8,7 +8,7 @@ Yomu is a native Android EPUB reader (Kotlin + Jetpack Compose). The product int
 
 Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Also built: streamlined **reading statistics** (library/completion overview, aggregate metric cards, and recent reading history) and **external "Open with"/share** EPUB import. **Hilt, Room, DataStore, Navigation Compose, Coil, and Readium are all present and wired.** (Home-screen Glance widgets were removed.)
 
-The only network feature is the dictionary lookup (Free Dictionary API; the reason for the `INTERNET` permission); everything else is offline. Remaining gaps are later-phase roadmap items (e.g. OPDS catalogs, non-EPUB formats like PDF/audiobook, cross-device sync) — see `docs/roadmap.md`. The `docs/` describe the product/design intent and are kept current — each doc has an "Implementation status (current)" note, and `docs/roadmap.md` (Phases 0–12) is the authoritative done-vs-pending source. **Keep this AGENTS.md in sync with the code as features land.**
+Network access is limited to dictionary lookups and explicit user-initiated Google Fonts downloads; reading, library management, annotations, search, and statistics remain offline. Remaining gaps are later-phase roadmap items (e.g. OPDS catalogs, non-EPUB formats like PDF/audiobook, cross-device sync) — see `docs/roadmap.md`. The `docs/` describe the product/design intent and are kept current — each doc has an "Implementation status (current)" note, and `docs/roadmap.md` (Phases 0–12) is the authoritative done-vs-pending source. **Keep this AGENTS.md in sync with the code as features land.**
 
 ## Commands
 
@@ -62,7 +62,7 @@ com.itexpert120.yomu
 │   ├── highlights/              # HighlightRepository + RoomHighlightRepository
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
 │   ├── stats/                   # StatsRepository (reading-time sessions + aggregate metrics)
-│   └── dictionary/              # DictionaryRepository (Free Dictionary API — the only network call)
+│   └── dictionary/              # DictionaryRepository (Free Dictionary API)
 ├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; also
 │                                #   kicks off background TOC extraction on insert)
 └── feature/                     # library, bookdetails, bookedit, reader, settings, stats, about
@@ -123,4 +123,4 @@ Another single-module native EPUB reader (`io.github.piyushdaiya.vaachak`, v2.0.
 - `index.html`, `script.js`, `styles.css` at the repo root are an exported IntelliJ inspection report — not application code; ignore them.
 - `docs/roadmap.md` defines implementation phases and acceptance criteria; consult it before starting a new feature area.
 - Code style is enforced with **Spotless + ktlint** (`./gradlew spotlessApply` to format, `spotlessCheck` to verify), configured in the root `build.gradle.kts` with `.editorconfig` (IntelliJ style; `function-naming`/`property-naming` disabled for Compose/design-system PascalCase). Kotlin sources are LF (`.gitattributes`).
-- The version catalog also includes `androidx.core-splashscreen` and `kotlinx-serialization-json`. The `INTERNET` permission exists solely for the dictionary lookup; the app is otherwise offline.
+- The version catalog also includes `androidx.core-splashscreen` and `kotlinx-serialization-json`. `INTERNET` is used only for dictionary lookups and user-requested Google Fonts downloads.

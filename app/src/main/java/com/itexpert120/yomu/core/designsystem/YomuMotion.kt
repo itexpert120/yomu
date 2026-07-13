@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
+import android.animation.ValueAnimator
 import android.os.Build
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -52,37 +53,50 @@ object YomuMotion {
     val PopupBlur = 16.dp
 }
 
+/** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
+fun yomuAnimationsEnabled(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+
 /**
  * Enter for edge-anchored chrome (bars, pills): fade + slide from its own edge — bottom-anchored
  * bars slide up from below, top-anchored bars slide down from above — so it reads as sliding off
  * its edge rather than materializing in place.
  */
 fun yomuChromeEnter(fromBottom: Boolean = true): EnterTransition {
+    if (!yomuAnimationsEnabled()) return EnterTransition.None
     val offset: (Int) -> Int = if (fromBottom) { h -> h / 3 } else { h -> -h / 3 }
     return fadeIn(spring(stiffness = 380f)) +
         slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f), initialOffsetY = offset)
 }
 
 fun yomuChromeExit(toBottom: Boolean = true): ExitTransition {
+    if (!yomuAnimationsEnabled()) return ExitTransition.None
     val offset: (Int) -> Int = if (toBottom) { h -> h / 3 } else { h -> -h / 3 }
     return fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
         slideOutVertically(spring(dampingRatio = 0.85f, stiffness = 380f), targetOffsetY = offset)
 }
 
 /** Enter for popups/menus that should "materialize" in place — scale + fade, no slide. */
-fun yomuPopupEnter(origin: TransformOrigin = TransformOrigin.Center): EnterTransition = fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
-    scaleIn(
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
-        initialScale = YomuMotion.PopupScaleFrom,
-        transformOrigin = origin,
-    )
+fun yomuPopupEnter(origin: TransformOrigin = TransformOrigin.Center): EnterTransition = if (!yomuAnimationsEnabled()) {
+    EnterTransition.None
+} else {
+    fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
+        scaleIn(
+            animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
+            initialScale = YomuMotion.PopupScaleFrom,
+            transformOrigin = origin,
+        )
+}
 
-fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransition = fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
-    scaleOut(
-        animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
-        targetScale = YomuMotion.PopupScaleFrom,
-        transformOrigin = origin,
-    )
+fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransition = if (!yomuAnimationsEnabled()) {
+    ExitTransition.None
+} else {
+    fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
+        scaleOut(
+            animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
+            targetScale = YomuMotion.PopupScaleFrom,
+            transformOrigin = origin,
+        )
+}
 
 /**
  * A directional content swap for tab/segment changes: the incoming content slides in horizontally
@@ -91,6 +105,9 @@ fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransit
  * blur-through. [forward] is true when switching to a later tab than the current one.
  */
 fun <S> AnimatedContentTransitionScope<S>.yomuContentSwap(forward: Boolean = true): ContentTransform {
+    if (!yomuAnimationsEnabled()) {
+        return EnterTransition.None togetherWith ExitTransition.None
+    }
     val direction = if (forward) {
         AnimatedContentTransitionScope.SlideDirection.Left
     } else {
@@ -117,6 +134,7 @@ fun Modifier.yomuChromeBlur(
     maxRadius: Dp = YomuMotion.ChromeBlur,
 ): Modifier {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
+    if (!yomuAnimationsEnabled()) return this
     val radius by scope.transition.animateDp(label = "yomuChromeBlur") { state ->
         if (state == EnterExitState.Visible) 0.dp else maxRadius
     }

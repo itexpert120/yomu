@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +23,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import android.graphics.Color as AndroidColor
 
@@ -36,7 +48,7 @@ fun YomuColorPicker(
     onColorChange: (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val initial = remember { FloatArray(3).also { AndroidColor.colorToHSV(color.toArgb(), it) } }
+    val initial = remember(color) { FloatArray(3).also { AndroidColor.colorToHSV(color.toArgb(), it) } }
     var hue by remember { mutableFloatStateOf(initial[0]) }
     var sat by remember { mutableFloatStateOf(initial[1]) }
     var value by remember { mutableFloatStateOf(initial[2]) }
@@ -49,6 +61,29 @@ fun YomuColorPicker(
                 .fillMaxWidth()
                 .height(180.dp)
                 .clip(RoundedCornerShape(YomuTheme.radius.md))
+                .semantics {
+                    contentDescription = "Saturation and brightness"
+                    stateDescription = "${(sat * 100).toInt()}% saturation, ${(value * 100).toInt()}% brightness"
+                    progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, 20)
+                    setProgress { requested ->
+                        value = requested.coerceIn(0f, 1f)
+                        emit()
+                        true
+                    }
+                }
+                .focusable()
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (event.key) {
+                        Key.DirectionLeft -> sat = (sat - 0.05f).coerceIn(0f, 1f)
+                        Key.DirectionRight -> sat = (sat + 0.05f).coerceIn(0f, 1f)
+                        Key.DirectionDown -> value = (value - 0.05f).coerceIn(0f, 1f)
+                        Key.DirectionUp -> value = (value + 0.05f).coerceIn(0f, 1f)
+                        else -> return@onKeyEvent false
+                    }
+                    emit()
+                    true
+                }
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         sat = (offset.x / size.width).coerceIn(0f, 1f)
@@ -57,10 +92,12 @@ fun YomuColorPicker(
                     }
                 }
                 .pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
+                    detectDragGestures(
+                        onDragEnd = { emit() },
+                        onDragCancel = { emit() },
+                    ) { change, _ ->
                         sat = (change.position.x / size.width).coerceIn(0f, 1f)
                         value = (1f - change.position.y / size.height).coerceIn(0f, 1f)
-                        emit()
                     }
                 },
         ) {
@@ -80,8 +117,29 @@ fun YomuColorPicker(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(24.dp)
+                .height(48.dp)
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                .semantics {
+                    contentDescription = "Hue"
+                    stateDescription = "${hue.toInt()} degrees"
+                    progressBarRangeInfo = ProgressBarRangeInfo(hue, 0f..360f, 72)
+                    setProgress { requested ->
+                        hue = requested.coerceIn(0f, 360f)
+                        emit()
+                        true
+                    }
+                }
+                .focusable()
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (event.key) {
+                        Key.DirectionLeft, Key.DirectionDown -> hue = (hue - 5f).mod(360f)
+                        Key.DirectionRight, Key.DirectionUp -> hue = (hue + 5f).mod(360f)
+                        else -> return@onKeyEvent false
+                    }
+                    emit()
+                    true
+                }
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         hue = (offset.x / size.width).coerceIn(0f, 1f) * 360f
@@ -89,9 +147,11 @@ fun YomuColorPicker(
                     }
                 }
                 .pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
+                    detectDragGestures(
+                        onDragEnd = { emit() },
+                        onDragCancel = { emit() },
+                    ) { change, _ ->
                         hue = (change.position.x / size.width).coerceIn(0f, 1f) * 360f
-                        emit()
                     }
                 },
         ) {

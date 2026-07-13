@@ -34,8 +34,8 @@ interface BookDao {
     @Query("SELECT id FROM books WHERE sha256 = :sha256 LIMIT 1")
     suspend fun findIdByHash(sha256: String): String?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(book: BookEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(book: BookEntity): Long
 
     @Query(
         "UPDATE books SET progress = 1.0, " +
@@ -112,6 +112,12 @@ interface BookDao {
     @Query("DELETE FROM reader_settings WHERE bookId IN (:bookIds)")
     suspend fun deleteReaderSettingsForBooks(bookIds: List<String>)
 
+    @Query("SELECT * FROM reader_settings")
+    suspend fun getAllReaderSettings(): List<ReaderSettingsEntity>
+
+    @Query("SELECT * FROM reader_settings WHERE bookId = :bookId")
+    suspend fun getReaderSettings(bookId: String): ReaderSettingsEntity?
+
     // endregion
 
     // region Cached table of contents
@@ -147,13 +153,17 @@ interface BookDao {
     @Query("SELECT * FROM reading_sessions ORDER BY startedAt DESC LIMIT :limit")
     fun observeRecentSessions(limit: Int): Flow<List<ReadingSessionEntity>>
 
-    /**
-     * (startedAt, seconds) for every session, newest first. Drives the weekday / hour-of-day
-     * distributions and the session aggregates (count, average, longest) — the seconds are small
-     * (one row per finished session) so loading them is cheap.
-     */
-    @Query("SELECT startedAt, seconds FROM reading_sessions ORDER BY startedAt DESC")
-    fun observeSessionTimes(): Flow<List<SessionTime>>
+    @Query(
+        "SELECT COUNT(*) AS count, COALESCE(AVG(seconds), 0) AS averageSeconds, " +
+            "COALESCE(MAX(seconds), 0) AS longestSeconds FROM reading_sessions",
+    )
+    fun observeSessionAggregate(): Flow<SessionAggregate>
+
+    @Query(
+        "DELETE FROM reading_sessions WHERE id NOT IN " +
+            "(SELECT id FROM reading_sessions ORDER BY startedAt DESC LIMIT :limit)",
+    )
+    suspend fun pruneReadingSessions(limit: Int)
 
     /** Total seconds spent reading a single book, summed across its sessions (0 if none). */
     @Query("SELECT COALESCE(SUM(seconds), 0) FROM reading_sessions WHERE bookId = :bookId")
@@ -166,7 +176,8 @@ interface BookDao {
 }
 
 /** Lightweight projection of a reading session: when it started and how long it lasted. */
-data class SessionTime(
-    val startedAt: Long,
-    val seconds: Long,
+data class SessionAggregate(
+    val count: Int,
+    val averageSeconds: Long,
+    val longestSeconds: Long,
 )

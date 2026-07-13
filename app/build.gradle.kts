@@ -39,6 +39,7 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")
     lint {
         // OldTargetApi: we deliberately target the latest STABLE SDK (36); 37 is a preview.
         // VectorPath: the app icon / wordmark is a single detailed logo with a long path — expected.
@@ -88,6 +89,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

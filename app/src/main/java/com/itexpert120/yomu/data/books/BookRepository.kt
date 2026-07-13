@@ -36,7 +36,8 @@ interface BookRepository {
     /** The id of the already-imported book with this content hash, or null if none. */
     suspend fun findIdByHash(sha256: String): BookId?
 
-    suspend fun insert(book: ImportedBook)
+    /** Inserts without replacing an existing hash. False means a concurrent duplicate won. */
+    suspend fun insert(book: ImportedBook): Boolean
 
     suspend fun readingTarget(id: BookId): ReadingTarget?
     suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double)

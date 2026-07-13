@@ -61,6 +61,7 @@ data class LibraryUiState(
     val searchQuery: String = "",
     val isImporting: Boolean = false,
     val importNotice: String? = null,
+    val canRetryImport: Boolean = false,
     val selectionMode: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
 )

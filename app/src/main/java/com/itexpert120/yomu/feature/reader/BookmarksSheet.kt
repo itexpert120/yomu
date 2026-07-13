@@ -60,11 +60,13 @@ internal fun BookmarkRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = "${(bookmark.progression * 100).toInt()}%",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-            )
+            bookmark.progression?.let { progression ->
+                Text(
+                    text = "${(progression * 100).toInt()}%",
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption,
+                )
+            }
         }
         Box(
             modifier = Modifier

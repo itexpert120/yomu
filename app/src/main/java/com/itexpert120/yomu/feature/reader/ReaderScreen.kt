@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
@@ -15,13 +14,17 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,7 +41,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.ViewCompat
@@ -48,6 +50,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
@@ -67,6 +70,7 @@ fun ReaderScreen(
     state: ReaderUiState,
     session: ReaderSession?,
     onBack: () -> Unit,
+    onRetryOpen: () -> Unit,
     onOpenSheet: () -> Unit,
     onCloseSheet: () -> Unit,
     onSeek: (Double) -> Unit,
@@ -235,20 +239,13 @@ fun ReaderScreen(
         // runs the system has already animated them in — re-hiding from there just produces a brief
         // visible flash before hideSystemBars() catches up. Listen for the inset-visibility change
         // itself instead: it fires the instant the system shows the bars, so we can re-hide immediately.
-        // Setting a listener on decorView REPLACES its default dispatch behaviour, so it must forward
-        // insets on (view.onApplyWindowInsets + dispatch to children) or every descendant downstream —
-        // Compose's own WindowInsets tracking, the Readium FragmentContainerView's inset consumer —
-        // stops receiving updates entirely.
+        // Returning the incoming value lets the normal ViewGroup dispatch continue. Calling
+        // ViewCompat.onApplyWindowInsets on this same decorated view from inside its listener would
+        // recursively invoke the listener.
         val decorView = window?.decorView
-        val insetsListener = OnApplyWindowInsetsListener { v, insets ->
+        val insetsListener = OnApplyWindowInsetsListener { _, insets ->
             if (insets.isVisible(WindowInsetsCompat.Type.systemBars())) hideSystemBars()
-            val applied = ViewCompat.onApplyWindowInsets(v, insets)
-            if (v is ViewGroup) {
-                for (i in 0 until v.childCount) {
-                    ViewCompat.dispatchApplyWindowInsets(v.getChildAt(i), applied)
-                }
-            }
-            applied
+            insets
         }
         decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, insetsListener) }
         val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
@@ -384,7 +381,7 @@ fun ReaderScreen(
             .background(background),
     ) {
         when {
-            state.failed -> CenteredMessage("This book couldn't be opened.")
+            state.failed -> ReaderFailure(onBack = onBack, onRetry = onRetryOpen)
             session != null -> {
                 // Host the navigator even while loading so it can paint and fire its ready signal;
                 // an opaque scrim below covers the half-rendered page until that first paint.
@@ -409,7 +406,7 @@ fun ReaderScreen(
                             .matchParentSize()
                             .background(background),
                     ) {
-                        CenteredMessage("Opening…")
+                        ReaderOpening()
                     }
                 }
 
@@ -559,6 +556,7 @@ fun ReaderScreen(
                         searchQuery = state.searchQuery,
                         searchResults = state.searchResults,
                         searchInProgress = state.searchInProgress,
+                        searchError = state.searchError,
                         searchPerformed = state.searchPerformed,
                         onSearchQueryChange = onSearchQueryChange,
                         onSubmitSearch = onSubmitSearch,
@@ -593,7 +591,7 @@ fun ReaderScreen(
                 }
             }
 
-            else -> CenteredMessage("Opening…")
+            else -> ReaderOpening()
         }
     }
 }
@@ -605,13 +603,39 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.CenteredMessage(text: String) {
-    Text(
-        text = text,
-        color = YomuTheme.colors.textMuted,
-        style = YomuTheme.type.body,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+private fun androidx.compose.foundation.layout.BoxScope.ReaderOpening() {
+    Column(
         modifier = Modifier.align(Alignment.Center),
-    )
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CircularProgressIndicator(
+            color = YomuTheme.colors.accent,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(text = "Opening…", color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.ReaderFailure(
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .align(Alignment.Center)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "This book couldn't be opened.",
+            color = YomuTheme.colors.textPrimary,
+            style = YomuTheme.type.body,
+        )
+        YomuButton(text = "Try again", onClick = onRetry)
+        YomuButton(text = "Back to library", onClick = onBack)
+    }
 }

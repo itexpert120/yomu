@@ -301,7 +301,7 @@ private fun ReaderBarButton(
 ) {
     Box(
         modifier = Modifier
-            .size(24.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

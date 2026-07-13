@@ -6,15 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportResult
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /**
@@ -30,26 +29,36 @@ class ExternalOpenViewModel @Inject constructor(
     private val _isImporting = MutableStateFlow(false)
     val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     // Buffered so an open emitted before the nav host starts collecting is not dropped.
-    private val _openBook = MutableSharedFlow<String>(
-        replay = 1,
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-    val openBook: SharedFlow<String> = _openBook.asSharedFlow()
+    private val openBookChannel = Channel<String>(Channel.BUFFERED)
+    val openBook = openBookChannel.receiveAsFlow()
+    private val importMutex = Mutex()
 
     /** Called by the Activity for both cold-start (onCreate) and warm (onNewIntent) external opens. */
     fun onExternalUri(uri: Uri) {
         viewModelScope.launch {
-            _isImporting.update { true }
-            val result = importBooks.importSingle(uri)
-            val bookId = when (result) {
-                is ImportResult.Imported -> result.bookId
-                is ImportResult.Duplicate -> result.bookId
-                ImportResult.Failed -> null
+            importMutex.withLock {
+                _isImporting.value = true
+                _error.value = null
+                try {
+                    when (val result = importBooks.importSingle(uri)) {
+                        is ImportResult.Imported -> openBookChannel.send(result.bookId)
+                        is ImportResult.Duplicate -> openBookChannel.send(result.bookId)
+                        is ImportResult.Failed -> _error.value = result.reason
+                    }
+                } catch (_: Throwable) {
+                    _error.value = "The EPUB couldn't be opened."
+                } finally {
+                    _isImporting.value = false
+                }
             }
-            _isImporting.update { false }
-            if (bookId != null) _openBook.emit(bookId)
         }
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }

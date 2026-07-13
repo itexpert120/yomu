@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.app
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import com.itexpert120.yomu.app.navigation.YomuNavHost
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -33,6 +35,8 @@ fun YomuApp(
     val oledDark = appearance.oledDark
     val accentSelection = appearance.accentSelection
     val systemDark = isSystemInDarkTheme()
+    val externalError by externalOpenViewModel.error.collectAsState()
+    val context = LocalContext.current
 
     val dark = when (preference) {
         ThemePreference.System -> systemDark
@@ -47,7 +51,13 @@ fun YomuApp(
     val accentColor = Color(accentSelection.resolve(dark))
 
     LaunchedEffect(resolved) { onResolvedThemeChange(resolved) }
-    LaunchedEffect(preference, oledDark) { onSplashThemeChange(preference, oledDark) }
+    LaunchedEffect(preference, oledDark, dark) { onSplashThemeChange(preference, oledDark && dark) }
+    LaunchedEffect(externalError) {
+        externalError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            externalOpenViewModel.clearError()
+        }
+    }
 
     YomuDesignTheme(themeMode = resolved, accent = accentColor) {
         // Opaque app-coloured backing so the shared-axis transition never reveals the window

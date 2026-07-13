@@ -7,7 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -36,8 +37,20 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -121,7 +134,7 @@ fun YomuSegmentedControl(
     val colors = YomuTheme.colors
     val count = options.size.coerceAtLeast(1)
     val selected = selectedIndex.coerceIn(0, count - 1)
-    val controlHeight = 34.dp
+    val controlHeight = 42.dp
 
     Box(
         modifier = modifier
@@ -159,7 +172,9 @@ fun YomuSegmentedControl(
                             .weight(1f)
                             .height(controlHeight)
                             .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                            .clickable(
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = { onSelected(index) },
@@ -209,7 +224,29 @@ fun YomuRangeRow(
             Canvas(
                 modifier = Modifier
                     .weight(1f)
-                    .height(28.dp)
+                    .height(48.dp)
+                    .semantics {
+                        progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, 20)
+                        setProgress { requested ->
+                            onValueChange(requested.coerceIn(0f, 1f))
+                            true
+                        }
+                    }
+                    .focusable()
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        when (event.key) {
+                            Key.DirectionLeft, Key.DirectionDown -> {
+                                onValueChange((value - 0.05f).coerceIn(0f, 1f))
+                                true
+                            }
+                            Key.DirectionRight, Key.DirectionUp -> {
+                                onValueChange((value + 0.05f).coerceIn(0f, 1f))
+                                true
+                            }
+                            else -> false
+                        }
+                    }
                     .onSizeChanged { sliderSize = it }
                     .pointerInput(sliderSize) {
                         fun updateValue(x: Float) {
@@ -270,7 +307,7 @@ private fun YomuStepButton(text: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .yomuPressable(onClick = onClick)
-            .size(32.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .border(1.dp, YomuTheme.colors.border, CircleShape),
@@ -291,7 +328,11 @@ fun YomuColorSwatch(
     val colors = YomuTheme.colors
     Column(
         modifier = modifier
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, role = Role.RadioButton)
+            .semantics {
+                contentDescription = name
+                this.selected = selected
+            }
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (selected) colors.surfaceSunken else colors.surfaceRaised)
             .border(

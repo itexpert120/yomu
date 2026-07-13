@@ -22,6 +22,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
@@ -64,6 +67,7 @@ internal fun ReaderBrowseSheet(
     searchQuery: String,
     searchResults: List<ReaderSearchResult>,
     searchInProgress: Boolean,
+    searchError: String?,
     searchPerformed: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onSubmitSearch: () -> Unit,
@@ -106,6 +110,7 @@ internal fun ReaderBrowseSheet(
                             searchQuery,
                             searchResults,
                             searchInProgress,
+                            searchError,
                             searchPerformed,
                             onSearchQueryChange,
                             onSubmitSearch,
@@ -210,6 +215,7 @@ private fun SearchBody(
     query: String,
     results: List<ReaderSearchResult>,
     inProgress: Boolean,
+    error: String?,
     performed: Boolean,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -224,41 +230,49 @@ private fun SearchBody(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
         )
-        when {
-            inProgress -> Text(
-                text = "Searching…",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-            )
-
-            performed && results.isEmpty() -> Text(
-                text = "No results",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-            )
-
-            results.isNotEmpty() -> {
-                Text(
-                    text = if (results.size >= 150) {
-                        "First ${results.size} matches"
-                    } else {
-                        "${results.size} ${if (results.size == 1) "match" else "matches"}"
-                    },
+        Column(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+            when {
+                inProgress -> Text(
+                    text = "Searching…",
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.caption,
                 )
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 380.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    itemsIndexed(results) { _, r ->
-                        SearchResultRow(
-                            result = r,
-                            accent = YomuTheme.colors.accent,
-                            onClick = { onJump(r.locatorJson) },
-                        )
+
+                error != null -> Text(
+                    text = error,
+                    color = YomuTheme.colors.danger,
+                    style = YomuTheme.type.caption,
+                )
+
+                performed && results.isEmpty() -> Text(
+                    text = "No results",
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption,
+                )
+
+                results.isNotEmpty() -> {
+                    Text(
+                        text = if (results.size >= 150) {
+                            "First ${results.size} matches"
+                        } else {
+                            "${results.size} ${if (results.size == 1) "match" else "matches"}"
+                        },
+                        color = YomuTheme.colors.textMuted,
+                        style = YomuTheme.type.caption,
+                    )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 380.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        itemsIndexed(results) { _, r ->
+                            SearchResultRow(
+                                result = r,
+                                accent = YomuTheme.colors.accent,
+                                onClick = { onJump(r.locatorJson) },
+                            )
+                        }
                     }
                 }
             }

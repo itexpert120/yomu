@@ -10,6 +10,6 @@ data class ReaderBookmark(
     val locatorJson: String,
     val href: String?,
     val chapterTitle: String?,
-    val progression: Double,
+    val progression: Double?,
     val createdAt: Long,
 )

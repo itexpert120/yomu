@@ -14,7 +14,6 @@ import com.itexpert120.yomu.data.settings.LibraryPrefsRepository
 import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,11 @@ import javax.inject.Inject
 private data class SearchState(val active: Boolean = false, val query: String = "")
 
 /** Transient import progress/result, surfaced as an inline notice. */
-private data class ImportState(val isImporting: Boolean = false, val notice: String? = null)
+private data class ImportState(
+    val isImporting: Boolean = false,
+    val notice: String? = null,
+    val retryUris: List<Uri> = emptyList(),
+)
 
 /** Transient multi-select state. */
 private data class SelectionState(val active: Boolean = false, val ids: Set<String> = emptySet())
@@ -106,13 +109,33 @@ class LibraryViewModel @Inject constructor(
 
     fun onImport(uris: List<Uri>) {
         if (uris.isEmpty()) return
+        performImport(uris)
+    }
+
+    fun onRetryImport() {
+        importState.value.retryUris.takeIf { it.isNotEmpty() }?.let(::performImport)
+    }
+
+    private fun performImport(uris: List<Uri>) {
         viewModelScope.launch {
-            importState.update { it.copy(isImporting = true, notice = null) }
-            val summary = importBooks.import(uris)
-            importState.value = ImportState(isImporting = false, notice = summary.toNotice())
-            delay(4_000)
-            importState.update { if (it.isImporting) it else it.copy(notice = null) }
+            importState.value = ImportState(isImporting = true)
+            try {
+                val summary = importBooks.import(uris)
+                importState.value = ImportState(
+                    notice = summary.toNotice(),
+                    retryUris = if (summary.failed > 0) uris else emptyList(),
+                )
+            } catch (_: Throwable) {
+                importState.value = ImportState(
+                    notice = "Import failed. Check the EPUB and try again.",
+                    retryUris = uris,
+                )
+            }
         }
+    }
+
+    fun onDismissImportNotice() {
+        importState.value = ImportState()
     }
 
     fun onSearchToggle() = search.update {
@@ -163,6 +186,7 @@ class LibraryViewModel @Inject constructor(
             searchQuery = search.query,
             isImporting = import.isImporting,
             importNotice = import.notice,
+            canRetryImport = import.retryUris.isNotEmpty(),
             selectionMode = selection.active,
             selectedIds = selection.ids,
         )

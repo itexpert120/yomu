@@ -4,17 +4,17 @@ This document defines the first-pass data model for Yomu. It is intentionally im
 
 ## Implementation status (current)
 
-Room is live at **schema version 3** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with tested migrations 1→2 and 2→3). The as-built schema is deliberately simpler than the relational target described in the rest of this document:
+Room is live at **schema version 9** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→9 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
 
-- Built tables: `books` (one flat row per imported book, with the single EPUB file's storage info embedded — no separate `BookFile` table), `chapter_reads` (per-chapter read-state), and `reader_settings` (per-book settings override as a JSON blob).
+- Built tables: `books`, `chapter_reads`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
 - Library view preferences and app settings (theme, OLED toggle, accent) live in Preferences DataStore.
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
-- Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, `ReadingSession`, `Bookmark`, `Highlight`, persisted custom `ThemePreset`, persisted `CustomFont`, the grouped/multi-layer reader settings models, and the FTS search index.
+- Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
-The "As-built schema (v3)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
+The "As-built schema (v9)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
 
-## As-built schema (v3)
+## As-built schema (v9)
 
 ### `books` (BookEntity)
 
@@ -40,6 +40,12 @@ Primary key `bookId`; `json` holds a serialised per-book `ReaderSettings` overri
 
 - `1→2`: adds `chapter_reads` (books preserved).
 - `2→3`: adds `reader_settings` (books preserved).
+- `3→4`: adds `book_toc`.
+- `4→5`: adds `reading_days`.
+- `5→6`: adds `reading_sessions`.
+- `6→7`: adds `highlights`.
+- `7→8`: adds book reading-timeline columns.
+- `8→9`: adds `bookmarks`.
 
 No destructive migrations are used for library data.
 
@@ -60,7 +66,7 @@ Use strongly typed IDs in Kotlin models even if Room stores strings/longs.
 
 ## Core Entities
 
-> Target model. Today only a single flat `books` table exists (see "As-built schema (v3)" above). The richer entities and relationships below — `BookFile`, `Author`, `Series`, `Group`, and their cross-refs — are planned and land as those features are built.
+> Target model. The current v9 schema keeps books flat while adding focused TOC, statistics, highlight, and bookmark tables. Richer `BookFile`, `Author`, `Series`, `Group`, and cross-reference entities remain planned.
 
 ### Book
 
@@ -201,7 +207,7 @@ Use case:
 
 ## Bookmarks
 
-> Planned. Bookmarks are not built yet.
+> Implemented in schema v9 as locator JSON, href/chapter metadata, progression, and creation time.
 
 ### Bookmark
 
@@ -224,7 +230,7 @@ Rules:
 
 ## Highlights
 
-> Planned. Highlights are not built yet.
+> Implemented in schema v7 as locator JSON, selected text, colour, and creation time.
 
 ### Highlight
 
@@ -289,7 +295,7 @@ Background mode values:
 
 ### CustomFont
 
-> Planned. Custom user fonts are out of scope today; reading fonts are a bundled, code-defined enum (`ReaderFont`: Lora, Karla, Rubik, Cardo, Nunito, Merriweather — Lora is the default), with TTFs in `app/src/main/assets/fonts` registered on the Readium navigator.
+> Implemented. Six bundled fonts are available offline, and users may explicitly download additional Google Fonts into app-private storage.
 
 Fields:
 
@@ -444,7 +450,7 @@ These can live in DataStore unless per-group persistence becomes relational.
 
 ## Search Index
 
-> Planned. No search is built yet (neither direct metadata queries nor FTS).
+> In-book full-text search is implemented through Readium. A Room FTS metadata index remains optional future work.
 
 Initial search:
 
@@ -459,7 +465,7 @@ Do not build full-text indexing before import and reader are stable.
 
 ## Room Migration Rules
 
-The schema is live at version 3 with explicit, additive migrations (1→2, 2→3) and exported schema JSON under `app/schemas`. The rules below remain in force:
+The schema is live at version 9 with explicit, additive migrations (1→9), exported schema JSON under `app/schemas`, and an instrumentation migration test. The rules below remain in force:
 
 - Add migration tests from the first schema.
 - Never use destructive migrations for user library data.
@@ -467,7 +473,7 @@ The schema is live at version 3 with explicit, additive migrations (1→2, 2→3
 
 ## Deletion Rules
 
-> Current (`RoomBookRepository.remove`): deleting a book removes its `books` row and also deletes its `chapter_reads` and `reader_settings` rows, the imported EPUB file, and the extracted cover. Per-bookmark/highlight cleanup and archiving are planned (no bookmarks/highlights or `archived` flag exist yet).
+> Current (`RoomBookRepository.remove`): deletion stages owned files, removes the book plus chapter state, reader settings, cached TOC, bookmarks, and highlights in one Room transaction, then finalizes file deletion. Reading-session history is retained for aggregate statistics.
 
 Deleting a book should optionally delete:
 

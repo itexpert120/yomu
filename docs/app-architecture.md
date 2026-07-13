@@ -6,11 +6,11 @@ Yomu should use native Android architecture, but the app architecture must prote
 
 The core of this architecture is now built, not just planned. Inside the single `:app` module:
 
-- Built: Hilt DI, Room (schema v3, exported schemas, tested migrations), Preferences DataStore, type-safe Navigation Compose (with Material shared-axis X transitions), Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
-- Built features: `library`, `bookdetails`, `bookedit`, `reader`, `settings`, `about`.
+- Built: Hilt DI, Room (schema v9, exported schemas, migration coverage), Preferences DataStore, type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
+- Built features: `library`, `bookdetails`, `bookedit`, `reader`, `settings`, `stats`, `about`.
 - Built layers: `core/{model, database, datastore, reader, storage, designsystem}`, `data/{books, reader/readium, settings}`, and `domain/imports`.
 - Settings resolution is implemented as a two-layer merge (global default in DataStore, optional per-book override in Room) rather than the full multi-layer resolver described below.
-- Pending: bookmarks, highlights, in-book search, advanced typography/page layout, reading statistics/sessions, nested groups and series/author grouping beyond a flat author group, multi-Gradle-module split, and the richer settings-layering resolver. Sections describing these remain forward-looking specs.
+- Built reader/data capabilities include bookmarks, highlights, in-book search, advanced typography, and reading statistics/sessions. Pending areas include nested groups, optional formats/sync, a multi-Gradle-module split, and the richer settings-layering resolver.
 
 The package and Gradle-module layouts further down still describe the eventual destination; the "Current package structure" block below reflects what exists today.
 
@@ -19,7 +19,7 @@ The package and Gradle-module layouts further down still describe the eventual d
 - UI toolkit: Jetpack Compose for app UI, panels, library, settings, and reader chrome. (Built.)
 - EPUB engine: Readium Kotlin Toolkit (3.x) behind a Yomu-owned interface. (Built — `core/reader` interfaces, `data/reader/readium` adapter.)
 - Visual reader host: Compose screen containing a Readium navigator fragment where required. (Built — `feature/reader/ReaderNavigatorHost`.)
-- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v3, Preferences DataStore.)
+- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v9, Preferences DataStore.)
 - State: Kotlin coroutines, Flow, StateFlow, and immutable UI state. (Built.)
 - DI: Hilt. (Built — `YomuApplication`, `MainActivity`, and the `app/di` modules.)
 - Navigation: type-safe Navigation Compose routes. (Built — `app/navigation`.)
@@ -71,7 +71,7 @@ com.itexpert120.yomu
 |       `-- YomuGalleryScreen.kt
 |-- core
 |   |-- model                    # Book/BookId, ReadingState, LibraryPreferences, ReaderSettings, AccentColor, ThemePreference
-|   |-- database                 # YomuDatabase (v3), BookEntity, ChapterReadEntity, ReaderSettingsEntity, BookDao
+|   |-- database                 # YomuDatabase (v9), library, TOC, stats, highlight and bookmark entities/DAOs
 |   |-- datastore                # YomuPreferences
 |   |-- reader                   # ReaderEngine/ReaderSession/ReaderLocator/ReaderTocItem (no Readium types)
 |   |-- storage                  # FileStorage

@@ -87,6 +87,8 @@ fun LibraryScreen(
     onRemoveSelected: () -> Unit = {},
     onMarkSelectedRead: () -> Unit = {},
     onMarkSelectedUnread: () -> Unit = {},
+    onRetryImport: () -> Unit = {},
+    onDismissImportNotice: () -> Unit = {},
 ) {
     var showSortSheet by remember { mutableStateOf(false) }
     var showGroupSheet by remember { mutableStateOf(false) }
@@ -160,24 +162,26 @@ fun LibraryScreen(
 
     YomuAppSurface {
         Box(Modifier.fillMaxSize()) {
-            if (!state.isLoading && state.totalCount == 0) {
-                EmptyLibrary(onImport = onImport)
-            } else {
-                Column(Modifier.fillMaxSize()) {
-                    LibraryTopBar(
-                        bookCount = state.totalCount,
-                        themePreference = themePreference,
-                        onImport = onImport,
-                        onThemeToggle = onThemeToggle,
-                        onOpenStats = onOpenStats,
-                        onOpenSettings = onOpenSettings,
-                        elevated = elevated,
-                    )
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    ) { libraryContent() }
+            Column(Modifier.fillMaxSize()) {
+                LibraryTopBar(
+                    bookCount = state.totalCount,
+                    themePreference = themePreference,
+                    onImport = onImport,
+                    onThemeToggle = onThemeToggle,
+                    onOpenStats = onOpenStats,
+                    onOpenSettings = onOpenSettings,
+                    elevated = elevated,
+                )
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    when {
+                        state.isLoading -> LibraryLoading()
+                        state.totalCount == 0 -> EmptyLibrary(onImport = onImport)
+                        else -> libraryContent()
+                    }
                 }
             }
 
@@ -227,6 +231,9 @@ fun LibraryScreen(
             ImportNotice(
                 importing = state.isImporting,
                 notice = state.importNotice,
+                canRetry = state.canRetryImport,
+                onRetry = onRetryImport,
+                onDismiss = onDismissImportNotice,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
 
@@ -269,6 +276,16 @@ fun LibraryScreen(
             SystemBarBottomScrim(Modifier.align(Alignment.BottomCenter))
         }
     }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.LibraryLoading() {
+    Text(
+        text = "Loading library…",
+        color = YomuTheme.colors.textMuted,
+        style = YomuTheme.type.body,
+        modifier = Modifier.align(Alignment.Center),
+    )
 }
 
 @Composable

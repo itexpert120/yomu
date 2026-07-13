@@ -32,6 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
@@ -71,7 +74,9 @@ internal fun WordLookupSheet(
         val blocks = remember(found) { found?.toBlocks().orEmpty() }
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -144,7 +149,7 @@ private fun CircleIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .clickable(
@@ -406,6 +411,7 @@ private val STOPWORDS: Set<String> = setOf(
 @Composable
 private fun SourceLink(url: String, license: String?) {
     val handler = androidx.compose.ui.platform.LocalUriHandler.current
+    val safeUrl = remember(url) { trustedSourceUrl(url) }
     // Show the host (e.g. "en.wiktionary.org") as the tappable link, plus the licence underneath.
     val host = remember(url) {
         url.substringAfter("://", url).substringBefore("/").ifBlank { url }
@@ -415,19 +421,32 @@ private fun SourceLink(url: String, license: String?) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(text = "Source", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        Text(
-            text = host,
-            color = YomuTheme.colors.accent,
-            style = YomuTheme.type.body,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { runCatching { handler.openUri(url) } },
-            ),
-        )
+        if (safeUrl != null) {
+            Text(
+                text = host,
+                color = YomuTheme.colors.accent,
+                style = YomuTheme.type.body,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { runCatching { handler.openUri(safeUrl) } },
+                ),
+            )
+        } else {
+            Text(text = host, color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
+        }
         if (!license.isNullOrBlank()) {
             Text(text = license, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
         }
+    }
+}
+
+private fun trustedSourceUrl(raw: String): String? {
+    val uri = runCatching { android.net.Uri.parse(raw) }.getOrNull() ?: return null
+    if (uri.scheme != "https") return null
+    val host = uri.host?.lowercase() ?: return null
+    return raw.takeIf {
+        host == "dictionaryapi.dev" || host == "wiktionary.org" || host.endsWith(".wiktionary.org")
     }
 }
 

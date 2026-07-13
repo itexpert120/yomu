@@ -4,10 +4,12 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.storage.FileStorage
 import com.itexpert120.yomu.data.books.BookRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,9 +33,12 @@ class EditBookViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: BookRepository,
     private val fileStorage: FileStorage,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
+    private var originalCoverPath: String? = null
+    private var pendingCoverPath: String? = null
 
     private val _state = MutableStateFlow(EditBookUiState())
     val state: StateFlow<EditBookUiState> = _state.asStateFlow()
@@ -42,6 +47,7 @@ class EditBookViewModel @Inject constructor(
         viewModelScope.launch {
             val book = repository.observeBook(BookId(bookId)).first()
             _state.value = if (book != null) {
+                originalCoverPath = book.coverImagePath
                 EditBookUiState(
                     loaded = true,
                     title = book.title,
@@ -64,6 +70,8 @@ class EditBookViewModel @Inject constructor(
     fun onCoverPicked(uri: Uri, stamp: Long) {
         viewModelScope.launch {
             val path = fileStorage.saveCoverFromUri(bookId, uri, stamp)
+            pendingCoverPath?.let { fileStorage.deleteCover(it) }
+            pendingCoverPath = path
             _state.update { it.copy(coverImagePath = path) }
         }
     }
@@ -79,7 +87,19 @@ class EditBookViewModel @Inject constructor(
                 description = s.description.ifBlank { null },
                 coverImagePath = s.coverImagePath,
             )
+            val previous = originalCoverPath
+            val current = s.coverImagePath
+            if (previous != null && previous != current) fileStorage.deleteCover(previous)
+            originalCoverPath = current
+            pendingCoverPath = null
             _state.update { it.copy(saved = true) }
         }
+    }
+
+    override fun onCleared() {
+        pendingCoverPath?.let { path ->
+            applicationScope.launch { runCatching { fileStorage.deleteCover(path) } }
+        }
+        pendingCoverPath = null
     }
 }

@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -77,6 +79,8 @@ class FontRepository @Inject constructor(
      * existing entry. Returns the installed font, or failure if the family couldn't be fetched.
      */
     suspend fun install(family: String): Result<CustomFontRef> = withContext(Dispatchers.IO) {
+        var regularPath: String? = null
+        var italicPath: String? = null
         runCatching {
             val css = fetchCss(family)
             val faces = parseLatinFaces(css)
@@ -84,13 +88,18 @@ class FontRepository @Inject constructor(
                 ?: faces.values.firstOrNull()
                 ?: error("No usable font face for \"$family\"")
             val slug = family.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
-            val regularPath = fileStorage.saveFont("$slug-regular.woff2", httpGetBytes(regularUrl))
-            val italicPath = faces[FontStyle.ITALIC]?.let { url ->
+            regularPath = fileStorage.saveFont("$slug-regular.woff2", httpGetBytes(regularUrl))
+            italicPath = faces[FontStyle.ITALIC]?.let { url ->
                 runCatching { fileStorage.saveFont("$slug-italic.woff2", httpGetBytes(url)) }.getOrNull()
             }
-            val ref = CustomFontRef(family = family, regularPath = regularPath, italicPath = italicPath)
-            putInstalled(ref)
+            val ref = CustomFontRef(family = family, regularPath = requireNotNull(regularPath), italicPath = italicPath)
+            val replaced = putInstalled(ref)
+            if (replaced?.regularPath != ref.regularPath) replaced?.regularPath?.let { fileStorage.deleteFont(it) }
+            if (replaced?.italicPath != ref.italicPath) replaced?.italicPath?.let { fileStorage.deleteFont(it) }
             ref
+        }.onFailure {
+            regularPath?.let { path -> fileStorage.deleteFont(path) }
+            italicPath?.let { path -> fileStorage.deleteFont(path) }
         }
     }
 
@@ -106,12 +115,15 @@ class FontRepository @Inject constructor(
         }
     }
 
-    private suspend fun putInstalled(ref: CustomFontRef) {
+    private suspend fun putInstalled(ref: CustomFontRef): CustomFontRef? {
+        var replaced: CustomFontRef? = null
         dataStore.edit { prefs ->
             val current = prefs[KeyInstalled]?.let { decode(it) } ?: emptyList()
+            replaced = current.firstOrNull { it.family == ref.family }
             prefs[KeyInstalled] =
                 json.encodeToString(serializer, current.filterNot { it.family == ref.family } + ref)
         }
+        return replaced
     }
 
     private fun fetchCss(family: String): String {
@@ -129,7 +141,9 @@ class FontRepository @Inject constructor(
                 runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }
                 error("Google Fonts returned ${connection.responseCode} for \"$family\"")
             }
-            return connection.inputStream.bufferedReader().use { it.readText() }
+            return connection.inputStream.use { input ->
+                readBounded(input, MAX_CSS_BYTES).toString(Charsets.UTF_8)
+            }
         } finally {
             runCatching { connection.disconnect() }
         }
@@ -146,7 +160,7 @@ class FontRepository @Inject constructor(
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 error("Font download failed (${connection.responseCode})")
             }
-            return connection.inputStream.use { it.readBytes() }
+            return connection.inputStream.use { readBounded(it, MAX_FONT_BYTES) }
         } finally {
             runCatching { connection.disconnect() }
         }
@@ -181,9 +195,25 @@ class FontRepository @Inject constructor(
 
     private fun decode(raw: String): List<CustomFontRef> = runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
 
+    private fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
+        val output = ByteArrayOutputStream(minOf(DEFAULT_BUFFER_SIZE, maxBytes))
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
+            total += read
+            check(total <= maxBytes) { "Download exceeded the allowed size" }
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
+    }
+
     private companion object {
         const val CSS_ENDPOINT = "https://fonts.googleapis.com/css2"
         const val TIMEOUT_MS = 12_000
+        const val MAX_CSS_BYTES = 256 * 1024
+        const val MAX_FONT_BYTES = 10 * 1024 * 1024
         const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

@@ -22,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
@@ -57,7 +58,8 @@ fun YomuNavHost(
     // View-system class with no Compose drop-in). The pop transitions also drive predictive
     // back (android:enableOnBackInvokedCallback in manifest).
     val duration = 300
-    val slide = with(LocalDensity.current) { 30.dp.roundToPx() }
+    val motionEnabled = yomuAnimationsEnabled()
+    val slide = if (motionEnabled) with(LocalDensity.current) { 30.dp.roundToPx() } else 0
     val fadeOutMs = (duration * 0.35f).toInt()
     val fadeInMs = duration - fadeOutMs
     val easing = FastOutSlowInEasing
@@ -68,16 +70,32 @@ fun YomuNavHost(
         startDestination = Library,
         modifier = modifier,
         enterTransition = {
-            slideInHorizontally(tween(duration, easing = easing)) { slide } + incoming()
+            if (motionEnabled) {
+                slideInHorizontally(tween(duration, easing = easing)) { slide } + incoming()
+            } else {
+                EnterTransition.None
+            }
         },
         exitTransition = {
-            slideOutHorizontally(tween(duration, easing = easing)) { -slide } + outgoing()
+            if (motionEnabled) {
+                slideOutHorizontally(tween(duration, easing = easing)) { -slide } + outgoing()
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            }
         },
         popEnterTransition = {
-            slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
+            if (motionEnabled) {
+                slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
+            } else {
+                EnterTransition.None
+            }
         },
         popExitTransition = {
-            slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
+            if (motionEnabled) {
+                slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            }
         },
     ) {
         composable<Library>(
@@ -85,7 +103,11 @@ fun YomuNavHost(
             // keeping the reverse shared-axis motion when Library is revealed by a back action.
             enterTransition = { EnterTransition.None },
             popEnterTransition = {
-                slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
+                if (motionEnabled) {
+                    slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
+                } else {
+                    EnterTransition.None
+                }
             },
         ) {
             val appearance by appViewModel.appearance.collectAsState()

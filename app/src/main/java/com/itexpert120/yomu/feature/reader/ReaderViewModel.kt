@@ -5,6 +5,7 @@ import android.speech.tts.TextToSpeech
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
@@ -27,8 +28,12 @@ import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,6 +96,7 @@ data class ReaderUiState(
     val searchQuery: String = "",
     val searchResults: List<ReaderSearchResult> = emptyList(),
     val searchInProgress: Boolean = false,
+    val searchError: String? = null,
     // True once a search has been run, so the UI can show "No results" vs. nothing yet.
     val searchPerformed: Boolean = false,
 )
@@ -116,6 +122,7 @@ class ReaderViewModel @Inject constructor(
     private val highlights: HighlightRepository,
     private val bookmarks: BookmarkRepository,
     private val fonts: FontRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     // Wall-clock start of the current foreground reading stretch, or null when paused/closed.
@@ -126,6 +133,9 @@ class ReaderViewModel @Inject constructor(
 
     // The in-flight search coroutine, cancelled when a new query starts or search closes.
     private var searchJob: Job? = null
+    private var searchGeneration = 0L
+    private var progressSaveJob: Job? = null
+    private var pendingProgress: PendingProgress? = null
 
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
     private val locatorOverride: String? = savedStateHandle["locator"]
@@ -156,182 +166,196 @@ class ReaderViewModel @Inject constructor(
                 _state.update { it.copy(customThemes = themes) }
             }
         }
-        viewModelScope.launch {
-            val target = repository.readingTarget(BookId(bookId))
-            val initialSettings =
-                target?.let { settingsRepository.effective(BookId(bookId)).first() }
-                    ?: ReaderSettings()
-            _state.update { it.copy(settings = initialSettings) }
-            // Prime the chapter-title lookup from the in-memory TOC cache (present if this book was
-            // opened earlier this session) so the top bar shows the correct chapter title on the very
-            // first frame instead of updating a moment after the reader opens.
-            repository.cachedTableOfContents(BookId(bookId))?.let { cached ->
-                val map = LinkedHashMap<String, String>()
-                cached.forEach { map.putIfAbsent(it.id, it.title) }
-                tocTitles = map
-            }
-            val opened = target?.let {
-                engine.open(
-                    filePath = it.storagePath,
-                    initialLocatorJson = locatorOverride ?: it.locatorJson,
-                    initialSettings = initialSettings,
-                )
-            }
-            if (opened == null) {
-                _state.update { it.copy(loading = false, failed = true) }
-                return@launch
-            }
-            _session.value = opened
-            _state.update { it.copy(title = opened.title) }
-            // Keep "Opening…" up until the navigator paints its first page (or an 8s fallback),
-            // instead of dropping it the instant the session is created.
-            launch {
-                withTimeoutOrNull(8_000) { opened.ready.first { it } }
-                _state.update { it.copy(loading = false) }
-            }
-            // Keep the page covered across chapter changes until its layout CSS has applied, so the
-            // chapter-start padding is present in the first visible frame instead of popping in.
-            launch {
-                opened.styled.collect { styled -> _state.update { it.copy(contentStyled = styled) } }
-            }
-            launch {
-                opened.transitionForward.collect { fwd ->
-                    _state.update { it.copy(transitionForward = fwd) }
-                }
-            }
-            // If timing already started during the loading spinner, re-arm from now so only actual
-            // reading time (post-open) is counted.
-            if (readingStart != null) readingStart = System.currentTimeMillis()
+        openReader()
+    }
 
-            // Build href -> chapter-title lookup (first entry per resource wins). Served from the
-            // persistent TOC cache so it's instant on subsequent opens.
-            launch {
-                val items =
-                    withContext(Dispatchers.IO) { repository.tableOfContents(BookId(bookId)) }
-                val map = LinkedHashMap<String, String>()
-                items.forEach { map.putIfAbsent(it.id, it.title) }
-                tocTitles = map
-                // If the locator already emitted before the TOC finished loading (first-ever open),
-                // correct the chapter title now instead of waiting for the next page change.
-                val resolved = currentHref?.let { map[it] }
-                if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
-                _state.update {
-                    it.copy(
-                        toc = items,
-                        tocLoading = false,
-                        chapterTitle = lastChapterTitle ?: it.chapterTitle,
+    private fun openReader() {
+        viewModelScope.launch {
+            try {
+                val target = repository.readingTarget(BookId(bookId))
+                val initialSettings =
+                    target?.let { settingsRepository.effective(BookId(bookId)).first() }
+                        ?: ReaderSettings()
+                _state.update { it.copy(settings = initialSettings) }
+                // Prime the chapter-title lookup from the in-memory TOC cache (present if this book was
+                // opened earlier this session) so the top bar shows the correct chapter title on the very
+                // first frame instead of updating a moment after the reader opens.
+                repository.cachedTableOfContents(BookId(bookId))?.let { cached ->
+                    val map = LinkedHashMap<String, String>()
+                    cached.forEach { map.putIfAbsent(it.id, it.title) }
+                    tocTitles = map
+                }
+                val opened = target?.let {
+                    engine.open(
+                        filePath = it.storagePath,
+                        initialLocatorJson = locatorOverride ?: it.locatorJson,
+                        initialSettings = initialSettings,
                     )
                 }
-            }
-
-            // Resolve effective settings (per-book override or global) and keep them applied live.
-            launch {
-                settingsRepository.effective(BookId(bookId)).collect { settings ->
-                    _state.update { it.copy(settings = settings) }
-                    opened.applySettings(settings)
+                if (opened == null) {
+                    _state.update { it.copy(loading = false, failed = true) }
+                    return@launch
                 }
-            }
-            launch {
-                opened.currentLocator.collect { locator ->
-                    if (locator != null) {
-                        lastLocator = locator
-                        val progression = locator.totalProgression
-                        // Smooth chapter-weighted book progress for the displayed percent (the engine
-                        // totalProgression barely moves through an early chapter of a long book).
-                        val displayProgress = locator.bookProgress ?: progression
-                        // Prefer the TOC chapter title for the current resource; fall back to the
-                        // engine's locator title, then the last known one (never the book name).
-                        val resolved = locator.href?.let { tocTitles[it] } ?: locator.chapterTitle
-                        if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
-                        _state.update {
-                            it.copy(
-                                chapterTitle = lastChapterTitle,
-                                totalProgression = progression ?: it.totalProgression,
-                                progressPercent = displayProgress?.let { p -> (p * 100).toInt() },
-                                chapterPagesLeft = locator.chapterPagesLeft,
-                                chapterProgression = locator.chapterProgression
-                                    ?: it.chapterProgression,
-                                hasPreviousChapter = locator.hasPreviousChapter,
-                                hasNextChapter = locator.hasNextChapter,
-                                currentHref = locator.href,
-                                currentPageBookmarked = isCurrentBookmarked(it.bookmarks),
-                            )
-                        }
-                        if (progression != null) {
-                            repository.saveProgress(
-                                BookId(bookId),
-                                locator.locatorJson,
-                                progression,
-                            )
-                        }
-                        val href = locator.href
-                        if (href != currentHref) {
-                            val left = currentHref
-                            if (left != null && markedChapters.add(left)) {
-                                repository.setChaptersRead(
-                                    BookId(bookId),
-                                    listOf(left),
-                                    read = true,
+                _session.value = opened
+                _state.update { it.copy(title = opened.title) }
+                // Keep "Opening…" up until the navigator paints its first page (or an 8s fallback),
+                // instead of dropping it the instant the session is created.
+                launch {
+                    withTimeoutOrNull(8_000) { opened.ready.first { it } }
+                    _state.update { it.copy(loading = false) }
+                }
+                // Keep the page covered across chapter changes until its layout CSS has applied, so the
+                // chapter-start padding is present in the first visible frame instead of popping in.
+                launch {
+                    opened.styled.collect { styled -> _state.update { it.copy(contentStyled = styled) } }
+                }
+                launch {
+                    opened.transitionForward.collect { fwd ->
+                        _state.update { it.copy(transitionForward = fwd) }
+                    }
+                }
+                // If timing already started during the loading spinner, re-arm from now so only actual
+                // reading time (post-open) is counted.
+                if (readingStart != null) readingStart = System.currentTimeMillis()
+
+                // Build href -> chapter-title lookup (first entry per resource wins). Served from the
+                // persistent TOC cache so it's instant on subsequent opens.
+                launch {
+                    val items =
+                        withContext(Dispatchers.IO) { repository.tableOfContents(BookId(bookId)) }
+                    val map = LinkedHashMap<String, String>()
+                    items.forEach { map.putIfAbsent(it.id, it.title) }
+                    tocTitles = map
+                    // If the locator already emitted before the TOC finished loading (first-ever open),
+                    // correct the chapter title now instead of waiting for the next page change.
+                    val resolved = currentHref?.let { map[it] }
+                    if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
+                    _state.update {
+                        it.copy(
+                            toc = items,
+                            tocLoading = false,
+                            chapterTitle = lastChapterTitle ?: it.chapterTitle,
+                        )
+                    }
+                }
+
+                // Resolve effective settings (per-book override or global) and keep them applied live.
+                launch {
+                    settingsRepository.effective(BookId(bookId)).collect { settings ->
+                        _state.update { it.copy(settings = settings) }
+                        opened.applySettings(settings)
+                    }
+                }
+                launch {
+                    opened.currentLocator.collect { locator ->
+                        if (locator != null) {
+                            lastLocator = locator
+                            // Use one canonical value for the footer, slider, completion, and persistence.
+                            // Some EPUBs omit totalProgression, so the engine's chapter-weighted fallback
+                            // keeps their locator resumable instead of discarding it.
+                            val progression = locator.totalProgression ?: locator.bookProgress
+                            // Prefer the TOC chapter title for the current resource; fall back to the
+                            // engine's locator title, then the last known one (never the book name).
+                            val resolved = locator.href?.let { tocTitles[it] } ?: locator.chapterTitle
+                            if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
+                            _state.update {
+                                it.copy(
+                                    chapterTitle = lastChapterTitle,
+                                    totalProgression = progression ?: it.totalProgression,
+                                    progressPercent = progression?.let { p -> (p * 100).toInt() },
+                                    chapterPagesLeft = locator.chapterPagesLeft,
+                                    chapterProgression = locator.chapterProgression
+                                        ?: it.chapterProgression,
+                                    hasPreviousChapter = locator.hasPreviousChapter,
+                                    hasNextChapter = locator.hasNextChapter,
+                                    currentHref = locator.href,
+                                    currentPageBookmarked = isCurrentBookmarked(it.bookmarks),
                                 )
                             }
-                            currentHref = href
+                            if (progression != null) {
+                                scheduleProgressSave(locator.locatorJson, progression)
+                            }
+                            val href = locator.href
+                            if (href != currentHref) {
+                                val left = currentHref
+                                if (left != null && markedChapters.add(left)) {
+                                    repository.setChaptersRead(
+                                        BookId(bookId),
+                                        listOf(left),
+                                        read = true,
+                                    )
+                                }
+                                currentHref = href
+                            }
                         }
                     }
                 }
-            }
-            launch {
-                // A center tap toggles the bottom chapter-controls bar (TOC / chapter nav / scroll /
-                // settings). The top bar stays static.
-                opened.centerTaps.collect {
-                    _state.update { it.copy(chapterControlsVisible = !it.chapterControlsVisible) }
-                }
-            }
-            launch {
-                opened.lookUpRequests.collect { text -> lookUp(text) }
-            }
-            launch {
-                opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
-            }
-            // A "Highlight" tap on a selection: create the highlight in the default colour and keep
-            // reading. Choosing a colour is optional — tap an existing highlight to recolour it.
-            launch {
-                opened.highlightRequests.collect { draft ->
-                    highlights.add(
-                        BookId(bookId),
-                        draft.locatorJson,
-                        draft.text,
-                        DEFAULT_HIGHLIGHT_ARGB,
-                    )
-                }
-            }
-            // A tap on an on-page highlight: open its edit/delete popup.
-            launch {
-                opened.highlightTaps.collect { id ->
-                    val target = _state.value.highlights.firstOrNull { it.id == id }
-                    if (target != null) _state.update { it.copy(editingHighlight = target) }
-                }
-            }
-            // Observe this book's highlights: keep the list state and the on-page decorations in sync.
-            launch {
-                highlights.observeForBook(BookId(bookId)).collect { list ->
-                    _state.update { it.copy(highlights = list) }
-                    opened.applyHighlights(list)
-                }
-            }
-            // Observe this book's bookmarks: keep the list and the current-page flag in sync.
-            launch {
-                bookmarks.observeForBook(BookId(bookId)).collect { list ->
-                    _state.update {
-                        it.copy(bookmarks = list, currentPageBookmarked = isCurrentBookmarked(list))
+                launch {
+                    // A center tap toggles the bottom chapter-controls bar (TOC / chapter nav / scroll /
+                    // settings). The top bar stays static.
+                    opened.centerTaps.collect {
+                        _state.update { it.copy(chapterControlsVisible = !it.chapterControlsVisible) }
                     }
                 }
-            }
-            launch {
-                repository.observeBook(BookId(bookId)).collect { book ->
-                    _state.update { it.copy(coverImagePath = book?.coverImagePath) }
+                launch {
+                    opened.lookUpRequests.collect { text -> lookUp(text) }
                 }
+                launch {
+                    opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
+                }
+                // A "Highlight" tap on a selection: create the highlight in the default colour and keep
+                // reading. Choosing a colour is optional — tap an existing highlight to recolour it.
+                launch {
+                    opened.highlightRequests.collect { draft ->
+                        highlights.add(
+                            BookId(bookId),
+                            draft.locatorJson,
+                            draft.text,
+                            DEFAULT_HIGHLIGHT_ARGB,
+                        )
+                    }
+                }
+                // A tap on an on-page highlight: open its edit/delete popup.
+                launch {
+                    opened.highlightTaps.collect { id ->
+                        val target = _state.value.highlights.firstOrNull { it.id == id }
+                        if (target != null) _state.update { it.copy(editingHighlight = target) }
+                    }
+                }
+                // Observe this book's highlights: keep the list state and the on-page decorations in sync.
+                launch {
+                    highlights.observeForBook(BookId(bookId)).collect { list ->
+                        _state.update { it.copy(highlights = list) }
+                        opened.applyHighlights(list)
+                    }
+                }
+                // Observe this book's bookmarks: keep the list and the current-page flag in sync.
+                launch {
+                    bookmarks.observeForBook(BookId(bookId)).collect { list ->
+                        _state.update {
+                            it.copy(bookmarks = list, currentPageBookmarked = isCurrentBookmarked(list))
+                        }
+                    }
+                }
+                launch {
+                    repository.observeBook(BookId(bookId)).collect { book ->
+                        _state.update { it.copy(coverImagePath = book?.coverImagePath) }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                _session.value?.close()
+                _session.value = null
+                _state.update { it.copy(loading = false, failed = true) }
             }
         }
+    }
+
+    fun onRetryOpen() {
+        if (_session.value != null || _state.value.loading) return
+        _state.update { it.copy(loading = true, failed = false) }
+        openReader()
     }
 
     fun onOpenSheet() = _state.update { it.copy(sheetVisible = true, chapterControlsVisible = false) }
@@ -373,6 +397,7 @@ class ReaderViewModel @Inject constructor(
                 searchQuery = "",
                 searchResults = emptyList(),
                 searchInProgress = false,
+                searchError = null,
                 searchPerformed = false,
             )
         }
@@ -576,26 +601,28 @@ class ReaderViewModel @Inject constructor(
     /** Whether the current reading position already has a bookmark (href + ~1% progression window). */
     private fun isCurrentBookmarked(list: List<ReaderBookmark>): Boolean {
         val loc = lastLocator ?: return false
-        val p = loc.totalProgression ?: 0.0
-        return list.any { it.href == loc.href && kotlin.math.abs(it.progression - p) < 0.01 }
+        val p = loc.totalProgression
+        return list.any { bookmark ->
+            bookmark.href == loc.href &&
+                if (p != null && bookmark.progression != null) {
+                    kotlin.math.abs(bookmark.progression - p) < 0.01
+                } else {
+                    bookmark.locatorJson == loc.locatorJson
+                }
+        }
     }
 
     /** Add or remove a bookmark at the current page (the always-visible top-bar toggle). */
     fun onToggleBookmark() {
         val loc = lastLocator ?: return
-        val p = loc.totalProgression ?: 0.0
         viewModelScope.launch {
-            if (bookmarks.existsAt(BookId(bookId), loc.href, p)) {
-                bookmarks.deleteAt(BookId(bookId), loc.href, p)
-            } else {
-                bookmarks.add(
-                    BookId(bookId),
-                    loc.locatorJson,
-                    loc.href,
-                    loc.chapterTitle ?: lastChapterTitle,
-                    p,
-                )
-            }
+            bookmarks.toggle(
+                BookId(bookId),
+                loc.locatorJson,
+                loc.href,
+                loc.chapterTitle ?: lastChapterTitle,
+                loc.totalProgression,
+            )
         }
     }
 
@@ -622,13 +649,32 @@ class ReaderViewModel @Inject constructor(
         val query = _state.value.searchQuery.trim()
         if (query.isBlank()) return
         searchJob?.cancel()
+        val generation = ++searchGeneration
         searchJob = viewModelScope.launch {
             _state.update {
-                it.copy(searchInProgress = true, searchPerformed = true, searchResults = emptyList())
+                it.copy(
+                    searchInProgress = true,
+                    searchError = null,
+                    searchPerformed = true,
+                    searchResults = emptyList(),
+                )
             }
-            val results = _session.value?.search(query).orEmpty()
-            _state.update { it.copy(searchInProgress = false, searchResults = results) }
-            _session.value?.applySearchDecorations(results)
+            try {
+                val activeSession = _session.value
+                val results = activeSession?.search(query).orEmpty()
+                ensureActive()
+                if (generation != searchGeneration || _state.value.searchQuery.trim() != query) return@launch
+                _state.update { it.copy(searchInProgress = false, searchResults = results) }
+                activeSession?.applySearchDecorations(results)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (generation == searchGeneration) {
+                    _state.update {
+                        it.copy(searchInProgress = false, searchError = "Search couldn't be completed.")
+                    }
+                }
+            }
         }
     }
 
@@ -656,7 +702,33 @@ class ReaderViewModel @Inject constructor(
         val seconds = (System.currentTimeMillis() - start) / 1000L
         // Guard against clock changes / absurd spans.
         if (seconds in 1..MAX_SESSION_SECONDS) {
-            viewModelScope.launch { stats.recordSession(BookId(bookId), start, seconds) }
+            applicationScope.launch { stats.recordSession(BookId(bookId), start, seconds) }
+        }
+        flushPendingProgress()
+    }
+
+    private fun scheduleProgressSave(locatorJson: String, progression: Double) {
+        pendingProgress = PendingProgress(locatorJson, progression)
+        progressSaveJob?.cancel()
+        progressSaveJob = viewModelScope.launch {
+            delay(PROGRESS_SAVE_DEBOUNCE_MS)
+            persistPendingProgress()
+        }
+    }
+
+    private suspend fun persistPendingProgress() {
+        val pending = pendingProgress ?: return
+        repository.saveProgress(BookId(bookId), pending.locatorJson, pending.progression)
+        if (pendingProgress == pending) pendingProgress = null
+    }
+
+    private fun flushPendingProgress() {
+        progressSaveJob?.cancel()
+        progressSaveJob = null
+        val pending = pendingProgress ?: return
+        pendingProgress = null
+        applicationScope.launch {
+            repository.saveProgress(BookId(bookId), pending.locatorJson, pending.progression)
         }
     }
 
@@ -670,6 +742,7 @@ class ReaderViewModel @Inject constructor(
 
     override fun onCleared() {
         onReadingPaused()
+        flushPendingProgress()
         runCatching { tts?.shutdown() }
         tts = null
         _session.value?.close()
@@ -677,8 +750,11 @@ class ReaderViewModel @Inject constructor(
 
     private companion object {
         const val MAX_SESSION_SECONDS = 24L * 60 * 60
+        const val PROGRESS_SAVE_DEBOUNCE_MS = 1_500L
 
         // Single default highlight colour (a warm yellow) — highlights are no longer multi-colour.
         const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()
     }
+
+    private data class PendingProgress(val locatorJson: String, val progression: Double)
 }

@@ -54,10 +54,33 @@ fun StatsRoute(onBack: () -> Unit) {
 @Composable
 fun StatsScreen(state: StatsUiState, onBack: () -> Unit) {
     YomuScreenScaffold(title = "Statistics", onBack = onBack) {
-        Overview(state.stats)
-        Entries(state.stats)
-        if (state.history.isNotEmpty()) History(state.history)
+        when {
+            state.isLoading -> StatusText("Loading statistics…")
+            state.error != null -> StatusText(state.error)
+            else -> {
+                Overview(state.stats)
+                if (state.stats.sessionCount == 0 && state.stats.totalReadingSeconds == 0L) {
+                    StatusText("No reading activity yet. Open a book to start your history.")
+                } else {
+                    Entries(state.stats)
+                    if (state.history.isNotEmpty()) History(state.history)
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun StatusText(text: String) {
+    Text(
+        text = text,
+        color = YomuTheme.colors.textMuted,
+        style = YomuTheme.type.body,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
@@ -85,7 +108,7 @@ private fun ColumnScope.Entries(stats: ReadingStats) {
         formatReadingTime(stats.averageSecondsPerActiveDay) to "Average per day",
         formatCount(stats.estimatedWordsRead) to "Estimated words",
         if (stats.estimatedReadingSpeedWpm > 0) {
-            "${stats.estimatedReadingSpeedWpm} wpm" to "Estimated speed"
+            "${stats.estimatedReadingSpeedWpm} wpm" to "Estimate basis"
         } else {
             "—" to "Estimated speed"
         },
@@ -243,7 +266,12 @@ private fun consolidateSessions(history: List<ReadingSessionItem>): List<Reading
     for (next in history.drop(1)) {
         val gapSeconds = current.startedAt / 1000 - (next.startedAt / 1000 + next.seconds)
         val bothShort = current.seconds <= ShortSessionSeconds && next.seconds <= ShortSessionSeconds
-        current = if (current.bookTitle == next.bookTitle && bothShort && gapSeconds <= MergeGapSeconds) {
+        current = if (
+            current.bookId != null &&
+            current.bookId == next.bookId &&
+            bothShort &&
+            gapSeconds <= MergeGapSeconds
+        ) {
             current.copy(
                 seconds = current.seconds + next.seconds,
                 sessionCount = current.sessionCount + next.sessionCount,

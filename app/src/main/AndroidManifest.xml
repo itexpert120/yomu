@@ -2,12 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Word definition lookups via the Free Dictionary API. -->
+    <!-- Word lookups and explicit user-initiated Google Fonts downloads. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".YomuApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="33"
         android:dataExtractionRules="@xml/data_extraction_rules"

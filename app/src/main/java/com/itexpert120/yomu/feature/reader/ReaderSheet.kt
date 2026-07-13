@@ -5,6 +5,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -40,9 +41,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -324,6 +335,7 @@ internal fun AutoSlider(
                 // Tick marks the default value's position on the track.
                 markerFraction = ((default - min) / (max - min)).coerceIn(0f, 1f),
                 onSeek = { onChange(snap(min + it * (max - min))) },
+                contentDescription = label,
                 modifier = Modifier.weight(1f),
             )
             RoundIcon(Icons.Rounded.Add, "Increase $label") { onChange(snap(current + step)) }
@@ -347,8 +359,7 @@ internal fun CustomThemeSheet(
     onDelete: (String) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
-    // scrollable=false: the colour picker handles its own vertical drag, which would fight a parent scroll.
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss, scrollable = false) { _ ->
+    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { _ ->
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -612,7 +623,7 @@ internal fun RoundIcon(
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .clickable(
@@ -639,6 +650,7 @@ internal fun ReaderSlider(
     modifier: Modifier = Modifier,
     onDrag: ((Float) -> Unit)? = null,
     markerFraction: Float? = null,
+    contentDescription: String = "Slider",
 ) {
     var drag by remember { mutableStateOf<Float?>(null) }
     val currentOnSeek by rememberUpdatedState(onSeek)
@@ -647,7 +659,27 @@ internal fun ReaderSlider(
     val thumb = 18.dp
     BoxWithConstraints(
         modifier = modifier
-            .height(36.dp)
+            .height(48.dp)
+            .semantics {
+                this.contentDescription = contentDescription
+                progressBarRangeInfo = ProgressBarRangeInfo(shown, 0f..1f, 100)
+                setProgress { requested ->
+                    currentOnSeek(requested.coerceIn(0f, 1f))
+                    true
+                }
+            }
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val next = when (event.key) {
+                    Key.DirectionLeft, Key.DirectionDown -> shown - 0.01f
+                    Key.DirectionRight, Key.DirectionUp -> shown + 0.01f
+                    else -> return@onKeyEvent false
+                }.coerceIn(0f, 1f)
+                currentOnDrag?.invoke(next)
+                currentOnSeek(next)
+                true
+            }
             .pointerInput(Unit) {
                 fun valueFor(x: Float): Float {
                     val thumbPx = thumb.toPx()

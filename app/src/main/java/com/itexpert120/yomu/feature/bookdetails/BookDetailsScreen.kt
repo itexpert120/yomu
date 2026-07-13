@@ -166,7 +166,7 @@ fun BookDetailsScreen(
                     // On a tablet-wide screen, split the cover/metadata/actions into a left column
                     // and the contents/description into a right column so the two read side by side
                     // instead of the cover sitting alone above a long scroll. Phones stay single-pane.
-                    val wideEnough = YomuWidthClass.fromWidth(maxWidth).isExpanded
+                    val wideEnough = YomuWidthClass.fromWidth(maxWidth).isWide
 
                     if (wideEnough && book != null) {
                         TwoPaneDetails(

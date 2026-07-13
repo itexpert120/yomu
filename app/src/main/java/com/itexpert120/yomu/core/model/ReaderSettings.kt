@@ -88,18 +88,31 @@ data class ReaderSettings(
         get() = when (theme) {
             ReaderThemeMode.Light -> 0xFFFFFFFF
             ReaderThemeMode.Sepia -> 0xFFFAF4E8
-            ReaderThemeMode.Dark -> 0xFF16181D
+            ReaderThemeMode.Dark -> 0xFF1C1B1A
             ReaderThemeMode.Black -> 0xFF000000
-            ReaderThemeMode.Custom -> customBackground ?: 0xFF16181D
+            ReaderThemeMode.Custom -> customBackground ?: 0xFF1C1B1A
         }
 
     /** Text colour for the active theme (ARGB). */
     val textArgb: Long
-        get() = when (theme) {
-            ReaderThemeMode.Light -> 0xFF1A1A1A
-            ReaderThemeMode.Sepia -> 0xFF2A2520
-            ReaderThemeMode.Dark, ReaderThemeMode.Black -> 0xFFE6E6E6
-            ReaderThemeMode.Custom -> customText ?: 0xFFE6E6E6
+        get() {
+            val requested = when (theme) {
+                ReaderThemeMode.Light -> 0xFF1A1A1A
+                ReaderThemeMode.Sepia -> 0xFF2A2520
+                ReaderThemeMode.Dark -> 0xFFE9E3D8
+                ReaderThemeMode.Black -> 0xFFE6E6E6
+                ReaderThemeMode.Custom -> customText ?: 0xFFE9E3D8
+            }
+            if (theme != ReaderThemeMode.Custom || contrastRatio(requested, backgroundArgb) >= 4.5) {
+                return requested
+            }
+            val darkInk = 0xFF171717
+            val lightInk = 0xFFF4F1EA
+            return if (contrastRatio(darkInk, backgroundArgb) >= contrastRatio(lightInk, backgroundArgb)) {
+                darkInk
+            } else {
+                lightInk
+            }
         }
 
     val isLightBackground: Boolean
@@ -130,4 +143,17 @@ data class ReaderSettings(
         // The darkest the extra-dim overlay may get; kept under 1.0 so the screen never goes fully black.
         const val MAX_DIM_ALPHA = 0.85f
     }
+}
+
+private fun contrastRatio(foreground: Long, background: Long): Double {
+    fun luminance(argb: Long): Double {
+        fun channel(shift: Int): Double {
+            val raw = ((argb shr shift) and 0xFF).toDouble() / 255.0
+            return if (raw <= 0.04045) raw / 12.92 else Math.pow((raw + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    }
+    val a = luminance(foreground)
+    val b = luminance(background)
+    return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
 }

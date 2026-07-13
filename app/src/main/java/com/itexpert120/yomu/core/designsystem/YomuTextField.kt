@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /** Labeled, custom (non-Material) text field used by editors and forms. */
@@ -44,7 +46,9 @@ fun YomuTextField(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = label },
                 textStyle = YomuTheme.type.body.copy(color = YomuTheme.colors.textPrimary),
                 cursorBrush = SolidColor(YomuTheme.colors.accent),
                 singleLine = singleLine,

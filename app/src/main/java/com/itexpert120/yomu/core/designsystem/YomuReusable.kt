@@ -16,11 +16,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +50,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -173,8 +179,8 @@ fun YomuCircleIconButton(
     Box(
         modifier = modifier
             .yomuPressable(onClick = onClick)
-            .size(36.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .size(48.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(YomuTheme.colors.textPrimary),
         contentAlignment = Alignment.Center,
     ) {
@@ -233,6 +239,44 @@ fun YomuBottomSheet(
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
 ) {
     if (!visible) return
+    val windowSize = LocalWindowInfo.current.containerSize
+    val windowWidth = with(LocalDensity.current) { windowSize.width.toDp() }
+    if (YomuWidthClass.fromWidth(windowWidth).isWide) {
+        val scrollState = rememberScrollState()
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.68f)
+                        .widthIn(max = 460.dp)
+                        .background(
+                            YomuTheme.colors.panel,
+                            RoundedCornerShape(topStart = YomuTheme.radius.lg, bottomStart = YomuTheme.radius.lg),
+                        )
+                        .windowInsetsPadding(WindowInsets.systemBars)
+                        .then(
+                            if (scrollable) {
+                                Modifier.verticalScroll(scrollState)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    content(onDismiss)
+                }
+            }
+        }
+        return
+    }
     // Open at the height the content needs rather than a half-expanded stop; tall content is then
     // capped to a reasonable height and scrolls internally instead of filling the whole screen.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

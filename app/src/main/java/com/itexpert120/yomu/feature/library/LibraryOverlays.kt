@@ -34,6 +34,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -98,6 +101,9 @@ internal fun ConfirmRemoveDialog(
 internal fun ImportNotice(
     importing: Boolean,
     notice: String?,
+    canRetry: Boolean,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBottom =
@@ -119,6 +125,7 @@ internal fun ImportNotice(
                 .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.pill))
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
                 .background(YomuTheme.colors.panel)
+                .semantics { liveRegion = LiveRegionMode.Assertive }
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -127,6 +134,26 @@ internal fun ImportNotice(
                 color = YomuTheme.colors.textPrimary,
                 style = YomuTheme.type.control,
             )
+            if (!importing && canRetry) {
+                Text(
+                    text = "Retry",
+                    color = YomuTheme.colors.accent,
+                    style = YomuTheme.type.control,
+                    modifier = Modifier
+                        .clickable(onClick = onRetry)
+                        .padding(8.dp),
+                )
+            }
+            if (!importing && notice != null) {
+                Text(
+                    text = "Dismiss",
+                    color = YomuTheme.colors.textSecondary,
+                    style = YomuTheme.type.control,
+                    modifier = Modifier
+                        .clickable(onClick = onDismiss)
+                        .padding(8.dp),
+                )
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ data class DailyReading(
  * short, close-together sessions of the same book were consolidated into one row for display.
  */
 data class ReadingSessionItem(
+    val bookId: String?,
     val bookTitle: String,
     val coverImagePath: String?,
     val startedAt: Long,

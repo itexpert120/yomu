@@ -362,5 +362,5 @@ Build later:
 6. Add import pipeline. (done — SAF import with sha256 dedup, in-process)
 7. Add Readium spike behind reader engine boundary. (done — Readium 3.3.0 behind `ReaderEngine`)
 8. Replace fake reader content with real EPUB session. (done)
-9. Add bookmarks/highlights/progress persistence. (partial — per-chapter read state persists; bookmarks/highlights still pending)
+9. Add bookmarks/highlights/progress persistence. (done)
 10. Add advanced modes and performance work. (pending — no baseline profiles/macrobenchmark yet)

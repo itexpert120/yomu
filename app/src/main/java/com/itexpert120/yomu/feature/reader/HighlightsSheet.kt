@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
@@ -144,18 +148,18 @@ private fun HighlightColorPalette(
     onSelect: (Int) -> Unit,
 ) {
     val colors = listOf(
-        YomuTheme.colors.highlightYellow,
-        YomuTheme.colors.highlightGreen,
-        YomuTheme.colors.highlightBlue,
-        YomuTheme.colors.highlightPink,
+        "Yellow" to YomuTheme.colors.highlightYellow,
+        "Green" to YomuTheme.colors.highlightGreen,
+        "Blue" to YomuTheme.colors.highlightBlue,
+        "Pink" to YomuTheme.colors.highlightPink,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        colors.forEach { color ->
+        colors.forEach { (name, color) ->
             val argb = color.toArgb()
             val selected = argb == selectedArgb
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(color)
                     .then(
@@ -165,7 +169,10 @@ private fun HighlightColorPalette(
                             Modifier
                         },
                     )
-                    .clickable(
+                    .semantics { contentDescription = "$name highlight" }
+                    .selectable(
+                        selected = selected,
+                        role = Role.RadioButton,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = { onSelect(argb) },

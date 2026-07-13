@@ -10,10 +10,11 @@ Yomu is a working reader, not a prototype. It has a real persisted library, book
 
 - **Library** — Room-backed, SAF multi-file import (copied to app-private storage, sha256 dedup), Coil cover art, search, sort (Recent/Title/Author/Unread), group by author, adaptive grid columns (Auto + manual) and list view, multi-select with bulk actions, continue-reading hero.
 - **Book details** — cover viewer (full-screen + save to gallery), metadata + edit, reading progress, a virtualized **table of contents** with persistent **per-chapter read state**, per-chapter and multi-select read/unread (including "mark up to here"), and jump-to-chapter.
-- **Reader** — EPUB rendered via **Readium** behind a Yomu engine boundary; locator persisted/restored; full-screen immersive chrome (permanent sleek top bar + optional clock/battery footer); a controls sheet with **themes** (Light/Dark/Sepia/Black/Custom with background + text colours), **six bundled fonts** with live previews + size, **brightness**, and **scroll/paged**. Settings resolve as a global default overridden **per-book**.
+- **Reader** — EPUB rendered via **Readium** behind a Yomu engine boundary; locator persisted/restored; immersive chrome; contents, bookmarks, highlights, full-text search, dictionary/TTS, footnotes, advanced typography, custom themes/fonts, brightness, and scroll/paged layouts. Settings resolve as a global default overridden **per-book**.
+- **Statistics** — streamlined overview and entry metrics with retained recent-reading history.
 - **Settings / About**, a custom design system, and a component **DevGallery**.
 
-**Not yet** — bookmarks, highlights, in-book search, advanced typography (line/word/letter spacing, margins, justification, hyphenation, columns), Room FTS, performance profiling, reading stats. See [`docs/roadmap.md`](docs/roadmap.md).
+**Not yet** — OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and performance profiling. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Tech
 

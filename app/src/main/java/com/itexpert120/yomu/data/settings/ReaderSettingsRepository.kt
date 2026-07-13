@@ -44,17 +44,46 @@ class ReaderSettingsRepository @Inject constructor(
     }
 
     suspend fun setGlobal(settings: ReaderSettings) {
-        dataStore.edit { it[KeyGlobal] = json.encodeToString(settings) }
+        dataStore.edit { prefs ->
+            prefs[KeyGlobal]?.takeIf { decodeOrNull(it) == null }?.let { corrupt ->
+                prefs[KeyGlobalBackup] = corrupt
+            }
+            prefs[KeyGlobal] = json.encodeToString(settings)
+        }
     }
 
     /** Writes a full per-book override (per-book-on-edit behaviour). */
     suspend fun setForBook(id: BookId, settings: ReaderSettings) {
+        dao.getReaderSettings(id.value)?.json?.let { existing ->
+            check(decodeOrNull(existing) != null) {
+                "Per-book reader settings are malformed; original data was preserved"
+            }
+        }
         dao.upsertReaderSettings(ReaderSettingsEntity(id.value, json.encodeToString(settings)))
     }
 
     /** Drops the override so the book follows the global default again. */
     suspend fun clearForBook(id: BookId) {
         dao.deleteReaderSettings(id.value)
+    }
+
+    /** Clears a removed custom font from both the global default and every per-book override. */
+    suspend fun clearCustomFontReferences(family: String) {
+        dataStore.edit { prefs ->
+            val raw = prefs[KeyGlobal] ?: return@edit
+            val current = decodeOrNull(raw) ?: return@edit
+            if (current.customFont?.family == family) {
+                prefs[KeyGlobal] = json.encodeToString(current.copy(customFont = null))
+            }
+        }
+        dao.getAllReaderSettings().forEach { row ->
+            val current = decodeOrNull(row.json) ?: return@forEach
+            if (current.customFont?.family == family) {
+                dao.upsertReaderSettings(
+                    ReaderSettingsEntity(row.bookId, json.encodeToString(current.copy(customFont = null))),
+                )
+            }
+        }
     }
 
     // region Saved custom themes (app-global)
@@ -68,7 +97,7 @@ class ReaderSettingsRepository @Inject constructor(
     /** Adds a new theme or replaces an existing one with the same id. */
     suspend fun saveCustomTheme(theme: CustomReaderTheme) {
         dataStore.edit { prefs ->
-            val current = prefs[KeyCustomThemes]?.let { decodeThemes(it) } ?: emptyList()
+            val current = prefs[KeyCustomThemes]?.let { decodeThemesOrThrow(it) } ?: emptyList()
             val updated = current.filterNot { it.id == theme.id } + theme
             prefs[KeyCustomThemes] = json.encodeToString(customThemeSerializer, updated)
         }
@@ -76,7 +105,7 @@ class ReaderSettingsRepository @Inject constructor(
 
     suspend fun deleteCustomTheme(id: String) {
         dataStore.edit { prefs ->
-            val current = prefs[KeyCustomThemes]?.let { decodeThemes(it) } ?: emptyList()
+            val current = prefs[KeyCustomThemes]?.let { decodeThemesOrThrow(it) } ?: emptyList()
             prefs[KeyCustomThemes] =
                 json.encodeToString(customThemeSerializer, current.filterNot { it.id == id })
         }
@@ -84,12 +113,18 @@ class ReaderSettingsRepository @Inject constructor(
 
     private fun decodeThemes(raw: String): List<CustomReaderTheme> = runCatching { json.decodeFromString(customThemeSerializer, raw) }.getOrDefault(emptyList())
 
+    private fun decodeThemesOrThrow(raw: String): List<CustomReaderTheme> = runCatching { json.decodeFromString(customThemeSerializer, raw) }
+        .getOrElse { error("Saved reader themes are malformed; original data was preserved") }
+
     // endregion
 
-    private fun decode(raw: String): ReaderSettings = runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrDefault(ReaderSettings())
+    private fun decode(raw: String): ReaderSettings = decodeOrNull(raw) ?: ReaderSettings()
+
+    private fun decodeOrNull(raw: String): ReaderSettings? = runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrNull()
 
     private companion object {
         val KeyGlobal = stringPreferencesKey("reader_settings_global")
+        val KeyGlobalBackup = stringPreferencesKey("reader_settings_global_corrupt_backup")
         val KeyCustomThemes = stringPreferencesKey("reader_custom_themes")
     }
 }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +24,16 @@ class FileStorage @Inject constructor(
     private val epubsDir: File = File(context.filesDir, "epubs").apply { mkdirs() }
     private val coversDir: File = File(context.filesDir, "covers").apply { mkdirs() }
     private val fontsDir: File = File(context.filesDir, "fonts").apply { mkdirs() }
+
+    init {
+        // A process death can interrupt an import or the final unlink after a transactional book
+        // deletion. These names are never live library files, so clear them on the next launch.
+        sequenceOf(epubsDir, coversDir).forEach { directory ->
+            directory.listFiles()
+                ?.filter { it.name.endsWith(".partial") || it.name.endsWith(".deleting") }
+                ?.forEach { runCatching { it.delete() } }
+        }
+    }
 
     data class CopiedFile(val file: File, val sha256: String, val sizeBytes: Long)
 
@@ -43,20 +54,33 @@ class FileStorage @Inject constructor(
     /** Copies the EPUB at [uri] into app storage under [bookId], returning its path + sha256. */
     suspend fun copyEpub(bookId: String, uri: Uri): CopiedFile = withContext(Dispatchers.IO) {
         val target = File(epubsDir, "$bookId.epub")
+        val partial = File(epubsDir, "$bookId.partial")
         val digest = MessageDigest.getInstance("SHA-256")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read == -1) break
-                    digest.update(buffer, 0, read)
-                    output.write(buffer, 0, read)
+        try {
+            var total = 0L
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                partial.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        total += read
+                        check(total <= MAX_EPUB_BYTES) { "EPUB is larger than 500 MB" }
+                        digest.update(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                    }
                 }
-            }
-        } ?: error("Unable to open input stream for $uri")
-        val sha = digest.digest().joinToString("") { "%02x".format(it) }
-        CopiedFile(target, sha, target.length())
+            } ?: error("Unable to open input stream for $uri")
+            check(total > 0L) { "EPUB is empty" }
+            validateEpubArchive(partial)
+            check(partial.renameTo(target)) { "Unable to finalize imported EPUB" }
+            val sha = digest.digest().joinToString("") { "%02x".format(it) }
+            CopiedFile(target, sha, total)
+        } catch (failure: Throwable) {
+            partial.delete()
+            target.delete()
+            throw failure
+        }
     }
 
     /** Persists [bitmap] as a PNG cover for [bookId], returning the absolute path. */
@@ -78,6 +102,26 @@ class FileStorage @Inject constructor(
         target.absolutePath
     }
 
+    suspend fun deleteCover(path: String) = withContext(Dispatchers.IO) {
+        val file = File(path)
+        if (file.parentFile == coversDir && file.exists()) check(file.delete())
+    }
+
+    fun canImportAsEpub(uri: Uri): Boolean {
+        val mime = context.contentResolver.getType(uri)?.lowercase()
+        val name = displayName(uri)?.lowercase()
+        return mime == EPUB_MIME || name?.endsWith(".epub") == true
+    }
+
+    private fun validateEpubArchive(file: File) {
+        ZipFile(file).use { zip ->
+            val mimetype = zip.getEntry("mimetype") ?: error("Not an EPUB archive")
+            val declared = zip.getInputStream(mimetype).bufferedReader().use { it.readText() }.trim()
+            check(declared == EPUB_MIME) { "Not an EPUB archive" }
+            check(zip.getEntry("META-INF/container.xml") != null) { "EPUB container is missing" }
+        }
+    }
+
     /** The original display name from the SAF document, used as a title fallback. */
     fun displayName(uri: Uri): String? = context.contentResolver.query(
         uri,
@@ -89,4 +133,9 @@ class FileStorage @Inject constructor(
         ?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         }
+
+    private companion object {
+        const val EPUB_MIME = "application/epub+zip"
+        const val MAX_EPUB_BYTES = 500L * 1024 * 1024
+    }
 }

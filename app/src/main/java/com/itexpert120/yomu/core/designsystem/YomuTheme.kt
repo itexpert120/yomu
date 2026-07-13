@@ -6,6 +6,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -88,7 +89,7 @@ private val LightYomuColors = YomuColors(
     panelStrong = Color(0xFFF6F6F2),
     textPrimary = Color(0xFF10110F),
     textSecondary = Color(0xFF4A4D46),
-    textMuted = Color(0xFF82857C),
+    textMuted = Color(0xFF696D65),
     border = Color(0xFFE2E2DD),
     accent = Color(0xFF1D4F3A),
     accentSoft = Color(0x141D4F3A),
@@ -229,8 +230,9 @@ fun YomuDesignTheme(
         YomuThemeMode.Oled -> OledYomuColors
     }
     // Apply the user's accent over the theme's default accent.
-    val colors = if (accent != null) {
-        baseColors.copy(accent = accent, accentSoft = accent.copy(alpha = 0.16f))
+    val safeAccent = accent?.takeIf { contrastRatio(it, baseColors.appBackground) >= 4.5f }
+    val colors = if (safeAccent != null) {
+        baseColors.copy(accent = safeAccent, accentSoft = safeAccent.copy(alpha = 0.16f))
     } else {
         baseColors
     }
@@ -241,4 +243,10 @@ fun YomuDesignTheme(
         LocalYomuRadius provides YomuRadius(),
         content = content,
     )
+}
+
+private fun contrastRatio(a: Color, b: Color): Float {
+    val lighter = maxOf(a.luminance(), b.luminance())
+    val darker = minOf(a.luminance(), b.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
 }

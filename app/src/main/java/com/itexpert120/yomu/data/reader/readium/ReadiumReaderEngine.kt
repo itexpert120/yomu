@@ -42,8 +42,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
@@ -223,6 +226,7 @@ private class ReadiumReaderSession(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
+    private var locatorCollectionJob: Job? = null
 
     // Latest engine locator, used for reading-order (chapter) navigation and for restoring position
     // after a re-host (config change) so the reader doesn't snap back to where the book was opened.
@@ -235,6 +239,7 @@ private class ReadiumReaderSession(
     // Per-resource reading-position progressions. Used as a scroll-mode fallback for "pages left";
     // paged mode uses Readium's visual page callback so the count changes on every page turn.
     private var positionsByHref: Map<String, List<Double>>? = null
+    private var publicationPositions: List<Locator>? = null
 
     private var latestVisualPage: VisualPageState? = null
 
@@ -487,17 +492,17 @@ private class ReadiumReaderSession(
     override fun onFragmentHosted(fragmentManager: FragmentManager, tag: String) {
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
         navigator = nav
+        locatorCollectionJob?.cancel()
         pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
         // Index page boundaries per resource once (off the main path) for "pages left in chapter".
         if (positionsByHref == null) {
             scope.launch {
-                positionsByHref = runCatching {
-                    publication.positions()
-                        .groupBy { it.href.toString() }
-                        .mapValues { (_, locs) ->
-                            locs.mapNotNull { it.locations.progression }.sorted()
-                        }
-                }.getOrNull()
+                positionsByHref = runCatching { loadPublicationPositions() }
+                    .getOrNull()
+                    ?.groupBy { it.href.toString() }
+                    ?.mapValues { (_, locs) ->
+                        locs.mapNotNull { it.locations.progression }.sorted()
+                    }
             }
         }
         // On a re-host (config change), the fresh fragment opens at the original initialLocator. If we
@@ -508,7 +513,7 @@ private class ReadiumReaderSession(
             restoring = true
             lastStyledHref = null
         }
-        scope.launch {
+        locatorCollectionJob = scope.launch {
             nav.currentLocator.collect { locator ->
                 updateCurrentLocator(locator)
             }
@@ -518,6 +523,11 @@ private class ReadiumReaderSession(
         if (restoreTarget != null) {
             scope.launch {
                 runCatching { nav.go(restoreTarget, animated = false) }
+                withTimeoutOrNull(RESTORE_SETTLE_TIMEOUT_MS) {
+                    nav.currentLocator
+                        .filter { it.matchesRestoreTarget(restoreTarget) }
+                        .first()
+                }
                 restoring = false
             }
         }
@@ -592,26 +602,29 @@ private class ReadiumReaderSession(
         if (query.isBlank()) return emptyList()
         runCatching { searchIterator?.close() }
         searchIterator = null
-        val iterator = publication.search(query) ?: return emptyList()
-        searchIterator = iterator
-        // Drain pages off the main thread, capped so a huge book can't produce thousands of rows.
         return withContext(Dispatchers.IO) {
+            val iterator = publication.search(query) ?: return@withContext emptyList()
+            searchIterator = iterator
             val out = ArrayList<ReaderSearchResult>()
-            while (out.size < MAX_SEARCH_RESULTS) {
-                // getOrNull() yields null at the end of the publication or on a read error — stop either way.
-                val page = iterator.next().getOrNull() ?: break
-                for (loc in page.locators) {
-                    out += ReaderSearchResult(
-                        locatorJson = loc.toJSON().toString(),
-                        before = loc.text.before.orEmpty(),
-                        match = loc.text.highlight.orEmpty(),
-                        after = loc.text.after.orEmpty(),
-                        chapterTitle = loc.title,
-                    )
-                    if (out.size >= MAX_SEARCH_RESULTS) break
+            try {
+                while (out.size < MAX_SEARCH_RESULTS) {
+                    val page = iterator.next().getOrNull() ?: break
+                    for (loc in page.locators) {
+                        out += ReaderSearchResult(
+                            locatorJson = loc.toJSON().toString(),
+                            before = loc.text.before.orEmpty(),
+                            match = loc.text.highlight.orEmpty(),
+                            after = loc.text.after.orEmpty(),
+                            chapterTitle = loc.title,
+                        )
+                        if (out.size >= MAX_SEARCH_RESULTS) break
+                    }
                 }
+                out
+            } finally {
+                runCatching { iterator.close() }
+                if (searchIterator === iterator) searchIterator = null
             }
-            out
         }
     }
 
@@ -974,7 +987,7 @@ private class ReadiumReaderSession(
     override fun goToProgression(totalProgression: Double) {
         scope.launch {
             // Map the requested whole-book progression to the nearest known position.
-            val positions = publication.positions()
+            val positions = runCatching { loadPublicationPositions() }.getOrNull() ?: return@launch
             val target = positions.minByOrNull {
                 kotlin.math.abs((it.locations.totalProgression ?: 0.0) - totalProgression)
             } ?: return@launch
@@ -1013,12 +1026,27 @@ private class ReadiumReaderSession(
     }
 
     override fun close() {
+        locatorCollectionJob?.cancel()
+        locatorCollectionJob = null
         scope.cancel()
         runCatching { searchIterator?.close() }
         searchIterator = null
         tts?.shutdown()
         tts = null
         runCatching { publication.close() }
+    }
+
+    private suspend fun loadPublicationPositions(): List<Locator> {
+        publicationPositions?.let { return it }
+        return withContext(Dispatchers.Default) { publication.positions() }
+            .also { publicationPositions = it }
+    }
+
+    private fun Locator.matchesRestoreTarget(target: Locator): Boolean {
+        if (href != target.href) return false
+        val actual = locations.progression ?: locations.totalProgression
+        val expected = target.locations.progression ?: target.locations.totalProgression
+        return actual == null || expected == null || kotlin.math.abs(actual - expected) < 0.01
     }
 
     private fun speakSelection(text: String) {
@@ -1339,6 +1367,7 @@ private class ReadiumReaderSession(
 
         // Cap on collected search hits — bounds memory and scan time on large books.
         const val MAX_SEARCH_RESULTS = 150
+        const val RESTORE_SETTLE_TIMEOUT_MS = 1_500L
 
         // Custom-scheme URLs behind the scroll-mode rubberband overscroll gesture (intercepted in
         // onExternalLinkActivated).

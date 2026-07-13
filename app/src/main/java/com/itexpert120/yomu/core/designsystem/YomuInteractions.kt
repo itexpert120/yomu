@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -43,26 +45,42 @@ fun Modifier.yomuPressable(
 ): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val focused by interaction.collectIsFocusedAsState()
+    val motionEnabled = yomuAnimationsEnabled()
     val scale by animateFloatAsState(
-        targetValue = if (pressed && enabled) pressedScale else 1f,
+        targetValue = if (motionEnabled && pressed && enabled) pressedScale else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "yomuPressScale",
     )
     val haptics = LocalHapticFeedback.current
+    val focusColor = YomuTheme.colors.accent
     val longClick: (() -> Unit)? = onLongClick?.let { action ->
         {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             action()
         }
     }
-    scale(scale).combinedClickable(
-        interactionSource = interaction,
-        indication = null,
-        enabled = enabled,
-        role = role,
-        onLongClick = longClick,
-        onClick = onClick,
-    )
+    scale(scale)
+        .drawWithContent {
+            drawContent()
+            if (focused) {
+                val stroke = 2.dp.toPx()
+                drawRect(
+                    color = focusColor,
+                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    style = Stroke(stroke),
+                )
+            }
+        }
+        .combinedClickable(
+            interactionSource = interaction,
+            indication = null,
+            enabled = enabled,
+            role = role,
+            onLongClick = longClick,
+            onClick = onClick,
+        )
 }
 
 /**

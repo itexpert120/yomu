@@ -11,15 +11,15 @@ Current technical baseline:
 - Android application module: `:app`, namespace `com.itexpert120.yomu`, Jetpack Compose UI
 - Toolchain: AGP 9.2.1, Kotlin 2.4.0, Java 17 (+ core-library desugaring), Compose BOM 2026.06.00, KSP; compileSdk 37 / minSdk 24 / targetSdk 36
 - DI: **Hilt** (`@HiltAndroidApp`, `@HiltViewModel`, modules in `app/di/`)
-- Persistence: **Room** (`books`, `chapter_reads`, `reader_settings`; migrations 1→3) and **DataStore** (app + library + global reader settings)
+- Persistence: **Room v9** (`books`, `chapter_reads`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`; additive migrations 1→9) and **DataStore**
 - Navigation: **Navigation Compose** with type-safe `@Serializable` routes and Material shared-axis (X) transitions
 - Reader engine: **Readium 3.3.0** behind a Yomu `ReaderEngine` boundary (only `data/reader/readium` imports Readium); `EpubNavigatorFragment` hosted in Compose
 - Images: **Coil 3** for covers; **SAF** import with sha256 dedup
 - Custom design system: `core/designsystem` (`YomuDesignTheme`, tokens, surface/control/card primitives) applied across every screen
-- Features: library (grid/list, search, sort, group, adaptive columns, multi-select, import), book details (TOC + persistent per-chapter read-state, multi-select, cover viewer + save-to-gallery, edit), reader (themes, six bundled fonts, brightness, scroll/paged, full-screen chrome, global + per-book settings), settings, about
+- Features: mature library and book details; reader with contents, bookmarks, highlights, full-text search, dictionary/TTS, advanced typography, custom themes/fonts, and immersive chrome; settings, about, and reading statistics with history
 - DevGallery component harness (`app/devgallery`); edge-to-edge with theme-aware system bar icons; real app launcher icon
 
-**Not yet built:** bookmarks, highlights, in-book search, advanced typography (line/word/letter spacing, margins, justification, hyphenation, columns), Room FTS, performance profiling, reading stats. See the [Roadmap](roadmap.md) for status per phase.
+**Not yet built:** OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and performance profiling. See the [Roadmap](roadmap.md) for status per phase.
 
 ## Planning Documents
 
@@ -52,4 +52,4 @@ The app should feel like a polished custom-native reading product:
 
 ## Next Engineering Goal
 
-With the library, book details, and a themeable Readium-backed reader working, the next focus is finishing the core reader for daily use: an in-reader Contents/Bookmarks panel, bookmarks, highlights, and in-book search (Roadmap Phase 7), followed by advanced typography (Phase 8).
+The next focus is performance hardening and optional expansion such as OPDS, additional formats, and sync, without weakening the offline-first reader experience.

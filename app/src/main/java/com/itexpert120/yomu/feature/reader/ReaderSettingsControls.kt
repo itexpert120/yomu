@@ -50,7 +50,13 @@ internal fun ReaderThemeRow(settings: ReaderSettings, onUpdateSettings: (ReaderS
         ReaderThemeMode.entries.forEach { mode ->
             YomuColorSwatch(
                 name = mode.name,
-                color = Color(ReaderSettings().copy(theme = mode).backgroundArgb),
+                color = Color(
+                    if (mode == ReaderThemeMode.Custom) {
+                        settings.copy(theme = mode).backgroundArgb
+                    } else {
+                        ReaderSettings().copy(theme = mode).backgroundArgb
+                    },
+                ),
                 selected = settings.theme == mode,
                 onClick = { onUpdateSettings(settings.copy(theme = mode)) },
                 modifier = Modifier.weight(1f),

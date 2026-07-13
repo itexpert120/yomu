@@ -21,4 +21,7 @@ interface HighlightDao {
 
     @Query("DELETE FROM highlights WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM highlights WHERE bookId IN (:bookIds)")
+    suspend fun deleteForBooks(bookIds: List<String>)
 }

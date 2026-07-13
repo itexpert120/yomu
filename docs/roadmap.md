@@ -2,7 +2,7 @@
 
 This roadmap keeps Yomu from starting with EPUB complexity before the product language is clear.
 
-**Overall status (current):** Phases 0–6 are complete — design system, real Room-backed library with SAF import, settings models, and the Readium integration are all done. Phase 7 (core reader) is largely done (themes, fonts, brightness, scroll/paged, chrome, persistent chapter read-state) with **bookmarks, highlights, in-book search, and an in-reader Contents panel still pending**. Phases 8–12 (advanced typography, library depth beyond author grouping, advanced reading modes, performance, optional expansion) are mostly not started.
+**Overall status (current):** Phases 0–8 are substantially complete. Yomu includes the custom design system, Room-backed library, hardened SAF import, Readium reader, contents, bookmarks, highlights, full-text search, dictionary/TTS, advanced typography, custom themes/fonts, and reading statistics with history. Later phases focus on performance and optional expansion such as OPDS, additional formats, and sync.
 
 ## Phase 0: Project Baseline
 
@@ -187,7 +187,7 @@ Acceptance criteria:
 - User can read, bookmark, highlight, resume, search, and customize appearance.
 - Settings persist correctly.
 
-**Status: Partial.** Done: font settings (6 bundled fonts with live previews + size), theme settings (Light/Dark/Sepia/Black/Custom bg+text), scrolled/paged, header/footer status options (clock + battery + progress, toggleable), resume, full-screen chrome. Also: persistent per-chapter read-state on the book-details TOC. **Pending: bookmarks, highlights, in-book search, and an in-reader Contents/Bookmarks panel.**
+**Status: Complete.** Font/theme settings, scrolled/paged layouts, header/footer options, resume, immersive chrome, persistent chapter state, contents, bookmarks, highlights, and in-book search are implemented.
 
 ## Phase 8: Advanced Layout And Themes
 

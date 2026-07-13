@@ -66,6 +66,8 @@ fun LibraryRoute(
         onRemoveSelected = viewModel::onRemoveSelected,
         onMarkSelectedRead = viewModel::onMarkSelectedRead,
         onMarkSelectedUnread = viewModel::onMarkSelectedUnread,
+        onRetryImport = viewModel::onRetryImport,
+        onDismissImportNotice = viewModel::onDismissImportNotice,
         onImport = {
             safLauncher.launch(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).apply {

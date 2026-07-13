@@ -17,38 +17,39 @@ class RoomBookmarkRepository @Inject constructor(
 
     override fun observeForBook(bookId: BookId): Flow<List<ReaderBookmark>> = dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
 
-    override suspend fun add(
+    override suspend fun toggle(
         bookId: BookId,
         locatorJson: String,
         href: String?,
         chapterTitle: String?,
-        progression: Double,
-    ): ReaderBookmark {
+        progression: Double?,
+    ): Boolean {
         val entity = BookmarkEntity(
             id = UUID.randomUUID().toString(),
             bookId = bookId.value,
             locatorJson = locatorJson,
             href = href,
             chapterTitle = chapterTitle,
-            progression = progression,
+            // -1 is an explicit "unknown whole-book position" sentinel. Identity then falls back
+            // to the exact locator JSON instead of incorrectly treating it as the start of the book.
+            progression = progression ?: UNKNOWN_PROGRESSION,
             createdAt = System.currentTimeMillis(),
         )
-        dao.upsert(entity)
-        return entity.toModel()
+        return dao.toggle(entity)
     }
 
     override suspend fun delete(id: String) = dao.deleteById(id)
-
-    override suspend fun existsAt(bookId: BookId, href: String?, progression: Double): Boolean = dao.existsAt(bookId.value, href, progression)
-
-    override suspend fun deleteAt(bookId: BookId, href: String?, progression: Double) = dao.deleteAt(bookId.value, href, progression)
 
     private fun BookmarkEntity.toModel() = ReaderBookmark(
         id = id,
         locatorJson = locatorJson,
         href = href,
         chapterTitle = chapterTitle,
-        progression = progression,
+        progression = progression.takeIf { it >= 0 },
         createdAt = createdAt,
     )
+
+    private companion object {
+        const val UNKNOWN_PROGRESSION = -1.0
+    }
 }

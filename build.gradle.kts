@@ -11,8 +11,9 @@ spotless {
     // The repo had mixed CRLF/LF; pin to LF (matches .gitattributes) so formatting is the only diff.
     lineEndings = LineEnding.UNIX
     kotlin {
-        target("**/*.kt")
-        targetExclude("**/build/**")
+        // Restrict traversal to source roots. Scanning `**` can race Android's asset compression
+        // task over transient build directories when formatting and assemble run together in CI.
+        target("app/src/**/*.kt")
         ktlint(libs.versions.ktlint.get())
             .editorConfigOverride(
                 mapOf(
