@@ -66,6 +66,7 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.ReaderFont
+import com.itexpert120.yomu.core.model.ReaderSettings
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -142,12 +143,12 @@ internal fun ReaderTopBar(
 internal fun ReaderFooter(
     progressPercent: Int?,
     chapterPagesLeft: Int?,
-    settings: com.itexpert120.yomu.core.model.ReaderSettings,
+    settings: ReaderSettings,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bg = Color(settings.backgroundArgb)
-    val muted = Color(settings.textArgb).copy(alpha = 0.6f)
+    val muted = Color(settings.colorPalette.secondaryTextArgb)
     val time = rememberClock()
     val battery = rememberBattery()
     Column(modifier = modifier.fillMaxWidth()) {
@@ -212,6 +213,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
     bottomInset: Dp,
     background: Color,
     content: Color,
+    border: Color,
     hasPrevious: Boolean,
     hasNext: Boolean,
     onBrowse: () -> Unit,
@@ -236,7 +238,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
                 .padding(horizontal = 12.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(background)
-                .border(1.dp, content.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
+                .border(1.dp, border, RoundedCornerShape(24.dp))
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -301,7 +303,7 @@ private fun ReaderBarButton(
 ) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(24.dp)
             .clip(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

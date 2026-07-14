@@ -134,7 +134,7 @@ fun YomuSegmentedControl(
     val colors = YomuTheme.colors
     val count = options.size.coerceAtLeast(1)
     val selected = selectedIndex.coerceIn(0, count - 1)
-    val controlHeight = 42.dp
+    val controlHeight = 34.dp
 
     Box(
         modifier = modifier
@@ -224,7 +224,7 @@ fun YomuRangeRow(
             Canvas(
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
+                    .height(28.dp)
                     .semantics {
                         progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, 20)
                         setProgress { requested ->
@@ -307,7 +307,7 @@ private fun YomuStepButton(text: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .yomuPressable(onClick = onClick)
-            .size(48.dp)
+            .size(32.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .border(1.dp, YomuTheme.colors.border, CircleShape),

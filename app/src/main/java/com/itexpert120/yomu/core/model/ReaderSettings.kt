@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.core.model
 
 import kotlinx.serialization.Serializable
+import kotlin.math.roundToInt
 
 /** Reflowable content flow. */
 @Serializable
@@ -37,6 +38,16 @@ data class CustomFontRef(
     val family: String,
     val regularPath: String,
     val italicPath: String? = null,
+)
+
+/** Semantic colours shared by EPUB content and reader chrome. */
+data class ReaderColorPalette(
+    val backgroundArgb: Long,
+    val textArgb: Long,
+    val secondaryTextArgb: Long,
+    val selectionArgb: Long,
+    val linkArgb: Long,
+    val borderArgb: Long,
 )
 
 /**
@@ -82,43 +93,83 @@ data class ReaderSettings(
     // top bar visible at all times.
     val immersiveChrome: Boolean = false,
 ) {
-    /** Page background for the active theme (ARGB). Shared by the engine and the reader chrome
-     *  so the area behind the system bars matches the page with no seam. Dark is a soft, non-OLED grey. */
-    val backgroundArgb: Long
-        get() = when (theme) {
-            ReaderThemeMode.Light -> 0xFFFFFFFF
-            ReaderThemeMode.Sepia -> 0xFFFAF4E8
-            ReaderThemeMode.Dark -> 0xFF1C1B1A
-            ReaderThemeMode.Black -> 0xFF000000
-            ReaderThemeMode.Custom -> customBackground ?: 0xFF1C1B1A
-        }
-
-    /** Text colour for the active theme (ARGB). */
-    val textArgb: Long
+    /** Complete palette for the active theme. Custom themes derive supporting colours from the
+     *  user's background/text pair so links, selections and chrome remain coherent. */
+    val colorPalette: ReaderColorPalette
         get() {
-            val requested = when (theme) {
-                ReaderThemeMode.Light -> 0xFF1A1A1A
-                ReaderThemeMode.Sepia -> 0xFF2A2520
-                ReaderThemeMode.Dark -> 0xFFE9E3D8
-                ReaderThemeMode.Black -> 0xFFE6E6E6
-                ReaderThemeMode.Custom -> customText ?: 0xFFE9E3D8
+            when (theme) {
+                ReaderThemeMode.Light -> return LIGHT_PALETTE
+                ReaderThemeMode.Sepia -> return SEPIA_PALETTE
+                ReaderThemeMode.Dark -> return DARK_PALETTE
+                ReaderThemeMode.Black -> return BLACK_PALETTE
+                ReaderThemeMode.Custom -> Unit
             }
-            if (theme != ReaderThemeMode.Custom || contrastRatio(requested, backgroundArgb) >= 4.5) {
-                return requested
-            }
+
+            val background = customBackground ?: DARK_PALETTE.backgroundArgb
+            val requested = customText ?: DARK_PALETTE.textArgb
             val darkInk = 0xFF171717
-            val lightInk = 0xFFF4F1EA
-            return if (contrastRatio(darkInk, backgroundArgb) >= contrastRatio(lightInk, backgroundArgb)) {
+            val lightInk = 0xFFF1F3F5
+            val text = if (contrastRatio(requested, background) >= 4.5) {
+                requested
+            } else if (contrastRatio(darkInk, background) >= contrastRatio(lightInk, background)) {
                 darkInk
             } else {
                 lightInk
             }
+            val lightBackground = relativeLuminance(background) >= 0.45
+            return ReaderColorPalette(
+                backgroundArgb = background,
+                textArgb = text,
+                secondaryTextArgb = blendArgb(text, background, 0.72f),
+                selectionArgb = blendArgb(text, background, 0.16f),
+                linkArgb = if (lightBackground) LIGHT_PALETTE.linkArgb else DARK_PALETTE.linkArgb,
+                borderArgb = blendArgb(text, background, 0.14f),
+            )
         }
 
+    /** Page background shared by the EPUB engine, chrome and system bars. */
+    val backgroundArgb: Long get() = colorPalette.backgroundArgb
+
+    /** Main reading text colour. */
+    val textArgb: Long get() = colorPalette.textArgb
+
     val isLightBackground: Boolean
-        get() = theme == ReaderThemeMode.Light || theme == ReaderThemeMode.Sepia
+        get() = relativeLuminance(backgroundArgb) >= 0.45
 
     companion object {
+        val LIGHT_PALETTE = ReaderColorPalette(
+            backgroundArgb = 0xFFF7F7F5,
+            textArgb = 0xFF222426,
+            secondaryTextArgb = 0xFF62676D,
+            selectionArgb = 0xFFDCE8F7,
+            linkArgb = 0xFF326EA8,
+            borderArgb = 0xFFE1E3E5,
+        )
+        val SEPIA_PALETTE = ReaderColorPalette(
+            backgroundArgb = 0xFFF3EBDD,
+            textArgb = 0xFF302B26,
+            secondaryTextArgb = 0xFF71685E,
+            selectionArgb = 0xFFDED3C2,
+            linkArgb = 0xFF456F91,
+            borderArgb = 0xFFD8CDBD,
+        )
+        val DARK_PALETTE = ReaderColorPalette(
+            backgroundArgb = 0xFF17191C,
+            textArgb = 0xFFD7DADE,
+            secondaryTextArgb = 0xFFAEB4BC,
+            selectionArgb = 0xFF30343A,
+            linkArgb = 0xFF82B7F5,
+            borderArgb = 0xFF2A2E34,
+        )
+        val BLACK_PALETTE = ReaderColorPalette(
+            backgroundArgb = 0xFF000000,
+            textArgb = 0xFFD4D7DB,
+            secondaryTextArgb = 0xFF9DA3AB,
+            selectionArgb = 0xFF25282D,
+            linkArgb = 0xFF76ADEF,
+            borderArgb = 0xFF202328,
+        )
+
         const val MIN_FONT_SCALE = 0.6f
         const val MAX_FONT_SCALE = 2.5f
         const val FONT_SCALE_STEP = 0.05f
@@ -146,14 +197,27 @@ data class ReaderSettings(
 }
 
 private fun contrastRatio(foreground: Long, background: Long): Double {
-    fun luminance(argb: Long): Double {
-        fun channel(shift: Int): Double {
-            val raw = ((argb shr shift) and 0xFF).toDouble() / 255.0
-            return if (raw <= 0.04045) raw / 12.92 else Math.pow((raw + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
-    }
-    val a = luminance(foreground)
-    val b = luminance(background)
+    val a = relativeLuminance(foreground)
+    val b = relativeLuminance(background)
     return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+}
+
+private fun relativeLuminance(argb: Long): Double {
+    fun channel(shift: Int): Double {
+        val raw = ((argb shr shift) and 0xFF).toDouble() / 255.0
+        return if (raw <= 0.04045) raw / 12.92 else Math.pow((raw + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+}
+
+private fun blendArgb(foreground: Long, background: Long, amount: Float): Long {
+    fun channel(shift: Int): Long {
+        val foregroundChannel = (foreground shr shift) and 0xFF
+        val backgroundChannel = (background shr shift) and 0xFF
+        return (backgroundChannel + (foregroundChannel - backgroundChannel) * amount)
+            .roundToInt()
+            .coerceIn(0, 255)
+            .toLong()
+    }
+    return 0xFF000000L or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
 }

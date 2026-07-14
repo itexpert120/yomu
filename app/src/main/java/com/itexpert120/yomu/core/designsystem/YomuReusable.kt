@@ -179,8 +179,8 @@ fun YomuCircleIconButton(
     Box(
         modifier = modifier
             .yomuPressable(onClick = onClick)
-            .size(48.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .size(36.dp)
+            .clip(RoundedCornerShape(18.dp))
             .background(YomuTheme.colors.textPrimary),
         contentAlignment = Alignment.Center,
     ) {

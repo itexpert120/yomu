@@ -159,7 +159,7 @@ private fun HighlightColorPalette(
             val selected = argb == selectedArgb
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(color)
                     .then(

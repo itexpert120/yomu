@@ -120,7 +120,7 @@ fun YomuScreenHeader(
 private fun YomuBackButton(onBack: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(36.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .clickable(

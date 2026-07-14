@@ -227,10 +227,17 @@ private class ReadiumReaderSession(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
     private var locatorCollectionJob: Job? = null
+    private var restorationJob: Job? = null
+    private var restorationGeneration = 0L
+    private var hostedFragmentManager: FragmentManager? = null
+    private var hostedFragmentTag: String? = null
+
+    private val initialLocator: Locator? = initialLocatorJson
+        ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
 
     // Latest engine locator, used for reading-order (chapter) navigation and for restoring position
     // after a re-host (config change) so the reader doesn't snap back to where the book was opened.
-    private var lastLocator: Locator? = null
+    private var lastLocator: Locator? = initialLocator
 
     // True while restoring [lastLocator] into a freshly re-hosted fragment; the fragment's transient
     // initial-locator emissions are ignored during this window so they can't clobber saved progress.
@@ -255,9 +262,6 @@ private class ReadiumReaderSession(
     // Lazily-created TTS for the "Read aloud" selection action; reused across taps, shut down on close.
     private var tts: TextToSpeech? = null
     private var pendingSpeak: String? = null
-
-    private val initialLocator: Locator? = initialLocatorJson
-        ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
 
     private val navigatorFactory = EpubNavigatorFactory(publication)
 
@@ -299,6 +303,9 @@ private class ReadiumReaderSession(
                 // of shoving the content down a few frames later. Best-effort: reveal anyway if the
                 // injection can't be confirmed, rather than leaving the page covered.
                 evalWithRetry(scrollCssJsForCurrent())
+                // Readium owns the page background/text preferences; these extra semantic roles
+                // keep links, selections, captions and separators on the complete Yomu palette.
+                evalWithRetry(readerPaletteJs(currentSettings))
                 // Embed the custom font (if any) before revealing, so text paints in it directly
                 // rather than flashing a fallback and re-flowing.
                 applyCustomFontInline()
@@ -491,7 +498,13 @@ private class ReadiumReaderSession(
 
     override fun onFragmentHosted(fragmentManager: FragmentManager, tag: String) {
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
+        restorationGeneration++
+        restorationJob?.cancel()
+        restorationJob = null
+        restoring = false
         navigator = nav
+        hostedFragmentManager = fragmentManager
+        hostedFragmentTag = tag
         locatorCollectionJob?.cancel()
         pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
         // Index page boundaries per resource once (off the main path) for "pages left in chapter".
@@ -510,7 +523,6 @@ private class ReadiumReaderSession(
         // and ignore the fragment's transient emissions until then so they can't overwrite progress.
         val restoreTarget = lastLocator
         if (restoreTarget != null) {
-            restoring = true
             lastStyledHref = null
         }
         locatorCollectionJob = scope.launch {
@@ -521,15 +533,7 @@ private class ReadiumReaderSession(
         // Restore the latest reading position into the freshly re-hosted fragment, then resume
         // reporting locator changes (the suppression above kept the transient open-position out).
         if (restoreTarget != null) {
-            scope.launch {
-                runCatching { nav.go(restoreTarget, animated = false) }
-                withTimeoutOrNull(RESTORE_SETTLE_TIMEOUT_MS) {
-                    nav.currentLocator
-                        .filter { it.matchesRestoreTarget(restoreTarget) }
-                        .first()
-                }
-                restoring = false
-            }
+            startRestoration(nav, restoreTarget, recreateOnFailure = false)
         }
         // Tap zones: in PAGED mode the left/right thirds turn pages and the centre toggles the
         // controls bar. In SCROLL mode there are no page-turn zones, so a tap *anywhere* toggles the
@@ -723,6 +727,8 @@ private class ReadiumReaderSession(
         applyScrollbars(settings)
         // Refresh scroll-only CSS overrides when layout or immersive mode changes.
         injectScrollCss()
+        // Update semantic document colours immediately when switching reader themes.
+        injectReaderPalette()
         // Toggle viewport-fit=cover with immersive scroll mode so normal reading keeps status-bar space.
         injectViewportFit()
         clearImmersiveScrollTopPadding(settings)
@@ -734,6 +740,18 @@ private class ReadiumReaderSession(
 
     override fun refreshImmersiveLayout() {
         clearImmersiveScrollTopPadding()
+    }
+
+    override fun onForegroundResumed() {
+        clearImmersiveScrollTopPadding()
+        val nav = navigator ?: return
+        val target = lastLocator ?: return
+        startRestoration(
+            nav = nav,
+            target = target,
+            recreateOnFailure = true,
+            verifyCurrentFirst = true,
+        )
     }
 
     // Inject the active custom font's @font-face (or clear it when switching back to a bundled font)
@@ -826,6 +844,11 @@ private class ReadiumReaderSession(
     private fun injectScrollCss() {
         navigator ?: return
         injectJs(scrollCssJsForCurrent())
+    }
+
+    private fun injectReaderPalette() {
+        navigator ?: return
+        injectJs(readerPaletteJs(currentSettings))
     }
 
     // Cover the page during a chapter change so it is revealed only once the new resource is re-styled
@@ -966,9 +989,10 @@ private class ReadiumReaderSession(
         val hrefStr = lastLocator?.href?.toString() ?: return
         val order = publication.readingOrder
         val index = order.indexOfFirst { it.url().toString() == hrefStr }
-        val target = order.getOrNull(index + delta) ?: return
+        val link = order.getOrNull(index + delta) ?: return
+        val target = publication.locatorFromLink(link) ?: return
         beginChapterTransition(forward = delta > 0)
-        scope.launch { navigator?.go(target, animated = false) }
+        scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
     // Navigate to the END of the previous resource (progression ~1), so pulling down past the top of
@@ -981,7 +1005,7 @@ private class ReadiumReaderSession(
         val base = publication.locatorFromLink(prev) ?: return
         val target = base.copy(locations = Locator.Locations(progression = 0.999))
         beginChapterTransition(forward = false)
-        scope.launch { navigator?.go(target, animated = false) }
+        scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
     override fun goToProgression(totalProgression: Double) {
@@ -998,7 +1022,7 @@ private class ReadiumReaderSession(
                     (lastLocator?.locations?.totalProgression ?: 0.0)
                 beginChapterTransition(forward = forward)
             }
-            navigator?.go(target, animated = false)
+            navigator?.let { goChecked(it, target) }
         }
     }
 
@@ -1010,7 +1034,7 @@ private class ReadiumReaderSession(
     private fun goToChapterProgression(progression: Double) {
         val base = lastLocator ?: return
         val target = base.copy(locations = Locator.Locations(progression = progression))
-        scope.launch { navigator?.go(target, animated = false) }
+        scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
     override fun goToLocator(locatorJson: String) {
@@ -1022,12 +1046,126 @@ private class ReadiumReaderSession(
                 (lastLocator?.locations?.totalProgression ?: 0.0)
             beginChapterTransition(forward = forward)
         }
-        scope.launch { navigator?.go(locator, animated = false) }
+        scope.launch { navigator?.let { goChecked(it, locator) } }
+    }
+
+    /**
+     * Runs a locator jump and handles Readium's Boolean failure signal. A failed jump immediately
+     * lifts the transition cover, then confirms a return to the last valid locator. If even that
+     * recovery fails, rebuilding the hosted navigator is safer than leaving a blank WebView.
+     */
+    private suspend fun goChecked(
+        nav: EpubNavigatorFragment,
+        target: Locator,
+        recoverOnFailure: Boolean = true,
+    ): Boolean {
+        val fallback = lastLocator
+        val succeeded = runCatching { nav.go(target, animated = false) }.getOrDefault(false)
+        if (succeeded) return true
+
+        clearChapterTransitionCover()
+        if (recoverOnFailure && fallback != null && !target.matchesRestoreTarget(fallback)) {
+            val fallbackStarted = runCatching { nav.go(fallback, animated = false) }.getOrDefault(false)
+            val recovered = fallbackStarted &&
+                withTimeoutOrNull(RESTORE_SETTLE_TIMEOUT_MS) {
+                    nav.currentLocator.filter { it.matchesRestoreTarget(fallback) }.first()
+                } != null
+            if (!recovered) scheduleNavigatorRecreation(nav)
+        }
+        return false
+    }
+
+    private fun startRestoration(
+        nav: EpubNavigatorFragment,
+        target: Locator,
+        recreateOnFailure: Boolean,
+        verifyCurrentFirst: Boolean = false,
+    ) {
+        val generation = ++restorationGeneration
+        restorationJob?.cancel()
+        restoring = true
+        restorationJob = scope.launch {
+            var confirmed: Locator? = null
+            var healthy = false
+            try {
+                if (verifyCurrentFirst) {
+                    delay(RESUME_CHECK_DELAY_MS)
+                    val current = runCatching { nav.currentLocator.first() }.getOrNull()
+                    if (current != null && current.matchesRestoreTarget(target) && awaitRenderableContent(nav)) {
+                        confirmed = current
+                        healthy = true
+                    }
+                }
+                if (!healthy) {
+                    val started = goChecked(nav, target, recoverOnFailure = false)
+                    if (started) {
+                        confirmed = withTimeoutOrNull(RESTORE_SETTLE_TIMEOUT_MS) {
+                            nav.currentLocator.filter { it.matchesRestoreTarget(target) }.first()
+                        }
+                        healthy = confirmed != null && awaitRenderableContent(nav)
+                    }
+                }
+            } finally {
+                if (generation == restorationGeneration && navigator === nav) {
+                    restoring = false
+                    confirmed?.let { updateCurrentLocator(it) }
+                    if (!healthy) {
+                        clearChapterTransitionCover()
+                        if (recreateOnFailure) scheduleNavigatorRecreation(nav)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun awaitRenderableContent(nav: EpubNavigatorFragment): Boolean {
+        repeat(NAVIGATOR_CONTENT_CHECK_ATTEMPTS) { attempt ->
+            if (navigator !== nav || nav.view == null || !nav.isAdded) return false
+            val result = runCatching { nav.evaluateJavascript(NAVIGATOR_CONTENT_CHECK_JS) }.getOrNull()
+            if (result?.trim('"') == "true") return true
+            delay(NAVIGATOR_CONTENT_CHECK_DELAY_MS * (attempt + 1))
+        }
+        return false
+    }
+
+    private fun scheduleNavigatorRecreation(expected: EpubNavigatorFragment) {
+        scope.launch {
+            if (navigator !== expected) return@launch
+            val fragmentManager = hostedFragmentManager ?: return@launch
+            val tag = hostedFragmentTag ?: return@launch
+            if (fragmentManager.isDestroyed) return@launch
+            val stale = fragmentManager.findFragmentByTag(tag) ?: return@launch
+            val containerId = stale.id.takeIf { it != 0 } ?: return@launch
+            beginChapterTransition()
+            runCatching {
+                fragmentManager.beginTransaction()
+                    .remove(stale)
+                    .commitNowAllowingStateLoss()
+                val replacement = fragmentFactory.instantiate(context.classLoader, fragmentClassName)
+                fragmentManager.fragmentFactory = fragmentFactory
+                fragmentManager.beginTransaction()
+                    .setReorderingAllowed(true)
+                    .add(containerId, replacement, tag)
+                    .commitNowAllowingStateLoss()
+                onFragmentHosted(fragmentManager, tag)
+            }.onFailure { clearChapterTransitionCover() }
+        }
+    }
+
+    private fun clearChapterTransitionCover() {
+        revealWatchdog?.cancel()
+        revealWatchdog = null
+        _styled.value = true
     }
 
     override fun close() {
+        restorationGeneration++
+        restorationJob?.cancel()
+        restorationJob = null
         locatorCollectionJob?.cancel()
         locatorCollectionJob = null
+        hostedFragmentManager = null
+        hostedFragmentTag = null
         scope.cancel()
         runCatching { searchIterator?.close() }
         searchIterator = null
@@ -1367,7 +1505,16 @@ private class ReadiumReaderSession(
 
         // Cap on collected search hits — bounds memory and scan time on large books.
         const val MAX_SEARCH_RESULTS = 150
-        const val RESTORE_SETTLE_TIMEOUT_MS = 1_500L
+
+        // Confirmation is the primary completion signal; timeout is only a safety escape hatch for
+        // malformed publications or a navigator that never emits after go().
+        const val RESTORE_SETTLE_TIMEOUT_MS = 5_000L
+        const val RESUME_CHECK_DELAY_MS = 300L
+        const val NAVIGATOR_CONTENT_CHECK_ATTEMPTS = 6
+        const val NAVIGATOR_CONTENT_CHECK_DELAY_MS = 150L
+        const val NAVIGATOR_CONTENT_CHECK_JS =
+            "(function(){var b=document&&document.body;" +
+                "return !!(b&&(b.childElementCount>0||(b.textContent||'').trim().length>0));})()"
 
         // Custom-scheme URLs behind the scroll-mode rubberband overscroll gesture (intercepted in
         // onExternalLinkActivated).
@@ -1391,6 +1538,35 @@ private class ReadiumReaderSession(
         const val CHAPTER_START_FALLBACK_PADDING_DP = 20f
         const val CHAPTER_START_EXTRA_PADDING_DP = 4f
         const val RUBBERBAND_EDGE_MARGIN_DP = 18f
+
+        fun readerPaletteJs(settings: ReaderSettings): String {
+            val styleId = "yomu-reader-palette"
+            val palette = settings.colorPalette
+            val text = palette.textArgb.toCssRgb()
+            val secondary = palette.secondaryTextArgb.toCssRgb()
+            val selection = palette.selectionArgb.toCssRgb()
+            val link = palette.linkArgb.toCssRgb()
+            val border = palette.borderArgb.toCssRgb()
+            val css = """
+                ::selection { background: $selection !important; color: $text !important; }
+                a, a:link, a:visited { color: $link !important; }
+                small, figcaption, caption, aside, .footnote, .endnote { color: $secondary !important; }
+                hr, table, th, td, blockquote { border-color: $border !important; }
+            """.trimIndent()
+            return """
+                (function() {
+                  var s = document.getElementById('$styleId');
+                  if (!s) {
+                    s = document.createElement('style');
+                    s.id = '$styleId';
+                    (document.head || document.documentElement).appendChild(s);
+                  }
+                  s.textContent = ${JSONObject.quote(css)};
+                })();
+            """.trimIndent()
+        }
+
+        private fun Long.toCssRgb(): String = "#" + (this and 0xFFFFFFL).toString(16).padStart(6, '0').uppercase()
 
         // Overrides Readium CSS's scroll-mode body{max-width:40rem!important} so scroll mode fills
         // the width like paged mode does. In immersive scroll mode it also neutralizes Readium's

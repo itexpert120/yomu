@@ -623,7 +623,7 @@ internal fun RoundIcon(
 ) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(40.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .clickable(
@@ -659,7 +659,7 @@ internal fun ReaderSlider(
     val thumb = 18.dp
     BoxWithConstraints(
         modifier = modifier
-            .height(48.dp)
+            .height(36.dp)
             .semantics {
                 this.contentDescription = contentDescription
                 progressBarRangeInfo = ProgressBarRangeInfo(shown, 0f..1f, 100)

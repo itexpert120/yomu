@@ -197,6 +197,7 @@ class ReaderViewModel @Inject constructor(
                     return@launch
                 }
                 _session.value = opened
+                if (readingStart != null) opened.onForegroundResumed()
                 _state.update { it.copy(title = opened.title) }
                 // Keep "Opening…" up until the navigator paints its first page (or an 8s fallback),
                 // instead of dropping it the instant the session is created.
@@ -272,10 +273,12 @@ class ReaderViewModel @Inject constructor(
                                     currentPageBookmarked = isCurrentBookmarked(it.bookmarks),
                                 )
                             }
+                            val href = locator.href
+                            val chapterChanged = currentHref != null && href != currentHref
                             if (progression != null) {
                                 scheduleProgressSave(locator.locatorJson, progression)
+                                if (chapterChanged) persistPendingProgress()
                             }
-                            val href = locator.href
                             if (href != currentHref) {
                                 val left = currentHref
                                 if (left != null && markedChapters.add(left)) {
@@ -687,10 +690,7 @@ class ReaderViewModel @Inject constructor(
     /** Start counting reading time (reader brought to the foreground). */
     fun onReadingResumed() {
         if (!state.value.failed) readingStart = System.currentTimeMillis()
-        // The Readium page fragment can leave a stray native top-padding on its WebView's parent when
-        // its Fragment/WebView is reattached after the Activity backgrounds and resumes — outside CSS
-        // and outside window insets, so it isn't caught by anything else. Clear it defensively.
-        _session.value?.refreshImmersiveLayout()
+        _session.value?.onForegroundResumed()
     }
 
     /** Stop counting and bank the elapsed foreground time toward today's stats. */
@@ -709,17 +709,22 @@ class ReaderViewModel @Inject constructor(
 
     private fun scheduleProgressSave(locatorJson: String, progression: Double) {
         pendingProgress = PendingProgress(locatorJson, progression)
-        progressSaveJob?.cancel()
+        if (progressSaveJob?.isActive == true) return
         progressSaveJob = viewModelScope.launch {
-            delay(PROGRESS_SAVE_DEBOUNCE_MS)
-            persistPendingProgress()
+            do {
+                delay(PROGRESS_SAVE_INTERVAL_MS)
+                persistPendingProgress()
+            } while (pendingProgress != null)
         }
     }
 
     private suspend fun persistPendingProgress() {
         val pending = pendingProgress ?: return
-        repository.saveProgress(BookId(bookId), pending.locatorJson, pending.progression)
-        if (pendingProgress == pending) pendingProgress = null
+        runCatching {
+            repository.saveProgress(BookId(bookId), pending.locatorJson, pending.progression)
+        }.onSuccess {
+            if (pendingProgress == pending) pendingProgress = null
+        }
     }
 
     private fun flushPendingProgress() {
@@ -750,7 +755,7 @@ class ReaderViewModel @Inject constructor(
 
     private companion object {
         const val MAX_SESSION_SECONDS = 24L * 60 * 60
-        const val PROGRESS_SAVE_DEBOUNCE_MS = 1_500L
+        const val PROGRESS_SAVE_INTERVAL_MS = 4_000L
 
         // Single default highlight colour (a warm yellow) — highlights are no longer multi-colour.
         const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()

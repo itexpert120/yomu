@@ -149,7 +149,7 @@ private fun CircleIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(34.dp)
             .clip(CircleShape)
             .background(YomuTheme.colors.surfaceRaised)
             .clickable(

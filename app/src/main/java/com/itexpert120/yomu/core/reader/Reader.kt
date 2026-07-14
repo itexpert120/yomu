@@ -140,6 +140,12 @@ interface ReaderSession {
      */
     fun refreshImmersiveLayout()
 
+    /**
+     * Verifies that the hosted navigator is still rendering [currentLocator] after the app returns
+     * to the foreground. A stale position is restored; a blank/unrecoverable navigator is rebuilt.
+     */
+    fun onForegroundResumed()
+
     // Navigation, driven by the custom chrome (tap zones, slider arrows, progress slider).
     fun goForward()
     fun goBackward()

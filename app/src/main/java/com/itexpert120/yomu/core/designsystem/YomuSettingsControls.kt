@@ -47,7 +47,7 @@ fun YomuTogglePill(
     Box(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.4f)
-            .size(48.dp)
+            .size(width = 44.dp, height = 26.dp)
             .toggleable(
                 value = checked,
                 enabled = enabled,

@@ -359,6 +359,7 @@ fun ReaderScreen(
 
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
+    val readerBorder = Color(state.settings.colorPalette.borderArgb)
 
     val scrollReveal = state.settings.layout == ReaderLayout.Scroll
     val reveal = remember { Animatable(1f) }
@@ -494,6 +495,7 @@ fun ReaderScreen(
                         bottomInset = controlBarBottomInset,
                         background = background,
                         content = onBackground,
+                        border = readerBorder,
                         hasPrevious = state.hasPreviousChapter,
                         hasNext = state.hasNextChapter,
                         onBrowse = onOpenBrowse,

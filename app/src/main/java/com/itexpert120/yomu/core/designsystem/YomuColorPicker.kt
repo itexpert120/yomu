@@ -117,7 +117,7 @@ fun YomuColorPicker(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(24.dp)
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
                 .semantics {
                     contentDescription = "Hue"
