@@ -12,6 +12,16 @@ data class ReadingTarget(
     val title: String,
 )
 
+data class ReadingProgressSnapshot(
+    val locatorJson: String,
+    val bookProgress: Double,
+    val currentHref: String?,
+    val chapterId: String?,
+    val chapterProgress: Double?,
+    val completedChapterId: String? = null,
+    val completed: Boolean,
+)
+
 /**
  * Library data source backed by Room ([RoomBookRepository]). The import pipeline inserts via
  * [insert]/[isDuplicate]; the UI reads via the observe* flows and mutates via the rest.
@@ -40,7 +50,7 @@ interface BookRepository {
     suspend fun insert(book: ImportedBook): Boolean
 
     suspend fun readingTarget(id: BookId): ReadingTarget?
-    suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double)
+    suspend fun saveProgress(id: BookId, snapshot: ReadingProgressSnapshot)
 
     /**
      * The [limit] most-recently-opened books (newest first), for the home-screen library widget's
@@ -55,6 +65,9 @@ interface BookRepository {
      */
     suspend fun tableOfContents(id: BookId): List<ReaderTocItem>
 
+    /** Persists a successfully parsed TOC, including an empty TOC, for future opens. */
+    suspend fun cacheTableOfContents(id: BookId, items: List<ReaderTocItem>)
+
     /**
      * The in-memory TOC for [id] if it's already been loaded this session, else null. Synchronous so
      * callers can render instantly without a loading flash; fall back to [tableOfContents] on null.
@@ -63,6 +76,9 @@ interface BookRepository {
 
     /** Set of chapter ids the user has marked read for [id]. */
     fun observeReadChapters(id: BookId): Flow<Set<String>>
+
+    /** Highest percentage reached for every logical TOC section in [id]. */
+    fun observeChapterProgress(id: BookId): Flow<Map<String, Float>>
 
     /** Marks [chapterIds] read or unread for [id]. */
     suspend fun setChaptersRead(id: BookId, chapterIds: List<String>, read: Boolean)

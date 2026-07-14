@@ -107,9 +107,9 @@ fun AboutScreen(onBack: () -> Unit) {
                 style = YomuTheme.type.body,
             )
             Text(
-                text = "The only feature that uses the internet is dictionary “Look up”: the " +
-                    "selected word is sent to a third-party dictionary service " +
-                    "(freedictionaryapi.com) to fetch its definition. Pronunciation is spoken " +
+                text = "Dictionary “Look up” sends the selected word to freedictionaryapi.com " +
+                    "to fetch its definition. If you explicitly choose “Search web,” that word " +
+                    "is opened as a Google search in your browser. Pronunciation is spoken " +
                     "on-device by your system text-to-speech. No other data is transmitted.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.caption,

@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Word lookups and explicit user-initiated Google Fonts downloads. -->
+    <!-- Word lookups, explicit web searches, and user-initiated Google Fonts downloads. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application

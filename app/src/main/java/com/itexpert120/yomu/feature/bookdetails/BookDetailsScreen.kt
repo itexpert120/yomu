@@ -719,7 +719,7 @@ private fun ContentsHeader(toc: TocUiState, onTocSortChange: (TocSortMode) -> Un
             )
             if (!toc.loading && toc.items.isNotEmpty()) {
                 Text(
-                    text = "${toc.items.size}",
+                    text = "${toc.readCount} read · ${toc.unreadCount} unread",
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.mono,
                 )

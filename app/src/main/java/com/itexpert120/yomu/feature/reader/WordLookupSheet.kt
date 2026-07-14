@@ -46,6 +46,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.data.dictionary.DictionaryEntry
 import com.itexpert120.yomu.data.dictionary.DictionaryPronunciation
@@ -67,6 +69,8 @@ internal fun WordLookupSheet(
     onPronounce: (String) -> Unit,
     onLookUpWord: (String) -> Unit,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onSearchWeb: (String) -> Unit,
 ) {
     YomuBottomSheet(visible = state != null, onDismiss = onDismiss, scrollable = false) { _ ->
         if (state == null) return@YomuBottomSheet
@@ -134,6 +138,32 @@ internal fun WordLookupSheet(
                     text = "No definition found for “${state.word}”.",
                     color = YomuTheme.colors.textMuted,
                     style = YomuTheme.type.body,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (state.result is DictionaryResult.Error && !state.loading) {
+                    YomuButton(
+                        text = "Try again",
+                        onClick = onRetry,
+                        modifier = Modifier.weight(1f),
+                        emphasis = YomuButtonEmphasis.Secondary,
+                    )
+                }
+                YomuButton(
+                    text = "Search web",
+                    onClick = { onSearchWeb(state.word) },
+                    modifier = Modifier.weight(1f),
+                    emphasis = YomuButtonEmphasis.Secondary,
+                )
+            }
+            if (state.webSearchError) {
+                Text(
+                    text = "No web browser is available.",
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption,
                 )
             }
         }

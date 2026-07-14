@@ -88,7 +88,6 @@ fun LibraryScreen(
     onMarkSelectedRead: () -> Unit = {},
     onMarkSelectedUnread: () -> Unit = {},
     onRetryImport: () -> Unit = {},
-    onDismissImportNotice: () -> Unit = {},
 ) {
     var showSortSheet by remember { mutableStateOf(false) }
     var showGroupSheet by remember { mutableStateOf(false) }
@@ -233,7 +232,6 @@ fun LibraryScreen(
                 notice = state.importNotice,
                 canRetry = state.canRetryImport,
                 onRetry = onRetryImport,
-                onDismiss = onDismissImportNotice,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
 

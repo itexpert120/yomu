@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.data.books
 
 import androidx.room.withTransaction
+import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.BookTocEntity
 import com.itexpert120.yomu.core.database.BookmarkDao
@@ -12,11 +13,8 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.Collections
@@ -33,13 +31,12 @@ class RoomBookRepository @Inject constructor(
     private val highlightDao: HighlightDao,
     private val bookmarkDao: BookmarkDao,
     private val readerEngine: ReaderEngine,
+    @ApplicationScope applicationScope: CoroutineScope,
 ) : BookRepository {
 
     private val tocJson = Json { ignoreUnknownKeys = true }
 
-    // Process-lifetime scope for fire-and-forget background work (building the TOC right after import)
-    // that must outlive the importing ViewModel, so it isn't cancelled when the user leaves the screen.
-    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val tocLoads = SingleFlight<String, List<ReaderTocItem>>(applicationScope)
 
     // Process-lifetime cache of parsed TOCs, so navigating details <-> reader <-> details doesn't
     // re-read or reparse from disk. The TOC is immutable per book, so entries never go stale.
@@ -58,7 +55,13 @@ class RoomBookRepository @Inject constructor(
 
     override suspend fun markRead(id: BookId) = dao.markRead(id.value, System.currentTimeMillis())
 
-    override suspend fun markUnread(id: BookId) = dao.markUnread(id.value)
+    override suspend fun markUnread(id: BookId) {
+        database.withTransaction {
+            dao.markUnread(id.value)
+            dao.deleteAllReadChapters(listOf(id.value))
+            dao.deleteAllChapterProgress(listOf(id.value))
+        }
+    }
 
     override suspend fun remove(ids: List<BookId>) {
         val keys = ids.map { it.value }
@@ -79,6 +82,7 @@ class RoomBookRepository @Inject constructor(
                 highlightDao.deleteForBooks(keys)
                 bookmarkDao.deleteForBooks(keys)
                 dao.deleteAllReadChapters(keys)
+                dao.deleteAllChapterProgress(keys)
                 dao.deleteReaderSettingsForBooks(keys)
                 dao.deleteTocForBooks(keys)
                 dao.deleteByIds(keys)
@@ -109,12 +113,20 @@ class RoomBookRepository @Inject constructor(
     override suspend fun findIdByHash(sha256: String): BookId? = dao.findIdByHash(sha256)?.let { BookId(it) }
 
     override suspend fun insert(book: ImportedBook): Boolean {
-        if (dao.insert(book.toEntity()) == -1L) return false
+        val cachedToc = book.tableOfContents?.let { items ->
+            BookTocEntity(book.id, tocJson.encodeToString(items))
+        }
+        val inserted = database.withTransaction {
+            if (dao.insert(book.toEntity()) == -1L) {
+                false
+            } else {
+                cachedToc?.let { dao.upsertToc(it) }
+                true
+            }
+        }
+        if (!inserted) return false
         deletedBookIds.remove(book.id)
-        // Build + cache the TOC now in the background so the first Book Details / reader open is
-        // instant instead of waiting on a full publication parse. tableOfContents() is idempotent and
-        // cache-checked, so this is a no-op if the book happens to be opened before it finishes.
-        backgroundScope.launch { runCatching { tableOfContents(BookId(book.id)) } }
+        book.tableOfContents?.let { tocMemory[book.id] = it }
         return true
     }
 
@@ -127,14 +139,59 @@ class RoomBookRepository @Inject constructor(
         )
     }
 
-    override suspend fun saveProgress(id: BookId, locatorJson: String, totalProgression: Double) {
-        dao.updateProgress(
-            id = id.value,
-            progress = totalProgression.toFloat(),
-            totalProgression = totalProgression,
-            locatorJson = locatorJson,
-            lastOpenedAt = System.currentTimeMillis(),
-        )
+    override suspend fun saveProgress(id: BookId, snapshot: ReadingProgressSnapshot) {
+        val now = System.currentTimeMillis()
+        val canonical = if (snapshot.completed) 1.0 else snapshot.bookProgress.coerceIn(0.0, 0.999)
+        database.withTransaction {
+            dao.updateProgress(
+                id = id.value,
+                progress = canonical.toFloat(),
+                totalProgression = canonical,
+                locatorJson = snapshot.locatorJson,
+                currentChapterId = snapshot.chapterId,
+                completed = snapshot.completed,
+                lastOpenedAt = now,
+            )
+            snapshot.completedChapterId?.let { completedChapterId ->
+                dao.setChapterProgress(
+                    id.value,
+                    completedChapterId,
+                    1f,
+                    now,
+                    manuallyRead = false,
+                )
+                dao.insertReadChapters(
+                    listOf(ChapterReadEntity(id.value, completedChapterId)),
+                )
+            }
+            val chapterId = snapshot.chapterId
+            val chapterProgress = snapshot.chapterProgress?.coerceIn(0.0, 1.0)?.toFloat()
+            if (chapterId != null && chapterProgress != null) {
+                val oldProgress = dao.getChapterProgress(id.value, chapterId)
+                // Repair the v9 bug where entering a continuation resource marked the active logical
+                // chapter read even though its real end had not been reached. A v10 automatic 100%
+                // row is repairable too; explicit manual read overrides remain authoritative.
+                if (
+                    chapterProgress < 0.999f &&
+                    snapshot.currentHref != null &&
+                    snapshot.currentHref != chapterId.substringBefore('#') &&
+                    oldProgress?.manuallyRead != true
+                ) {
+                    dao.deleteReadChapters(id.value, listOf(chapterId))
+                    dao.setChapterProgress(
+                        id.value,
+                        chapterId,
+                        chapterProgress,
+                        now,
+                        manuallyRead = false,
+                    )
+                }
+                dao.saveHighestChapterProgress(id.value, chapterId, chapterProgress, now)
+                if (chapterProgress >= 0.999f) {
+                    dao.insertReadChapters(listOf(ChapterReadEntity(id.value, chapterId)))
+                }
+            }
+        }
     }
 
     override suspend fun recentBooks(limit: Int): List<Book> = dao.getRecentBooks(limit).map { it.toBook() }
@@ -144,31 +201,70 @@ class RoomBookRepository @Inject constructor(
     override suspend fun tableOfContents(id: BookId): List<ReaderTocItem> {
         if (id.value in deletedBookIds) return emptyList()
         tocMemory[id.value]?.let { return it }
-        dao.getCachedToc(id.value)?.let { cached ->
-            runCatching { tocJson.decodeFromString<List<ReaderTocItem>>(cached) }
+        readCachedTableOfContents(id.value)?.let { return it }
+        return tocLoads.run(id.value) {
+            if (id.value in deletedBookIds) return@run emptyList()
+            tocMemory[id.value]?.let { return@run it }
+            readCachedTableOfContents(id.value)?.let { return@run it }
+            val entity = dao.getBook(id.value) ?: return@run emptyList()
+            val items = runCatching { readerEngine.tableOfContents(entity.storagePath) }
                 .getOrNull()
-                ?.let {
-                    tocMemory[id.value] = it
-                    return it
-                }
+                ?: return@run emptyList()
+            if (persistTableOfContents(id.value, items)) items else emptyList()
         }
-        val entity = dao.getBook(id.value) ?: return emptyList()
-        val items = readerEngine.tableOfContents(entity.storagePath)
-        if (items.isNotEmpty() && id.value !in deletedBookIds && dao.getBook(id.value) != null) {
-            tocMemory[id.value] = items
-            runCatching { dao.upsertToc(BookTocEntity(id.value, tocJson.encodeToString(items))) }
+    }
+
+    override suspend fun cacheTableOfContents(id: BookId, items: List<ReaderTocItem>) {
+        if (id.value in deletedBookIds) return
+        tocMemory[id.value]?.let { return }
+        readCachedTableOfContents(id.value)?.let { return }
+        persistTableOfContents(id.value, items)
+    }
+
+    private suspend fun readCachedTableOfContents(bookId: String): List<ReaderTocItem>? {
+        val cached = dao.getCachedToc(bookId) ?: return null
+        return runCatching { tocJson.decodeFromString<List<ReaderTocItem>>(cached) }
+            .getOrNull()
+            ?.also { tocMemory[bookId] = it }
+    }
+
+    private suspend fun persistTableOfContents(
+        bookId: String,
+        items: List<ReaderTocItem>,
+    ): Boolean {
+        if (bookId in deletedBookIds) return false
+        val entity = BookTocEntity(bookId, tocJson.encodeToString(items))
+        val persisted = database.withTransaction {
+            if (bookId in deletedBookIds || dao.getBook(bookId) == null) {
+                false
+            } else {
+                dao.upsertToc(entity)
+                true
+            }
         }
-        return items
+        if (persisted && bookId !in deletedBookIds) tocMemory[bookId] = items
+        return persisted
     }
 
     override fun observeReadChapters(id: BookId): Flow<Set<String>> = dao.observeReadChapters(id.value).map { it.toSet() }
 
+    override fun observeChapterProgress(id: BookId): Flow<Map<String, Float>> = dao.observeChapterProgress(id.value).map { rows -> rows.associate { it.chapterId to it.progress } }
+
     override suspend fun setChaptersRead(id: BookId, chapterIds: List<String>, read: Boolean) {
         if (chapterIds.isEmpty()) return
-        if (read) {
-            dao.insertReadChapters(chapterIds.map { ChapterReadEntity(id.value, it) })
-        } else {
-            dao.deleteReadChapters(id.value, chapterIds)
+        database.withTransaction {
+            val now = System.currentTimeMillis()
+            if (read) {
+                dao.insertReadChapters(chapterIds.map { ChapterReadEntity(id.value, it) })
+                chapterIds.forEach {
+                    dao.setChapterProgress(id.value, it, 1f, now, manuallyRead = true)
+                }
+            } else {
+                dao.deleteReadChapters(id.value, chapterIds)
+                chapterIds.forEach {
+                    dao.setChapterProgress(id.value, it, 0f, now, manuallyRead = false)
+                }
+            }
         }
     }
 

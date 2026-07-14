@@ -1,6 +1,9 @@
 package com.itexpert120.yomu.feature.reader
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -20,6 +23,7 @@ import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.fonts.FontRepository
@@ -30,7 +34,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -40,7 +43,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import java.util.UUID
@@ -108,6 +110,7 @@ data class WordLookupUiState(
     val loading: Boolean = true,
     val result: DictionaryResult? = null,
     val canGoBack: Boolean = false,
+    val webSearchError: Boolean = false,
 )
 
 @HiltViewModel
@@ -135,14 +138,13 @@ class ReaderViewModel @Inject constructor(
     private var searchJob: Job? = null
     private var searchGeneration = 0L
     private var progressSaveJob: Job? = null
-    private var pendingProgress: PendingProgress? = null
+    private var pendingProgress: ReadingProgressSnapshot? = null
 
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
     private val locatorOverride: String? = savedStateHandle["locator"]
 
-    // The resource being read; a chapter is marked read only once the reader leaves it for another.
+    // Logical TOC section currently being read. A section can span multiple resource hrefs.
     private var currentHref: String? = null
-    private val markedChapters = mutableSetOf<String>()
 
     // Resource href -> chapter title, so the top bar can show the current chapter name even when
     // the engine locator carries no title. Retains the last known title to avoid blanking out.
@@ -219,26 +221,22 @@ class ReaderViewModel @Inject constructor(
                 // reading time (post-open) is counted.
                 if (readingStart != null) readingStart = System.currentTimeMillis()
 
-                // Build href -> chapter-title lookup (first entry per resource wins). Served from the
-                // persistent TOC cache so it's instant on subsequent opens.
-                launch {
-                    val items =
-                        withContext(Dispatchers.IO) { repository.tableOfContents(BookId(bookId)) }
-                    val map = LinkedHashMap<String, String>()
-                    items.forEach { map.putIfAbsent(it.id, it.title) }
-                    tocTitles = map
-                    // If the locator already emitted before the TOC finished loading (first-ever open),
-                    // correct the chapter title now instead of waiting for the next page change.
-                    val resolved = currentHref?.let { map[it] }
-                    if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
-                    _state.update {
-                        it.copy(
-                            toc = items,
-                            tocLoading = false,
-                            chapterTitle = lastChapterTitle ?: it.chapterTitle,
-                        )
-                    }
+                // The live publication already contains Readium's parsed navigation tree. Use it
+                // directly instead of opening the EPUB again just to populate Browse.
+                val items = opened.tableOfContents
+                val map = LinkedHashMap<String, String>()
+                items.forEach { map.putIfAbsent(it.id, it.title) }
+                tocTitles = map
+                val resolved = currentHref?.let { map[it] }
+                if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
+                _state.update {
+                    it.copy(
+                        toc = items,
+                        tocLoading = false,
+                        chapterTitle = lastChapterTitle ?: it.chapterTitle,
+                    )
                 }
+                launch { repository.cacheTableOfContents(BookId(bookId), items) }
 
                 // Resolve effective settings (per-book override or global) and keep them applied live.
                 launch {
@@ -251,13 +249,11 @@ class ReaderViewModel @Inject constructor(
                     opened.currentLocator.collect { locator ->
                         if (locator != null) {
                             lastLocator = locator
-                            // Use one canonical value for the footer, slider, completion, and persistence.
-                            // Some EPUBs omit totalProgression, so the engine's chapter-weighted fallback
-                            // keeps their locator resumable instead of discarding it.
-                            val progression = locator.totalProgression ?: locator.bookProgress
-                            // Prefer the TOC chapter title for the current resource; fall back to the
-                            // engine's locator title, then the last known one (never the book name).
-                            val resolved = locator.href?.let { tocTitles[it] } ?: locator.chapterTitle
+                            // The engine owns canonical, position-weighted whole-book progress. A
+                            // publication-provided totalProgression is retained only inside locator JSON.
+                            val progression = locator.bookProgress
+                            val resolved = locator.chapterTitle
+                                ?: locator.chapterId?.let { tocTitles[it] }
                             if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
                             _state.update {
                                 it.copy(
@@ -269,27 +265,26 @@ class ReaderViewModel @Inject constructor(
                                         ?: it.chapterProgression,
                                     hasPreviousChapter = locator.hasPreviousChapter,
                                     hasNextChapter = locator.hasNextChapter,
-                                    currentHref = locator.href,
+                                    currentHref = locator.chapterId ?: locator.href,
                                     currentPageBookmarked = isCurrentBookmarked(it.bookmarks),
                                 )
                             }
-                            val href = locator.href
-                            val chapterChanged = currentHref != null && href != currentHref
+                            val chapterChanged = currentHref != null && locator.chapterId != currentHref
                             if (progression != null) {
-                                scheduleProgressSave(locator.locatorJson, progression)
+                                scheduleProgressSave(
+                                    ReadingProgressSnapshot(
+                                        locatorJson = locator.locatorJson,
+                                        bookProgress = progression,
+                                        currentHref = locator.href,
+                                        chapterId = locator.chapterId,
+                                        chapterProgress = locator.chapterProgression,
+                                        completedChapterId = locator.completedChapterId,
+                                        completed = locator.completed,
+                                    ),
+                                )
                                 if (chapterChanged) persistPendingProgress()
                             }
-                            if (href != currentHref) {
-                                val left = currentHref
-                                if (left != null && markedChapters.add(left)) {
-                                    repository.setChaptersRead(
-                                        BookId(bookId),
-                                        listOf(left),
-                                        read = true,
-                                    )
-                                }
-                                currentHref = href
-                            }
+                            currentHref = locator.chapterId
                         }
                     }
                 }
@@ -494,6 +489,36 @@ class ReaderViewModel @Inject constructor(
         val word = sanitizeWord(raw) ?: return
         if (lookupStack.lastOrNull() == word) return
         pushLookup(word)
+    }
+
+    fun onRetryLookup() {
+        val current = _state.value.lookup ?: return
+        if (current.result !is DictionaryResult.Error || current.loading) return
+        lookupCache.remove(current.word)
+        showLookup(current.word)
+    }
+
+    fun onSearchWeb(word: String) {
+        val uri = Uri.parse("https://www.google.com/search").buildUpon()
+            .appendQueryParameter("q", word)
+            .build()
+        val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.resolveActivity(context.packageManager) == null) {
+            _state.update { state ->
+                state.copy(lookup = state.lookup?.copy(webSearchError = true))
+            }
+            return
+        }
+        try {
+            context.startActivity(intent)
+            _state.update { state ->
+                state.copy(lookup = state.lookup?.copy(webSearchError = false))
+            }
+        } catch (_: ActivityNotFoundException) {
+            _state.update { state ->
+                state.copy(lookup = state.lookup?.copy(webSearchError = true))
+            }
+        }
     }
 
     /** Step back to the previously looked-up word, or close the sheet at the bottom of the stack. */
@@ -707,8 +732,8 @@ class ReaderViewModel @Inject constructor(
         flushPendingProgress()
     }
 
-    private fun scheduleProgressSave(locatorJson: String, progression: Double) {
-        pendingProgress = PendingProgress(locatorJson, progression)
+    private fun scheduleProgressSave(snapshot: ReadingProgressSnapshot) {
+        pendingProgress = snapshot
         if (progressSaveJob?.isActive == true) return
         progressSaveJob = viewModelScope.launch {
             do {
@@ -721,7 +746,7 @@ class ReaderViewModel @Inject constructor(
     private suspend fun persistPendingProgress() {
         val pending = pendingProgress ?: return
         runCatching {
-            repository.saveProgress(BookId(bookId), pending.locatorJson, pending.progression)
+            repository.saveProgress(BookId(bookId), pending)
         }.onSuccess {
             if (pendingProgress == pending) pendingProgress = null
         }
@@ -733,7 +758,7 @@ class ReaderViewModel @Inject constructor(
         val pending = pendingProgress ?: return
         pendingProgress = null
         applicationScope.launch {
-            repository.saveProgress(BookId(bookId), pending.locatorJson, pending.progression)
+            repository.saveProgress(BookId(bookId), pending)
         }
     }
 
@@ -760,6 +785,4 @@ class ReaderViewModel @Inject constructor(
         // Single default highlight colour (a warm yellow) — highlights are no longer multi-colour.
         const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()
     }
-
-    private data class PendingProgress(val locatorJson: String, val progression: Double)
 }

@@ -279,7 +279,7 @@ internal fun ReaderChromeToggles(
             enabled = settings.showFooter,
         )
     }
-    YomuSettingRow(title = "Pages left in chapter") {
+    YomuSettingRow(title = "Chapter remaining") {
         YomuTogglePill(
             checked = settings.footerShowPagesLeft,
             onCheckedChange = { onUpdateSettings(settings.copy(footerShowPagesLeft = it)) },

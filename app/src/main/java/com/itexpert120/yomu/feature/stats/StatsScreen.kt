@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -125,16 +127,18 @@ private fun ColumnScope.Entries(stats: ReadingStats) {
 
 @Composable
 private fun RowScope.MetricCard(value: String, label: String) {
+    val shape = RoundedCornerShape(YomuTheme.radius.md)
+
     Column(
         modifier = Modifier
             .weight(1f)
             .heightIn(min = 80.dp)
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
+            .clip(shape)
             .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
+            .border(1.dp, YomuTheme.colors.border, shape)
             .padding(horizontal = 10.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(
             text = value,
@@ -145,14 +149,17 @@ private fun RowScope.MetricCard(value: String, label: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+
+        Spacer(Modifier.height(4.dp))
+
         Text(
             text = label,
             color = YomuTheme.colors.textMuted,
             style = YomuTheme.type.caption,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
-            minLines = 2,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

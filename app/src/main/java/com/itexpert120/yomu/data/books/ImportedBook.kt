@@ -1,5 +1,7 @@
 package com.itexpert120.yomu.data.books
 
+import com.itexpert120.yomu.core.reader.ReaderTocItem
+
 /** Payload produced by the import pipeline and inserted into the library. */
 data class ImportedBook(
     val id: String,
@@ -17,4 +19,5 @@ data class ImportedBook(
     val sha256: String,
     val fileSizeBytes: Long,
     val addedAt: Long,
+    val tableOfContents: List<ReaderTocItem>?,
 )

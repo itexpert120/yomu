@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         BookEntity::class,
         ChapterReadEntity::class,
+        ChapterProgressEntity::class,
         ReaderSettingsEntity::class,
         BookTocEntity::class,
         ReadingDayEntity::class,
@@ -16,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HighlightEntity::class,
         BookmarkEntity::class,
     ],
-    version = 9,
+    version = 11,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
@@ -136,6 +137,32 @@ abstract class YomuDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_bookmarks_bookId` " +
                         "ON `bookmarks` (`bookId`)",
+                )
+            }
+        }
+
+        /** v10 stores progress for logical TOC sections and the active section on each book. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `currentChapterId` TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `chapter_progress` (" +
+                        "`bookId` TEXT NOT NULL, `chapterId` TEXT NOT NULL, " +
+                        "`progress` REAL NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`bookId`, `chapterId`))",
+                )
+                // Cached v9 TOCs keyed rows only by resource href. Rebuild them with fragment-safe
+                // logical section ids on next access.
+                db.execSQL("DELETE FROM `book_toc`")
+            }
+        }
+
+        /** v11 distinguishes explicit manual read overrides from automatically reached progress. */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `chapter_progress` ADD COLUMN " +
+                        "`manuallyRead` INTEGER NOT NULL DEFAULT 0",
                 )
             }
         }

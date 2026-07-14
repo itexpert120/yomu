@@ -83,7 +83,7 @@ data class ReaderSettings(
     val footerShowBattery: Boolean = true,
     val footerShowClock: Boolean = true,
     val footerShowProgress: Boolean = true,
-    // "X pages left" in the current chapter, shown in the footer (off by default).
+    // Remaining chapter amount in the footer: visual pages in paged mode, percentage in scroll mode.
     val footerShowPagesLeft: Boolean = false,
     // Keep the display awake while reading (on by default).
     val keepScreenOn: Boolean = true,

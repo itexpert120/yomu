@@ -14,6 +14,8 @@ import com.itexpert120.yomu.data.settings.LibraryPrefsRepository
 import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +48,7 @@ class LibraryViewModel @Inject constructor(
     private val search = MutableStateFlow(SearchState())
     private val importState = MutableStateFlow(ImportState())
     private val selection = MutableStateFlow(SelectionState())
+    private var importNoticeDismissJob: Job? = null
 
     val state: StateFlow<LibraryUiState> =
         combine(
@@ -118,24 +121,34 @@ class LibraryViewModel @Inject constructor(
 
     private fun performImport(uris: List<Uri>) {
         viewModelScope.launch {
+            importNoticeDismissJob?.cancel()
             importState.value = ImportState(isImporting = true)
             try {
                 val summary = importBooks.import(uris)
-                importState.value = ImportState(
-                    notice = summary.toNotice(),
-                    retryUris = if (summary.failed > 0) uris else emptyList(),
+                showImportNotice(
+                    ImportState(
+                        notice = summary.toNotice(),
+                        retryUris = if (summary.failed > 0) uris else emptyList(),
+                    ),
                 )
             } catch (_: Throwable) {
-                importState.value = ImportState(
-                    notice = "Import failed. Check the EPUB and try again.",
-                    retryUris = uris,
+                showImportNotice(
+                    ImportState(
+                        notice = "Import failed. Check the EPUB and try again.",
+                        retryUris = uris,
+                    ),
                 )
             }
         }
     }
 
-    fun onDismissImportNotice() {
-        importState.value = ImportState()
+    private fun showImportNotice(notice: ImportState) {
+        importState.value = notice
+        importNoticeDismissJob?.cancel()
+        importNoticeDismissJob = viewModelScope.launch {
+            delay(IMPORT_NOTICE_DURATION_MS)
+            if (importState.value == notice) importState.value = ImportState()
+        }
     }
 
     fun onSearchToggle() = search.update {
@@ -198,3 +211,5 @@ private fun ImportSummary.toNotice(): String = buildList {
     if (duplicates > 0) add("$duplicates duplicate${if (duplicates == 1) "" else "s"}")
     if (failed > 0) add("$failed failed")
 }.joinToString(" · ").ifEmpty { "Nothing imported" }
+
+private const val IMPORT_NOTICE_DURATION_MS = 3_500L

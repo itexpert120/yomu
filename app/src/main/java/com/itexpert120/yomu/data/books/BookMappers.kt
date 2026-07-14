@@ -26,6 +26,8 @@ internal fun BookEntity.toBook(): Book {
         currentChapterProgress = locations?.let {
             if (it.has("progression")) it.optDouble("progression").toFloat() else null
         },
+        currentChapterId = currentChapterId,
+        locatorJson = locatorJson,
         addedAt = addedAt,
         lastOpenedAt = lastOpenedAt,
         startedAt = startedAt,
@@ -51,6 +53,7 @@ internal fun ImportedBook.toEntity(): BookEntity = BookEntity(
     progress = 0f,
     totalProgression = null,
     locatorJson = null,
+    currentChapterId = null,
     addedAt = addedAt,
     lastOpenedAt = 0L,
     startedAt = 0L,

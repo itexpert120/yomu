@@ -47,6 +47,8 @@ data class BookDetailsUi(
     val coverImagePath: String?,
     val coverColors: List<Color>,
     val readingState: ReadingState,
+    val currentChapterId: String? = null,
+    val resumeLocatorJson: String? = null,
 )
 
 /** TOC ordering, expressed in the book's own rendering order rather than alphabetically. */
@@ -82,6 +84,8 @@ data class TocUiState(
     val items: List<TocEntryUi> = emptyList(),
 ) {
     val selectedCount: Int get() = items.count { it.selected }
+    val readCount: Int get() = items.count { it.jumpable && it.read }
+    val unreadCount: Int get() = items.count { it.jumpable && !it.read }
 }
 
 @HiltViewModel
@@ -117,20 +121,23 @@ class BookDetailsViewModel @Inject constructor(
     private val readChapters = repository.observeReadChapters(BookId(bookId))
 
     private val selectionFlow = combine(selectedUids, selectionMode) { uids, mode -> uids to mode }
-    private val positionFlow = repository.observeBook(BookId(bookId))
-        .map { ReadingPosition(it?.currentHref, it?.currentChapterProgress) }
+    private val readingFlow = combine(
+        readChapters,
+        repository.observeChapterProgress(BookId(bookId)),
+    ) { read, progress -> read to progress }
 
     private val configFlow = combine(tocLoading, tocSort) { loading, sort -> loading to sort }
 
     val toc: StateFlow<TocUiState> = combine(
         configFlow,
         tocItems,
-        readChapters,
         selectionFlow,
-        positionFlow,
-    ) { config, items, read, selection, position ->
+        readingFlow,
+        state,
+    ) { config, items, selection, reading, currentBook ->
         val (loading, sort) = config
         val (selected, inSelection) = selection
+        val (read, progress) = reading
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
         val ordered = items.withIndex().toList()
             .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
@@ -139,17 +146,29 @@ class BookDetailsViewModel @Inject constructor(
             sort = sort,
             selectionMode = inSelection,
             items = ordered.map { (uid, it) ->
-                val isRead = it.id in read
+                val storedProgress = progress[it.id]
+                // Logical progress is authoritative once present. The old read table remains a
+                // fallback for pre-v10/manual rows that have not acquired a progress row yet.
+                val isRead = storedProgress?.let { value -> value >= 0.999f } ?: (it.id in read)
                 TocEntryUi(
                     uid = uid,
                     chapterId = it.id,
                     title = it.title,
-                    locatorJson = it.locatorJson,
+                    locatorJson = if (currentBook?.currentChapterId == it.id) {
+                        currentBook.resumeLocatorJson ?: it.locatorJson
+                    } else {
+                        it.locatorJson
+                    },
                     depth = it.depth,
                     read = isRead,
                     selected = uid in selected,
-                    // Show progress only for the chapter currently being read and not yet finished.
-                    percent = if (!isRead && it.id == position.href) position.chapterProgress else null,
+                    percent = if (it.locatorJson == null) {
+                        null
+                    } else if (isRead) {
+                        1f
+                    } else {
+                        storedProgress?.coerceIn(0f, 1f) ?: 0f
+                    },
                 )
             },
         )
@@ -251,8 +270,6 @@ class BookDetailsViewModel @Inject constructor(
 }
 
 /** Current reading position projected for the TOC: which resource and how far through it. */
-private data class ReadingPosition(val href: String?, val chapterProgress: Float?)
-
 private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     id = id.value,
     title = title,
@@ -269,6 +286,8 @@ private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     coverImagePath = coverImagePath,
     coverColors = coverPalette.map { Color(it) },
     readingState = readingState,
+    currentChapterId = currentChapterId,
+    resumeLocatorJson = locatorJson,
 )
 
 /** "3h 24m" / "12m" / "<1m" for any positive duration; null when nothing has been read. */

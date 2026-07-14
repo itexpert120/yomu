@@ -23,8 +23,15 @@ data class ReaderLocator(
     // smoothly-advancing "% through book" display. Unlike the engine's totalProgression it never sits
     // near 0 through a whole early chapter of a many-chapter book.
     val bookProgress: Double? = null,
-    // Pages (content positions) remaining in the current chapter, or null until positions are indexed.
+    // Visual pages remaining in paged mode; null in scroll mode.
     val chapterPagesLeft: Int? = null,
+    // Stable logical TOC section containing [href]. A section may span several reading-order
+    // resources, unlike [href], which always identifies the currently rendered resource.
+    val chapterId: String? = null,
+    // A preceding logical section whose end was just crossed through continuous reading.
+    val completedChapterId: String? = null,
+    // True only when the actual final page/end of the publication has been reached.
+    val completed: Boolean = false,
 )
 
 /**
@@ -39,6 +46,9 @@ data class ReaderTocItem(
     val title: String,
     val locatorJson: String?,
     val depth: Int,
+    // Raw resource href for matching old caches and locators. [id] additionally includes a fragment
+    // when needed so two TOC sections in one XHTML resource remain independently addressable.
+    val resourceHref: String = id,
 )
 
 /**
@@ -63,7 +73,7 @@ interface ReaderEngine {
     ): ReaderSession?
 
     /** Reads the book's table of contents without starting a reading session. */
-    suspend fun tableOfContents(filePath: String): List<ReaderTocItem>
+    suspend fun tableOfContents(filePath: String): List<ReaderTocItem>?
 }
 
 /**
@@ -73,6 +83,7 @@ interface ReaderEngine {
  */
 interface ReaderSession {
     val title: String
+    val tableOfContents: List<ReaderTocItem>
     val currentLocator: StateFlow<ReaderLocator?>
 
     /**

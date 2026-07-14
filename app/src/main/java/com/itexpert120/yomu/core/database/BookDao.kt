@@ -47,7 +47,7 @@ interface BookDao {
     // Reverting to unread clears the finished mark but keeps the original start (it was started once).
     @Query(
         "UPDATE books SET progress = 0.0, totalProgression = NULL, locatorJson = NULL, " +
-            "finishedAt = 0 WHERE id = :id",
+            "currentChapterId = NULL, finishedAt = 0 WHERE id = :id",
     )
     suspend fun markUnread(id: String)
 
@@ -66,16 +66,20 @@ interface BookDao {
 
     @Query(
         "UPDATE books SET progress = :progress, totalProgression = :totalProgression, " +
-            "locatorJson = :locatorJson, lastOpenedAt = :lastOpenedAt, " +
+            "locatorJson = :locatorJson, currentChapterId = :currentChapterId, " +
+            "lastOpenedAt = :lastOpenedAt, " +
             "startedAt = CASE WHEN startedAt = 0 THEN :lastOpenedAt ELSE startedAt END, " +
-            "finishedAt = CASE WHEN :progress >= 0.999 AND finishedAt = 0 THEN :lastOpenedAt " +
-            "ELSE finishedAt END WHERE id = :id",
+            "finishedAt = CASE WHEN :completed = 1 THEN " +
+            "CASE WHEN finishedAt = 0 THEN :lastOpenedAt ELSE finishedAt END " +
+            "ELSE 0 END WHERE id = :id",
     )
     suspend fun updateProgress(
         id: String,
         progress: Float,
         totalProgression: Double?,
         locatorJson: String?,
+        currentChapterId: String?,
+        completed: Boolean,
         lastOpenedAt: Long,
     )
 
@@ -95,6 +99,43 @@ interface BookDao {
 
     @Query("DELETE FROM chapter_reads WHERE bookId IN (:bookIds)")
     suspend fun deleteAllReadChapters(bookIds: List<String>)
+
+    @Query("SELECT * FROM chapter_progress WHERE bookId = :bookId")
+    fun observeChapterProgress(bookId: String): Flow<List<ChapterProgressEntity>>
+
+    @Query("SELECT * FROM chapter_progress WHERE bookId = :bookId AND chapterId = :chapterId")
+    suspend fun getChapterProgress(bookId: String, chapterId: String): ChapterProgressEntity?
+
+    @Query(
+        "INSERT INTO chapter_progress(bookId, chapterId, progress, updatedAt, manuallyRead) " +
+            "VALUES(:bookId, :chapterId, :progress, :updatedAt, 0) " +
+            "ON CONFLICT(bookId, chapterId) DO UPDATE SET " +
+            "progress = MAX(progress, excluded.progress), updatedAt = excluded.updatedAt",
+    )
+    suspend fun saveHighestChapterProgress(
+        bookId: String,
+        chapterId: String,
+        progress: Float,
+        updatedAt: Long,
+    )
+
+    @Query(
+        "INSERT INTO chapter_progress(bookId, chapterId, progress, updatedAt, manuallyRead) " +
+            "VALUES(:bookId, :chapterId, :progress, :updatedAt, :manuallyRead) " +
+            "ON CONFLICT(bookId, chapterId) DO UPDATE SET " +
+            "progress = excluded.progress, updatedAt = excluded.updatedAt, " +
+            "manuallyRead = excluded.manuallyRead",
+    )
+    suspend fun setChapterProgress(
+        bookId: String,
+        chapterId: String,
+        progress: Float,
+        updatedAt: Long,
+        manuallyRead: Boolean,
+    )
+
+    @Query("DELETE FROM chapter_progress WHERE bookId IN (:bookIds)")
+    suspend fun deleteAllChapterProgress(bookIds: List<String>)
 
     // endregion
 

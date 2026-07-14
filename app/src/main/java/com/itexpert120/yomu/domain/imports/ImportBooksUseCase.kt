@@ -100,6 +100,7 @@ class ImportBooksUseCase @Inject constructor(
                     sha256 = copied.sha256,
                     fileSizeBytes = copied.sizeBytes,
                     addedAt = System.currentTimeMillis(),
+                    tableOfContents = metadata?.tableOfContents,
                 ),
             )
             if (!inserted) {

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.util.Base64
@@ -68,7 +69,6 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
-import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.publication.services.search.SearchIterator
 import org.readium.r2.shared.publication.services.search.search
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -79,8 +79,10 @@ import org.readium.r2.shared.util.toUrl
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
+import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
@@ -107,25 +109,24 @@ class ReadiumReaderEngine @Inject constructor(
         initialSettings: ReaderSettings,
     ): ReaderSession? {
         val publication = openPublication(filePath) ?: return null
+        val resourceWeights = loadResourceWeights(filePath, publication.readingOrder)
+        val tableOfContents = withContext(Dispatchers.Default) {
+            publication.flattenedTableOfContents()
+        }
         return ReadiumReaderSession(
             context,
             publication,
             initialLocatorJson,
             initialSettings,
+            resourceWeights,
+            tableOfContents,
         )
     }
 
-    override suspend fun tableOfContents(filePath: String): List<ReaderTocItem> {
-        val publication = openPublication(filePath) ?: return emptyList()
+    override suspend fun tableOfContents(filePath: String): List<ReaderTocItem>? {
+        val publication = openPublication(filePath) ?: return null
         return try {
-            buildList {
-                flattenToc(
-                    publication,
-                    publication.tableOfContents,
-                    depth = 0,
-                    out = this,
-                )
-            }
+            publication.flattenedTableOfContents().map { it.item }
         } finally {
             runCatching { publication.close() }
         }
@@ -141,30 +142,31 @@ class ReadiumReaderEngine @Inject constructor(
             }
     }
 
-    // Flatten the TOC tree depth-first, preserving reading order and recording nesting depth.
-    private fun flattenToc(
-        publication: Publication,
-        links: List<Link>,
-        depth: Int,
-        out: MutableList<ReaderTocItem>,
-    ) {
-        for (link in links) {
-            val title = link.title?.trim()?.takeIf { it.isNotEmpty() }
-            if (title != null) {
-                val locator = publication.locatorFromLink(link)
-                out += ReaderTocItem(
-                    // Key on the resource href (from the resolved locator) so it matches the
-                    // reader's ReaderLocator.href and read-state tracks as the user reads.
-                    id = locator?.href?.toString() ?: link.url().toString(),
-                    title = title,
-                    locatorJson = locator?.toJSON()?.toString(),
-                    depth = depth,
-                )
+    private suspend fun loadResourceWeights(
+        filePath: String,
+        readingOrder: List<Link>,
+    ): List<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            ZipFile(File(filePath)).use { archive ->
+                readingOrder.map { link ->
+                    val entryName = link.url().toString()
+                        .substringBefore('#')
+                        .substringBefore('?')
+                        .removePrefix("/")
+                    val length = (
+                        archive.getEntry(entryName)
+                            ?: archive.getEntry(Uri.decode(entryName))
+                        )?.size ?: 0L
+                    ceil(length.coerceAtLeast(1L).toDouble() / POSITION_CHUNK_BYTES)
+                        .toInt()
+                        .coerceAtLeast(1)
+                }
             }
-            if (link.children.isNotEmpty()) {
-                flattenToc(publication, link.children, depth + 1, out)
-            }
-        }
+        }.getOrElse { List(readingOrder.size) { 1 } }
+    }
+
+    private companion object {
+        const val POSITION_CHUNK_BYTES = 1024.0
     }
 }
 
@@ -174,9 +176,12 @@ private class ReadiumReaderSession(
     private val publication: Publication,
     initialLocatorJson: String?,
     initialSettings: ReaderSettings,
+    private val resourceWeights: List<Int>,
+    mappedTableOfContents: List<ReadiumTocEntry>,
 ) : ReaderSession {
 
     override val title: String = publication.metadata.title ?: "Reading"
+    override val tableOfContents: List<ReaderTocItem> = mappedTableOfContents.map { it.item }
 
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
@@ -227,6 +232,7 @@ private class ReadiumReaderSession(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
     private var locatorCollectionJob: Job? = null
+    private var scrollProgressJob: Job? = null
     private var restorationJob: Job? = null
     private var restorationGeneration = 0L
     private var hostedFragmentManager: FragmentManager? = null
@@ -243,12 +249,8 @@ private class ReadiumReaderSession(
     // initial-locator emissions are ignored during this window so they can't clobber saved progress.
     private var restoring = false
 
-    // Per-resource reading-position progressions. Used as a scroll-mode fallback for "pages left";
-    // paged mode uses Readium's visual page callback so the count changes on every page turn.
-    private var positionsByHref: Map<String, List<Double>>? = null
-    private var publicationPositions: List<Locator>? = null
-
     private var latestVisualPage: VisualPageState? = null
+    private var pendingCompletedChapterId: String? = null
 
     // The resource we last injected the scroll-width CSS override into (re-injected per resource).
     private var lastStyledHref: String? = null
@@ -265,6 +267,28 @@ private class ReadiumReaderSession(
 
     private val navigatorFactory = EpubNavigatorFactory(publication)
 
+    private data class LogicalSection(
+        val id: String,
+        val title: String,
+        val locator: Locator,
+        val orderIndex: Int,
+        val startProgression: Double,
+    )
+
+    private val logicalSections: List<LogicalSection> = mappedTableOfContents
+        .mapNotNull { entry ->
+            val locator = entry.locator ?: return@mapNotNull null
+            if (entry.readingOrderIndex < 0) return@mapNotNull null
+            LogicalSection(
+                id = entry.item.id,
+                title = entry.item.title,
+                locator = locator,
+                orderIndex = entry.readingOrderIndex,
+                startProgression = entry.startProgression,
+            )
+        }
+        .sortedWith(compareBy<LogicalSection> { it.orderIndex }.thenBy { it.startProgression })
+
     private val listener = object : EpubNavigatorFragment.Listener {
         override fun onExternalLinkActivated(url: AbsoluteUrl) {
             // Custom-scheme links injected by the scroll-mode rubberband overscroll gesture route
@@ -273,7 +297,7 @@ private class ReadiumReaderSession(
             val s = url.toString()
             when {
                 s.startsWith(PREV_CHAPTER_URL) -> goToPreviousResourceEnd()
-                s.startsWith(NEXT_CHAPTER_URL) -> nextChapter()
+                s.startsWith(NEXT_CHAPTER_URL) -> goToNextResourceStart()
             }
         }
 
@@ -337,6 +361,7 @@ private class ReadiumReaderSession(
     override val fragmentFactory: FragmentFactory =
         navigatorFactory.createFragmentFactory(
             initialLocator = initialLocator,
+            readingOrder = publication.readingOrder,
             initialPreferences = initialSettings.toPreferences(),
             listener = listener,
             paginationListener = paginationListener,
@@ -364,8 +389,9 @@ private class ReadiumReaderSession(
                         menu.add(Menu.NONE, MENU_COPY, 0, android.R.string.copy)
                         menu.add(Menu.NONE, MENU_HIGHLIGHT, 1, "Highlight")
                         menu.add(Menu.NONE, MENU_LOOK_UP, 2, "Look up")
-                        menu.add(Menu.NONE, MENU_SPEAK, 3, "Read aloud")
-                        menu.add(Menu.NONE, MENU_SHARE, 4, "Share")
+                        menu.add(Menu.NONE, MENU_SEARCH_WEB, 3, "Search web")
+                        menu.add(Menu.NONE, MENU_SPEAK, 4, "Read aloud")
+                        menu.add(Menu.NONE, MENU_SHARE, 5, "Share")
                         return true
                     }
 
@@ -377,6 +403,7 @@ private class ReadiumReaderSession(
                                 MENU_COPY,
                                 MENU_HIGHLIGHT,
                                 MENU_LOOK_UP,
+                                MENU_SEARCH_WEB,
                                 MENU_SPEAK,
                                 MENU_SHARE,
                             )
@@ -393,6 +420,7 @@ private class ReadiumReaderSession(
                                     MENU_SPEAK -> speakSelection(text)
                                     MENU_SHARE -> shareSelection(text)
                                     MENU_LOOK_UP -> _lookUpRequests.tryEmit(text)
+                                    MENU_SEARCH_WEB -> searchWeb(text)
                                     MENU_HIGHLIGHT -> _highlightRequests.tryEmit(
                                         ReaderHighlightDraft(
                                             locatorJson = locator.toJSON().toString(),
@@ -507,17 +535,6 @@ private class ReadiumReaderSession(
         hostedFragmentTag = tag
         locatorCollectionJob?.cancel()
         pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
-        // Index page boundaries per resource once (off the main path) for "pages left in chapter".
-        if (positionsByHref == null) {
-            scope.launch {
-                positionsByHref = runCatching { loadPublicationPositions() }
-                    .getOrNull()
-                    ?.groupBy { it.href.toString() }
-                    ?.mapValues { (_, locs) ->
-                        locs.mapNotNull { it.locations.progression }.sorted()
-                    }
-            }
-        }
         // On a re-host (config change), the fresh fragment opens at the original initialLocator. If we
         // already have a position, restore it so the reader doesn't snap back to an earlier chapter —
         // and ignore the fragment's transient emissions until then so they can't overwrite progress.
@@ -664,24 +681,52 @@ private class ReadiumReaderSession(
         val totalPages: Int,
     )
 
-    private fun updateCurrentLocator(locator: Locator, visualPage: VisualPageState? = null) {
+    private data class ScrollProgressState(
+        val href: String,
+        val progression: Double,
+    )
+
+    private var latestScrollProgress: ScrollProgressState? = null
+
+    private data class ProgressMetrics(
+        val bookProgress: Double,
+        val chapter: LogicalSection?,
+        val chapterProgress: Double?,
+        val chapterIndex: Int,
+        val completed: Boolean,
+    )
+
+    private fun updateCurrentLocator(
+        locator: Locator,
+        visualPage: VisualPageState? = null,
+        measuredScrollProgress: Double? = null,
+        queryScrollProgress: Boolean = true,
+    ) {
         if (restoring) return
         visualPage?.let { latestVisualPage = it }
+        val previousHref = lastLocator?.href?.toString()
         lastLocator = locator
         val hrefStr = locator.href.toString()
+        if (latestScrollProgress?.href != hrefStr) latestScrollProgress = null
+        measuredScrollProgress?.let {
+            latestScrollProgress = ScrollProgressState(hrefStr, it.coerceIn(0.0, 1.0))
+        }
+        if (currentSettings.layout == ReaderLayout.Scroll && queryScrollProgress) {
+            requestScrollProgress(locator)
+        }
         // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
         // RsProperties maxLineLength can't override (it's set per-resource on body). Inject a
         // style override so scroll mode fills the width too. Re-applied per resource.
         val order = publication.readingOrder
         val index = order.indexOfFirst { it.url().toString() == hrefStr }
-        val hasNext = index in 0 until order.lastIndex
-        // Chapter-weighted whole-book progress: advances smoothly even through an early chapter of a
-        // many-chapter book (where Readium's totalProgression barely moves).
-        val bookProgress = if (index >= 0 && order.isNotEmpty()) {
-            ((index + (locator.locations.progression ?: 0.0)) / order.size).coerceIn(0.0, 1.0)
-        } else {
-            null
-        }
+        val metrics = progressMetrics(locator, visualPage ?: latestVisualPage)
+        val crossedChapterId = completedSectionOnSequentialCrossing(
+            pendingChapterId = pendingCompletedChapterId,
+            currentChapterId = metrics.chapter?.id,
+            previousHref = previousHref,
+            currentHref = hrefStr,
+        )
+        if (crossedChapterId != null) pendingCompletedChapterId = null
         val visualPagesLeft = latestVisualPage
             ?.takeIf {
                 currentSettings.layout == ReaderLayout.Paged &&
@@ -692,11 +737,6 @@ private class ReadiumReaderSession(
                 val pageIndex = it.pageIndex.coerceIn(0, it.totalPages - 1)
                 (it.totalPages - pageIndex - 1).coerceAtLeast(0)
             }
-        // In scroll mode there is no visual page index, so fall back to Readium positions.
-        val pagesLeft = visualPagesLeft ?: positionsByHref?.get(hrefStr)?.let { positions ->
-            val prog = locator.locations.progression ?: 0.0
-            positions.count { it > prog + 1e-6 }
-        }
         if (hrefStr != lastStyledHref) {
             lastStyledHref = hrefStr
             scope.launch {
@@ -710,18 +750,63 @@ private class ReadiumReaderSession(
         _currentLocator.value = ReaderLocator(
             locatorJson = locator.toJSON().toString(),
             totalProgression = locator.locations.totalProgression,
-            chapterTitle = locator.title,
+            chapterTitle = metrics.chapter?.title ?: locator.title,
             href = hrefStr,
-            chapterProgression = locator.locations.progression,
-            hasPreviousChapter = index > 0,
-            hasNextChapter = hasNext,
-            bookProgress = bookProgress,
-            chapterPagesLeft = pagesLeft,
+            chapterProgression = metrics.chapterProgress,
+            hasPreviousChapter = metrics.chapterIndex > 0,
+            hasNextChapter = metrics.chapterIndex in 0 until logicalSections.lastIndex,
+            bookProgress = metrics.bookProgress,
+            chapterPagesLeft = visualPagesLeft,
+            chapterId = metrics.chapter?.id,
+            completedChapterId = crossedChapterId,
+            completed = metrics.completed,
+        )
+    }
+
+    private fun progressMetrics(locator: Locator, visualPage: VisualPageState?): ProgressMetrics {
+        val order = publication.readingOrder
+        val href = locator.href.toString()
+        val resourceIndex = order.indexOfFirst { it.url().toString() == href }
+        if (resourceIndex < 0 || order.isEmpty()) {
+            return ProgressMetrics(0.0, null, null, -1, false)
+        }
+        val visualPageProgress = visualPage
+            ?.takeIf { it.href == href && it.totalPages > 0 }
+            ?.let { (it.pageIndex + 1).toDouble() / it.totalPages }
+        val resourceProgress = resolveResourceProgress(
+            locatorProgress = locator.locations.progression,
+            visualPageProgress = visualPageProgress,
+            measuredScrollProgress = latestScrollProgress
+                ?.takeIf { it.href == href }
+                ?.progression,
+            useVisualPageProgress = currentSettings.layout == ReaderLayout.Paged,
+        )
+        val weights = resourceWeights.takeIf { it.size == order.size }
+            ?: List(order.size) { 1 }
+        val logical = calculateLogicalProgress(
+            resourceIndex = resourceIndex,
+            resourceProgress = resourceProgress,
+            locatorProgress = locator.locations.progression ?: 0.0,
+            resourceWeights = weights,
+            sections = logicalSections.map { SectionBoundary(it.orderIndex, it.startProgression) },
+        )
+        val chapterIndex = logical.sectionIndex
+        val chapter = logicalSections.getOrNull(chapterIndex)
+        return ProgressMetrics(
+            bookProgress = logical.bookProgress,
+            chapter = chapter,
+            chapterProgress = logical.sectionProgress,
+            chapterIndex = chapterIndex,
+            completed = logical.completed,
         )
     }
     override fun applySettings(settings: ReaderSettings) {
         pendingSettings = settings
         currentSettings = settings
+        if (settings.layout != ReaderLayout.Scroll) {
+            scrollProgressJob?.cancel()
+            latestScrollProgress = null
+        }
         navigator?.submitPreferences(settings.toPreferences())
         // Re-toggle/re-theme the native scrollbar (it's scroll-mode only and tracks the text colour).
         applyScrollbars(settings)
@@ -981,16 +1066,14 @@ private class ReadiumReaderSession(
         (navigator as? OverflowableNavigator)?.goBackward()
     }
 
-    override fun nextChapter() = goToReadingOrderOffset(+1)
+    override fun nextChapter() = goToLogicalSectionOffset(+1)
 
-    override fun previousChapter() = goToReadingOrderOffset(-1)
+    override fun previousChapter() = goToLogicalSectionOffset(-1)
 
-    private fun goToReadingOrderOffset(delta: Int) {
-        val hrefStr = lastLocator?.href?.toString() ?: return
-        val order = publication.readingOrder
-        val index = order.indexOfFirst { it.url().toString() == hrefStr }
-        val link = order.getOrNull(index + delta) ?: return
-        val target = publication.locatorFromLink(link) ?: return
+    private fun goToLogicalSectionOffset(delta: Int) {
+        val current = lastLocator ?: return
+        val index = progressMetrics(current, latestVisualPage).chapterIndex
+        val target = logicalSections.getOrNull(index + delta)?.locator ?: return
         beginChapterTransition(forward = delta > 0)
         scope.launch { navigator?.let { goChecked(it, target) } }
     }
@@ -1008,32 +1091,80 @@ private class ReadiumReaderSession(
         scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
+    // Scroll overscroll represents continuous reading, so advance to the immediately following
+    // spine resource. A logical TOC chapter can span several resources (for example chapter005 and
+    // chapter006 in the Yen Press test book); using nextChapter() here would skip its actual text.
+    private fun goToNextResourceStart() {
+        val hrefStr = lastLocator?.href?.toString() ?: return
+        val order = publication.readingOrder
+        val index = order.indexOfFirst { it.url().toString() == hrefStr }
+        val next = order.getOrNull(index + 1) ?: return
+        val target = publication.locatorFromLink(next) ?: return
+        val currentSection = lastLocator
+            ?.let { logicalSections.getOrNull(progressMetrics(it, latestVisualPage).chapterIndex) }
+        val targetSection = logicalSections.getOrNull(progressMetrics(target, null).chapterIndex)
+        val completedChapterId = currentSection?.id
+            ?.takeIf { targetSection?.id != it }
+        beginChapterTransition(forward = true)
+        scope.launch {
+            val nav = navigator ?: return@launch
+            pendingCompletedChapterId = completedChapterId
+            if (!goChecked(nav, target)) pendingCompletedChapterId = null
+        }
+    }
+
     override fun goToProgression(totalProgression: Double) {
         scope.launch {
-            // Map the requested whole-book progression to the nearest known position.
-            val positions = runCatching { loadPublicationPositions() }.getOrNull() ?: return@launch
-            val target = positions.minByOrNull {
-                kotlin.math.abs((it.locations.totalProgression ?: 0.0) - totalProgression)
-            } ?: return@launch
+            val order = publication.readingOrder
+            val weights = resourceWeights.takeIf { it.size == order.size }
+                ?: List(order.size) { 1 }
+            val weightedTarget = weightedProgressTarget(totalProgression, weights)
+                ?: return@launch
+            val target = order.getOrNull(weightedTarget.resourceIndex)
+                ?.let { publication.locatorFromLink(it) }
+                ?.let { locator ->
+                    locator.copy(
+                        locations = locator.locations.copy(
+                            progression = weightedTarget.resourceProgress,
+                        ),
+                    )
+                } ?: return@launch
             // Cover only when landing on a different resource (a same-resource jump doesn't reload, so
             // onPageLoaded wouldn't fire to lift the cover).
             if (target.href.toString() != lastLocator?.href?.toString()) {
-                val forward = (target.locations.totalProgression ?: 0.0) >=
-                    (lastLocator?.locations?.totalProgression ?: 0.0)
+                val forward = totalProgression >=
+                    (lastLocator?.let { progressMetrics(it, latestVisualPage).bookProgress } ?: 0.0)
                 beginChapterTransition(forward = forward)
             }
             navigator?.let { goChecked(it, target) }
         }
     }
 
-    override fun scrollToChapterStart() = goToChapterProgression(0.0)
+    override fun scrollToChapterStart() {
+        val current = lastLocator ?: return
+        val section = logicalSections.getOrNull(progressMetrics(current, latestVisualPage).chapterIndex)
+            ?: return
+        scope.launch { navigator?.let { goChecked(it, section.locator) } }
+    }
 
-    override fun scrollToChapterEnd() = goToChapterProgression(0.999)
-
-    // Jump within the current resource by replacing only its progression, so start/end stay in-chapter.
-    private fun goToChapterProgression(progression: Double) {
-        val base = lastLocator ?: return
-        val target = base.copy(locations = Locator.Locations(progression = progression))
+    override fun scrollToChapterEnd() {
+        val current = lastLocator ?: return
+        val sectionIndex = progressMetrics(current, latestVisualPage).chapterIndex
+        val section = logicalSections.getOrNull(sectionIndex) ?: return
+        val next = logicalSections.getOrNull(sectionIndex + 1)
+        val target = when {
+            next == null -> publication.readingOrder.lastOrNull()
+                ?.let { publication.locatorFromLink(it) }
+                ?.copy(locations = Locator.Locations(progression = 0.999))
+            next.orderIndex == section.orderIndex -> next.locator.copy(
+                locations = next.locator.locations.copy(
+                    progression = (next.startProgression - 0.001).coerceAtLeast(0.0),
+                ),
+            )
+            else -> publication.readingOrder.getOrNull(next.orderIndex - 1)
+                ?.let { publication.locatorFromLink(it) }
+                ?.copy(locations = Locator.Locations(progression = 0.999))
+        } ?: return
         scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
@@ -1042,8 +1173,8 @@ private class ReadiumReaderSession(
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
         // Cover only on a cross-resource jump (same-resource jumps don't reload to lift the cover).
         if (locator.href.toString() != lastLocator?.href?.toString()) {
-            val forward = (locator.locations.totalProgression ?: 0.0) >=
-                (lastLocator?.locations?.totalProgression ?: 0.0)
+            val forward = progressMetrics(locator, null).bookProgress >=
+                (lastLocator?.let { progressMetrics(it, latestVisualPage).bookProgress } ?: 0.0)
             beginChapterTransition(forward = forward)
         }
         scope.launch { navigator?.let { goChecked(it, locator) } }
@@ -1164,6 +1295,8 @@ private class ReadiumReaderSession(
         restorationJob = null
         locatorCollectionJob?.cancel()
         locatorCollectionJob = null
+        scrollProgressJob?.cancel()
+        scrollProgressJob = null
         hostedFragmentManager = null
         hostedFragmentTag = null
         scope.cancel()
@@ -1174,10 +1307,22 @@ private class ReadiumReaderSession(
         runCatching { publication.close() }
     }
 
-    private suspend fun loadPublicationPositions(): List<Locator> {
-        publicationPositions?.let { return it }
-        return withContext(Dispatchers.Default) { publication.positions() }
-            .also { publicationPositions = it }
+    private fun requestScrollProgress(locator: Locator) {
+        val nav = navigator ?: return
+        val href = locator.href.toString()
+        scrollProgressJob?.cancel()
+        scrollProgressJob = scope.launch {
+            delay(SCROLL_PROGRESS_DEBOUNCE_MS)
+            if (navigator !== nav || currentSettings.layout != ReaderLayout.Scroll) return@launch
+            val result = runCatching { nav.evaluateJavascript(SCROLL_PROGRESS_JS) }.getOrNull()
+            val progression = result?.trim('"')?.toDoubleOrNull() ?: return@launch
+            if (lastLocator?.href?.toString() != href) return@launch
+            updateCurrentLocator(
+                locator = locator,
+                measuredScrollProgress = progression,
+                queryScrollProgress = false,
+            )
+        }
     }
 
     private fun Locator.matchesRestoreTarget(target: Locator): Boolean {
@@ -1217,6 +1362,16 @@ private class ReadiumReaderSession(
         }
         val chooser = Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(chooser) }
+    }
+
+    private fun searchWeb(text: String) {
+        val uri = Uri.parse("https://www.google.com/search").buildUpon()
+            .appendQueryParameter("q", text)
+            .build()
+        val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.resolveActivity(context.packageManager) != null) {
+            runCatching { context.startActivity(intent) }
+        }
     }
 
     // Builds the injected JS for the scroll-mode rubberband chapter gesture. Idempotent per document
@@ -1263,6 +1418,7 @@ private class ReadiumReaderSession(
               var body = document.body;
               var baseTransform = body ? body.style.transform : '';
               var baseWillChange = body ? body.style.willChange : '';
+              var hideTimer = 0;
               // 'contain' only stops scroll-chaining to the parent — Chromium/Android WebView still
               // plays its own native overscroll glow/rubber-band content-stretch at the boundary, which
               // fires the instant the finger pulls past the edge (before our touchmove handler below
@@ -1274,10 +1430,12 @@ private class ReadiumReaderSession(
               if (document.body) document.body.style.overscrollBehaviorY = 'none';
               var hint = document.createElement('div');
               hint.id = 'yomu-overscroll';
+              hint.setAttribute('data-yomu-hidden', 'true');
+              hint.setAttribute('aria-hidden', 'true');
               hint.style.cssText = [
                 'position:fixed', 'left:50%', 'z-index:2147483647', 'box-sizing:border-box',
                 'width:42px', 'height:42px', 'border-radius:50%',
-                'display:flex', 'align-items:center', 'justify-content:center',
+                'display:none', 'align-items:center', 'justify-content:center',
                 'font:600 22px system-ui,-apple-system,Roboto,sans-serif', 'line-height:1',
                 'background:$fill', 'border:1px solid $border', 'color:$accent',
                 'opacity:0', 'transform:translateX(-50%) scale(0.7)',
@@ -1346,14 +1504,28 @@ private class ReadiumReaderSession(
                 }
                 renderHintTransform();
               }
+              function showHint() {
+                if (hideTimer) { window.clearTimeout(hideTimer); hideTimer = 0; }
+                hint.setAttribute('data-yomu-hidden', 'false');
+                hint.setAttribute('aria-hidden', 'false');
+                hint.style.setProperty('display', 'flex', 'important');
+              }
               function fadeHint() {
                 hint.style.opacity = 0;
                 hint.style.background = '$fill';
                 hint.style.color = '$accent';
                 st.hintScale = 0.7;
                 renderHintTransform();
+                if (hideTimer) window.clearTimeout(hideTimer);
+                hideTimer = window.setTimeout(function() {
+                  hint.setAttribute('data-yomu-hidden', 'true');
+                  hint.setAttribute('aria-hidden', 'true');
+                  hint.style.setProperty('display', 'none', 'important');
+                  hideTimer = 0;
+                }, 180);
               }
               function updateHint(pull) {
+                showHint();
                 var p = Math.min(pull / THRESHOLD, 1);
                 hint.style.opacity = p;
                 if (st.armed) {
@@ -1411,6 +1583,7 @@ private class ReadiumReaderSession(
                            : (dy < 0 && atBottom() && st.hasNext) ? 1 : 0;
                   if (cand === 0) return;
                   st.engaged = true; st.dir = cand; st.engageY = y;
+                  showHint();
                   if (st.svgDir !== cand) { st.svgDir = cand; setArrow(cand < 0); }
                   if (cand < 0) { hint.style.top = st.topHint + 'px'; hint.style.bottom = 'auto'; }
                   else { hint.style.bottom = '18px'; hint.style.top = 'auto'; }
@@ -1495,6 +1668,7 @@ private class ReadiumReaderSession(
         const val MENU_SPEAK = 3
         const val MENU_SHARE = 4
         const val MENU_HIGHLIGHT = 5
+        const val MENU_SEARCH_WEB = 6
 
         // Decoration group name for user highlights.
         const val HIGHLIGHTS_GROUP = "highlights"
@@ -1512,9 +1686,18 @@ private class ReadiumReaderSession(
         const val RESUME_CHECK_DELAY_MS = 300L
         const val NAVIGATOR_CONTENT_CHECK_ATTEMPTS = 6
         const val NAVIGATOR_CONTENT_CHECK_DELAY_MS = 150L
+        const val SCROLL_PROGRESS_DEBOUNCE_MS = 48L
         const val NAVIGATOR_CONTENT_CHECK_JS =
             "(function(){var b=document&&document.body;" +
                 "return !!(b&&(b.childElementCount>0||(b.textContent||'').trim().length>0));})()"
+        const val SCROLL_PROGRESS_JS =
+            "(function(){" +
+                "var e=document.scrollingElement||document.documentElement||document.body;" +
+                "if(!e)return null;" +
+                "var top=Math.max(window.pageYOffset||0,e.scrollTop||0);" +
+                "var max=Math.max(0,e.scrollHeight-e.clientHeight);" +
+                "return max<=1?1:Math.max(0,Math.min(1,top/max));" +
+                "})()"
 
         // Custom-scheme URLs behind the scroll-mode rubberband overscroll gesture (intercepted in
         // onExternalLinkActivated).
@@ -1609,6 +1792,9 @@ private class ReadiumReaderSession(
                 // (rubberband) bottom detection sits mid-screen. Force the page to at least fill the
                 // viewport so the reading background covers it and bottom-of-chapter is the screen edge.
                 ':root[style*="readium-scroll-on"] body{min-height:100vh!important}',
+                // Opacity alone leaves the fixed overscroll SVG rendered in WebView's scroll-height
+                // accounting. Collapse it completely while idle in every scroll presentation.
+                ':root[style*="readium-scroll-on"] #yomu-overscroll[data-yomu-hidden="true"]{display:none!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}',
                 $topPaddingFix
                 $spacerCss
               ].filter(Boolean).join('\n');

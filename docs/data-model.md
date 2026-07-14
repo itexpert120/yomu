@@ -4,17 +4,17 @@ This document defines the first-pass data model for Yomu. It is intentionally im
 
 ## Implementation status (current)
 
-Room is live at **schema version 9** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→9 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
+Room is live at **schema version 11** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→11 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
 
-- Built tables: `books`, `chapter_reads`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
+- Built tables: `books`, `chapter_reads`, `chapter_progress`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
 - Library view preferences and app settings (theme, OLED toggle, accent) live in Preferences DataStore.
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
 - Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
-The "As-built schema (v9)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
+The "As-built schema (v11)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
 
-## As-built schema (v9)
+## As-built schema (v11)
 
 ### `books` (BookEntity)
 
@@ -23,18 +23,26 @@ Single flat table; `id` is a `String` UUID primary key, with a unique index on `
 - `id`, `title`, `subtitle`, `author`, `description`, `language`, `publisher`, `series`
 - `coverImagePath`, `storagePath`, `originalUri`, `originalDisplayName`
 - `sha256`, `fileSizeBytes`
-- `progress` (Float), `totalProgression` (Double?), `locatorJson` (String?)
+- `progress` (Float), `totalProgression` (Double?), `locatorJson` (String?), `currentChapterId` (String?)
 - `addedAt`, `lastOpenedAt`
 
 `author` and `series` are plain strings on the row (no join tables). The domain `Book` (`core/model/Book`) is mapped from this entity and additionally derives `currentHref` and `currentChapterProgress` by parsing `locatorJson`; `readingState` is derived from `progress`.
 
 ### `chapter_reads` (ChapterReadEntity)
 
-Composite primary key `(bookId, chapterId)`. Presence of a row = that chapter is read; absence = unread. `chapterId` is the resource href, matching `ReaderTocItem.id` / `ReaderLocator.href`.
+Composite primary key `(bookId, chapterId)`. Presence of a row = that logical TOC section is read; absence = unread. `chapterId` matches `ReaderTocItem.id` / `ReaderLocator.chapterId`.
+
+### `chapter_progress` (ChapterProgressEntity)
+
+Composite primary key `(bookId, chapterId)`. Stores the highest position-weighted percentage reached in each logical TOC section plus its update time. `manuallyRead` distinguishes an explicit user override from automatically reached progress so stale automatic completion can be repaired safely.
 
 ### `reader_settings` (ReaderSettingsEntity)
 
 Primary key `bookId`; `json` holds a serialised per-book `ReaderSettings` override. Presence means the book overrides the global default.
+
+### `book_toc` (BookTocEntity)
+
+Primary key `bookId`; `json` holds Readium's flattened navigation tree. New imports write this row atomically with the book after extracting metadata, cover, and TOC from one publication instance. A cached `[]` is a valid publication with no TOC; absence means extraction has not succeeded and remains retryable. Legacy cache misses are single-flight per book.
 
 ### Migrations
 
@@ -46,6 +54,8 @@ Primary key `bookId`; `json` holds a serialised per-book `ReaderSettings` overri
 - `6→7`: adds `highlights`.
 - `7→8`: adds book reading-timeline columns.
 - `8→9`: adds `bookmarks`.
+- `9→10`: adds logical chapter progress, the active chapter id on books, and fragment-safe TOC cache rebuilding.
+- `10→11`: records whether chapter completion was explicitly marked by the user.
 
 No destructive migrations are used for library data.
 
@@ -465,7 +475,7 @@ Do not build full-text indexing before import and reader are stable.
 
 ## Room Migration Rules
 
-The schema is live at version 9 with explicit, additive migrations (1→9), exported schema JSON under `app/schemas`, and an instrumentation migration test. The rules below remain in force:
+The schema is live at version 11 with explicit, additive migrations (1→11), exported schema JSON under `app/schemas`, and an instrumentation migration test. The rules below remain in force:
 
 - Add migration tests from the first schema.
 - Never use destructive migrations for user library data.

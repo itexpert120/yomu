@@ -27,6 +27,8 @@ data class Book(
     // Current reading position: the resource href being read and how far through it (0..1).
     val currentHref: String? = null,
     val currentChapterProgress: Float? = null,
+    val currentChapterId: String? = null,
+    val locatorJson: String? = null,
     val addedAt: Long = 0L,
     val lastOpenedAt: Long = 0L,
     // Reading-timeline timestamps (epoch millis); 0 = not started / not finished yet.

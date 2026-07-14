@@ -16,14 +16,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -240,8 +241,10 @@ fun YomuBottomSheet(
 ) {
     if (!visible) return
     val windowSize = LocalWindowInfo.current.containerSize
-    val windowWidth = with(LocalDensity.current) { windowSize.width.toDp() }
+    val density = LocalDensity.current
+    val windowWidth = with(density) { windowSize.width.toDp() }
     if (YomuWidthClass.fromWidth(windowWidth).isWide) {
+        val maxHeight = with(density) { windowSize.height.toDp() - 48.dp }
         val scrollState = rememberScrollState()
         Dialog(
             onDismissRequest = onDismiss,
@@ -250,17 +253,29 @@ fun YomuBottomSheet(
                 decorFitsSystemWindows = false,
             ),
         ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.68f)
-                        .widthIn(max = 460.dp)
+                        .fillMaxWidth(0.86f)
+                        .widthIn(max = 560.dp)
+                        .heightIn(max = maxHeight)
+                        .shadow(18.dp, RoundedCornerShape(YomuTheme.radius.lg))
+                        .clip(RoundedCornerShape(YomuTheme.radius.lg))
                         .background(
                             YomuTheme.colors.panel,
-                            RoundedCornerShape(topStart = YomuTheme.radius.lg, bottomStart = YomuTheme.radius.lg),
+                            RoundedCornerShape(YomuTheme.radius.lg),
                         )
-                        .windowInsetsPadding(WindowInsets.systemBars)
+                        .border(
+                            1.dp,
+                            YomuTheme.colors.border,
+                            RoundedCornerShape(YomuTheme.radius.lg),
+                        )
                         .then(
                             if (scrollable) {
                                 Modifier.verticalScroll(scrollState)
@@ -268,7 +283,7 @@ fun YomuBottomSheet(
                                 Modifier
                             },
                         )
-                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                        .padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     content(onDismiss)

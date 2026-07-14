@@ -103,7 +103,6 @@ internal fun ImportNotice(
     notice: String?,
     canRetry: Boolean,
     onRetry: () -> Unit,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBottom =
@@ -141,16 +140,6 @@ internal fun ImportNotice(
                     style = YomuTheme.type.control,
                     modifier = Modifier
                         .clickable(onClick = onRetry)
-                        .padding(8.dp),
-                )
-            }
-            if (!importing && notice != null) {
-                Text(
-                    text = "Dismiss",
-                    color = YomuTheme.colors.textSecondary,
-                    style = YomuTheme.type.control,
-                    modifier = Modifier
-                        .clickable(onClick = onDismiss)
                         .padding(8.dp),
                 )
             }

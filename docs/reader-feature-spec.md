@@ -19,10 +19,10 @@ The reader is partly built. EPUB content renders through Readium's `EpubNavigato
 | Theme presets + custom colours | Partial | Presets: Light / Dark (default, soft `#16181D`, non-OLED) / Sepia / Black / Custom. Custom exposes background + text colour pickers. The longer preset/background-pattern lists below are pending. |
 | Brightness | Done | "Use system brightness" toggle or a manual slider (live preview while dragging, commit on release) applied via window `screenBrightness`. |
 | Fonts | Partial | Scroll/paged toggle; font-family chips that preview each typeface (Lora default, Karla, Rubik, Cardo, Nunito, Merriweather; bundled TTFs registered with Readium); font-size slider. Per-role serif/sans/mono assignment and custom-font import are pending. |
-| TOC | Partial | Flattened TOC extracted from the publication; read-state shown on the Book Details screen and auto-marked as the reader leaves a resource. No in-reader TOC panel yet. |
-| Chapter read-tracking | Done | A chapter is auto-marked read when the reader moves from it to the next resource. |
+| TOC | Done | Flattened TOC in the reader and Book Details; logical sections can span multiple EPUB resources. |
+| Chapter read-tracking | Done | Position-weighted per-section percentages persist in Room; a section is marked read only at its logical end. |
 | Reader settings model | Done | One `ReaderSettings`: global default (DataStore) overridden per-book (Room `reader_settings`); editing inside the reader writes that book's override (per-book-on-edit). |
-| Engine navigation | Done | `goForward`/`goBackward`, next/previous chapter (reading order), `goToProgression` (nearest position). |
+| Engine navigation | Done | `goForward`/`goBackward`, next/previous logical TOC section, `goToProgression` (position-weighted resource seek). |
 | Bookmarks | Pending | Not built. |
 | Highlighting | Pending | Not built. |
 | In-book search | Pending | Not built. |
@@ -79,7 +79,7 @@ Actions (✓ = built):
 - Previous page/position. ✓ (`goBackward`)
 - Next page/position. ✓ (`goForward`)
 - Previous/next chapter by reading order. ✓ (`previousChapter`/`nextChapter`)
-- Seek by total progression. ✓ (`goToProgression`, snaps to the nearest known position)
+- Seek by total progression. ✓ (`goToProgression`, maps into position-weighted reading-order resources)
 - Restore last position. ✓ (locator persisted to Room, restored on reopen)
 - Jump to TOC item. Planned (TOC is extracted but there's no in-reader TOC navigation panel yet).
 - Jump to bookmark. Planned.
@@ -157,7 +157,7 @@ Implementation note:
 
 ## TOC
 
-Current state: the TOC is extracted from the publication and flattened (each entry keyed on its resource href, retaining nesting depth), exposed as `ReaderTocItem`. Read-state is surfaced on the **Book Details** screen and chapters are auto-marked read as the reader leaves a resource. There is **no in-reader TOC panel yet** — the panel below is the target.
+Current state: Readium's parsed TOC is flattened once with nesting depth and exposed as `ReaderTocItem` in both the in-reader Browse sheet and **Book Details**. Imports extract metadata, cover, and TOC from one publication instance; live reader sessions reuse that same parsed tree, while legacy cache misses are single-flight. Stable section ids retain fragments when needed, continuation resources are grouped under the preceding logical TOC section, and position-weighted percentage/read state persists per section.
 
 TOC panel should show:
 

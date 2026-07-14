@@ -6,7 +6,7 @@ Yomu should use native Android architecture, but the app architecture must prote
 
 The core of this architecture is now built, not just planned. Inside the single `:app` module:
 
-- Built: Hilt DI, Room (schema v9, exported schemas, migration coverage), Preferences DataStore, type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
+- Built: Hilt DI, Room (schema v11, exported schemas, migration coverage), Preferences DataStore, type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
 - Built features: `library`, `bookdetails`, `bookedit`, `reader`, `settings`, `stats`, `about`.
 - Built layers: `core/{model, database, datastore, reader, storage, designsystem}`, `data/{books, reader/readium, settings}`, and `domain/imports`.
 - Settings resolution is implemented as a two-layer merge (global default in DataStore, optional per-book override in Room) rather than the full multi-layer resolver described below.
@@ -19,7 +19,7 @@ The package and Gradle-module layouts further down still describe the eventual d
 - UI toolkit: Jetpack Compose for app UI, panels, library, settings, and reader chrome. (Built.)
 - EPUB engine: Readium Kotlin Toolkit (3.x) behind a Yomu-owned interface. (Built — `core/reader` interfaces, `data/reader/readium` adapter.)
 - Visual reader host: Compose screen containing a Readium navigator fragment where required. (Built — `feature/reader/ReaderNavigatorHost`.)
-- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v9, Preferences DataStore.)
+- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v11, Preferences DataStore.)
 - State: Kotlin coroutines, Flow, StateFlow, and immutable UI state. (Built.)
 - DI: Hilt. (Built — `YomuApplication`, `MainActivity`, and the `app/di` modules.)
 - Navigation: type-safe Navigation Compose routes. (Built — `app/navigation`.)
@@ -71,7 +71,7 @@ com.itexpert120.yomu
 |       `-- YomuGalleryScreen.kt
 |-- core
 |   |-- model                    # Book/BookId, ReadingState, LibraryPreferences, ReaderSettings, AccentColor, ThemePreference
-|   |-- database                 # YomuDatabase (v9), library, TOC, stats, highlight and bookmark entities/DAOs
+|   |-- database                 # YomuDatabase (v11), logical chapter progress, TOC, stats, highlight and bookmark entities/DAOs
 |   |-- datastore                # YomuPreferences
 |   |-- reader                   # ReaderEngine/ReaderSession/ReaderLocator/ReaderTocItem (no Readium types)
 |   |-- storage                  # FileStorage
@@ -215,11 +215,12 @@ This boundary is built. The actual interfaces live in `core/reader/Reader.kt`; `
 ```kotlin
 interface ReaderEngine {
     suspend fun open(filePath: String, initialLocatorJson: String?): ReaderSession?
-    suspend fun tableOfContents(filePath: String): List<ReaderTocItem>
+    suspend fun tableOfContents(filePath: String): List<ReaderTocItem>?
 }
 
 interface ReaderSession {
     val title: String
+    val tableOfContents: List<ReaderTocItem>
     val currentLocator: StateFlow<ReaderLocator?>
     val centerTaps: SharedFlow<Unit>
     val fragmentFactory: FragmentFactory

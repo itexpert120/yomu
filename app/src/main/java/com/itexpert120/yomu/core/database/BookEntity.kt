@@ -30,6 +30,7 @@ data class BookEntity(
     val progress: Float,
     val totalProgression: Double?,
     val locatorJson: String?,
+    val currentChapterId: String?,
     val addedAt: Long,
     val lastOpenedAt: Long,
     // Epoch millis for the reading timeline; 0 = not yet started / not yet finished.

@@ -20,10 +20,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -104,6 +107,8 @@ fun ReaderScreen(
     onCloseLookup: () -> Unit,
     onLookUpWord: (String) -> Unit,
     onLookupBack: () -> Unit,
+    onRetryLookup: () -> Unit,
+    onSearchWeb: (String) -> Unit,
     onPronounce: (String) -> Unit,
     onCloseFootnote: () -> Unit,
     // Highlight edit popup + bookmark toggle.
@@ -324,6 +329,13 @@ fun ReaderScreen(
     val statusTop = WindowInsets.statusBarsIgnoringVisibility
         .asPaddingValues()
         .calculateTopPadding()
+    val pagedSafeTop = WindowInsets.displayCutout
+        .union(WindowInsets.statusBarsIgnoringVisibility)
+        .asPaddingValues()
+        .calculateTopPadding()
+    val pagedSafeBottom = WindowInsets.navigationBarsIgnoringVisibility
+        .asPaddingValues()
+        .calculateBottomPadding()
     val baseTopInset = (fullTop - statusTop).coerceAtLeast(0.dp)
     val footerHeight = if (state.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
     val scrollEndPadding =
@@ -344,11 +356,19 @@ fun ReaderScreen(
     val immersive = state.settings.immersiveChrome
     val chromeShown = state.loading || !immersive || state.chapterControlsVisible
     val topInset by animateDpAsState(
-        targetValue = if (immersive) 0.dp else baseTopInset,
+        targetValue = when {
+            immersive && state.settings.layout == ReaderLayout.Paged -> pagedSafeTop
+            immersive -> 0.dp
+            else -> baseTopInset
+        },
         label = "readerTopInset",
     )
     val bottomInset by animateDpAsState(
-        targetValue = if (immersive) 0.dp else baseBottomInset,
+        targetValue = when {
+            immersive && state.settings.layout == ReaderLayout.Paged -> pagedSafeBottom
+            immersive -> 0.dp
+            else -> baseBottomInset
+        },
         label = "readerBottomInset",
     )
 
@@ -436,7 +456,6 @@ fun ReaderScreen(
                 ) {
                     ReaderTopBar(
                         chapter = state.chapterTitle ?: state.title,
-                        font = state.settings.font,
                         background = background,
                         content = onBackground,
                         isBookmarked = state.currentPageBookmarked,
@@ -466,6 +485,7 @@ fun ReaderScreen(
                         ReaderFooter(
                             progressPercent = state.progressPercent,
                             chapterPagesLeft = state.chapterPagesLeft,
+                            chapterProgression = state.chapterProgression,
                             settings = state.settings,
                             onContentHeight = { footerPx = it },
                             modifier = Modifier
@@ -580,6 +600,8 @@ fun ReaderScreen(
                         onPronounce = onPronounce,
                         onLookUpWord = onLookUpWord,
                         onBack = onLookupBack,
+                        onRetry = onRetryLookup,
+                        onSearchWeb = onSearchWeb,
                     )
 
                     FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)

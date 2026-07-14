@@ -56,8 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,18 +63,18 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
-import com.itexpert120.yomu.core.model.ReaderFont
+import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.ceil
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ReaderTopBar(
     chapter: String,
-    font: ReaderFont,
     background: Color,
     content: Color,
     isBookmarked: Boolean,
@@ -86,11 +84,6 @@ internal fun ReaderTopBar(
     modifier: Modifier = Modifier,
 ) {
     val bg = background
-    // Render the chapter title in the active reading font for a true reader-first feel.
-    val assets = LocalContext.current.assets
-    val readerFamily = remember(font) {
-        FontFamily(Font(path = "fonts/${font.name}-Regular.ttf", assetManager = assets))
-    }
     Column(modifier = modifier.fillMaxWidth()) {
         // The navigator draws edge-to-edge, so inset content by the full solid bar (status backdrop
         // + the controls row); the fade below is excluded so it bleeds over the page.
@@ -109,7 +102,7 @@ internal fun ReaderTopBar(
                     )
                     .background(bg),
             )
-            // Sleek, compact bar: chevron back · chapter title (reading font) · bookmark.
+            // Sleek, compact bar: chevron back · chapter title · bookmark.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,7 +115,7 @@ internal fun ReaderTopBar(
                 Text(
                     text = chapter,
                     color = content,
-                    style = YomuTheme.type.body.copy(fontFamily = readerFamily),
+                    style = YomuTheme.type.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -143,6 +136,7 @@ internal fun ReaderTopBar(
 internal fun ReaderFooter(
     progressPercent: Int?,
     chapterPagesLeft: Int?,
+    chapterProgression: Double,
     settings: ReaderSettings,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -178,12 +172,23 @@ internal fun ReaderFooter(
                     if (settings.footerShowBattery) Spacer(Modifier.width(14.dp))
                     Text(text = time, color = muted, style = YomuTheme.type.mono)
                 }
-                if (settings.footerShowPagesLeft && chapterPagesLeft != null) {
+                val chapterRemainingLabel = when (settings.layout) {
+                    ReaderLayout.Paged -> chapterPagesLeft?.let {
+                        if (it == 0) "Last page" else "$it pages left"
+                    }
+                    ReaderLayout.Scroll -> {
+                        val remaining = ceil(
+                            (1.0 - chapterProgression.coerceIn(0.0, 1.0)) * 100.0,
+                        ).toInt().coerceIn(0, 100)
+                        "$remaining% chapter left"
+                    }
+                }
+                if (settings.footerShowPagesLeft && chapterRemainingLabel != null) {
                     if (settings.footerShowBattery || settings.footerShowClock) {
                         Spacer(Modifier.width(14.dp))
                     }
                     Text(
-                        text = if (chapterPagesLeft == 0) "Last page" else "$chapterPagesLeft pages left",
+                        text = chapterRemainingLabel,
                         color = muted,
                         style = YomuTheme.type.mono,
                     )
