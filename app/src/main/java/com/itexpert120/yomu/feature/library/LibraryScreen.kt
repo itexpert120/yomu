@@ -308,15 +308,15 @@ private fun EmptyLibrary(onImport: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_yomu_mark),
+                painter = painterResource(R.drawable.open_reader_logo),
                 contentDescription = null,
-                tint = Color.White,
+                tint = Color.Unspecified,
                 modifier = Modifier.size(64.dp),
             )
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            text = "Welcome to Yomu",
+            text = "Welcome to Open Reader",
             color = YomuTheme.colors.textPrimary,
             style = YomuTheme.type.display,
             textAlign = TextAlign.Center,

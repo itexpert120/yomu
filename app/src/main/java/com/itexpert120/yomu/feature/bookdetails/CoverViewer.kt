@@ -187,7 +187,7 @@ internal suspend fun saveImageToGallery(
             put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Yomu")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Open Reader")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }

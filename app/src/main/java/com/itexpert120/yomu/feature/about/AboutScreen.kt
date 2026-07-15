@@ -56,20 +56,20 @@ fun AboutScreen(onBack: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_yomu_mark),
+                    painter = painterResource(R.drawable.open_reader_logo),
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = Color.Unspecified,
                     modifier = Modifier.size(64.dp),
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "Yomu",
+                    text = "Open Reader",
                     color = YomuTheme.colors.textPrimary,
                     style = YomuTheme.type.display,
                 )
                 Text(
-                    text = "読む · EPUB reader",
+                    text = "Private · offline · EPUB reader",
                     color = YomuTheme.colors.textSecondary,
                     style = YomuTheme.type.body,
                 )
@@ -90,27 +90,71 @@ fun AboutScreen(onBack: () -> Unit) {
 
         YomuSettingGroup(title = "About") {
             Text(
-                text = "Yomu is a native Android EPUB reader focused on a calm, reader-first " +
-                    "experience with deep typography and theme control.",
+                text = "Open Reader is a native Android EPUB reader focused on a calm, " +
+                    "reader-first experience with deep typography and theme control.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )
         }
 
-        YomuSettingGroup(title = "Privacy") {
+        YomuSettingGroup(title = "Privacy policy") {
             Text(
-                text = "Yomu keeps your library, reading progress, highlights, and statistics on " +
-                    "this device only. There are no accounts, ads, or analytics, and nothing " +
-                    "about your reading is collected or shared. The books you add never leave " +
-                    "your device.",
+                text = "Effective 14 July 2026 · Open Reader is developed by IT Expert 120. Privacy " +
+                    "questions can be sent to itexpert120@outlook.com.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
             )
             Text(
-                text = "Dictionary “Look up” sends the selected word to freedictionaryapi.com " +
-                    "to fetch its definition. If you explicitly choose “Search web,” that word " +
-                    "is opened as a Google search in your browser. Pronunciation is spoken " +
-                    "on-device by your system text-to-speech. No other data is transmitted.",
+                text = "Data kept on your device",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.section,
+            )
+            Text(
+                text = "Imported EPUB files, covers, book metadata, reading positions, chapter " +
+                    "progress, bookmarks, highlights, reading statistics, installed fonts, and " +
+                    "settings are stored in Open Reader’s private app storage. Open Reader has no accounts, " +
+                    "advertising, analytics, tracking SDKs, or developer-operated servers. Your " +
+                    "books and reading history are not uploaded.",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+            )
+            Text(
+                text = "Optional network features",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.section,
+            )
+            Text(
+                text = "When you choose Dictionary “Look up,” Open Reader sends only the selected word " +
+                    "and language code over HTTPS to freedictionaryapi.com. When you install a " +
+                    "Google Font, Open Reader sends the requested font-family name to " +
+                    "fonts.googleapis.com and downloads font files from Google-hosted servers. " +
+                    "Those services also receive ordinary connection information such as your IP " +
+                    "address and user agent. Open Reader does not control their server logs or retention. " +
+                    "When you choose “Search web,” Open Reader opens a Google search in your external " +
+                    "browser; the browser and Google then handle that request under their own " +
+                    "privacy terms. Pronunciation uses your device’s text-to-speech service.",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+            )
+            Text(
+                text = "Security, retention, and deletion",
+                color = YomuTheme.colors.textPrimary,
+                style = YomuTheme.type.section,
+            )
+            Text(
+                text = "Network requests initiated by Open Reader use HTTPS. Local app data is excluded " +
+                    "from Android cloud backup and device transfer. Removing a book deletes its " +
+                    "app-private EPUB, cover, progress, bookmarks, and highlights. Other local data " +
+                    "remains until you clear Open Reader’s storage or uninstall the app. Open Reader cannot " +
+                    "delete logs independently retained by external dictionary, font, browser, or " +
+                    "text-to-speech providers.",
+                color = YomuTheme.colors.textMuted,
+                style = YomuTheme.type.caption,
+            )
+            Text(
+                text = "Open Reader is not specifically directed to children and does not supply books " +
+                    "or other reading content. You control the EPUB files you import. Material " +
+                    "changes to this policy will be reflected here with a new effective date.",
                 color = YomuTheme.colors.textMuted,
                 style = YomuTheme.type.caption,
             )
@@ -118,9 +162,9 @@ fun AboutScreen(onBack: () -> Unit) {
 
         YomuSettingGroup(title = "Terms of use") {
             Text(
-                text = "Yomu is provided “as is”, without warranty of any kind, to the fullest " +
+                text = "Open Reader is provided “as is”, without warranty of any kind, to the fullest " +
                     "extent permitted by law. You are responsible for the books you import and " +
-                    "for complying with their licenses and applicable copyright law. Yomu does " +
+                    "for complying with their licenses and applicable copyright law. Open Reader does " +
                     "not provide, sell, or distribute any books.",
                 color = YomuTheme.colors.textSecondary,
                 style = YomuTheme.type.body,
@@ -140,7 +184,7 @@ fun AboutScreen(onBack: () -> Unit) {
         }
 
         Text(
-            text = "© 2026 Yomu. All rights reserved.",
+            text = "© 2026 IT Expert 120. Open Reader is an independent application.",
             color = YomuTheme.colors.textMuted,
             style = YomuTheme.type.caption,
             modifier = Modifier.padding(top = 4.dp, start = 4.dp, bottom = 8.dp),

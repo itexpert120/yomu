@@ -1,16 +1,16 @@
-# Yomu
+# Open Reader
 
 A native Android **EPUB reader** built with Kotlin and Jetpack Compose, deliberately designed **not** to look like a default Material app — polished, reader-first, and tablet-minded, with a custom design system.
 
 ## Status
 
-Yomu is a working reader, not a prototype. It has a real persisted library, book details, and a Readium-backed reading experience with deep appearance controls.
+Open Reader is a working reader, not a prototype. It has a real persisted library, book details, and a Readium-backed reading experience with deep appearance controls.
 
 **Built**
 
 - **Library** — Room-backed, SAF multi-file import (copied to app-private storage, sha256 dedup), Coil cover art, search, sort (Recent/Title/Author/Unread), group by author, adaptive grid columns (Auto + manual) and list view, multi-select with bulk actions, continue-reading hero.
 - **Book details** — cover viewer (full-screen + save to gallery), metadata + edit, reading progress, a virtualized **table of contents** with persistent logical-chapter percentages and read/unread counts, multi-select read/unread (including "mark up to here"), and jump-to-chapter.
-- **Reader** — EPUB rendered via **Readium** behind a Yomu engine boundary; locator persisted/restored; immersive chrome; contents, bookmarks, highlights, full-text search, dictionary/TTS, footnotes, advanced typography, custom themes/fonts, brightness, and scroll/paged layouts. Settings resolve as a global default overridden **per-book**.
+- **Reader** — EPUB rendered via **Readium** behind the app-owned reader boundary; locator persisted/restored; immersive chrome; contents, bookmarks, highlights, full-text search, dictionary/TTS, footnotes, advanced typography, custom themes/fonts, brightness, and scroll/paged layouts. Settings resolve as a global default overridden **per-book**.
 - **Statistics** — streamlined overview and entry metrics with retained recent-reading history.
 - **Settings / About**, a custom design system, and a component **DevGallery**.
 

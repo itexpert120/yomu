@@ -9,10 +9,15 @@ import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,12 +32,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
@@ -395,6 +402,11 @@ fun ReaderScreen(
     }
     val revealSlidePx = with(density) { 36.dp.toPx() }
     val revealDir = if (state.transitionForward) 1f else -1f
+    // Session creation changes which layer owns the opening scrim. Keep the indicator as movable
+    // content so Compose transfers its animation state instead of disposing and restarting it.
+    val openingContent = remember {
+        movableContentOf<Modifier> { modifier -> ReaderOpening(modifier) }
+    }
 
     Box(
         modifier = Modifier
@@ -427,7 +439,7 @@ fun ReaderScreen(
                             .matchParentSize()
                             .background(background),
                     ) {
-                        ReaderOpening()
+                        openingContent(Modifier.align(Alignment.Center))
                     }
                 }
 
@@ -455,7 +467,7 @@ fun ReaderScreen(
                     modifier = Modifier.align(Alignment.TopCenter),
                 ) {
                     ReaderTopBar(
-                        chapter = state.chapterTitle ?: state.title,
+                        chapter = if (state.loading) "" else state.chapterTitle ?: state.title,
                         background = background,
                         content = onBackground,
                         isBookmarked = state.currentPageBookmarked,
@@ -615,7 +627,7 @@ fun ReaderScreen(
                 }
             }
 
-            else -> ReaderOpening()
+            else -> openingContent(Modifier.align(Alignment.Center))
         }
     }
 }
@@ -627,18 +639,40 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.ReaderOpening() {
+private fun ReaderOpening(modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier.align(Alignment.Center),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CircularProgressIndicator(
-            color = YomuTheme.colors.accent,
-            strokeWidth = 2.dp,
-            modifier = Modifier.size(24.dp),
-        )
+        ReaderOpeningSpinner()
         Text(text = "Opening…", color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
+    }
+}
+
+@Composable
+private fun ReaderOpeningSpinner() {
+    val rotation by rememberInfiniteTransition(label = "readerOpeningTransition").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+        ),
+        label = "readerOpeningRotation",
+    )
+    val color = YomuTheme.colors.accent
+    Canvas(
+        modifier = Modifier
+            .size(24.dp)
+            .graphicsLayer { rotationZ = rotation },
+    ) {
+        drawArc(
+            color = color,
+            startAngle = -90f,
+            sweepAngle = 105f,
+            useCenter = false,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 

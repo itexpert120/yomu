@@ -1,10 +1,10 @@
-# Yomu Planning Docs
+# Open Reader Planning Docs
 
-Yomu is a native Android EPUB reader built with Kotlin and Jetpack Compose, but it should not look like a default Material Android app. These docs define the product, design language, architecture, build patterns, reader model, data model, and implementation phases. They began as a pre-build plan; several sections describe a destination that is now substantially built — each doc carries an "Implementation status (current)" note where it has diverged from the plan.
+Open Reader is a native Android EPUB reader built with Kotlin and Jetpack Compose, but it should not look like a default Material Android app. These docs define the product, design language, architecture, build patterns, reader model, data model, and implementation phases. They began as a pre-build plan; several sections describe a destination that is now substantially built — each doc carries an "Implementation status (current)" note where it has diverged from the plan.
 
 ## Current Project State
 
-Yomu is now a **working EPUB reader**, not a static prototype. A single `:app` module contains the custom design system plus a real, persisted library and a Readium-backed reader.
+Open Reader is now a **working EPUB reader**, not a static prototype. A single `:app` module contains the custom design system plus a real, persisted library and a Readium-backed reader.
 
 Current technical baseline:
 

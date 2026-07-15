@@ -53,11 +53,13 @@ Expected result: every command ends with `BUILD SUCCESSFUL`.
 
 ## Privacy and policy
 
-- [ ] Privacy policy URL is published and matches the app behavior.
-- [ ] Data Safety form covers local EPUB files, library metadata, reading progress, settings, and any network lookups.
-- [ ] Explain the `INTERNET` permission if dictionary lookup or other online functionality is present.
+- [ ] Publish `PRIVACY.md` at an active, public, non-geofenced HTML URL (not a PDF), enter that URL in Play Console, and confirm it matches the in-app policy.
+- [ ] Data Safety form covers the optional dictionary term sent to FreeDictionaryAPI, Google Fonts requests, external-browser search handoff, and any network behavior of the configured TTS provider. Local-only EPUB files, metadata, progress, annotations, settings, and statistics are not transmitted by Open Reader.
+- [ ] Explain that `INTERNET` supports only explicit dictionary lookups and user-initiated Google Fonts downloads; web search is handed to the external browser.
 - [ ] Confirm no test analytics, debug endpoints, or sample credentials are shipped.
 - [ ] Confirm backup/data extraction rules are intentional for user library data.
+- [ ] Use the Open Reader name and final supplied logo consistently across the app, icon, screenshots, and descriptions; retain evidence of rights to every store-listing image and book cover.
+- [ ] Select an accurate target audience. Open Reader is not specifically directed to children; do not opt into Families unless the app and listing are intentionally made compliant for children.
 
 ## Manifest and release behavior
 

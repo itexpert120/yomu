@@ -31,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -159,16 +158,14 @@ fun SettingsScreen(
             )
             NavigationDivider()
             NavigationRow(
-                // The splash-ready drawable includes safe-area padding around the visible mark.
-                icon = painterResource(R.drawable.ic_yomu_mark),
-                label = "About Yomu",
+                icon = painterResource(R.drawable.open_reader_logo_monochrome),
+                label = "About Open Reader",
                 onClick = onOpenAbout,
-                iconScale = 2.25f,
             )
         }
 
         Text(
-            text = "Yomu v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            text = "Open Reader v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
             color = YomuTheme.colors.textMuted,
             style = YomuTheme.type.caption,
             modifier = Modifier
@@ -291,7 +288,6 @@ private fun NavigationRow(
     icon: Painter,
     label: String,
     onClick: () -> Unit,
-    iconScale: Float = 1f,
 ) {
     Row(
         modifier = Modifier
@@ -313,12 +309,7 @@ private fun NavigationRow(
                 painter = icon,
                 contentDescription = null,
                 tint = YomuTheme.colors.textSecondary,
-                modifier = Modifier
-                    .size(18.dp)
-                    .graphicsLayer {
-                        scaleX = iconScale
-                        scaleY = iconScale
-                    },
+                modifier = Modifier.size(18.dp),
             )
         }
         Text(

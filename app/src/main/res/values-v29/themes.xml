@@ -15,7 +15,7 @@
 
     <style name="Theme.Yomu.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_yomu_mark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_open_reader_mark</item>
         <item name="yomuSplashMarkColor">@color/yomu_splash_mark</item>
         <item name="postSplashScreenTheme">@style/Theme.Yomu</item>
         <item name="android:windowLightStatusBar">@bool/yomu_splash_light_system_bars</item>

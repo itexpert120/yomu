@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "yomu"
+rootProject.name = "open-reader"
 include(":app")

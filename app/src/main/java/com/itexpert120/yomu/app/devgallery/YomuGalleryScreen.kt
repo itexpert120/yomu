@@ -188,7 +188,7 @@ private fun GalleryHeader(
             .padding(top = if (compact) 18.dp else 0.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = "Yomu", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.display)
+        Text(text = "Open Reader", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.display)
         Text(
             text = "Component gallery for the EPUB reader design system.",
             color = YomuTheme.colors.textSecondary,

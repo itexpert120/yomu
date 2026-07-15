@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="yomu_launcher_background">#050505</color>
+    <color name="yomu_launcher_background">#F7FAFC</color>
     <color name="yomu_launcher_mark">#FFFFFF</color>
     <color name="yomu_splash_background">#FFFFFF</color>
     <color name="yomu_splash_mark">#10110F</color>
