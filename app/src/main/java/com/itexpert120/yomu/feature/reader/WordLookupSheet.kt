@@ -70,7 +70,6 @@ internal fun WordLookupSheet(
     onLookUpWord: (String) -> Unit,
     onBack: () -> Unit,
     onRetry: () -> Unit,
-    onSearchWeb: (String) -> Unit,
 ) {
     YomuBottomSheet(visible = state != null, onDismiss = onDismiss, scrollable = false) { _ ->
         if (state == null) return@YomuBottomSheet
@@ -140,30 +139,12 @@ internal fun WordLookupSheet(
                     style = YomuTheme.type.body,
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (state.result is DictionaryResult.Error && !state.loading) {
-                    YomuButton(
-                        text = "Try again",
-                        onClick = onRetry,
-                        modifier = Modifier.weight(1f),
-                        emphasis = YomuButtonEmphasis.Secondary,
-                    )
-                }
+            if (state.result is DictionaryResult.Error && !state.loading) {
                 YomuButton(
-                    text = "Search web",
-                    onClick = { onSearchWeb(state.word) },
-                    modifier = Modifier.weight(1f),
+                    text = "Try again",
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth(),
                     emphasis = YomuButtonEmphasis.Secondary,
-                )
-            }
-            if (state.webSearchError) {
-                Text(
-                    text = "No web browser is available.",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
                 )
             }
         }

@@ -1,9 +1,6 @@
 package com.itexpert120.yomu.feature.reader
 
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -110,7 +107,6 @@ data class WordLookupUiState(
     val loading: Boolean = true,
     val result: DictionaryResult? = null,
     val canGoBack: Boolean = false,
-    val webSearchError: Boolean = false,
 )
 
 @HiltViewModel
@@ -496,29 +492,6 @@ class ReaderViewModel @Inject constructor(
         if (current.result !is DictionaryResult.Error || current.loading) return
         lookupCache.remove(current.word)
         showLookup(current.word)
-    }
-
-    fun onSearchWeb(word: String) {
-        val uri = Uri.parse("https://www.google.com/search").buildUpon()
-            .appendQueryParameter("q", word)
-            .build()
-        val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (intent.resolveActivity(context.packageManager) == null) {
-            _state.update { state ->
-                state.copy(lookup = state.lookup?.copy(webSearchError = true))
-            }
-            return
-        }
-        try {
-            context.startActivity(intent)
-            _state.update { state ->
-                state.copy(lookup = state.lookup?.copy(webSearchError = false))
-            }
-        } catch (_: ActivityNotFoundException) {
-            _state.update { state ->
-                state.copy(lookup = state.lookup?.copy(webSearchError = true))
-            }
-        }
     }
 
     /** Step back to the previously looked-up word, or close the sheet at the bottom of the stack. */

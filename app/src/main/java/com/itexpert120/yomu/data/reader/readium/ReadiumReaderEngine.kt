@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.data.reader.readium
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -15,6 +16,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.FragmentFactory
@@ -1368,9 +1370,14 @@ private class ReadiumReaderSession(
         val uri = Uri.parse("https://www.google.com/search").buildUpon()
             .appendQueryParameter("q", text)
             .build()
-        val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (intent.resolveActivity(context.packageManager) != null) {
-            runCatching { context.startActivity(intent) }
+        val customTab = CustomTabsIntent.Builder()
+            .setShowTitle(true)
+            .build()
+            .also { it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        try {
+            customTab.launchUrl(context, uri)
+        } catch (_: ActivityNotFoundException) {
+            // The device has no activity capable of handling web links.
         }
     }
 

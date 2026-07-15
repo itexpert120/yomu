@@ -115,7 +115,6 @@ fun ReaderScreen(
     onLookUpWord: (String) -> Unit,
     onLookupBack: () -> Unit,
     onRetryLookup: () -> Unit,
-    onSearchWeb: (String) -> Unit,
     onPronounce: (String) -> Unit,
     onCloseFootnote: () -> Unit,
     // Highlight edit popup + bookmark toggle.
@@ -613,7 +612,6 @@ fun ReaderScreen(
                         onLookUpWord = onLookUpWord,
                         onBack = onLookupBack,
                         onRetry = onRetryLookup,
-                        onSearchWeb = onSearchWeb,
                     )
 
                     FootnoteSheet(html = state.footnoteHtml, onDismiss = onCloseFootnote)

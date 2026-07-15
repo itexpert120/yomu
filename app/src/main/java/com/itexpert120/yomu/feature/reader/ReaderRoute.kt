@@ -47,7 +47,6 @@ fun ReaderRoute(onBack: () -> Unit) {
         onLookUpWord = viewModel::onLookUpWord,
         onLookupBack = viewModel::onLookupBack,
         onRetryLookup = viewModel::onRetryLookup,
-        onSearchWeb = viewModel::onSearchWeb,
         onPronounce = viewModel::onPronounce,
         onCloseFootnote = viewModel::onCloseFootnote,
         onDeleteHighlight = viewModel::onDeleteHighlight,
