@@ -79,7 +79,6 @@ import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
@@ -255,7 +254,6 @@ fun BookDetailsScreen(
                         reading = book.readingState == ReadingState.Reading,
                         onClick = onRead,
                         modifier = Modifier
-                            .yomuChromeBlur(this)
                             .padding(end = 16.dp, bottom = navBottom + 16.dp),
                     )
                 }
@@ -275,7 +273,6 @@ fun BookDetailsScreen(
                     onSelectAll = onSelectAllChapters,
                     onClose = onExitChapterSelection,
                     modifier = Modifier
-                        .yomuChromeBlur(this)
                         .padding(bottom = navBottom + 16.dp),
                 )
             }

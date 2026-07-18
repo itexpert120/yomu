@@ -31,7 +31,6 @@ import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
@@ -95,7 +94,7 @@ internal fun ReaderBrowseSheet(
                 },
                 label = "browseTab",
             ) { t ->
-                Box(modifier = Modifier.yomuChromeBlur(this)) {
+                Box {
                     when (t) {
                         BrowseTab.Contents ->
                             ContentsBody(toc, tocLoading, currentHref, onJumpToLocator)

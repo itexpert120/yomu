@@ -102,14 +102,25 @@ fun YomuBookCard(
 fun YomuSettingGroup(
     title: String,
     modifier: Modifier = Modifier,
+    outlined: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
+            .background(YomuTheme.colors.panelStrong)
+            .then(
+                if (outlined) {
+                    Modifier.border(
+                        1.dp,
+                        YomuTheme.colors.border,
+                        RoundedCornerShape(YomuTheme.radius.lg),
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .padding(YomuTheme.space.md),
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
     ) {

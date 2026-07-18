@@ -24,15 +24,21 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
+import com.itexpert120.yomu.core.model.SortMode
 
-/** Display options (view mode + grid columns) as a draggable slide-up sheet. */
+/** All library arrangement controls in one draggable sheet. */
 @Composable
-internal fun LibraryDisplaySheet(
+internal fun LibraryOptionsSheet(
     visible: Boolean,
+    sortMode: SortMode,
+    groupMode: GroupMode,
     viewMode: LibraryViewMode,
     columns: Int,
+    onSortModeChange: (SortMode) -> Unit,
+    onGroupModeChange: (GroupMode) -> Unit,
     onViewModeChange: (LibraryViewMode) -> Unit,
     onColumnsChange: (Int) -> Unit,
     onDismiss: () -> Unit,
@@ -43,10 +49,30 @@ internal fun LibraryDisplaySheet(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Display",
+                text = "Arrange library",
                 color = YomuTheme.colors.textPrimary,
                 style = YomuTheme.type.title,
             )
+
+            SheetSection(label = "Sort") {
+                val modes = SortMode.entries
+                YomuSegmentedControl(
+                    options = modes.map { it.label },
+                    selectedIndex = modes.indexOf(sortMode),
+                    onSelected = { onSortModeChange(modes[it]) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            SheetSection(label = "Group") {
+                val modes = GroupMode.entries
+                YomuSegmentedControl(
+                    options = modes.map { it.label },
+                    selectedIndex = modes.indexOf(groupMode),
+                    onSelected = { onGroupModeChange(modes[it]) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             SheetSection(label = "View") {
                 val modes = LibraryViewMode.entries

@@ -48,10 +48,8 @@ import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuMotion
-import com.itexpert120.yomu.core.designsystem.YomuOptionSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
@@ -89,9 +87,7 @@ fun LibraryScreen(
     onMarkSelectedUnread: () -> Unit = {},
     onRetryImport: () -> Unit = {},
 ) {
-    var showSortSheet by remember { mutableStateOf(false) }
-    var showGroupSheet by remember { mutableStateOf(false) }
-    var showDisplaySheet by remember { mutableStateOf(false) }
+    var showOptionsSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
@@ -123,9 +119,7 @@ fun LibraryScreen(
             viewMode = state.viewMode,
             onSearchToggle = onSearchToggle,
             onSearchQueryChange = onSearchQueryChange,
-            onSortSheetToggle = { showSortSheet = !showSortSheet },
-            onGroupSheetToggle = { showGroupSheet = !showGroupSheet },
-            onDisplaySheetToggle = { showDisplaySheet = !showDisplaySheet },
+            onOptionsSheetToggle = { showOptionsSheet = !showOptionsSheet },
             modifier = mod,
         )
     }
@@ -184,31 +178,17 @@ fun LibraryScreen(
                 }
             }
 
-            YomuOptionSheet(
-                visible = showSortSheet,
-                onDismiss = { showSortSheet = false },
-                title = "Sort by",
-                options = SortMode.entries,
-                selectedOption = state.sortMode,
-                onSelect = onSortModeChange,
-                label = { it.label },
-            )
-            YomuOptionSheet(
-                visible = showGroupSheet,
-                onDismiss = { showGroupSheet = false },
-                title = "Group by",
-                options = GroupMode.entries,
-                selectedOption = state.groupMode,
-                onSelect = onGroupModeChange,
-                label = { it.label },
-            )
-            LibraryDisplaySheet(
-                visible = showDisplaySheet,
+            LibraryOptionsSheet(
+                visible = showOptionsSheet,
+                sortMode = state.sortMode,
+                groupMode = state.groupMode,
                 viewMode = state.viewMode,
                 columns = state.gridColumns,
+                onSortModeChange = onSortModeChange,
+                onGroupModeChange = onGroupModeChange,
                 onViewModeChange = onViewModeChange,
                 onColumnsChange = onGridColumnsChange,
-                onDismiss = { showDisplaySheet = false },
+                onDismiss = { showOptionsSheet = false },
             )
 
             val continueReading = state.continueReading
@@ -222,7 +202,6 @@ fun LibraryScreen(
                     FloatingResumeButton(
                         book = continueReading,
                         onResume = { onOpenReader(continueReading.id) },
-                        modifier = Modifier.yomuChromeBlur(this),
                     )
                 }
             }
@@ -256,7 +235,6 @@ fun LibraryScreen(
                     } else {
                         null
                     },
-                    modifier = Modifier.yomuChromeBlur(this),
                 )
             }
 

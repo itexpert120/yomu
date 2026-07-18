@@ -63,7 +63,6 @@ import androidx.lifecycle.LifecycleOwner
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.CustomReaderTheme
@@ -473,7 +472,6 @@ fun ReaderScreen(
                         onBack = onBack,
                         onToggleBookmark = onToggleBookmark,
                         onContentHeight = { topBarPx = it },
-                        modifier = Modifier.yomuChromeBlur(this),
                     )
                 }
 

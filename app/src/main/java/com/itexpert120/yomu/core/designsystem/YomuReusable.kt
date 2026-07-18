@@ -156,8 +156,7 @@ fun YomuPillFilter(
         modifier = modifier
             .yomuPressable(onClick = onClick)
             .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.pill))
+            .background(YomuTheme.colors.surface)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -173,21 +172,38 @@ fun YomuPillFilter(
     }
 }
 
+enum class YomuIconButtonEmphasis {
+    Primary,
+    Quiet,
+}
+
 @Composable
 fun YomuCircleIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    emphasis: YomuIconButtonEmphasis = YomuIconButtonEmphasis.Quiet,
     icon: @Composable () -> Unit,
 ) {
     Box(
         modifier = modifier
             .yomuPressable(onClick = onClick)
-            .size(36.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(YomuTheme.colors.textPrimary),
+            .size(48.dp),
         contentAlignment = Alignment.Center,
     ) {
-        icon()
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                .background(
+                    when (emphasis) {
+                        YomuIconButtonEmphasis.Primary -> YomuTheme.colors.accent
+                        YomuIconButtonEmphasis.Quiet -> YomuTheme.colors.surface
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            icon()
+        }
     }
 }
 
@@ -197,9 +213,13 @@ fun YomuCircleIconButton(
     icon: ImageVector,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    tint: Color = YomuTheme.colors.appBackground,
+    emphasis: YomuIconButtonEmphasis = YomuIconButtonEmphasis.Quiet,
+    tint: Color = when (emphasis) {
+        YomuIconButtonEmphasis.Primary -> YomuTheme.colors.appBackground
+        YomuIconButtonEmphasis.Quiet -> YomuTheme.colors.textPrimary
+    },
 ) {
-    YomuCircleIconButton(onClick = onClick, modifier = modifier) {
+    YomuCircleIconButton(onClick = onClick, modifier = modifier, emphasis = emphasis) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,

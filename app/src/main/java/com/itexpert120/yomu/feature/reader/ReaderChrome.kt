@@ -60,7 +60,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -237,7 +236,6 @@ internal fun BoxScope.ReaderChapterControlsBar(
     ) {
         Row(
             modifier = Modifier
-                .yomuChromeBlur(this)
                 // Keep the pill clear of the screen edges; on narrow devices the row scrolls
                 // horizontally instead of overflowing/clipping its buttons.
                 .padding(horizontal = 12.dp)

@@ -43,7 +43,6 @@ import androidx.compose.ui.window.Dialog
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 
@@ -120,7 +119,6 @@ internal fun ImportNotice(
     ) {
         Row(
             modifier = Modifier
-                .yomuChromeBlur(this)
                 .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.pill))
                 .clip(RoundedCornerShape(YomuTheme.radius.pill))
                 .background(YomuTheme.colors.panel)

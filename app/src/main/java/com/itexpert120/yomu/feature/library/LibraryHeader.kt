@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
+import com.itexpert120.yomu.core.designsystem.YomuIconButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.GroupMode
@@ -67,7 +68,7 @@ internal fun LibraryTopBar(
     // Lift the bar onto its own plane once the content scrolls beneath it; the
     // shadow defines the seam instead of fading the content under it.
     val elevation by animateDpAsState(
-        targetValue = if (elevated) 4.dp else 0.dp,
+        targetValue = if (elevated) 2.dp else 0.dp,
         label = "headerElevation",
     )
     Box(
@@ -100,11 +101,12 @@ internal fun LibraryTopBar(
                     style = YomuTheme.type.caption,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row {
                 YomuCircleIconButton(
                     onClick = onImport,
                     icon = Icons.Rounded.Add,
                     contentDescription = "Import EPUB",
+                    emphasis = YomuIconButtonEmphasis.Primary,
                 )
                 YomuCircleIconButton(
                     onClick = onThemeToggle,
@@ -126,7 +128,7 @@ internal fun LibraryTopBar(
     }
 }
 
-/** Search + Sort/Group/View pills — scrolls away with the list instead of staying pinned. */
+/** Search + the consolidated library options control; scrolls away with the list. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LibrarySearchAndFilters(
@@ -137,9 +139,7 @@ internal fun LibrarySearchAndFilters(
     viewMode: LibraryViewMode,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onSortSheetToggle: () -> Unit,
-    onGroupSheetToggle: () -> Unit,
-    onDisplaySheetToggle: () -> Unit,
+    onOptionsSheetToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -163,20 +163,15 @@ internal fun LibrarySearchAndFilters(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val summary = listOfNotNull(
+                sortMode.label,
+                groupMode.takeUnless { it == GroupMode.None }?.label,
+                viewMode.label,
+            ).joinToString(" · ")
             YomuPillFilter(
-                label = "Sort",
-                value = sortMode.label,
-                onClick = onSortSheetToggle,
-            )
-            YomuPillFilter(
-                label = "Group",
-                value = groupMode.label,
-                onClick = onGroupSheetToggle,
-            )
-            YomuPillFilter(
-                label = "View",
-                value = viewMode.label,
-                onClick = onDisplaySheetToggle,
+                label = "Arrange",
+                value = summary,
+                onClick = onOptionsSheetToggle,
             )
         }
     }

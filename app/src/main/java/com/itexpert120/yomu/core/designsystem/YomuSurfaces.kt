@@ -29,7 +29,8 @@ fun YomuAppSurface(
 @Composable
 fun YomuPanel(
     modifier: Modifier = Modifier,
-    tonal: Boolean = false,
+    tonal: Boolean = true,
+    outlined: Boolean = false,
     contentPadding: Dp = YomuTheme.space.md,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -39,7 +40,13 @@ fun YomuPanel(
         modifier = modifier
             .clip(RoundedCornerShape(radius.panel))
             .background(if (tonal) colors.panelStrong else colors.panel)
-            .border(1.dp, colors.border, RoundedCornerShape(radius.panel))
+            .then(
+                if (outlined) {
+                    Modifier.border(1.dp, colors.border, RoundedCornerShape(radius.panel))
+                } else {
+                    Modifier
+                },
+            )
             .padding(contentPadding),
         content = content,
     )

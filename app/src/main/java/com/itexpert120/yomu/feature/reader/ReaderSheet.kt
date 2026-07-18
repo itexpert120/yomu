@@ -67,7 +67,6 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
-import com.itexpert120.yomu.core.designsystem.yomuChromeBlur
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
@@ -122,9 +121,7 @@ internal fun ReaderControlsSheet(
                 },
                 label = "readerSheetTab",
             ) { current ->
-                // The blur (driven by this content's enter/exit transition) is what makes the swap
-                // read as smooth rather than a plain fade.
-                Box(modifier = Modifier.yomuChromeBlur(this)) {
+                Box {
                     when (current) {
                         SheetTab.Controls -> ControlsTab(
                             state = state,
