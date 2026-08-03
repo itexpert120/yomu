@@ -47,14 +47,14 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun StatsRoute(onBack: () -> Unit) {
+fun StatsRoute(onBack: (() -> Unit)?) {
     val viewModel: StatsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
     StatsScreen(state = state, onBack = onBack)
 }
 
 @Composable
-fun StatsScreen(state: StatsUiState, onBack: () -> Unit) {
+fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
     YomuScreenScaffold(title = "Statistics", onBack = onBack) {
         when {
             state.isLoading -> StatusText("Loading statistics…")

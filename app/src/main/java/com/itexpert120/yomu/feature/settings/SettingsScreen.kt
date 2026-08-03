@@ -64,7 +64,7 @@ fun SettingsScreen(
     onToggleOled: (Boolean) -> Unit,
     onSelectAccent: (AccentColor) -> Unit,
     onSelectCustomAccent: (Long) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onOpenStats: () -> Unit,
     onOpenReaderDefaults: () -> Unit,
     onOpenAbout: () -> Unit,

@@ -27,8 +27,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,10 +46,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
-import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuMotion
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -57,13 +56,11 @@ import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
-import com.itexpert120.yomu.core.model.ThemePreference
 import androidx.compose.foundation.lazy.items as lazyListItems
 
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
-    themePreference: ThemePreference = ThemePreference.System,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSortModeChange: (SortMode) -> Unit,
@@ -73,9 +70,6 @@ fun LibraryScreen(
     onOpenReader: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
     onImport: () -> Unit,
-    onThemeToggle: () -> Unit,
-    onOpenStats: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
     onEnterSelection: (String) -> Unit = {},
     onToggleSelect: (String) -> Unit = {},
     onExitSelection: () -> Unit = {},
@@ -108,22 +102,6 @@ fun LibraryScreen(
         BackHandler(onBack = onExitSelection)
     }
 
-    // Search + Sort/Group/View: scrolls away with the list rather than staying pinned in the
-    // sticky top bar. Rendered as the first item inside each layout below.
-    val filtersBar: @Composable (Modifier) -> Unit = { mod ->
-        LibrarySearchAndFilters(
-            searchActive = state.searchActive,
-            searchQuery = state.searchQuery,
-            sortMode = state.sortMode,
-            groupMode = state.groupMode,
-            viewMode = state.viewMode,
-            onSearchToggle = onSearchToggle,
-            onSearchQueryChange = onSearchQueryChange,
-            onOptionsSheetToggle = { showOptionsSheet = !showOptionsSheet },
-            modifier = mod,
-        )
-    }
-
     val libraryContent: @Composable () -> Unit = {
         Crossfade(
             targetState = state.viewMode,
@@ -138,7 +116,6 @@ fun LibraryScreen(
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
                     onBookLongPress = onCardLongPress,
-                    filtersBar = filtersBar,
                 )
 
                 LibraryViewMode.List -> LibraryList(
@@ -147,7 +124,6 @@ fun LibraryScreen(
                     selectedIds = state.selectedIds,
                     onBookClick = onCardClick,
                     onBookLongPress = onCardLongPress,
-                    filtersBar = filtersBar,
                 )
             }
         }
@@ -157,12 +133,11 @@ fun LibraryScreen(
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 LibraryTopBar(
-                    bookCount = state.totalCount,
-                    themePreference = themePreference,
-                    onImport = onImport,
-                    onThemeToggle = onThemeToggle,
-                    onOpenStats = onOpenStats,
-                    onOpenSettings = onOpenSettings,
+                    searchActive = state.searchActive,
+                    searchQuery = state.searchQuery,
+                    onSearchToggle = onSearchToggle,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onOptionsSheetToggle = { showOptionsSheet = true },
                     elevated = elevated,
                 )
                 Box(
@@ -191,6 +166,13 @@ fun LibraryScreen(
                 onDismiss = { showOptionsSheet = false },
             )
 
+            if (!state.selectionMode && state.totalCount > 0) {
+                FloatingAddBookButton(
+                    onImport = onImport,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
+            }
+
             val continueReading = state.continueReading
             if (continueReading != null) {
                 AnimatedVisibility(
@@ -202,6 +184,7 @@ fun LibraryScreen(
                     FloatingResumeButton(
                         book = continueReading,
                         onResume = { onOpenReader(continueReading.id) },
+                        bottomOffset = if (state.totalCount > 0) 72.dp else 0.dp,
                     )
                 }
             }
@@ -258,8 +241,8 @@ fun LibraryScreen(
 private fun androidx.compose.foundation.layout.BoxScope.LibraryLoading() {
     Text(
         text = "Loading library…",
-        color = YomuTheme.colors.textMuted,
-        style = YomuTheme.type.body,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.align(Alignment.Center),
     )
 }
@@ -276,12 +259,12 @@ private fun EmptyLibrary(onImport: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(92.dp)
-                .clip(RoundedCornerShape(YomuTheme.radius.lg))
+                .clip(MaterialTheme.shapes.large)
                 .background(Color(0xFF050505))
                 .border(
                     1.dp,
-                    YomuTheme.colors.border.copy(alpha = 0.6f),
-                    RoundedCornerShape(YomuTheme.radius.lg),
+                    MaterialTheme.colorScheme.outlineVariant,
+                    MaterialTheme.shapes.large,
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -295,29 +278,30 @@ private fun EmptyLibrary(onImport: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         Text(
             text = "Welcome to Open Reader",
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.display,
+            color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.headlineLarge,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = "A calm, reader-first EPUB library. Import a book to begin — your themes, fonts, " +
                 "reading position and stats all live here.",
-            color = YomuTheme.colors.textSecondary,
-            style = YomuTheme.type.body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(28.dp))
-        YomuButton(
-            text = "Import EPUB",
+        Button(
             onClick = onImport,
             modifier = Modifier.fillMaxWidth(),
-        )
+        ) {
+            Text("Import EPUB")
+        }
         Spacer(Modifier.height(12.dp))
         Text(
             text = "EPUB files only · kept privately on your device",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
         )
     }
@@ -331,7 +315,6 @@ private fun LibraryGrid(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    filtersBar: @Composable (Modifier) -> Unit,
 ) {
     // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
     // wide tablet/desktop; on a phone this is a no-op (screen < max width).
@@ -356,17 +339,13 @@ private fun LibraryGrid(
             modifier = Modifier
                 .fillMaxSize()
                 .yomuScrollEdgeShadow(
-                    color = YomuTheme.colors.appBackground,
+                    color = MaterialTheme.colorScheme.background,
                     bottom = state.canScrollForward,
                 ),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                filtersBar(Modifier.animateItem())
-            }
-
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -394,7 +373,6 @@ private fun LibraryList(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    filtersBar: @Composable (Modifier) -> Unit,
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
     // column centered on screen. Phones are unaffected (screen < max width).
@@ -406,14 +384,12 @@ private fun LibraryList(
                 .fillMaxSize()
                 .align(Alignment.TopCenter)
                 .yomuScrollEdgeShadow(
-                    color = YomuTheme.colors.appBackground,
+                    color = MaterialTheme.colorScheme.background,
                     bottom = state.canScrollForward,
                 ),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            item { filtersBar(Modifier.animateItem()) }
-
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item { GroupSectionHeader(title = group.label, modifier = Modifier.animateItem()) }
@@ -451,7 +427,6 @@ private fun LibraryScreenPreview() {
             onOpenReader = {},
             onOpenDetails = {},
             onImport = {},
-            onThemeToggle = {},
         )
     }
 }

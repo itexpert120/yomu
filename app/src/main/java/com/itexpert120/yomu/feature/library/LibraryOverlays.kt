@@ -11,11 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
@@ -32,7 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
@@ -112,32 +112,45 @@ internal fun ImportNotice(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FloatingResumeButton(
-    book: LibraryBook,
-    onResume: () -> Unit,
+internal fun FloatingAddBookButton(
+    onImport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBottom =
         WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-    ExtendedFloatingActionButton(
-        onClick = onResume,
+    FloatingActionButton(
+        onClick = onImport,
         modifier = modifier.padding(end = 16.dp, bottom = navBottom + 16.dp),
-        icon = {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = null,
-            )
-        },
-        text = {
-            Text(
-                text = "Resume · ${book.title}",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 220.dp),
-            )
-        },
-        shape = MaterialTheme.shapes.extraLarge,
-    )
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = "Import EPUB",
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun FloatingResumeButton(
+    book: LibraryBook,
+    onResume: () -> Unit,
+    modifier: Modifier = Modifier,
+    bottomOffset: Dp = 0.dp,
+) {
+    val navBottom =
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    FloatingActionButton(
+        onClick = onResume,
+        modifier = modifier.padding(
+            end = 16.dp,
+            bottom = navBottom + 16.dp + bottomOffset,
+        ),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = "Resume ${book.title}",
+        )
+    }
 }
 
 /**

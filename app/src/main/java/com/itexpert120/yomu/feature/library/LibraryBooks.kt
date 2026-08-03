@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,12 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,7 +37,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import java.io.File
 
@@ -48,31 +50,52 @@ fun GridBookCard(
 ) {
     Card(
         modifier = modifier.yomuPressable(onClick = onClick, onLongClick = onLongPress),
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
         ),
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 BookCoverImage(
                     book = book,
                     modifier = Modifier.fillMaxWidth(),
-                    showProgress = true,
                 )
                 SelectionMarker(selected)
             }
-            Text(
-                text = book.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleSmall,
-                minLines = 2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = book.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = book.author,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (book.progress > 0f) {
+                    LinearProgressIndicator(
+                        progress = { book.progress.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 3.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -94,55 +117,61 @@ fun BookListRow(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.secondaryContainer
             } else {
-                MaterialTheme.colorScheme.surfaceContainer
+                MaterialTheme.colorScheme.surfaceContainerLow
             },
         ),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BookCoverImage(book = book, modifier = Modifier.width(54.dp))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ListItem(
+            modifier = Modifier.fillMaxWidth(),
+            leadingContent = {
+                BookCoverImage(
+                    book = book,
+                    modifier = Modifier.width(56.dp),
+                )
+            },
+            headlineContent = {
                 Text(
                     text = book.title,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyLarge,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = book.author,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (book.progress > 0f) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+            },
+            supportingContent = {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(
+                        text = book.author,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (book.progress > 0f) {
                         LinearProgressIndicator(
                             progress = { book.progress.coerceIn(0f, 1f) },
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "${(book.progress * 100).toInt()}%",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }
-            }
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
+            },
+            trailingContent = {
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (book.progress > 0f) {
+                    Text(
+                        text = "${(book.progress * 100).toInt()}%",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = Color.Transparent,
+            ),
+        )
     }
 }
 
@@ -177,29 +206,27 @@ private fun BoxScope.SelectionMarker(selected: Boolean) {
 
 @Composable
 fun ImportEmptyCard(onImport: () -> Unit) {
-    Box(
+    OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .yomuPressable(onClick = onImport)
-            .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large),
-        contentAlignment = Alignment.Center,
+            .yomuPressable(onClick = onImport),
+        shape = MaterialTheme.shapes.large,
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "+",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.title,
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
             )
             Text(
                 text = "Import EPUB",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.body,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
     }
@@ -209,9 +236,9 @@ fun ImportEmptyCard(onImport: () -> Unit) {
 fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
     Text(
         text = title,
-        color = YomuTheme.colors.textMuted,
-        style = YomuTheme.type.section,
-        modifier = modifier.padding(top = 4.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = modifier.padding(top = 8.dp),
     )
 }
 
@@ -223,7 +250,7 @@ private fun BookCoverImage(
 ) {
     Box(
         modifier = modifier
-            .aspectRatio(1f / 1.6f)
+            .aspectRatio(1f / 1.55f)
             .clip(MaterialTheme.shapes.medium)
             .background(Brush.verticalGradient(book.coverColors)),
     ) {
@@ -255,14 +282,14 @@ private fun BookCoverImage(
                     Text(
                         text = book.shortTitle,
                         color = Color.White,
-                        style = YomuTheme.type.caption,
+                        style = MaterialTheme.typography.labelMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = book.authorLastName,
                         color = Color.White.copy(alpha = 0.7f),
-                        style = YomuTheme.type.mono,
+                        style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -271,7 +298,6 @@ private fun BookCoverImage(
         }
 
         if (showProgress && book.progress > 0f) {
-            // A solid badge reads clearly over any cover, unlike a thin bar that blended in.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -283,7 +309,7 @@ private fun BookCoverImage(
                 Text(
                     text = "${(book.progress * 100).toInt()}%",
                     color = Color.White,
-                    style = YomuTheme.type.mono,
+                    style = MaterialTheme.typography.labelSmall,
                 )
             }
         }
@@ -292,18 +318,8 @@ private fun BookCoverImage(
 
 @Composable
 fun ProgressLine(progress: Float) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(2.dp)
-            .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .height(2.dp)
-                .background(MaterialTheme.colorScheme.primary),
-        )
-    }
+    LinearProgressIndicator(
+        progress = { progress.coerceIn(0f, 1f) },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

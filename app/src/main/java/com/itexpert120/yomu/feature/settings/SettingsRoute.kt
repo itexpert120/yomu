@@ -10,7 +10,7 @@ import com.itexpert120.yomu.core.model.ThemePreference
 @Composable
 fun SettingsRoute(
     appViewModel: AppViewModel,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onOpenStats: () -> Unit,
     onOpenReaderDefaults: () -> Unit,
     onOpenAbout: () -> Unit,

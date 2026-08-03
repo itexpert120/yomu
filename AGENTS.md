@@ -67,7 +67,7 @@ com.itexpert120.yomu
 │                                #   extracts metadata, cover, and TOC in one Readium pass)
 └── feature/                     # library, bookdetails, bookedit, reader, settings, stats, about
 ```
-Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`, `Settings`, `Stats`, `ReaderDefaults`, `About`, `Reader(bookId, locator?)`. Bookmarks and in-book search are built **behind the `core/reader` boundary** (search via Readium's `SearchService`, surfaced as `ReaderSession.search`/`applySearchDecorations`; bookmarks are Room-backed and reuse `currentLocator`/`goToLocator`). New reader capabilities should follow the same boundary pattern — the sibling Readium test-app under "Related projects" below has worked references.
+Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`, `Settings`, `Stats`, `ReaderDefaults`, `About`, `Reader(bookId, locator?)`. The Library, Statistics, and Settings destinations share an adaptive Material `NavigationBar`/`NavigationRail` shell; child routes hide it for focused work. Bookmarks and in-book search are built **behind the `core/reader` boundary** (search via Readium's `SearchService`, surfaced as `ReaderSession.search`/`applySearchDecorations`; bookmarks are Room-backed and reuse `currentLocator`/`goToLocator`). New reader capabilities should follow the same boundary pattern — the sibling Readium test-app under "Related projects" below has worked references.
 
 ### Design system is the foundation — use Material 3 Expressive through the compatibility layer
 `core/designsystem` owns the Material 3 Expressive theme boundary and temporary Yomu compatibility wrappers:

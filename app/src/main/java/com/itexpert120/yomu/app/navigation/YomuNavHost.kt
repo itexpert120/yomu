@@ -9,15 +9,16 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.itexpert120.yomu.app.AppViewModel
@@ -40,6 +41,13 @@ fun YomuNavHost(
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
+    val currentDestination = navController.currentBackStackEntryAsState().value?.destination
+    val topLevelDestination = when {
+        currentDestination?.hasRoute<Library>() == true -> YomuTopLevelDestination.Library
+        currentDestination?.hasRoute<Stats>() == true -> YomuTopLevelDestination.Statistics
+        currentDestination?.hasRoute<Settings>() == true -> YomuTopLevelDestination.Settings
+        else -> null
+    }
 
     // An EPUB opened from outside the app (file manager / share) is imported off-screen, then we
     // jump straight into the reader for the resolved book (an existing entry on a duplicate).
@@ -65,43 +73,25 @@ fun YomuNavHost(
     val easing = FastOutSlowInEasing
     val incoming = { fadeIn(tween(fadeInMs, delayMillis = fadeOutMs, easing = easing)) }
     val outgoing = { fadeOut(tween(fadeOutMs, easing = easing)) }
-    NavHost(
-        navController = navController,
-        startDestination = Library,
-        modifier = modifier,
-        enterTransition = {
-            if (motionEnabled) {
-                slideInHorizontally(tween(duration, easing = easing)) { slide } + incoming()
-            } else {
-                EnterTransition.None
-            }
-        },
-        exitTransition = {
-            if (motionEnabled) {
-                slideOutHorizontally(tween(duration, easing = easing)) { -slide } + outgoing()
-            } else {
-                androidx.compose.animation.ExitTransition.None
-            }
-        },
-        popEnterTransition = {
-            if (motionEnabled) {
-                slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
-            } else {
-                EnterTransition.None
-            }
-        },
-        popExitTransition = {
-            if (motionEnabled) {
-                slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
-            } else {
-                androidx.compose.animation.ExitTransition.None
-            }
-        },
-    ) {
-        composable<Library>(
-            // Avoid replaying the page entrance over the platform splash on a cold launch, while
-            // keeping the reverse shared-axis motion when Library is revealed by a back action.
-            enterTransition = { EnterTransition.None },
+    val navContent: @Composable (Modifier) -> Unit = { hostModifier ->
+        NavHost(
+            navController = navController,
+            startDestination = Library,
+            modifier = hostModifier,
+            enterTransition = {
+                if (motionEnabled) {
+                    slideInHorizontally(tween(duration, easing = easing)) { slide } + incoming()
+                } else {
+                    EnterTransition.None
+                }
+            },
+            exitTransition = {
+                if (motionEnabled) {
+                    slideOutHorizontally(tween(duration, easing = easing)) { -slide } + outgoing()
+                } else {
+                    androidx.compose.animation.ExitTransition.None
+                }
+            },
             popEnterTransition = {
                 if (motionEnabled) {
                     slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
@@ -109,55 +99,105 @@ fun YomuNavHost(
                     EnterTransition.None
                 }
             },
+            popExitTransition = {
+                if (motionEnabled) {
+                    slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
+                } else {
+                    androidx.compose.animation.ExitTransition.None
+                }
+            },
         ) {
-            val appearance by appViewModel.appearance.collectAsState()
-            LibraryRoute(
-                themePreference = appearance.themePreference,
-                onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
-                onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
-                onThemeToggle = appViewModel::onCycleTheme,
-                onOpenStats = { navController.navigate(Stats) },
-                onOpenSettings = { navController.navigate(Settings) },
-            )
+            composable<Library>(
+                // Avoid replaying the page entrance over the platform splash on a cold launch, while
+                // keeping the reverse shared-axis motion when Library is revealed by a back action.
+                enterTransition = { EnterTransition.None },
+                popEnterTransition = {
+                    if (motionEnabled) {
+                        slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
+                    } else {
+                        EnterTransition.None
+                    }
+                },
+            ) {
+                LibraryRoute(
+                    onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
+                    onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
+                )
+            }
+            composable<BookDetails> { entry ->
+                val args = entry.toRoute<BookDetails>()
+                BookDetailsRoute(
+                    onBack = navController::popBackStackIfResumed,
+                    onRead = { navController.navigate(Reader(args.bookId)) },
+                    onEdit = { navController.navigate(EditBook(args.bookId)) },
+                    onOpenChapter = { locator -> navController.navigate(Reader(args.bookId, locator)) },
+                )
+            }
+            composable<EditBook> {
+                EditBookRoute(onBack = navController::popBackStackIfResumed)
+            }
+            composable<Settings> {
+                SettingsRoute(
+                    appViewModel = appViewModel,
+                    onBack = null,
+                    onOpenStats = {
+                        navController.navigateTopLevel(YomuTopLevelDestination.Statistics)
+                    },
+                    onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
+                    onOpenAbout = { navController.navigate(About) },
+                )
+            }
+            composable<ReaderDefaults> {
+                ReaderDefaultsRoute(
+                    onBack = navController::popBackStackIfResumed,
+                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                )
+            }
+            composable<FontLibrary> {
+                FontLibraryRoute(onBack = navController::popBackStackIfResumed)
+            }
+            composable<Stats> {
+                StatsRoute(onBack = null)
+            }
+            composable<About> {
+                AboutRoute(onBack = navController::popBackStackIfResumed)
+            }
+            composable<Reader> {
+                ReaderRoute(onBack = navController::popBackStackIfResumed)
+            }
         }
-        composable<BookDetails> { entry ->
-            val args = entry.toRoute<BookDetails>()
-            BookDetailsRoute(
-                onBack = navController::popBackStackIfResumed,
-                onRead = { navController.navigate(Reader(args.bookId)) },
-                onEdit = { navController.navigate(EditBook(args.bookId)) },
-                onOpenChapter = { locator -> navController.navigate(Reader(args.bookId, locator)) },
-            )
+    }
+
+    if (topLevelDestination != null) {
+        YomuTopLevelNavigation(
+            selected = topLevelDestination,
+            onSelected = navController::navigateTopLevel,
+            content = navContent,
+            modifier = modifier,
+        )
+    } else {
+        navContent(modifier)
+    }
+}
+
+private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination) {
+    when (destination) {
+        YomuTopLevelDestination.Library -> navigate(Library) {
+            popUpTo<Library> { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
-        composable<EditBook> {
-            EditBookRoute(onBack = navController::popBackStackIfResumed)
+
+        YomuTopLevelDestination.Statistics -> navigate(Stats) {
+            popUpTo<Library> { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
-        composable<Settings> {
-            SettingsRoute(
-                appViewModel = appViewModel,
-                onBack = navController::popBackStackIfResumed,
-                onOpenStats = { navController.navigate(Stats) },
-                onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
-                onOpenAbout = { navController.navigate(About) },
-            )
-        }
-        composable<ReaderDefaults> {
-            ReaderDefaultsRoute(
-                onBack = navController::popBackStackIfResumed,
-                onOpenFontLibrary = { navController.navigate(FontLibrary) },
-            )
-        }
-        composable<FontLibrary> {
-            FontLibraryRoute(onBack = navController::popBackStackIfResumed)
-        }
-        composable<Stats> {
-            StatsRoute(onBack = navController::popBackStackIfResumed)
-        }
-        composable<About> {
-            AboutRoute(onBack = navController::popBackStackIfResumed)
-        }
-        composable<Reader> {
-            ReaderRoute(onBack = navController::popBackStackIfResumed)
+
+        YomuTopLevelDestination.Settings -> navigate(Settings) {
+            popUpTo<Library> { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
     }
 }

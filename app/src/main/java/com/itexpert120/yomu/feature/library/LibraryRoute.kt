@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.itexpert120.yomu.core.model.ThemePreference
 
 /**
  * Stateful entry point for the library: binds [LibraryViewModel], owns the SAF import launcher,
@@ -16,12 +15,8 @@ import com.itexpert120.yomu.core.model.ThemePreference
  */
 @Composable
 fun LibraryRoute(
-    themePreference: ThemePreference,
     onOpenReader: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
-    onThemeToggle: () -> Unit,
-    onOpenStats: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     val viewModel: LibraryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
@@ -45,7 +40,6 @@ fun LibraryRoute(
 
     LibraryScreen(
         state = state,
-        themePreference = themePreference,
         onSearchToggle = viewModel::onSearchToggle,
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onSortModeChange = viewModel::onSortModeChange,
@@ -54,9 +48,6 @@ fun LibraryRoute(
         onGridColumnsChange = viewModel::onGridColumnsChange,
         onOpenReader = onOpenReader,
         onOpenDetails = onOpenDetails,
-        onThemeToggle = onThemeToggle,
-        onOpenStats = onOpenStats,
-        onOpenSettings = onOpenSettings,
         onEnterSelection = viewModel::onEnterSelection,
         onToggleSelect = viewModel::onToggleSelect,
         onExitSelection = viewModel::onExitSelection,

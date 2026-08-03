@@ -6,7 +6,7 @@ Open Reader uses native Android architecture and Material 3 Expressive as its UI
 
 The core of this architecture is now built, not just planned. Inside the single `:app` module:
 
-- Built: Hilt DI, Room (schema v11, exported schemas, migration coverage), Preferences DataStore, type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
+- Built: Hilt DI, Room (schema v11, exported schemas, migration coverage), Preferences DataStore, adaptive type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary.
 - Built features: `library`, `bookdetails`, `bookedit`, `reader`, `settings`, `stats`, `about`.
 - Built layers: `core/{model, database, datastore, reader, storage, designsystem}`, `data/{books, reader/readium, settings}`, and `domain/imports`.
 - Settings resolution is implemented as a two-layer merge (global default in DataStore, optional per-book override in Room) rather than the full multi-layer resolver described below.
@@ -22,14 +22,14 @@ The package and Gradle-module layouts further down still describe the eventual d
 - Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v11, Preferences DataStore.)
 - State: Kotlin coroutines, Flow, StateFlow, and immutable UI state. (Built.)
 - DI: Hilt. (Built — `YomuApplication`, `MainActivity`, and the `app/di` modules.)
-- Navigation: type-safe Navigation Compose routes. (Built — `app/navigation`.)
+- Navigation: type-safe Navigation Compose routes with a Material `NavigationBar` on compact screens and `NavigationRail` on medium/expanded screens for the Library, Statistics, and Settings destinations. (Built — `app/navigation`.)
 - Import: Android Storage Access Framework, then copy imported files into app-private storage. (Built — `domain/imports/ImportBooksUseCase` + `core/storage/FileStorage`.)
 
 ## Architecture Style
 
 Use a pragmatic layered architecture:
 
-- UI layer: Compose screens, Material 3 Expressive components, temporary Yomu compatibility primitives, ViewModels, and state holders.
+- UI layer: Compose screens, Material 3 Expressive components, adaptive top-level navigation, temporary Yomu compatibility primitives, ViewModels, and state holders.
 - Domain layer: reusable business logic and use cases where complexity is real.
 - Data layer: repositories, DAOs, data sources, file storage, Readium integration adapters.
 - Engine boundary: EPUB reader APIs exposed through Yomu interfaces.
@@ -60,7 +60,8 @@ com.itexpert120.yomu
 |   |-- EdgeToEdge.kt
 |   |-- navigation
 |   |   |-- YomuDestinations.kt  # @Serializable routes: Library, BookDetails, EditBook, Settings, About, Reader
-|   |   `-- YomuNavHost.kt       # shared-axis (X) transitions
+|   |   |-- YomuNavigationScaffold.kt # NavigationBar/NavigationRail top-level shell
+|   |   `-- YomuNavHost.kt       # shared-axis (X) transitions + adaptive top-level routing
 |   |-- di
 |   |   |-- DataStoreModule.kt
 |   |   |-- DatabaseModule.kt
