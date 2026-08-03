@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -34,8 +35,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -107,22 +111,33 @@ fun YomuDropdownMenuItem(
         modifier = modifier
             .fillMaxWidth()
             .yomuPressable(onClick = onClick)
-            .clip(RoundedCornerShape(YomuTheme.radius.sm))
-            .background(if (selected) YomuTheme.colors.accentSoft else Color.Transparent)
+            .clip(MaterialTheme.shapes.medium)
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
+            )
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = text,
-            color = if (selected) YomuTheme.colors.accent else YomuTheme.colors.textPrimary,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
             style = YomuTheme.type.body,
             modifier = Modifier.weight(1f),
         )
         if (selected) {
-            Text(
-                text = "\u2713",
-                color = YomuTheme.colors.accent,
-                style = YomuTheme.type.body,
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -133,15 +148,17 @@ fun YomuDropdownMenuContainer(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        modifier = modifier
-            .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.md))
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .background(YomuTheme.colors.panel)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md))
-            .padding(vertical = 4.dp),
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp,
     ) {
-        content()
+        Column(Modifier.padding(vertical = 4.dp)) {
+            content()
+        }
     }
 }
 
@@ -152,24 +169,24 @@ fun YomuPillFilter(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .yomuPressable(onClick = onClick)
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.surface)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(text = label, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        Text(text = value, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.caption)
-        Icon(
-            imageVector = Icons.Rounded.KeyboardArrowDown,
-            contentDescription = null,
-            tint = YomuTheme.colors.textMuted,
-            modifier = Modifier.size(14.dp),
-        )
-    }
+    AssistChip(
+        onClick = onClick,
+        modifier = modifier,
+        label = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(text = label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text = value, color = MaterialTheme.colorScheme.onSurface)
+            }
+        },
+        trailingIcon = {
+            Icon(
+                imageVector = Icons.Rounded.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        shape = MaterialTheme.shapes.large,
+    )
 }
 
 enum class YomuIconButtonEmphasis {
@@ -184,23 +201,19 @@ fun YomuCircleIconButton(
     emphasis: YomuIconButtonEmphasis = YomuIconButtonEmphasis.Quiet,
     icon: @Composable () -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .yomuPressable(onClick = onClick)
-            .size(48.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .background(
-                    when (emphasis) {
-                        YomuIconButtonEmphasis.Primary -> YomuTheme.colors.accent
-                        YomuIconButtonEmphasis.Quiet -> YomuTheme.colors.surface
-                    },
-                ),
-            contentAlignment = Alignment.Center,
+    when (emphasis) {
+        YomuIconButtonEmphasis.Primary -> androidx.compose.material3.FilledIconButton(
+            onClick = onClick,
+            modifier = modifier.size(48.dp),
+            shape = MaterialTheme.shapes.large,
+        ) {
+            icon()
+        }
+
+        YomuIconButtonEmphasis.Quiet -> androidx.compose.material3.FilledTonalIconButton(
+            onClick = onClick,
+            modifier = modifier.size(48.dp),
+            shape = MaterialTheme.shapes.large,
         ) {
             icon()
         }
@@ -219,32 +232,40 @@ fun YomuCircleIconButton(
         YomuIconButtonEmphasis.Quiet -> YomuTheme.colors.textPrimary
     },
 ) {
-    YomuCircleIconButton(onClick = onClick, modifier = modifier, emphasis = emphasis) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(18.dp),
-        )
+    when (emphasis) {
+        YomuIconButtonEmphasis.Primary -> androidx.compose.material3.FilledIconButton(
+            onClick = onClick,
+            modifier = modifier.size(48.dp),
+            shape = MaterialTheme.shapes.large,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+            )
+        }
+
+        YomuIconButtonEmphasis.Quiet -> androidx.compose.material3.FilledTonalIconButton(
+            onClick = onClick,
+            modifier = modifier.size(48.dp),
+            shape = MaterialTheme.shapes.large,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+            )
+        }
     }
 }
 
-/** A custom, on-brand drag grip for [YomuBottomSheet]s. */
+/** Material 3 drag handle compatibility wrapper for [YomuBottomSheet]s. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun YomuSheetDragHandle() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 36.dp, height = 4.dp)
-                .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .background(YomuTheme.colors.border),
-        )
-    }
+    BottomSheetDefaults.DragHandle(
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
 }
 
 /**
@@ -259,6 +280,9 @@ fun YomuBottomSheet(
     onDismiss: () -> Unit,
     // Sheets with their own scroll container (e.g. a LazyColumn) should pass false.
     scrollable: Boolean = true,
+    // Expanded tablets can keep reader navigation visible as a side sheet instead of a centered
+    // dialog. Other sheets retain the centered dialog treatment.
+    wideAsSideSheet: Boolean = false,
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
 ) {
     if (!visible) return
@@ -279,8 +303,8 @@ fun YomuBottomSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(if (wideAsSideSheet) 0.dp else 24.dp),
+                contentAlignment = if (wideAsSideSheet) Alignment.CenterEnd else Alignment.Center,
             ) {
                 // The wide layout fills the Dialog window, so platform outside-click handling never
                 // sees a click as being outside. Make the visible scrim dismiss explicitly instead.
@@ -293,19 +317,29 @@ fun YomuBottomSheet(
                 )
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth(0.86f)
-                        .widthIn(max = 560.dp)
-                        .heightIn(max = maxHeight)
-                        .shadow(18.dp, RoundedCornerShape(YomuTheme.radius.lg))
-                        .clip(RoundedCornerShape(YomuTheme.radius.lg))
+                        .then(
+                            if (wideAsSideSheet) {
+                                Modifier
+                                    .fillMaxHeight()
+                                    .widthIn(min = 320.dp, max = 440.dp)
+                                    .padding(vertical = 16.dp)
+                            } else {
+                                Modifier
+                                    .fillMaxWidth(0.86f)
+                                    .widthIn(max = 560.dp)
+                                    .heightIn(max = maxHeight)
+                            },
+                        )
+                        .shadow(18.dp, MaterialTheme.shapes.extraLarge)
+                        .clip(MaterialTheme.shapes.extraLarge)
                         .background(
-                            YomuTheme.colors.panel,
-                            RoundedCornerShape(YomuTheme.radius.lg),
+                            MaterialTheme.colorScheme.surfaceContainerLow,
+                            MaterialTheme.shapes.extraLarge,
                         )
                         .border(
                             1.dp,
-                            YomuTheme.colors.border,
-                            RoundedCornerShape(YomuTheme.radius.lg),
+                            MaterialTheme.colorScheme.outlineVariant,
+                            MaterialTheme.shapes.extraLarge,
                         )
                         // Keep taps on empty panel space from reaching the dismiss scrim behind it.
                         .pointerInput(Unit) {
@@ -344,8 +378,8 @@ fun YomuBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = YomuTheme.colors.panel,
-        contentColor = YomuTheme.colors.textPrimary,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         dragHandle = { YomuSheetDragHandle() },
         // Draw the panel edge-to-edge under the (transparent) gesture nav bar instead of reserving it
         // as bottom inset — otherwise the panel stops above the bar, leaving a coloured band. The nav

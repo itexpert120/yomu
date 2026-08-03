@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yomu Library — Material 3 Expressive Prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #e8eaf3;
+      --surface: #fbf8ff;
+      --surface-low: #f5f2fa;
+      --surface-container: #efedf5;
+      --surface-high: #e8e6ee;
+      --surface-highest: #e2e0e8;
+      --on-surface: #1a1b20;
+      --on-surface-variant: #45464f;
+      --outline: #767780;
+      --outline-variant: #c7c6d0;
+      --primary: #3f5f9b;
+      --on-primary: #ffffff;
+      --primary-container: #d9e2ff;
+      --on-primary-container: #284777;
+      --secondary: #70558b;
+      --secondary-container: #f1dcff;
+      --on-secondary-container: #2a143c;
+      --tertiary: #006a60;
+      --tertiary-container: #a0f2e1;
+      --on-tertiary-container: #00201b;
+      --inverse-surface: #303036;
+      --inverse-on-surface: #f2eff7;
+      --shadow: rgba(28, 31, 43, 0.16);
+      --shadow-soft: rgba(28, 31, 43, 0.08);
+      --focus: #6d9ee8;
+      --ease: cubic-bezier(.2, 0, 0, 1);
+    }
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --canvas: #0f1015;
+      --surface: #111218;
+      --surface-low: #18191f;
+      --surface-container: #1d1e25;
+      --surface-high: #26272e;
+      --surface-highest: #303138;
+      --on-surface: #e4e2ea;
+      --on-surface-variant: #c5c4ce;
+      --outline: #8f909a;
+      --outline-variant: #464750;
+      --primary: #aec6ff;
+      --on-primary: #102f60;
+      --primary-container: #284777;
+      --on-primary-container: #d9e2ff;
+      --secondary: #ddb9f3;
+      --secondary-container: #533c68;
+      --on-secondary-container: #f1dcff;
+      --tertiary: #83d6c8;
+      --tertiary-container: #005047;
+      --on-tertiary-container: #a0f2e1;
+      --inverse-surface: #e4e2ea;
+      --inverse-on-surface: #303036;
+      --shadow: rgba(0, 0, 0, 0.42);
+      --shadow-soft: rgba(0, 0, 0, 0.24);
+      --focus: #9fc2ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      background: radial-gradient(circle at 14% 12%, rgba(161, 182, 240, .35), transparent 29rem), radial-gradient(circle at 90% 88%, rgba(218, 178, 237, .24), transparent 28rem), var(--canvas);
+      color: var(--on-surface);
+      font-family: "Google Sans", "Roboto", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, .book-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    .icon { display: block; width: 21px; height: 21px; flex: none; }
+    .prototype-canvas { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+    .device-frame {
+      position: relative; display: flex; width: min(1180px, calc(100vw - 32px)); height: min(900px, calc(100vh - 32px)); min-height: 650px; overflow: hidden;
+      border: 10px solid #22232a; border-radius: 44px; background: var(--surface); box-shadow: 0 32px 80px rgba(35, 38, 53, .22), 0 10px 24px rgba(35, 38, 53, .14);
+    }
+    .app-shell { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; background: var(--surface); }
+    .status-bar { display: flex; height: 28px; flex: none; align-items: center; justify-content: space-between; padding: 7px 24px 0; color: var(--on-surface-variant); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+    .status-icons { display: flex; align-items: center; gap: 8px; }
+    .signal { display: inline-flex; align-items: end; gap: 2px; height: 11px; }
+    .signal i { display: block; width: 2px; border-radius: 2px; background: currentColor; }
+    .signal i:nth-child(1) { height: 4px; } .signal i:nth-child(2) { height: 7px; } .signal i:nth-child(3) { height: 10px; }
+    .battery { position: relative; display: inline-block; width: 18px; height: 9px; border: 1.5px solid currentColor; border-radius: 3px; }
+    .battery::after { position: absolute; top: 2px; right: -3px; width: 2px; height: 4px; border-radius: 0 2px 2px 0; background: currentColor; content: ""; }
+    .battery span { display: block; width: 72%; height: 100%; border-radius: 1px; background: currentColor; }
+    .top-app-bar { display: flex; min-height: 72px; flex: none; align-items: center; gap: 20px; padding: 12px 28px; background: var(--surface); }
+    .app-brand { display: flex; min-width: max-content; align-items: center; gap: 11px; }
+    .brand-mark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 15px 15px 15px 7px; background: linear-gradient(145deg, var(--primary), #758fd0); color: white; box-shadow: 0 4px 12px rgba(63, 95, 155, .25); transform: rotate(-4deg); }
+    .brand-mark span { display: block; font-family: Georgia, serif; font-size: 23px; font-weight: 700; line-height: 1; transform: rotate(4deg); }
+    .brand-copy { display: flex; flex-direction: column; gap: 1px; }
+    .brand-copy strong { font-size: 19px; font-weight: 750; letter-spacing: -.03em; }
+    .brand-copy span { color: var(--on-surface-variant); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .app-bar-actions { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; gap: 8px; }
+    .search-field { display: flex; width: min(320px, 34vw); height: 46px; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid transparent; border-radius: 17px; background: var(--surface-container); color: var(--on-surface-variant); transition: width .3s var(--ease), background .25s var(--ease), border-color .25s var(--ease); }
+    .search-field:focus-within { width: min(370px, 38vw); border-color: var(--primary); background: var(--surface-low); }
+    .search-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--on-surface); font-size: 14px; }
+    .search-field input::placeholder { color: var(--on-surface-variant); opacity: .82; }
+    .clear-button, .icon-button, .avatar, .theme-control { border: 0; cursor: pointer; transition: background .2s var(--ease), transform .2s var(--ease), color .2s var(--ease); }
+    .clear-button { display: grid; width: 28px; height: 28px; flex: none; place-items: center; border-radius: 50%; background: transparent; color: var(--on-surface-variant); }
+    .clear-button:hover, .icon-button:hover, .avatar:hover { background: var(--surface-high); }
+    .clear-button:active, .icon-button:active, .avatar:active, .theme-control:active { transform: scale(.94); }
+    .clear-button .icon { width: 17px; height: 17px; }
+    .theme-control { display: inline-flex; height: 44px; align-items: center; gap: 7px; padding: 0 12px; border-radius: 15px; background: var(--surface-container); color: var(--on-surface-variant); font-size: 12px; font-weight: 700; }
+    .theme-control:hover { background: var(--surface-high); }
+    .theme-control .icon { width: 18px; height: 18px; color: var(--primary); }
+    .avatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 14px 14px 6px 14px; background: var(--tertiary-container); color: var(--on-tertiary-container); font-size: 12px; font-weight: 800; }
+    .app-layout { display: flex; flex: 1; min-height: 0; }
+    .nav-rail { display: none; width: 96px; flex: none; flex-direction: column; align-items: center; padding: 10px 8px 18px; border-right: 1px solid var(--outline-variant); background: var(--surface); }
+    .rail-brand { display: grid; width: 48px; height: 48px; margin: 2px 0 25px; place-items: center; border-radius: 18px 18px 8px 18px; background: var(--primary-container); color: var(--on-primary-container); font-family: Georgia, serif; font-size: 23px; font-weight: 700; }
+    .rail-nav { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 7px; }
+    .rail-spacer { flex: 1; }
+    .nav-item { display: flex; width: 76px; min-height: 61px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 4px; border: 0; border-radius: 18px; background: transparent; color: var(--on-surface-variant); cursor: pointer; font-size: 10px; font-weight: 700; transition: color .2s var(--ease), transform .2s var(--ease); }
+    .nav-item:hover { color: var(--on-surface); } .nav-item:active { transform: scale(.96); }
+    .nav-icon { display: grid; width: 56px; height: 32px; place-items: center; border-radius: 17px; transition: background .25s var(--ease), color .25s var(--ease); }
+    .nav-item[aria-current="page"] { color: var(--on-primary-container); } .nav-item[aria-current="page"] .nav-icon { background: var(--primary-container); }
+    .bottom-nav { z-index: 10; display: none; height: 76px; flex: none; align-items: center; justify-content: space-around; gap: 4px; padding: 7px 12px 10px; border-top: 1px solid var(--outline-variant); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(18px); }
+    .bottom-nav .nav-item { width: 74px; min-height: 58px; gap: 4px; font-size: 10px; } .bottom-nav .nav-icon { width: 52px; height: 30px; }
+    .content-area { position: relative; min-width: 0; flex: 1; overflow: hidden; background: var(--surface); }
+    .content-scroll { height: 100%; overflow-y: auto; padding: 26px clamp(20px, 4vw, 48px) 38px; scrollbar-color: var(--outline-variant) transparent; scrollbar-width: thin; }
+    .content-inner { width: 100%; max-width: 1080px; margin: 0 auto; }
+    .library-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+    .eyebrow { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .eyebrow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tertiary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--tertiary) 18%, transparent); }
+    .library-heading h1 { margin: 0; font-size: clamp(30px, 4vw, 42px); font-weight: 750; letter-spacing: -.045em; line-height: 1.04; }
+    .library-heading p { max-width: 430px; margin: 9px 0 0; color: var(--on-surface-variant); font-size: 14px; line-height: 1.45; }
+    .library-summary { display: flex; align-items: center; gap: 8px; color: var(--on-surface-variant); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .summary-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--outline); }
+    .filter-row { position: relative; display: flex; align-items: center; gap: 8px; margin: 23px 0 19px; overflow: visible; scrollbar-width: none; }
+    .filter-chip, .sort-trigger { display: inline-flex; height: 38px; flex: none; align-items: center; gap: 7px; padding: 0 13px; border: 1px solid var(--outline-variant); border-radius: 13px; background: transparent; color: var(--on-surface-variant); cursor: pointer; font-size: 12px; font-weight: 750; white-space: nowrap; transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease), transform .2s var(--ease); }
+    .filter-chip:hover, .sort-trigger:hover { border-color: var(--outline); background: var(--surface-container); } .filter-chip:active, .sort-trigger:active { transform: scale(.97); }
+    .filter-chip.is-active { border-color: var(--primary-container); background: var(--primary-container); color: var(--on-primary-container); }
+    .chip-count { display: inline-grid; min-width: 18px; height: 18px; place-items: center; padding: 0 4px; border-radius: 9px; background: color-mix(in srgb, currentColor 12%, transparent); font-size: 10px; }
+    .sort-wrapper { position: relative; margin-left: auto; } .sort-trigger { border-color: transparent; background: var(--surface-container); } .sort-trigger .icon { width: 17px; height: 17px; color: var(--primary); }
+    .sort-menu { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: 190px; padding: 7px; border: 1px solid var(--outline-variant); border-radius: 17px; background: var(--surface); box-shadow: 0 14px 32px var(--shadow); }
+    .sort-option { display: flex; width: 100%; height: 40px; align-items: center; justify-content: space-between; padding: 0 11px; border: 0; border-radius: 11px; background: transparent; color: var(--on-surface-variant); cursor: pointer; font-size: 12px; font-weight: 650; text-align: left; }
+    .sort-option:hover, .sort-option.is-selected { background: var(--primary-container); color: var(--on-primary-container); } .sort-check { display: grid; width: 20px; height: 20px; place-items: center; }
+    .hero-card { position: relative; display: grid; grid-template-columns: 145px minmax(0, 1fr) 145px; gap: 24px; min-height: 244px; overflow: hidden; padding: 24px; border-radius: 31px 31px 15px 31px; background: linear-gradient(125deg, color-mix(in srgb, var(--primary-container) 96%, white), var(--secondary-container)); color: var(--on-primary-container); box-shadow: 0 10px 24px var(--shadow-soft); }
+    .hero-card::before { position: absolute; top: -110px; right: 110px; width: 280px; height: 280px; border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent); border-radius: 50%; content: ""; }
+    .hero-card::after { position: absolute; right: -52px; bottom: -105px; width: 270px; height: 210px; border-radius: 50% 50% 0 0; background: color-mix(in srgb, var(--secondary) 10%, transparent); content: ""; }
+    .hero-cover { position: relative; z-index: 1; width: 145px; height: 196px; align-self: center; }
+    .cover-art { position: relative; isolation: isolate; display: flex; width: 100%; height: 100%; flex-direction: column; justify-content: flex-end; overflow: hidden; padding: 15px; border-radius: 18px 18px 8px 18px; background: #345; color: #fff; box-shadow: 0 12px 22px rgba(23, 30, 52, .24); }
+    .cover-art::before, .cover-art::after { position: absolute; z-index: -1; content: ""; }
+    .cover-art::before { top: -24%; right: -28%; width: 90%; height: 70%; border: 1px solid rgba(255,255,255,.34); border-radius: 50%; transform: rotate(-19deg); }
+    .cover-art::after { right: -18%; bottom: -22%; width: 110%; height: 57%; border-radius: 55% 0 0 0; background: rgba(255,255,255,.13); transform: rotate(-8deg); }
+    .cover-kicker { position: absolute; top: 14px; left: 15px; z-index: 2; font-size: 8px; font-weight: 800; letter-spacing: .14em; opacity: .88; }
+    .cover-title { position: relative; z-index: 2; display: flex; flex-direction: column; margin-top: auto; font-family: Georgia, "Times New Roman", serif; font-size: clamp(17px, 2.1vw, 24px); font-weight: 700; letter-spacing: -.04em; line-height: .92; text-transform: uppercase; }
+    .cover-author { position: relative; z-index: 2; margin-top: 12px; font-size: 8px; font-weight: 800; letter-spacing: .1em; line-height: 1.25; text-transform: uppercase; }
+    .cover-hero { background: linear-gradient(145deg, #172850 4%, #326891 52%, #e99b73 100%); }
+    .cover-hero::before { top: 17%; right: -34%; width: 130%; height: 55%; border: 0; background: rgba(255, 224, 174, .35); box-shadow: 0 0 0 17px rgba(255, 224, 174, .13), 0 0 0 34px rgba(255, 224, 174, .08); }
+    .cover-1 { background: linear-gradient(145deg, #4a1231, #b74254 52%, #f1b46d); } .cover-1::before { top: 11%; right: -28%; width: 120%; height: 38%; border-color: rgba(255, 231, 197, .6); transform: rotate(23deg); }
+    .cover-2 { background: linear-gradient(145deg, #092b38, #13757c 50%, #a6d8c8); } .cover-2::before { top: 2%; right: -22%; width: 85%; height: 75%; border-width: 15px; border-color: rgba(195, 242, 226, .3); }
+    .cover-3 { background: linear-gradient(145deg, #76895a, #c6c58b 55%, #f1e3ba); color: #253229; } .cover-3::before { right: -8%; bottom: -5%; width: 90%; height: 74%; border: 0; background: rgba(43, 85, 63, .22); border-radius: 62% 0 0 0; transform: rotate(12deg); }
+    .cover-4 { background: linear-gradient(145deg, #161c49, #623f87 53%, #ed977a); } .cover-4::before { top: 21%; right: -12%; width: 74%; height: 74%; border-width: 13px; border-color: rgba(248, 198, 173, .27); transform: rotate(45deg); }
+    .cover-5 { background: linear-gradient(145deg, #d0a943, #f2cf71 55%, #293c68); color: #17223b; } .cover-5::before { top: -17%; left: -29%; width: 95%; height: 88%; border-color: rgba(255,255,255,.7); transform: rotate(42deg); }
+    .cover-6 { background: linear-gradient(145deg, #352248, #964b76 55%, #edb08c); } .cover-6::before { top: 12%; right: -22%; width: 95%; height: 65%; border: 0; background: rgba(255, 214, 201, .24); border-radius: 58% 42% 55% 45%; transform: rotate(-33deg); }
+    .cover-7 { background: linear-gradient(145deg, #0e5365, #299aa2 55%, #e3cc7b); } .cover-7::before { top: -10%; right: -23%; width: 80%; height: 80%; border-color: rgba(226, 250, 235, .52); transform: rotate(61deg); }
+    .hero-copy { position: relative; z-index: 1; align-self: center; min-width: 0; } .hero-copy .eyebrow { color: var(--primary); margin-bottom: 12px; }
+    .hero-copy h2 { max-width: 470px; margin: 0; color: var(--on-primary-container); font-size: clamp(25px, 3.4vw, 36px); font-weight: 760; letter-spacing: -.045em; line-height: 1.02; }
+    .hero-author { margin: 9px 0 20px; color: color-mix(in srgb, var(--on-primary-container) 76%, transparent); font-size: 13px; font-weight: 650; }
+    .progress-info { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--on-primary-container); font-size: 11px; font-weight: 750; }
+    .progress-track, .mini-progress-track { overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--on-primary-container) 18%, transparent); }
+    .progress-track { height: 8px; } .progress-track span, .mini-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+    .hero-footer { display: flex; align-items: center; gap: 11px; margin-top: 18px; color: color-mix(in srgb, var(--on-primary-container) 78%, transparent); font-size: 11px; font-weight: 650; }
+    .hero-footer-separator { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+    .hero-actions { position: relative; z-index: 1; display: flex; align-self: center; flex-direction: column; align-items: stretch; gap: 9px; }
+    .hero-primary, .tonal-button { display: inline-flex; height: 46px; align-items: center; justify-content: center; gap: 8px; padding: 0 17px; border: 0; border-radius: 15px 15px 7px 15px; cursor: pointer; font-size: 12px; font-weight: 800; transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+    .hero-primary { background: var(--primary); color: var(--on-primary); box-shadow: 0 7px 15px color-mix(in srgb, var(--primary) 28%, transparent); } .hero-primary:hover { box-shadow: 0 9px 19px color-mix(in srgb, var(--primary) 34%, transparent); transform: translateY(-1px); } .hero-primary:active, .tonal-button:active { transform: scale(.96); }
+    .hero-primary .icon { width: 17px; height: 17px; }
+    .hero-secondary { display: inline-flex; height: 40px; align-items: center; justify-content: center; gap: 7px; border: 1px solid color-mix(in srgb, var(--on-primary-container) 24%, transparent); border-radius: 13px; background: color-mix(in srgb, white 16%, transparent); color: var(--on-primary-container); cursor: pointer; font-size: 11px; font-weight: 750; } .hero-secondary:hover { background: color-mix(in srgb, white 26%, transparent); }
+    .hero-secondary .icon { width: 17px; height: 17px; }
+    .section-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 30px 0 15px; } .section-header h2 { margin: 0; font-size: 21px; font-weight: 760; letter-spacing: -.03em; } .section-header span { color: var(--on-surface-variant); font-size: 12px; font-weight: 650; }
+    .book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(157px, 1fr)); gap: 16px; }
+    .book-card { min-width: 0; padding: 10px; border: 1px solid var(--outline-variant); border-radius: 23px 23px 12px 23px; background: var(--surface-low); cursor: pointer; transition: transform .25s var(--ease), border-color .25s var(--ease), background .25s var(--ease), box-shadow .25s var(--ease); }
+    .book-card:hover { border-color: color-mix(in srgb, var(--primary) 46%, var(--outline-variant)); background: var(--surface-container); box-shadow: 0 8px 18px var(--shadow-soft); transform: translateY(-3px); }
+    .book-card-cover { width: 100%; aspect-ratio: .7; margin-bottom: 12px; } .book-card-cover .cover-art { padding: 13px; border-radius: 17px 17px 8px 17px; } .book-card-cover .cover-kicker { top: 12px; left: 13px; font-size: 7px; } .book-card-cover .cover-title { font-size: clamp(15px, 1.7vw, 20px); } .book-card-cover .cover-author { margin-top: 9px; font-size: 7px; }
+    .book-status { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; color: var(--on-surface-variant); font-size: 10px; font-weight: 750; } .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--outline); } .status-dot.reading { background: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent); } .status-dot.finished { background: var(--tertiary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tertiary) 16%, transparent); }
+    .book-card h3 { display: -webkit-box; min-height: 36px; overflow: hidden; margin: 0; color: var(--on-surface); font-size: 14px; font-weight: 760; letter-spacing: -.02em; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; } .book-author { overflow: hidden; margin: 4px 0 11px; color: var(--on-surface-variant); font-size: 11px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+    .book-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 5px; margin-bottom: 6px; color: var(--on-surface-variant); font-size: 9px; font-weight: 700; } .mini-progress-track { height: 5px; background: var(--surface-highest); } .mini-progress-track span.reading { background: var(--primary); } .mini-progress-track span.finished { background: var(--tertiary); }
+    .empty-state { padding: 46px 24px; border: 1px dashed var(--outline); border-radius: 24px; color: var(--on-surface-variant); text-align: center; } .empty-state strong { display: block; margin-bottom: 6px; color: var(--on-surface); font-size: 18px; } .empty-state p { margin: 0; font-size: 13px; }
+    .fab { position: absolute; right: 34px; bottom: 28px; z-index: 12; display: inline-flex; height: 56px; align-items: center; gap: 9px; padding: 0 20px; border: 0; border-radius: 18px 18px 8px 18px; background: var(--primary); color: var(--on-primary); cursor: pointer; font-size: 13px; font-weight: 800; box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 30%, transparent); transition: background .25s var(--ease), box-shadow .25s var(--ease), transform .25s var(--ease); }
+    .fab:hover { box-shadow: 0 13px 25px color-mix(in srgb, var(--primary) 38%, transparent); transform: translateY(-2px); } .fab:active { transform: scale(.95); } .fab.is-confirmed { background: var(--tertiary); color: #fff; } .fab .icon { width: 20px; height: 20px; }
+    .toast { position: absolute; z-index: 30; bottom: 29px; left: 50%; display: flex; max-width: min(410px, calc(100% - 40px)); min-height: 48px; align-items: center; gap: 10px; padding: 11px 16px; border-radius: 15px 15px 6px 15px; background: var(--inverse-surface); color: var(--inverse-on-surface); box-shadow: 0 10px 25px var(--shadow); font-size: 12px; font-weight: 650; opacity: 0; pointer-events: none; transform: translate(-50%, 18px); transition: opacity .28s var(--ease), transform .28s var(--ease); }
+    .toast.is-visible { opacity: 1; transform: translate(-50%, 0); } .toast .icon { width: 18px; height: 18px; color: var(--tertiary); }
+    @media (min-width: 860px) { .nav-rail { display: flex; } }
+    @media (max-width: 859px) {
+      .prototype-canvas { padding: 0; } .device-frame { width: 100vw; height: 100vh; min-height: 600px; border: 0; border-radius: 0; box-shadow: none; }
+      .top-app-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 12px 16px 14px; } .app-bar-actions { display: contents; } .search-field { grid-column: 1 / -1; grid-row: 2; width: 100%; } .search-field:focus-within { width: 100%; } .theme-control { grid-column: 2; grid-row: 1; padding: 0 11px; } .theme-control .theme-label { display: none; } .avatar { grid-column: 3; grid-row: 1; }
+      .status-bar { padding-right: 18px; padding-left: 18px; } .content-scroll { padding: 23px 16px 30px; } .library-heading { align-items: start; flex-direction: column; gap: 8px; } .library-heading h1 { font-size: 34px; } .library-summary { display: none; }
+      .filter-row { margin-top: 19px; overflow-x: auto; padding-bottom: 2px; } .sort-wrapper { margin-left: auto; }
+      .hero-card { grid-template-columns: 108px minmax(0, 1fr); gap: 17px; min-height: 0; padding: 18px; border-radius: 27px 27px 13px 27px; } .hero-cover { width: 108px; height: 154px; } .hero-cover .cover-art { padding: 12px; } .hero-cover .cover-title { font-size: 17px; } .hero-cover .cover-kicker { top: 12px; left: 12px; font-size: 6px; } .hero-cover .cover-author { margin-top: 8px; font-size: 6px; }
+      .hero-copy h2 { font-size: 25px; } .hero-author { margin-bottom: 15px; font-size: 12px; } .hero-footer { flex-wrap: wrap; gap: 7px; margin-top: 13px; font-size: 10px; } .hero-actions { grid-column: 1 / -1; flex-direction: row; align-items: center; } .hero-primary { flex: 1; } .hero-secondary { width: 44px; padding: 0; } .hero-secondary span:last-child { display: none; }
+      .section-header { margin-top: 25px; } .book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .book-card { padding: 8px; border-radius: 20px 20px 10px 20px; } .book-card-cover { margin-bottom: 10px; } .book-card h3 { font-size: 13px; } .book-author { margin-bottom: 9px; font-size: 10px; }
+      .bottom-nav { display: flex; } .fab { right: 18px; bottom: 88px; width: 56px; justify-content: center; padding: 0; border-radius: 18px 18px 8px 18px; } .fab .fab-label { display: none; } .toast { bottom: 90px; }
+    }
+    @media (max-width: 380px) { .brand-copy span { display: none; } .hero-card { grid-template-columns: 96px minmax(0, 1fr); gap: 14px; padding: 15px; } .hero-cover { width: 96px; height: 140px; } .hero-copy h2 { font-size: 22px; } .hero-author { margin-top: 7px; margin-bottom: 12px; } .hero-footer { display: none; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="prototype-canvas">
+    <div class="device-frame" id="device" data-theme="light">
+      <div class="app-shell">
+        <div class="status-bar" aria-label="Device status"><span>9:41</span><div class="status-icons" aria-hidden="true"><span class="signal"><i></i><i></i><i></i></span><span>⌁</span><span class="battery"><span></span></span></div></div>
+        <header class="top-app-bar">
+          <div class="app-brand" aria-label="Yomu Library"><div class="brand-mark" aria-hidden="true"><span>Y</span></div><div class="brand-copy"><strong>Yomu</strong><span>Library</span></div></div>
+          <div class="app-bar-actions">
+            <div class="search-field" role="search"><span class="icon-slot" data-icon="search" aria-hidden="true"></span><input id="searchInput" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off" /><button class="clear-button" id="clearSearch" type="button" aria-label="Clear search" hidden><span class="icon-slot" data-icon="close" aria-hidden="true"></span></button></div>
+            <button class="theme-control" id="themeToggle" type="button" aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-symbol icon-slot" data-icon="sun" aria-hidden="true"></span><span class="theme-label" id="themeLabel">Light</span></button><button class="avatar" type="button" aria-label="Account">AM</button>
+          </div>
+        </header>
+        <div class="app-layout">
+          <aside class="nav-rail" aria-label="Primary navigation"><div class="rail-brand" aria-hidden="true">Y</div><nav class="rail-nav"><button class="nav-item" type="button" data-nav="library" aria-current="page"><span class="nav-icon icon-slot" data-icon="library" aria-hidden="true"></span><span class="nav-label">Library</span></button><button class="nav-item" type="button" data-nav="explore"><span class="nav-icon icon-slot" data-icon="explore" aria-hidden="true"></span><span class="nav-label">Explore</span></button><button class="nav-item" type="button" data-nav="bookmarks"><span class="nav-icon icon-slot" data-icon="bookmark" aria-hidden="true"></span><span class="nav-label">Bookmarks</span></button></nav><div class="rail-spacer"></div><nav class="rail-nav"><button class="nav-item" type="button" data-nav="settings"><span class="nav-icon icon-slot" data-icon="settings" aria-hidden="true"></span><span class="nav-label">Settings</span></button></nav></aside>
+          <main class="content-area" aria-label="Library"><div class="content-scroll"><div class="content-inner">
+            <section class="library-heading" aria-labelledby="libraryTitle"><div><p class="eyebrow"><span class="eyebrow-dot"></span>Wednesday, June 18</p><h1 id="libraryTitle">Your library</h1><p>A quiet place for the stories you are reading, returning to, and saving for later.</p></div><div class="library-summary"><span id="summaryCount">8 books</span><span class="summary-dot"></span><span>42% read</span></div></section>
+            <div class="filter-row" aria-label="Library filters"><button class="filter-chip is-active" type="button" data-filter="all">All <span class="chip-count" data-count="all">8</span></button><button class="filter-chip" type="button" data-filter="reading">In progress <span class="chip-count" data-count="reading">3</span></button><button class="filter-chip" type="button" data-filter="unread">Unread <span class="chip-count" data-count="unread">3</span></button><button class="filter-chip" type="button" data-filter="finished">Finished <span class="chip-count" data-count="finished">2</span></button><div class="sort-wrapper"><button class="sort-trigger" id="sortButton" type="button" aria-expanded="false" aria-controls="sortMenu"><span class="icon-slot" data-icon="filter" aria-hidden="true"></span><span id="sortLabel">Recent</span></button><div class="sort-menu" id="sortMenu" hidden><button class="sort-option is-selected" type="button" data-sort="recent" data-label="Recent">Recently added <span class="sort-check"></span></button><button class="sort-option" type="button" data-sort="title" data-label="Title">Title A–Z <span class="sort-check"></span></button><button class="sort-option" type="button" data-sort="progress" data-label="Progress">Reading progress <span class="sort-check"></span></button></div></div></div>
+            <section class="hero-card" aria-labelledby="continueTitle"><div class="hero-cover"><div class="cover-art cover-hero" role="img" aria-label="Cover of The City and the Stars"><span class="cover-kicker">YOMU PICK</span><span class="cover-title"><span>THE CITY</span><span>&amp; THE</span><span>STARS</span></span><span class="cover-author">ARTHUR C. CLARKE</span></div></div><div class="hero-copy"><p class="eyebrow"><span class="eyebrow-dot"></span>Continue reading</p><h2 id="continueTitle">The City &amp; the Stars</h2><p class="hero-author">Arthur C. Clarke</p><div class="progress-info"><span>Chapter 9 · Diaspar</span><span>68%</span></div><div class="progress-track" aria-label="68 percent complete"><span style="width: 68%"></span></div><div class="hero-footer"><span>Page 236 of 348</span><span class="hero-footer-separator"></span><span>24 min left</span></div></div><div class="hero-actions"><button class="hero-primary" id="openBook" type="button">Continue <span class="icon-slot" data-icon="arrow" aria-hidden="true"></span></button><button class="hero-secondary" id="heroMore" type="button" aria-label="More options for The City and the Stars"><span class="icon-slot" data-icon="more" aria-hidden="true"></span><span>More</span></button></div></section>
+            <section aria-labelledby="collectionTitle"><div class="section-header"><h2 id="collectionTitle">Your collection</h2><span id="resultCount">8 books</span></div><div class="book-grid" id="bookGrid"></div><div class="empty-state" id="emptyState" hidden><strong>No books found</strong><p>Try another title, author, or filter.</p></div></section>
+          </div></div></main>
+        </div>
+        <nav class="bottom-nav" aria-label="Primary navigation"><button class="nav-item" type="button" data-nav="library" aria-current="page"><span class="nav-icon icon-slot" data-icon="library" aria-hidden="true"></span><span class="nav-label">Library</span></button><button class="nav-item" type="button" data-nav="explore"><span class="nav-icon icon-slot" data-icon="explore" aria-hidden="true"></span><span class="nav-label">Explore</span></button><button class="nav-item" type="button" data-nav="bookmarks"><span class="nav-icon icon-slot" data-icon="bookmark" aria-hidden="true"></span><span class="nav-label">Saved</span></button><button class="nav-item" type="button" data-nav="settings"><span class="nav-icon icon-slot" data-icon="settings" aria-hidden="true"></span><span class="nav-label">Settings</span></button></nav>
+        <button class="fab" id="fab" type="button" aria-label="Add a book"><span class="icon-slot" data-icon="plus" aria-hidden="true"></span><span class="fab-label">Add book</span></button><div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const books = [
+      { title: "The City & the Stars", author: "Arthur C. Clarke", coverClass: "cover-hero", coverLines: ["THE CITY", "& THE", "STARS"], status: "reading", progress: 68, added: 8 },
+      { title: "The Night Circus", author: "Erin Morgenstern", coverClass: "cover-1", coverLines: ["THE", "NIGHT", "CIRCUS"], status: "reading", progress: 42, added: 7 },
+      { title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", coverClass: "cover-2", coverLines: ["THE LEFT", "HAND OF", "DARKNESS"], status: "unread", progress: 0, added: 6 },
+      { title: "Braiding Sweetgrass", author: "Robin Wall Kimmerer", coverClass: "cover-3", coverLines: ["BRAIDING", "SWEETGRASS"], status: "finished", progress: 100, added: 5 },
+      { title: "Station Eleven", author: "Emily St. John Mandel", coverClass: "cover-4", coverLines: ["STATION", "ELEVEN"], status: "reading", progress: 21, added: 4 },
+      { title: "The Hobbit", author: "J. R. R. Tolkien", coverClass: "cover-5", coverLines: ["THE", "HOBBIT"], status: "unread", progress: 0, added: 3 },
+      { title: "Circe", author: "Madeline Miller", coverClass: "cover-6", coverLines: ["CIRCE"], status: "finished", progress: 100, added: 2 },
+      { title: "The Dispossessed", author: "Ursula K. Le Guin", coverClass: "cover-7", coverLines: ["THE", "DISPOSSESSED"], status: "unread", progress: 0, added: 1 }
+    ];
+    const state = { filter: "all", query: "", sort: "recent", theme: "light" };
+    const device = document.getElementById("device"), grid = document.getElementById("bookGrid"), emptyState = document.getElementById("emptyState"), resultCount = document.getElementById("resultCount"), summaryCount = document.getElementById("summaryCount"), searchInput = document.getElementById("searchInput"), clearSearch = document.getElementById("clearSearch"), sortButton = document.getElementById("sortButton"), sortMenu = document.getElementById("sortMenu"), sortLabel = document.getElementById("sortLabel"), toast = document.getElementById("toast"), themeToggle = document.getElementById("themeToggle"), themeLabel = document.getElementById("themeLabel"), fab = document.getElementById("fab");
+    const icons = { search: '<path d="m20 20-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/>', close: '<path d="m7 7 10 10M17 7 7 17"/>', sun: '<circle cx="12" cy="12" r="3.4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>', moon: '<path d="M20.2 15.7A8.4 8.4 0 0 1 8.3 3.8 8.5 8.5 0 1 0 20.2 15.7Z"/>', library: '<path d="M5 4.5h4v15H5zM11 4.5h4v15h-4zM17 4.5h2v15h-2z"/>', explore: '<circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.5 4.1-4.1 1.5 1.5-4.1 4.1-1.5Z"/>', bookmark: '<path d="M6.5 4.5A1.5 1.5 0 0 1 8 3h8a1.5 1.5 0 0 1 1.5 1.5V21L12 17.5 6.5 21V4.5Z"/>', settings: '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 0 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3.1 1.3v.2a1.8 1.8 0 0 1-3.6 0v-.2a1.8 1.8 0 0 0-3.1-1.3l-.1.1a1.8 1.8 0 0 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-1.3-3.1h-.2a1.8 1.8 0 0 1 0-3.6h.2a1.8 1.8 0 0 0 1.3-3.1l-.1-.1a1.8 1.8 0 0 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3.1-1.3v-.2a1.8 1.8 0 0 1 3.6 0v.2a1.8 1.8 0 0 0 3.1 1.3l.1-.1a1.8 1.8 0 0 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 1.3 3.1h.2a1.8 1.8 0 0 1 0 3.6h-.2a1.8 1.8 0 0 0-1.3 3.1Z"/>', plus: '<path d="M12 5v14M5 12h14"/>', arrow: '<path d="M5 12h13m-5-5 5 5-5 5"/>', more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>', filter: '<path d="M4 6h16M7 12h10m-7 6h4"/>', check: '<path d="m5 12 4.2 4.2L19 6.5"/>' };
+    function icon(name) { return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[name] + "</svg>"; }
+    function escapeHtml(value) { return value.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character])); }
+    function fillIcons() { document.querySelectorAll(".icon-slot").forEach(slot => { if (slot.dataset.icon) slot.innerHTML = icon(slot.dataset.icon); }); }
+    function statusLabel(status, progress) { if (status === "reading") return progress + "% in progress"; if (status === "finished") return "Finished"; return "Not started"; }
+    function bookMarkup(book) { const title = escapeHtml(book.title), author = escapeHtml(book.author), lines = book.coverLines.map(line => "<span>" + escapeHtml(line) + "</span>").join(""), progress = book.status === "finished" ? 100 : book.progress; return `<article class="book-card" tabindex="0" data-title="${title}" data-author="${author}" aria-label="${title} by ${author}"><div class="book-card-cover"><div class="cover-art ${book.coverClass}" role="img" aria-label="Cover of ${title}"><span class="cover-kicker">EPUB • YOMU</span><span class="cover-title">${lines}</span><span class="cover-author">${author}</span></div></div><div class="book-status"><span class="status-dot ${book.status}"></span><span>${statusLabel(book.status, book.progress)}</span></div><h3>${title}</h3><p class="book-author">${author}</p><div class="book-progress-label"><span>${book.status === "unread" ? "Ready when you are" : book.status === "finished" ? "Completed" : "Reading progress"}</span><span>${progress}%</span></div><div class="mini-progress-track" aria-label="${progress}% complete"><span class="${book.status}" style="width: ${progress}%"></span></div></article>`; }
+    function renderBooks() { const query = state.query.trim().toLowerCase(); let visibleBooks = books.filter(book => (state.filter === "all" || book.status === state.filter) && (!query || book.title.toLowerCase().includes(query) || book.author.toLowerCase().includes(query))); if (state.sort === "title") visibleBooks.sort((a, b) => a.title.localeCompare(b.title)); else if (state.sort === "progress") visibleBooks.sort((a, b) => b.progress - a.progress); else visibleBooks.sort((a, b) => b.added - a.added); grid.innerHTML = visibleBooks.map(bookMarkup).join(""); emptyState.hidden = visibleBooks.length !== 0; resultCount.textContent = visibleBooks.length + " " + (visibleBooks.length === 1 ? "book" : "books"); summaryCount.textContent = books.length + " books"; }
+    function updateCounts() { const counts = { all: books.length, reading: books.filter(book => book.status === "reading").length, unread: books.filter(book => book.status === "unread").length, finished: books.filter(book => book.status === "finished").length }; Object.entries(counts).forEach(([key, value]) => { const node = document.querySelector('[data-count="' + key + '"]'); if (node) node.textContent = value; }); }
+    let toastTimer; function showToast(message, symbol = "check") { toast.innerHTML = icon(symbol) + "<span>" + escapeHtml(message) + "</span>"; toast.classList.add("is-visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2800); }
+    function applyTheme() { const isDark = state.theme === "dark"; device.dataset.theme = state.theme; themeToggle.setAttribute("aria-pressed", String(isDark)); themeToggle.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme"); themeLabel.textContent = isDark ? "Dark" : "Light"; themeToggle.querySelector(".theme-symbol").innerHTML = icon(isDark ? "moon" : "sun"); }
+    document.querySelectorAll("[data-filter]").forEach(button => button.addEventListener("click", () => { state.filter = button.dataset.filter; document.querySelectorAll("[data-filter]").forEach(item => item.classList.toggle("is-active", item === button)); renderBooks(); }));
+    searchInput.addEventListener("input", event => { state.query = event.target.value; clearSearch.hidden = state.query.length === 0; renderBooks(); });
+    clearSearch.addEventListener("click", () => { searchInput.value = ""; state.query = ""; clearSearch.hidden = true; searchInput.focus(); renderBooks(); });
+    sortButton.addEventListener("click", event => { event.stopPropagation(); const isOpen = !sortMenu.hidden; sortMenu.hidden = isOpen; sortButton.setAttribute("aria-expanded", String(!isOpen)); });
+    document.querySelectorAll(".sort-option").forEach(option => option.addEventListener("click", () => { state.sort = option.dataset.sort; sortLabel.textContent = option.dataset.label; document.querySelectorAll(".sort-option").forEach(item => { item.classList.toggle("is-selected", item === option); item.querySelector(".sort-check").innerHTML = item === option ? icon("check") : ""; }); sortMenu.hidden = true; sortButton.setAttribute("aria-expanded", "false"); renderBooks(); }));
+    document.addEventListener("click", event => { if (!event.target.closest(".sort-wrapper")) { sortMenu.hidden = true; sortButton.setAttribute("aria-expanded", "false"); } });
+    document.addEventListener("keydown", event => { if (event.key === "Escape") { sortMenu.hidden = true; sortButton.setAttribute("aria-expanded", "false"); } });
+    document.querySelectorAll("[data-nav]").forEach(button => button.addEventListener("click", () => { const destination = button.dataset.nav, label = button.querySelector(".nav-label").textContent; document.querySelectorAll("[data-nav]").forEach(item => { const selected = item.dataset.nav === destination; item.toggleAttribute("aria-current", selected); if (selected) item.setAttribute("aria-current", "page"); }); if (destination !== "library") showToast(label + " selected — this preview stays in Library."); }));
+    themeToggle.addEventListener("click", () => { state.theme = state.theme === "light" ? "dark" : "light"; applyTheme(); showToast(state.theme === "dark" ? "Dark reading mode on." : "Light reading mode on.", state.theme === "dark" ? "moon" : "sun"); });
+    document.getElementById("openBook").addEventListener("click", () => showToast("Opening The City & the Stars…", "arrow"));
+    document.getElementById("heroMore").addEventListener("click", () => showToast("Book actions opened."));
+    grid.addEventListener("click", event => { const card = event.target.closest(".book-card"); if (card) showToast("Ready to open " + card.dataset.title + ".", "arrow"); });
+    grid.addEventListener("keydown", event => { if ((event.key === "Enter" || event.key === " ") && event.target.closest(".book-card")) { event.preventDefault(); const card = event.target.closest(".book-card"); showToast("Ready to open " + card.dataset.title + ".", "arrow"); } });
+    const fabDefault = fab.innerHTML; fab.addEventListener("click", () => { fab.classList.add("is-confirmed"); fab.innerHTML = icon("check") + '<span class="fab-label">Added</span>'; showToast("Import your next EPUB from Files."); setTimeout(() => { fab.classList.remove("is-confirmed"); fab.innerHTML = fabDefault; fillIcons(); }, 1800); });
+    fillIcons(); updateCounts(); document.querySelector(".sort-check").innerHTML = icon("check"); renderBooks(); applyTheme();
+  </script>
+</body>
+</html>

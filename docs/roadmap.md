@@ -2,7 +2,7 @@
 
 This roadmap keeps Yomu from starting with EPUB complexity before the product language is clear.
 
-**Overall status (current):** Phases 0–8 are substantially complete. Yomu includes the custom design system, Room-backed library, hardened SAF import, Readium reader, contents, bookmarks, highlights, full-text search, dictionary/TTS, advanced typography, custom themes/fonts, and reading statistics with history. Later phases focus on performance and optional expansion such as OPDS, additional formats, and sync.
+**Overall status (current):** Phases 0–8 are substantially complete. Open Reader includes the Material 3 Expressive migration baseline on the `v2` branch, a Yomu compatibility layer, Room-backed library, hardened SAF import, Readium reader, contents, bookmarks, highlights, full-text search, dictionary/TTS, advanced typography, custom themes/fonts, and reading statistics with history. The next v2 work is guided screen-by-screen visual redesign, with later phases still focused on performance and optional expansion such as OPDS, additional formats, and sync.
 
 ## Phase 0: Project Baseline
 

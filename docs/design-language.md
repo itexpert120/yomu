@@ -1,21 +1,21 @@
 # Design Language
 
-Yomu should be a native Android app that does not look like a default Android app. The UI should be built from custom Compose primitives and guided by a reader-first product identity.
+Open Reader should feel like a native Android app while keeping a reader-first identity. The v2 UI follows Material 3 Expressive principles — dynamic/system-aware colour, clear Material roles, adaptive layouts, accessible native interactions, purposeful motion, and expressive typography/shapes — rather than inventing a second visual language.
 
 ## Implementation status (current)
 
-The custom design system is built and is the foundation of every product surface — it is no longer just a gallery prototype. It is applied across the real library, book-details, reader, settings, and about screens.
+The v2 Material 3 migration baseline is in place across the shared design system, library, book details, reader chrome, settings, statistics, and supporting screens. The visual system is intentionally still a compatibility bridge so the remaining redesign can be guided screen-by-screen without destabilising reader/data behaviour.
 
 What exists in `core/designsystem`:
 
-- Theming is delivered through CompositionLocals, not `MaterialTheme`. `YomuDesignTheme { }` provides colours/type/spacing/radius, accessed via the `YomuTheme` object (`YomuTheme.colors/type/space/radius`).
+- `YomuDesignTheme { }` now owns a native `MaterialTheme` with dynamic light/dark colour schemes, Material typography, a conventional Material shape scale, and Yomu CompositionLocals as a temporary compatibility bridge (`YomuTheme.colors/type/space/radius`).
 - Token data classes `YomuColors`, `YomuType`, `YomuSpacing`, `YomuRadius` (all `@Immutable`). Theme variants live in `YomuThemeMode { Light, Dark, Oled }`. (Note: the actual token sets differ in naming/coverage from the aspirational `YomuColor.*` / `YomuType.*` lists further down this doc — treat those lists as direction, the code as source of truth.)
-- Built primitives: `YomuAppSurface` / `YomuPanel` / `YomuFloatingPanel` (`YomuSurfaces.kt`); `YomuButton` / `YomuChip` / `YomuSegmentedControl` / `YomuTogglePill` (`YomuControls.kt`, `YomuSettingsControls.kt`); `YomuCard` / `YomuSettingGroup` (`YomuCards.kt`); `YomuScreenHeader` / `YomuScreenScaffold` (`YomuScaffold.kt`); `YomuColorPicker` (HSV), `YomuColorSwatch`, `YomuBottomSheet`, plus reusable bits in `YomuReusable.kt`.
+- Shared primitives retain their Yomu names for call-site compatibility, but now delegate to native Material components where equivalents exist: `Button`, `FilterChip`, `PrimaryTabRow`, `Switch`, `Slider`, `OutlinedTextField`, `Card`, `TopAppBar`, `AlertDialog`, `ExtendedFloatingActionButton`, `ListItem`, and `ModalBottomSheet`. The HSV picker remains custom because Material has no equivalent.
 - `MainActivity` owns the window insets controller and flips status/nav-bar icon appearance on theme change.
 - An `app/devgallery` harness validates primitives in isolation.
 - There is now a real app launcher icon (`ic_yomu_mark` / adaptive icon).
 
-The anti-Material rules below still hold: no Material `Scaffold`/`TopAppBar`/bottom sheet as product surfaces; `material3` is only a building block.
+The initial migration deliberately uses native Material product surfaces. Reader pages and reader-specific colour themes remain custom where EPUB comfort requires it, while chrome and supporting surfaces use Material semantics, touch targets, ripples, dynamic colour, and adaptive sheet patterns.
 
 Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
 
@@ -23,7 +23,7 @@ Still pending design work: bookmarks, highlights, in-book search, and advanced t
 
 ## Visual Direction
 
-The target look is clean, restrained, responsive, and serious. It should feel closer to a premium reading/media tool than a generic utility app.
+The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.
 
 Influences:
 
@@ -42,27 +42,25 @@ Do not copy these products. Use them as proof that native Android can feel custo
 5. Dark and light themes must both feel first-class.
 6. Motion must clarify structure, not decorate the screen.
 7. Blur and glass are accents, not the whole identity.
-8. Material defaults must not define the product shape.
+8. Material roles and defaults should define the interaction foundation; product-specific reader surfaces may layer on top only when reading comfort requires it.
 
-## Anti-Material Rules
+## Material 3 Expressive Rules
 
-Avoid these in final visible UI:
+Use these as the baseline for every redesign:
 
-- Default `Scaffold` layout behavior.
-- Default Material top app bars.
-- Default Material bottom bars.
-- Default Material sliders for reader settings.
-- Default Material switches for important settings.
-- Default Material cards with standard rounded shape/elevation.
-- Default purple theme tokens.
-- Generic Android ripples when they clash with the custom language.
+- Prefer native Material components and semantics for app chrome, controls, dialogs, lists, cards, sheets, and navigation.
+- Use Material colour roles and dynamic/system-aware colour where the user's accent/theme settings allow it; do not hard-code a generic purple product palette.
+- Use the Material typography hierarchy, readable line lengths, clear emphasis, and expressive type only where it improves the reading task.
+- Use a consistent conventional shape scale; expressive shapes should communicate hierarchy, not decorate every surface.
+- Use native touch targets, focus/selection semantics, ripples, reduced-motion support, and accessible contrast.
+- Make compact, medium, and expanded layouts intentional. Tablets should gain side-by-side context and navigation rather than merely stretching phone content.
+- Keep the EPUB reading canvas and saved reader themes distinct from app chrome when custom page colours/fonts are required for reading comfort.
 
-Allowed:
+Avoid:
 
-- Compose runtime/foundation/layout primitives.
-- Material icons if restyled or replaced later.
-- Material components as temporary scaffolding during early implementation.
-- Material theme only as an internal compatibility bridge if needed.
+- Bespoke replacements for a Material component that already satisfies the interaction.
+- Decorative motion, excessive elevation, or shape changes that compete with the text.
+- Treating a tablet as a scaled phone or letting a wide reading surface become uncomfortable to scan.
 
 ## Foundation Tokens
 

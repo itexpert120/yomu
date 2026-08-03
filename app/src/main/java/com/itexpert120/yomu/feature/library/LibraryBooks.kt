@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,26 +46,34 @@ fun GridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    Column(
-        modifier = modifier
-            .yomuPressable(onClick = onClick, onLongClick = onLongPress),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Card(
+        modifier = modifier.yomuPressable(onClick = onClick, onLongClick = onLongPress),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // Progress reads as a thin bar along the cover's bottom edge instead of a
-            // separate line under the title.
-            BookCoverImage(book = book, modifier = Modifier.fillMaxWidth(), showProgress = true)
-            SelectionMarker(selected)
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                BookCoverImage(
+                    book = book,
+                    modifier = Modifier.fillMaxWidth(),
+                    showProgress = true,
+                )
+                SelectionMarker(selected)
+            }
+            Text(
+                text = book.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        // Reserve two lines so one- and two-line titles keep card baselines aligned across a row.
-        Text(
-            text = book.title,
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.caption,
-            minLines = 2,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -74,57 +85,61 @@ fun BookListRow(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    Row(
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .background(if (selected) YomuTheme.colors.accentSoft else Color.Transparent)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
+            },
+        ),
     ) {
-        BookCoverImage(book = book, modifier = Modifier.width(54.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = book.title,
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = book.author,
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (book.progress > 0f) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { ProgressLine(progress = book.progress) }
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "${(book.progress * 100).toInt()}%",
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.mono,
-                    )
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BookCoverImage(book = book, modifier = Modifier.width(54.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = book.title,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = book.author,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (book.progress > 0f) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { book.progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "${(book.progress * 100).toInt()}%",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                 }
             }
-        }
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(YomuTheme.colors.accent),
-                contentAlignment = Alignment.Center,
-            ) {
+            if (selected) {
                 Icon(
                     imageVector = Icons.Rounded.Check,
-                    contentDescription = null,
-                    tint = YomuTheme.colors.appBackground,
-                    modifier = Modifier.size(15.dp),
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
@@ -134,13 +149,13 @@ fun BookListRow(
 @Composable
 private fun BoxScope.SelectionMarker(selected: Boolean) {
     if (!selected) return
-    val shape = RoundedCornerShape(10.dp)
+    val shape = MaterialTheme.shapes.medium
     Box(
         modifier = Modifier
             .matchParentSize()
             .clip(shape)
-            .background(YomuTheme.colors.accent.copy(alpha = 0.22f))
-            .border(2.dp, YomuTheme.colors.accent, shape),
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+            .border(2.dp, MaterialTheme.colorScheme.primary, shape),
     )
     Box(
         modifier = Modifier
@@ -148,13 +163,13 @@ private fun BoxScope.SelectionMarker(selected: Boolean) {
             .padding(6.dp)
             .size(22.dp)
             .clip(CircleShape)
-            .background(YomuTheme.colors.accent),
+            .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Rounded.Check,
             contentDescription = null,
-            tint = YomuTheme.colors.appBackground,
+            tint = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.size(14.dp),
         )
     }
@@ -167,9 +182,9 @@ fun ImportEmptyCard(onImport: () -> Unit) {
             .fillMaxWidth()
             .height(80.dp)
             .yomuPressable(onClick = onImport)
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .background(YomuTheme.colors.surface)
-            .border(1.5.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.md)),
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -209,7 +224,7 @@ private fun BookCoverImage(
     Box(
         modifier = modifier
             .aspectRatio(1f / 1.6f)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(Brush.verticalGradient(book.coverColors)),
     ) {
         // Real extracted cover when available; otherwise the generated gradient + title placeholder.
@@ -261,8 +276,8 @@ private fun BookCoverImage(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .background(Color.Black.copy(alpha = 0.62f))
+                    .clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
                     .padding(horizontal = 7.dp, vertical = 3.dp),
             ) {
                 Text(
@@ -281,14 +296,14 @@ fun ProgressLine(progress: Float) {
         modifier = Modifier
             .fillMaxWidth()
             .height(2.dp)
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.border),
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(progress.coerceIn(0f, 1f))
                 .height(2.dp)
-                .background(YomuTheme.colors.textPrimary),
+                .background(MaterialTheme.colorScheme.primary),
         )
     }
 }

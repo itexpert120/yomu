@@ -1,12 +1,9 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,19 +15,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -158,17 +155,10 @@ private fun CircleIconButton(
     tint: Color,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(YomuTheme.colors.surfaceRaised)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp),
+        shape = MaterialTheme.shapes.large,
     ) {
         Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
     }
@@ -204,30 +194,27 @@ private fun PhoneticsRow(items: List<DictionaryPronunciation>) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items.forEach { pron ->
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .background(YomuTheme.colors.surfaceRaised)
-                    .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.pill))
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = pron.text,
-                    color = YomuTheme.colors.textSecondary,
-                    style = YomuTheme.type.mono,
-                    maxLines = 1,
-                )
-                pron.tags.firstOrNull()?.let { tag ->
-                    Text(
-                        text = tag,
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.caption,
-                        maxLines = 1,
-                    )
-                }
-            }
+            AssistChip(
+                onClick = {},
+                label = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = pron.text,
+                            style = YomuTheme.type.mono,
+                            maxLines = 1,
+                        )
+                        pron.tags.firstOrNull()?.let { tag ->
+                            Text(
+                                text = tag,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = YomuTheme.type.caption,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                },
+                shape = MaterialTheme.shapes.large,
+            )
         }
     }
 }
@@ -330,19 +317,10 @@ private fun RelatedRow(label: String, words: List<String>, onLookUpWord: (String
 
 @Composable
 private fun WordChip(word: String, onLookUpWord: (String) -> Unit) {
-    Text(
-        text = word,
-        color = YomuTheme.colors.accent,
-        style = YomuTheme.type.caption,
-        modifier = Modifier
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.accentSoft)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { onLookUpWord(word) },
-            )
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+    AssistChip(
+        onClick = { onLookUpWord(word) },
+        label = { Text(word) },
+        shape = MaterialTheme.shapes.large,
     )
 }
 

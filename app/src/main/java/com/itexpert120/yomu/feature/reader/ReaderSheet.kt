@@ -5,18 +5,12 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,35 +22,28 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuButton
@@ -618,28 +605,20 @@ internal fun RoundIcon(
     description: String,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(YomuTheme.colors.surfaceRaised)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp),
+        shape = MaterialTheme.shapes.large,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = YomuTheme.colors.textPrimary,
             modifier = Modifier.size(22.dp),
         )
     }
 }
 
-/** Minimal custom slider: drag the thumb or tap the track to seek (0..1). */
+/** Material 3 slider compatibility wrapper for reader seeking and typography controls. */
 @Composable
 internal fun ReaderSlider(
     fraction: Float,
@@ -649,122 +628,21 @@ internal fun ReaderSlider(
     markerFraction: Float? = null,
     contentDescription: String = "Slider",
 ) {
-    var drag by remember { mutableStateOf<Float?>(null) }
-    val currentOnSeek by rememberUpdatedState(onSeek)
-    val currentOnDrag by rememberUpdatedState(onDrag)
-    val shown = (drag ?: fraction).coerceIn(0f, 1f)
-    val thumb = 18.dp
-    BoxWithConstraints(
-        modifier = modifier
-            .height(36.dp)
-            .semantics {
-                this.contentDescription = contentDescription
-                progressBarRangeInfo = ProgressBarRangeInfo(shown, 0f..1f, 100)
-                setProgress { requested ->
-                    currentOnSeek(requested.coerceIn(0f, 1f))
-                    true
-                }
-            }
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                val next = when (event.key) {
-                    Key.DirectionLeft, Key.DirectionDown -> shown - 0.01f
-                    Key.DirectionRight, Key.DirectionUp -> shown + 0.01f
-                    else -> return@onKeyEvent false
-                }.coerceIn(0f, 1f)
-                currentOnDrag?.invoke(next)
-                currentOnSeek(next)
-                true
-            }
-            .pointerInput(Unit) {
-                fun valueFor(x: Float): Float {
-                    val thumbPx = thumb.toPx()
-                    val trackWidth = (size.width - thumbPx).coerceAtLeast(1f)
-                    return ((x - thumbPx / 2f) / trackWidth).coerceIn(0f, 1f)
-                }
-                detectTapGestures { offset ->
-                    val value = valueFor(offset.x)
-                    currentOnDrag?.invoke(value)
-                    currentOnSeek(value)
-                }
-            }
-            .pointerInput(Unit) {
-                fun valueFor(x: Float): Float {
-                    val thumbPx = thumb.toPx()
-                    val trackWidth = (size.width - thumbPx).coerceAtLeast(1f)
-                    return ((x - thumbPx / 2f) / trackWidth).coerceIn(0f, 1f)
-                }
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        val value = valueFor(offset.x)
-                        drag = value
-                        currentOnDrag?.invoke(value)
-                    },
-                    onDrag = { change, _ ->
-                        val value = valueFor(change.position.x)
-                        drag = value
-                        currentOnDrag?.invoke(value)
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        drag?.let { currentOnSeek(it) }
-                        drag = null
-                    },
-                    onDragCancel = { drag = null },
-                )
-            },
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        val density = LocalDensity.current
-        val thumbPx = with(density) { thumb.toPx() }
-        val trackWidthPx = (constraints.maxWidth.toFloat() - thumbPx).coerceAtLeast(1f)
-        Box(
-            modifier = Modifier
-                .padding(horizontal = thumb / 2f)
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(YomuTheme.colors.border),
-        )
-        Box(
-            modifier = Modifier
-                .padding(start = thumb / 2f)
-                .width(with(density) { (shown * trackWidthPx).toDp() })
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(YomuTheme.colors.accent),
-        )
-        // Default-position indicator: a faint tick showing where the setting's default sits.
-        markerFraction?.let { m ->
-            val markerWidth = 2.dp
-            val markerWidthPx = with(density) { markerWidth.toPx() }
-            Box(
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            (
-                                m.coerceIn(
-                                    0f,
-                                    1f,
-                                ) * trackWidthPx + thumbPx / 2f - markerWidthPx / 2f
-                                ).roundToInt(),
-                            0,
-                        )
-                    }
-                    .size(width = markerWidth, height = 12.dp)
-                    .clip(CircleShape)
-                    .background(YomuTheme.colors.textMuted.copy(alpha = 0.7f)),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .offset {
-                    IntOffset((shown * trackWidthPx).roundToInt(), 0)
-                }
-                .size(thumb)
-                .clip(CircleShape)
-                .background(YomuTheme.colors.accent),
-        )
-    }
+    var pending by remember(fraction) { mutableStateOf(fraction.coerceIn(0f, 1f)) }
+    Slider(
+        value = pending,
+        onValueChange = {
+            pending = it.coerceIn(0f, 1f)
+            onDrag?.invoke(pending)
+        },
+        onValueChangeFinished = { onSeek(pending) },
+        modifier = modifier.semantics {
+            this.contentDescription = contentDescription
+        },
+        colors = SliderDefaults.colors(
+            thumbColor = MaterialTheme.colorScheme.primary,
+            activeTrackColor = MaterialTheme.colorScheme.primary,
+            inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ),
+    )
 }

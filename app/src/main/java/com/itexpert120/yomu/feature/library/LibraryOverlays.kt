@@ -2,36 +2,31 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -39,9 +34,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -54,45 +46,29 @@ internal fun ConfirmRemoveDialog(
     onConfirm: () -> Unit,
 ) {
     if (!visible) return
-    // A real Dialog (window-scoped) gives the standard platform dialog animation + dimming,
-    // instead of a hand-rolled fade.
-    Dialog(onDismissRequest = onCancel) {
-        Column(
-            modifier = Modifier
-                // Keep the dialog to a readable width on tablets instead of stretching wide.
-                .widthIn(max = 360.dp)
-                .clip(RoundedCornerShape(YomuTheme.radius.panel))
-                .background(YomuTheme.colors.panel)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = {
+            Text("Remove ${if (count == 1) "this book" else "$count books"}?")
+        },
+        text = {
             Text(
-                text = "Remove ${if (count == 1) "this book" else "$count books"}?",
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.section,
-            )
-            Text(
-                text = "This deletes the imported file${if (count == 1) "" else "s"} and cover from " +
+                "This deletes the imported file${if (count == 1) "" else "s"} and cover from " +
                     "the device. It can't be undone.",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.body,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YomuButton(
-                    text = "Cancel",
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f),
-                    emphasis = YomuButtonEmphasis.Secondary,
-                )
-                YomuButton(
-                    text = "Remove",
-                    onClick = onConfirm,
-                    modifier = Modifier.weight(1f),
-                    emphasis = YomuButtonEmphasis.Primary,
-                )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Remove")
             }
-        }
-    }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text("Cancel")
+            }
+        },
+        shape = MaterialTheme.shapes.extraLarge,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -117,30 +93,19 @@ internal fun ImportNotice(
         exit = yomuChromeExit(),
         modifier = modifier.padding(bottom = navBottom + 20.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .shadow(8.dp, RoundedCornerShape(YomuTheme.radius.pill))
-                .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .background(YomuTheme.colors.panel)
-                .semantics { liveRegion = LiveRegionMode.Assertive }
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Snackbar(
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+            action = if (!importing && canRetry) {
+                {
+                    TextButton(onClick = onRetry) {
+                        Text("Retry")
+                    }
+                }
+            } else {
+                null
+            },
         ) {
-            Text(
-                text = lastText,
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.control,
-            )
-            if (!importing && canRetry) {
-                Text(
-                    text = "Retry",
-                    color = YomuTheme.colors.accent,
-                    style = YomuTheme.type.control,
-                    modifier = Modifier
-                        .clickable(onClick = onRetry)
-                        .padding(8.dp),
-                )
-            }
+            Text(lastText)
         }
     }
 }
@@ -154,50 +119,25 @@ internal fun FloatingResumeButton(
 ) {
     val navBottom =
         WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-    // Foreground tracks appBackground so the label reads on the accent in every
-    // theme (the dark-theme accent is light, where white text would wash out).
-    val onAccent = YomuTheme.colors.appBackground
-    Column(
-        modifier = modifier
-            .padding(end = 16.dp, bottom = navBottom + 16.dp)
-            .shadow(10.dp, RoundedCornerShape(YomuTheme.radius.lg))
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.accent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onResume,
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    ExtendedFloatingActionButton(
+        onClick = onResume,
+        modifier = modifier.padding(end = 16.dp, bottom = navBottom + 16.dp),
+        icon = {
             Icon(
                 imageVector = Icons.Rounded.PlayArrow,
                 contentDescription = null,
-                tint = onAccent,
-                modifier = Modifier.size(18.dp),
             )
+        },
+        text = {
             Text(
-                text = "Resume",
-                color = onAccent,
-                style = YomuTheme.type.control,
+                text = "Resume · ${book.title}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 220.dp),
             )
-        }
-        Text(
-            text = book.title,
-            color = onAccent.copy(alpha = 0.72f),
-            style = YomuTheme.type.caption,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            // Adaptive: the pill hugs short titles and only caps long ones, instead of always
-            // reserving a fixed width.
-            modifier = Modifier.widthIn(max = 200.dp),
-        )
-    }
+        },
+        shape = MaterialTheme.shapes.extraLarge,
+    )
 }
 
 /**

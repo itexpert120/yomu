@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+)
+
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.animation.AnimatedVisibility
@@ -6,15 +11,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -22,35 +21,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
-/**
- * Custom (non-Material) top bar for detail/settings screens: optional back affordance, title,
- * optional subtitle, and trailing actions. Deliberately not a Material `TopAppBar`
- * (docs/design-language.md "Anti-Material Rules").
- */
-@OptIn(ExperimentalLayoutApi::class)
+/** Material 3 top app bar compatibility wrapper for detail and settings screens. */
 @Composable
 fun YomuScreenHeader(
     title: String,
@@ -58,35 +49,16 @@ fun YomuScreenHeader(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     elevated: Boolean = false,
-    // Lets callers fade the title in on scroll (e.g. a title-less bar that reveals the title once
-    // the in-content title scrolls away).
     titleVisible: Boolean = true,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    // Lift the header onto its own plane once content scrolls beneath it; the shadow defines the
-    // seam instead of the content hard-cutting at the header edge.
     val elevation by animateDpAsState(
-        targetValue = if (elevated) 4.dp else 0.dp,
+        targetValue = if (elevated) 3.dp else 0.dp,
         label = "screenHeaderElevation",
     )
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            // Draw above the content column below it in the parent Column — otherwise the shadow's
-            // blur, which bleeds past this composable's own bounds, gets painted over by the later
-            // (higher-index) sibling instead of sitting on top of it.
-            .zIndex(1f)
-            .shadow(elevation)
-            .background(YomuTheme.colors.appBackground)
-            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (onBack != null) {
-            YomuBackButton(onBack)
-        }
-        Column(Modifier.weight(1f)) {
+    TopAppBar(
+        modifier = modifier.zIndex(1f),
+        title = {
             AnimatedVisibility(
                 visible = titleVisible,
                 enter = fadeIn() + slideInVertically { it / 2 },
@@ -95,56 +67,44 @@ fun YomuScreenHeader(
                 Column {
                     Text(
                         text = title,
-                        color = YomuTheme.colors.textPrimary,
-                        style = YomuTheme.type.title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (subtitle != null) {
                         Text(
                             text = subtitle,
-                            color = YomuTheme.colors.textMuted,
-                            style = YomuTheme.type.caption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
-        }
-        trailing()
-    }
+        },
+        navigationIcon = {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                    )
+                }
+            }
+        },
+        actions = trailing,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = if (elevation > 0.dp) {
+                MaterialTheme.colorScheme.surfaceContainer
+            } else {
+                MaterialTheme.colorScheme.background
+            },
+            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    )
 }
 
-@Composable
-private fun YomuBackButton(onBack: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(YomuTheme.colors.surfaceRaised)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onBack,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = "Back",
-            tint = YomuTheme.colors.textPrimary,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-/**
- * Standard detail-screen shell: app surface, a [YomuScreenHeader], and a vertically scrolling
- * content column padded for the page gutter and bottom system bar. Content arrives as a
- * [ColumnScope] so callers stack [YomuSettingGroup]s / panels directly.
- */
-@OptIn(ExperimentalLayoutApi::class)
+/** Standard detail-screen shell with a Material 3 top app bar and capped tablet content. */
 @Composable
 fun YomuScreenScaffold(
     title: String,
@@ -154,10 +114,10 @@ fun YomuScreenScaffold(
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val navBottom =
-        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility
+        .asPaddingValues()
+        .calculateBottomPadding()
     val scrollState = rememberScrollState()
-    // derivedStateOf so the header only recomposes when crossing the top, not on every scroll px.
     val elevated by remember { derivedStateOf { scrollState.value > 0 } }
     YomuAppSurface(modifier = modifier) {
         Column(Modifier.fillMaxSize()) {
@@ -168,24 +128,20 @@ fun YomuScreenScaffold(
                 elevated = elevated,
                 trailing = trailing,
             )
-            // Content is centered and capped so detail screens read intentionally on tablets
-            // rather than stretching edge-to-edge; on phones it just fills the width.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    // Bottom edge fade so content dissolves into the surface instead of hard-cutting
-                    // at the screen/nav-bar edge (the top edge is handled by the header's shadow).
                     .yomuScrollEdgeShadow(
-                        color = YomuTheme.colors.appBackground,
+                        color = MaterialTheme.colorScheme.background,
                         bottom = scrollState.canScrollForward,
                     )
                     .verticalScroll(scrollState),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
             ) {
                 Column(
                     modifier = Modifier
-                        .widthIn(max = 640.dp)
+                        .widthIn(max = YomuContentMaxWidth)
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .padding(top = 4.dp, bottom = navBottom + 28.dp),

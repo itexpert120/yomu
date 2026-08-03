@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -28,10 +29,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Yomu's anti-Material press affordance — the deliberate replacement for the Material ripple this
- * design system removes (`indication = null`). The surface dips slightly while held, spring-eased,
- * so a tap is acknowledged under the finger without any ink. [onLongClick], when set, fires a light
- * haptic first — the native cue for a long-press, which has no hover precursor on a touch screen.
+ * Shared press affordance for the migration bridge. Native Material indication remains enabled so
+ * touch, keyboard, and accessibility interactions feel like Android; the small spring scale adds
+ * the expressive emphasis without replacing the platform cue. [onLongClick], when set, fires a
+ * light haptic first — the native cue for a long-press.
  *
  * Apply this EARLY in the modifier chain (before `clip`/`background`/`border`) so the whole surface —
  * fill, border, and content — scales together rather than just the inner content.
@@ -75,7 +76,7 @@ fun Modifier.yomuPressable(
         }
         .combinedClickable(
             interactionSource = interaction,
-            indication = null,
+            indication = LocalIndication.current,
             enabled = enabled,
             role = role,
             onLongClick = longClick,

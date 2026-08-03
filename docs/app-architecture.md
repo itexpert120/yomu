@@ -1,6 +1,6 @@
 # App Architecture
 
-Yomu should use native Android architecture, but the app architecture must protect the product design from both Material defaults and third-party reader engine constraints.
+Open Reader uses native Android architecture and Material 3 Expressive as its UI foundation, while the app architecture protects reader comfort and the Readium boundary from accidental coupling.
 
 ## Implementation status (current)
 
@@ -29,7 +29,7 @@ The package and Gradle-module layouts further down still describe the eventual d
 
 Use a pragmatic layered architecture:
 
-- UI layer: Compose screens, custom primitives, ViewModels, state holders.
+- UI layer: Compose screens, Material 3 Expressive components, temporary Yomu compatibility primitives, ViewModels, and state holders.
 - Domain layer: reusable business logic and use cases where complexity is real.
 - Data layer: repositories, DAOs, data sources, file storage, Readium integration adapters.
 - Engine boundary: EPUB reader APIs exposed through Yomu interfaces.
@@ -43,7 +43,7 @@ Dependencies should point inward or downward:
 - UI depends on domain/data abstractions through ViewModels.
 - Domain depends on repository interfaces or concrete repositories, depending on module stage.
 - Data depends on Room, DataStore, file system, Readium, Coil, SAF helpers.
-- Design system depends only on Compose foundation/runtime and minimal Android resources.
+- Design system depends on Compose, Material 3, Material icons, and minimal Android resources; it must not depend on feature packages.
 - Reader feature depends on the reader engine abstraction, not Readium directly except in the engine adapter package/module.
 
 ## Current Package Structure

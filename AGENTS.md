@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## What This Is
 
-Open Reader (formerly Yomu) is a native Android EPUB reader (Kotlin + Jetpack Compose). The product intent is a polished, reader-first, tablet-optimized app that deliberately does **not** look like a default Material app. Internal Kotlin packages and `Yomu*` design-system identifiers retain their established names for source and data compatibility. See `docs/` for the full product/design/architecture specs — `docs/README.md` is the entry point.
+Open Reader (formerly Yomu) is a native Android EPUB reader (Kotlin + Jetpack Compose). The product intent is a polished, reader-first, tablet-optimized app with a recognizably native Android feel, following Material 3 Expressive principles while retaining reader-specific comfort surfaces. Internal Kotlin packages and `Yomu*` design-system identifiers retain their established names for source and data compatibility. See `docs/` for the full product/design/architecture specs — `docs/README.md` is the entry point.
 
 Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Also built: streamlined **reading statistics** (library/completion overview, aggregate metric cards, and recent reading history) and **external "Open with"/share** EPUB import. **Hilt, Room, DataStore, Navigation Compose, Coil, and Readium are all present and wired.** (Home-screen Glance widgets were removed.)
 
@@ -69,13 +69,13 @@ com.itexpert120.yomu
 ```
 Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`, `Settings`, `Stats`, `ReaderDefaults`, `About`, `Reader(bookId, locator?)`. Bookmarks and in-book search are built **behind the `core/reader` boundary** (search via Readium's `SearchService`, surfaced as `ReaderSession.search`/`applySearchDecorations`; bookmarks are Room-backed and reuse `currentLocator`/`goToLocator`). New reader capabilities should follow the same boundary pattern — the sibling Readium test-app under "Related projects" below has worked references.
 
-### Design system is the foundation — use it, don't reach for Material
-`core/designsystem` defines the visual language. Theming is delivered through **CompositionLocals**, not `MaterialTheme`:
-- `YomuDesignTheme { ... }` wraps the app and provides colors/type/spacing/radius.
-- Access tokens inside composables via the `YomuTheme` object: `YomuTheme.colors`, `YomuTheme.type`, `YomuTheme.space`, `YomuTheme.radius`.
-- Token data classes: `YomuColors`, `YomuType`, `YomuSpacing`, `YomuRadius` (all `@Immutable`). Theme variants: `YomuThemeMode.{Light, Dark, Oled}`.
-- Build UI from the `Yomu*` primitives in `YomuSurfaces.kt`, `YomuControls.kt`, `YomuCards.kt`, `YomuReusable.kt` (e.g. `YomuAppSurface`). Do **not** introduce Material `Scaffold`/`MaterialTheme`/raw Material components as the app shell or product surface. `material3`/`material-icons-extended` are on the classpath only as building blocks for the custom system.
-- Controls are hand-drawn (Canvas/gestures, ripples suppressed): segmented control, range/slider rows, toggle pill, an HSV `YomuColorPicker`. `YomuColors` also carries four highlight colors; accent supports both presets (`AccentColor`) and arbitrary custom ARGB. Tablet/expanded layouts use the `YomuWidthClass` responsive breakpoints + `YomuContentMaxWidth`.
+### Design system is the foundation — use Material 3 Expressive through the compatibility layer
+`core/designsystem` owns the Material 3 Expressive theme boundary and temporary Yomu compatibility wrappers:
+- `YomuDesignTheme { ... }` wraps native `MaterialTheme`, dynamic/system-aware colour schemes, Material typography, conventional Material shapes, and the existing Yomu CompositionLocals.
+- Access compatibility tokens inside composables via `YomuTheme.colors`, `YomuTheme.type`, `YomuTheme.space`, and `YomuTheme.radius`; migrate call sites incrementally rather than inventing a second token system.
+- Token data classes remain `YomuColors`, `YomuType`, `YomuSpacing`, and `YomuRadius` (all `@Immutable`). Theme variants remain `YomuThemeMode.{Light, Dark, Oled}`.
+- Prefer native Material components through the Yomu wrappers (`Button`, chips, tabs, switches, sliders, text fields, cards, top app bars, dialogs, FABs, lists, and sheets). Keep custom Canvas/gesture code only where Material has no equivalent or the EPUB page requires reader-specific behaviour (for example the HSV picker and engine-driven reading canvas).
+- Preserve native touch targets, semantics, ripples, reduced-motion support, dynamic colour, and adaptive compact/medium/expanded layouts. Tablet layouts should add context or side-by-side navigation rather than stretching phone UI.
 - The design system package must not depend on `feature/*`.
 
 ### Theme ↔ system bars

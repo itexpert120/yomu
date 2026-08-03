@@ -5,16 +5,16 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
@@ -40,8 +39,15 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,7 +76,10 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(
+    ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+)
 @Composable
 internal fun ReaderTopBar(
     chapter: String,
@@ -82,52 +91,64 @@ internal fun ReaderTopBar(
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bg = background
     Column(modifier = modifier.fillMaxWidth()) {
-        // The navigator draws edge-to-edge, so inset content by the full solid bar (status backdrop
-        // + the controls row); the fade below is excluded so it bleeds over the page.
-        Column(
+        // The navigator draws edge-to-edge. Keep the cutout/status backdrop solid, then use the
+        // platform top app bar for native touch targets, semantics, and expressive motion defaults.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsTopHeight(
+                    WindowInsets.displayCutout.union(WindowInsets.statusBarsIgnoringVisibility),
+                )
+                .background(background),
+        )
+        TopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { onContentHeight(it.height) },
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Clear the camera cutout (and the status bar when it's shown). When the status
-                    // bar is hidden for full-screen reading, the cutout still keeps the title clear.
-                    .windowInsetsTopHeight(
-                        WindowInsets.displayCutout.union(WindowInsets.statusBarsIgnoringVisibility),
-                    )
-                    .background(bg),
-            )
-            // Sleek, compact bar: chevron back · chapter title · bookmark.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(bg)
-                    .padding(bottom = 8.dp, start = 12.dp, end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReaderBarButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Back", content, onBack)
+            title = {
                 Text(
                     text = chapter,
                     color = content,
                     style = YomuTheme.type.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
                 )
-                // Always-visible bookmark toggle: filled when the current page is bookmarked.
-                ReaderBarButton(
-                    if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                    if (isBookmarked) "Remove bookmark" else "Add bookmark",
-                    content,
-                    onToggleBookmark,
-                )
-            }
-        }
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                        contentDescription = "Back",
+                        tint = content,
+                    )
+                }
+            },
+            actions = {
+                IconButton(onClick = onToggleBookmark) {
+                    Icon(
+                        imageVector = if (isBookmarked) {
+                            Icons.Rounded.Bookmark
+                        } else {
+                            Icons.Rounded.BookmarkBorder
+                        },
+                        contentDescription = if (isBookmarked) {
+                            "Remove bookmark"
+                        } else {
+                            "Add bookmark"
+                        },
+                        tint = content,
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = background,
+                titleContentColor = content,
+                navigationIconContentColor = content,
+                actionIconContentColor = content,
+            ),
+            windowInsets = WindowInsets(0),
+        )
     }
 }
 
@@ -234,24 +255,29 @@ internal fun BoxScope.ReaderChapterControlsBar(
             .align(Alignment.BottomCenter)
             .padding(bottom = bottomInset + 14.dp),
     ) {
-        Row(
-            modifier = Modifier
-                // Keep the pill clear of the screen edges; on narrow devices the row scrolls
-                // horizontally instead of overflowing/clipping its buttons.
-                .padding(horizontal = 12.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(background)
-                .border(1.dp, border, RoundedCornerShape(24.dp))
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        Surface(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = background,
+            contentColor = content,
+            border = BorderStroke(1.dp, border),
+            tonalElevation = 2.dp,
         ) {
-            ControlButton(Icons.Rounded.Toc, "Browse", content, enabled = true, onBrowse)
-            ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
-            ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
-            ControlButton(Icons.Rounded.MoreHoriz, "More", content, enabled = true, onMore)
-            ControlButton(Icons.Rounded.Tune, "Display", content, enabled = true, onDisplay)
+            Row(
+                modifier = Modifier
+                    // Keep the controls reachable on narrow phones without clipping; tablets get
+                    // the same native button group centered over the reading canvas.
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                ControlButton(Icons.Rounded.Toc, "Browse", content, enabled = true, onBrowse)
+                ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
+                ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
+                ControlButton(Icons.Rounded.MoreHoriz, "More", content, enabled = true, onMore)
+                ControlButton(Icons.Rounded.Tune, "Display", content, enabled = true, onDisplay)
+            }
         }
     }
 }
@@ -264,22 +290,19 @@ private fun ControlButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val tint = if (enabled) content else content.copy(alpha = 0.3f)
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(
-                enabled = enabled,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.large,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp),
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = content,
+            disabledContentColor = content.copy(alpha = 0.3f),
+        ),
     ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
-        Text(text = label, color = tint, style = YomuTheme.type.caption, maxLines = 1)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text = label, maxLines = 1)
     }
 }
 
@@ -304,17 +327,7 @@ private fun ReaderBarButton(
     tint: Color,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
+    IconButton(onClick = onClick) {
         Icon(
             imageVector = icon,
             contentDescription = description,

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "plan": "material3-expressive-migration-v2",
+  "slug": "material-3-expressive-library",
+  "title": "Material 3 Expressive Library",
+  "created_at": "2026-08-03T19:30:38.068Z",
+  "updated_at": "2026-08-03T19:30:38.068Z",
+  "latest_version": 1,
+  "versions": [
+    {
+      "version": 1,
+      "file": "v001.html",
+      "intent": "Preview the native Android / Material 3 Expressive direction for the responsive Open Reader library screen.",
+      "created_at": "2026-08-03T19:30:38.068Z"
+    }
+  ]
+}

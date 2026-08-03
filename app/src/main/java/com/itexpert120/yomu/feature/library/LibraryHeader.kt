@@ -1,24 +1,14 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.itexpert120.yomu.feature.library
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BrightnessAuto
@@ -29,32 +19,33 @@ import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.itexpert120.yomu.core.designsystem.YomuCircleIconButton
 import com.itexpert120.yomu.core.designsystem.YomuIconButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuPillFilter
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.core.model.ThemePreference
 
-/** The persistently-visible strip: title/count + the primary icon actions. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Native Material 3 top app bar with actions that remain reachable on tablet and phone. */
 @Composable
 internal fun LibraryTopBar(
     bookCount: Int,
@@ -65,43 +56,25 @@ internal fun LibraryTopBar(
     onOpenSettings: () -> Unit,
     elevated: Boolean,
 ) {
-    // Lift the bar onto its own plane once the content scrolls beneath it; the
-    // shadow defines the seam instead of fading the content under it.
-    val elevation by animateDpAsState(
-        targetValue = if (elevated) 2.dp else 0.dp,
-        label = "headerElevation",
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Draw above the scrollable content below it in the parent Column — otherwise the
-            // shadow's blur, which bleeds past this composable's own bounds, gets painted over by
-            // the later (higher-index) sibling instead of sitting on top of it.
-            .zIndex(1f)
-            .shadow(elevation)
-            .background(YomuTheme.colors.appBackground)
-            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+    TopAppBar(
+        title = {
+            Column {
                 Text(
                     text = "Library",
-                    color = YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.display,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
                     text = "$bookCount books",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Row {
+        },
+        actions = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 YomuCircleIconButton(
                     onClick = onImport,
                     icon = Icons.Rounded.Add,
@@ -124,12 +97,19 @@ internal fun LibraryTopBar(
                     contentDescription = "Settings",
                 )
             }
-        }
-    }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = if (elevated) {
+                MaterialTheme.colorScheme.surfaceContainer
+            } else {
+                MaterialTheme.colorScheme.background
+            },
+            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    )
 }
 
-/** Search + the consolidated library options control; scrolls away with the list. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Search and the consolidated library arrangement control; scrolls away with the list. */
 @Composable
 internal fun LibrarySearchAndFilters(
     searchActive: Boolean,
@@ -145,7 +125,7 @@ internal fun LibrarySearchAndFilters(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 0.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (searchActive) {
@@ -177,7 +157,6 @@ internal fun LibrarySearchAndFilters(
     }
 }
 
-/** Icon reflects the active theme choice so the quick toggle communicates current state. */
 private fun ThemePreference.themeIcon(): ImageVector = when (this) {
     ThemePreference.System -> Icons.Rounded.BrightnessAuto
     ThemePreference.Light -> Icons.Rounded.LightMode
@@ -186,30 +165,24 @@ private fun ThemePreference.themeIcon(): ImageVector = when (this) {
 
 @Composable
 private fun SearchHint(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.surface)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Text(
-            text = "Search books, authors",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.body,
-            modifier = Modifier.weight(1f),
-        )
         Icon(
             imageVector = Icons.Rounded.Search,
-            contentDescription = "Search",
-            tint = YomuTheme.colors.textSecondary,
+            contentDescription = null,
             modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = "Search books, authors",
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Start,
         )
     }
 }
@@ -227,44 +200,21 @@ private fun SearchField(
         focusRequester.requestFocus()
     }
 
-    Row(
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.pill))
-            .background(YomuTheme.colors.surface)
-            .border(1.dp, YomuTheme.colors.accent, RoundedCornerShape(YomuTheme.radius.pill))
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        androidx.compose.foundation.text.BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focusRequester)
-                .padding(vertical = 10.dp),
-            textStyle = YomuTheme.type.body.copy(color = YomuTheme.colors.textPrimary),
-            singleLine = true,
-            decorationBox = { inner ->
-                Box {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = "Search books, authors",
-                            color = YomuTheme.colors.textMuted,
-                            style = YomuTheme.type.body,
-                        )
-                    }
-                    inner()
-                }
-            },
-        )
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(YomuTheme.colors.surfaceRaised)
-                .clickable {
+            .focusRequester(focusRequester),
+        singleLine = true,
+        shape = MaterialTheme.shapes.large,
+        placeholder = { Text("Search books, authors") },
+        leadingIcon = {
+            Icon(Icons.Rounded.Search, contentDescription = null)
+        },
+        trailingIcon = {
+            IconButton(
+                onClick = {
                     if (query.isNotEmpty()) {
                         onQueryChange("")
                     } else {
@@ -272,14 +222,9 @@ private fun SearchField(
                         onClose()
                     }
                 },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Close,
-                contentDescription = "Close",
-                tint = YomuTheme.colors.textMuted,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
+            ) {
+                Icon(Icons.Rounded.Close, contentDescription = "Close search")
+            }
+        },
+    )
 }

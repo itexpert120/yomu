@@ -1,7 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,8 +11,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,68 +33,65 @@ fun YomuBookCard(
     coverColors: List<Color>,
     modifier: Modifier = Modifier,
 ) {
-    val colors = YomuTheme.colors
-    Column(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(BookCoverAspectRatio)
-                .clip(RoundedCornerShape(YomuTheme.radius.md))
-                .background(Brush.verticalGradient(coverColors))
-                .border(
-                    1.dp,
-                    colors.border.copy(alpha = 0.35f),
-                    RoundedCornerShape(YomuTheme.radius.md),
-                )
-                .padding(14.dp),
-        ) {
+    Card(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth(0.42f)
-                    .height(3.dp)
-                    .background(Color.White.copy(alpha = 0.7f)),
-            )
-            Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    style = YomuTheme.type.section,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = author,
-                    color = Color.White.copy(alpha = 0.74f),
-                    style = YomuTheme.type.caption,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .background(colors.border),
+                    .fillMaxWidth()
+                    .aspectRatio(BookCoverAspectRatio)
+                    .clip(MaterialTheme.shapes.large)
+                    .background(Brush.verticalGradient(coverColors))
+                    .padding(14.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth(0.42f)
                         .height(3.dp)
-                        .background(colors.textPrimary),
+                        .background(Color.White.copy(alpha = 0.7f)),
+                )
+                Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = author,
+                        color = Color.White.copy(alpha = 0.78f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
-            Spacer(Modifier.size(10.dp))
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                color = colors.textMuted,
-                style = YomuTheme.type.mono,
-            )
         }
     }
 }
@@ -105,27 +103,29 @@ fun YomuSettingGroup(
     outlined: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.panelStrong)
-            .then(
-                if (outlined) {
-                    Modifier.border(
-                        1.dp,
-                        YomuTheme.colors.border,
-                        RoundedCornerShape(YomuTheme.radius.lg),
-                    )
-                } else {
-                    Modifier
-                },
-            )
-            .padding(YomuTheme.space.md),
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        border = if (outlined) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        },
     ) {
-        Text(text = title, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.section)
-        content()
+        Column(
+            modifier = Modifier.padding(YomuTheme.space.md),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
+        ) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            content()
+        }
     }
 }
 

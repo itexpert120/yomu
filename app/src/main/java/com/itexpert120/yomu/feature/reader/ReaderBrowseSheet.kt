@@ -74,7 +74,12 @@ internal fun ReaderBrowseSheet(
     onSelectTab: (BrowseTab) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    YomuBottomSheet(visible = tab != null, onDismiss = onDismiss, scrollable = false) { _ ->
+    YomuBottomSheet(
+        visible = tab != null,
+        onDismiss = onDismiss,
+        scrollable = false,
+        wideAsSideSheet = true,
+    ) { _ ->
         val current = tab ?: BrowseTab.Contents
         Column(
             modifier = Modifier.fillMaxWidth(),
