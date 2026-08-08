@@ -92,7 +92,7 @@ fun ReaderScreen(
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
     onSaveCustomTheme: (String) -> Unit,
     onDeleteCustomTheme: (String) -> Unit,
-    // Browse sheet (Contents / Bookmarks / Highlights / Search).
+    // Browse sheet (Contents / Bookmarks / Highlights).
     onOpenBrowse: () -> Unit,
     onSelectBrowseTab: (BrowseTab) -> Unit,
     onCloseBrowse: () -> Unit,
@@ -102,13 +102,10 @@ fun ReaderScreen(
     onJumpToSearchResult: (String) -> Unit,
     onDeleteBookmarkById: (String) -> Unit,
     onDeleteHighlightById: (String) -> Unit,
+    onOpenSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSubmitSearch: () -> Unit,
-    // More overflow sheet.
-    onOpenMore: () -> Unit,
-    onCloseMore: () -> Unit,
-    onChapterStart: () -> Unit,
-    onChapterEnd: () -> Unit,
     // Word lookup + footnote popups.
     onCloseLookup: () -> Unit,
     onLookUpWord: (String) -> Unit,
@@ -456,7 +453,7 @@ fun ReaderScreen(
                     )
                 }
 
-                // Top bar: chevron · chapter title (reading font) · progress % · bookmark. Hidden with
+                // Top bar: chevron · chapter title · bookmark. Hidden with
                 // the rest of the chrome in immersive mode; always shown otherwise.
                 AnimatedVisibility(
                     visible = chromeShown,
@@ -465,7 +462,7 @@ fun ReaderScreen(
                     modifier = Modifier.align(Alignment.TopCenter),
                 ) {
                     ReaderTopBar(
-                        chapter = if (state.loading) "" else state.chapterTitle ?: state.title,
+                        chapter = if (state.loading) "" else state.chapterTitle ?: "Reading",
                         background = background,
                         content = onBackground,
                         isBookmarked = state.currentPageBookmarked,
@@ -518,20 +515,16 @@ fun ReaderScreen(
                         )
                     }
 
-                    // Bottom chapter-controls bar, toggled by a centre tap.
+                    // Bottom navigation bar, toggled by a centre tap.
                     ReaderChapterControlsBar(
                         visible = state.chapterControlsVisible,
                         bottomInset = controlBarBottomInset,
                         background = background,
                         content = onBackground,
                         border = readerBorder,
-                        hasPrevious = state.hasPreviousChapter,
-                        hasNext = state.hasNextChapter,
                         onBrowse = onOpenBrowse,
-                        onPrevious = onPreviousChapter,
-                        onNext = onNextChapter,
+                        onSearch = onOpenSearch,
                         onDisplay = onOpenSheet,
-                        onMore = onOpenMore,
                     )
 
                     ReaderControlsSheet(
@@ -584,6 +577,12 @@ fun ReaderScreen(
                         highlights = state.highlights,
                         onJumpToHighlight = onJumpToHighlight,
                         onDeleteHighlight = onDeleteHighlightById,
+                        onSelectTab = onSelectBrowseTab,
+                        onDismiss = onCloseBrowse,
+                    )
+
+                    ReaderSearchSheet(
+                        visible = state.searchSheetVisible,
                         searchQuery = state.searchQuery,
                         searchResults = state.searchResults,
                         searchInProgress = state.searchInProgress,
@@ -592,15 +591,7 @@ fun ReaderScreen(
                         onSearchQueryChange = onSearchQueryChange,
                         onSubmitSearch = onSubmitSearch,
                         onJumpToSearchResult = onJumpToSearchResult,
-                        onSelectTab = onSelectBrowseTab,
-                        onDismiss = onCloseBrowse,
-                    )
-
-                    ReaderMoreSheet(
-                        visible = state.moreSheetVisible,
-                        onChapterStart = onChapterStart,
-                        onChapterEnd = onChapterEnd,
-                        onDismiss = onCloseMore,
+                        onDismiss = onCloseSearch,
                     )
 
                     WordLookupSheet(

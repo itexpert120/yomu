@@ -1142,34 +1142,6 @@ private class ReadiumReaderSession(
         }
     }
 
-    override fun scrollToChapterStart() {
-        val current = lastLocator ?: return
-        val section = logicalSections.getOrNull(progressMetrics(current, latestVisualPage).chapterIndex)
-            ?: return
-        scope.launch { navigator?.let { goChecked(it, section.locator) } }
-    }
-
-    override fun scrollToChapterEnd() {
-        val current = lastLocator ?: return
-        val sectionIndex = progressMetrics(current, latestVisualPage).chapterIndex
-        val section = logicalSections.getOrNull(sectionIndex) ?: return
-        val next = logicalSections.getOrNull(sectionIndex + 1)
-        val target = when {
-            next == null -> publication.readingOrder.lastOrNull()
-                ?.let { publication.locatorFromLink(it) }
-                ?.copy(locations = Locator.Locations(progression = 0.999))
-            next.orderIndex == section.orderIndex -> next.locator.copy(
-                locations = next.locator.locations.copy(
-                    progression = (next.startProgression - 0.001).coerceAtLeast(0.0),
-                ),
-            )
-            else -> publication.readingOrder.getOrNull(next.orderIndex - 1)
-                ?.let { publication.locatorFromLink(it) }
-                ?.copy(locations = Locator.Locations(progression = 0.999))
-        } ?: return
-        scope.launch { navigator?.let { goChecked(it, target) } }
-    }
-
     override fun goToLocator(locatorJson: String) {
         val locator =
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return

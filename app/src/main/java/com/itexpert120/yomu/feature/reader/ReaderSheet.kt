@@ -86,7 +86,11 @@ internal fun ReaderControlsSheet(
     onCommitDim: (Float) -> Unit,
 ) {
     var tab by remember { mutableStateOf(SheetTab.Controls) }
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { _ ->
+    YomuBottomSheet(
+        visible = visible,
+        onDismiss = onDismiss,
+        showScrollEdgeShadow = false,
+    ) { _ ->
         Column(
             // Animate the height as tab content of differing size swaps in.
             modifier = Modifier

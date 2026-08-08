@@ -56,6 +56,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -283,6 +284,10 @@ fun YomuBottomSheet(
     // Expanded tablets can keep reader navigation visible as a side sheet instead of a centered
     // dialog. Other sheets retain the centered dialog treatment.
     wideAsSideSheet: Boolean = false,
+    // Optional lower bound for focused sheets such as in-book search.
+    minHeight: Dp = 0.dp,
+    // Some controls contain their own visual hierarchy and do not need a fading scroll edge.
+    showScrollEdgeShadow: Boolean = true,
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
 ) {
     if (!visible) return
@@ -327,7 +332,10 @@ fun YomuBottomSheet(
                                 Modifier
                                     .fillMaxWidth(0.86f)
                                     .widthIn(max = 560.dp)
-                                    .heightIn(max = maxHeight)
+                                    .heightIn(
+                                        min = minHeight.coerceAtMost(maxHeight),
+                                        max = maxHeight,
+                                    )
                             },
                         )
                         .shadow(18.dp, MaterialTheme.shapes.extraLarge)
@@ -403,17 +411,26 @@ fun YomuBottomSheet(
                 .then(
                     if (scrollable) {
                         Modifier
-                            .heightIn(max = maxHeight)
-                            // Fade content into the panel at whichever edge has more to scroll, so a
-                            // tall sheet doesn't hard-cut under the drag handle or at its bottom.
-                            .yomuScrollEdgeShadow(
-                                color = YomuTheme.colors.panel,
-                                top = scrollState.canScrollBackward,
-                                bottom = scrollState.canScrollForward,
+                            .heightIn(
+                                min = minHeight.coerceAtMost(maxHeight),
+                                max = maxHeight,
+                            )
+                            .then(
+                                if (showScrollEdgeShadow) {
+                                    // Fade content into the panel at whichever edge has more to scroll, so a
+                                    // tall sheet doesn't hard-cut under the drag handle or at its bottom.
+                                    Modifier.yomuScrollEdgeShadow(
+                                        color = YomuTheme.colors.panel,
+                                        top = scrollState.canScrollBackward,
+                                        bottom = scrollState.canScrollForward,
+                                    )
+                                } else {
+                                    Modifier
+                                },
                             )
                             .verticalScroll(scrollState)
                     } else {
-                        Modifier
+                        Modifier.heightIn(min = minHeight.coerceAtMost(maxHeight))
                     },
                 )
                 .padding(horizontal = 20.dp)

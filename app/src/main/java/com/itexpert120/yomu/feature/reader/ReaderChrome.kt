@@ -5,10 +5,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -27,25 +26,20 @@ import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -58,10 +52,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -108,7 +104,7 @@ internal fun ReaderTopBar(
                 .onSizeChanged { onContentHeight(it.height) },
             title = {
                 Text(
-                    text = chapter,
+                    text = chapter.ifBlank { "Reading" },
                     color = content,
                     style = YomuTheme.type.body,
                     maxLines = 1,
@@ -227,11 +223,7 @@ internal fun ReaderFooter(
     }
 }
 
-/**
- * Bottom chapter-controls bar, revealed by a centre tap. Holds quick navigation: table of contents,
- * previous/next chapter, highlights, and reader settings. The top bar
- * stays static, so the chapter title remains visible at all times.
- */
+/** A full-width bottom toolbar for reader actions; seeking stays in the Controls sheet. */
 @Composable
 internal fun BoxScope.ReaderChapterControlsBar(
     visible: Boolean,
@@ -239,13 +231,9 @@ internal fun BoxScope.ReaderChapterControlsBar(
     background: Color,
     content: Color,
     border: Color,
-    hasPrevious: Boolean,
-    hasNext: Boolean,
     onBrowse: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+    onSearch: () -> Unit,
     onDisplay: () -> Unit,
-    onMore: () -> Unit,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -253,56 +241,113 @@ internal fun BoxScope.ReaderChapterControlsBar(
         exit = yomuChromeExit(),
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .padding(bottom = bottomInset + 14.dp),
+            .fillMaxWidth()
+            .padding(bottom = bottomInset),
     ) {
-        Surface(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = background,
-            contentColor = content,
-            border = BorderStroke(1.dp, border),
-            tonalElevation = 2.dp,
-        ) {
-            Row(
-                modifier = Modifier
-                    // Keep the controls reachable on narrow phones without clipping; tablets get
-                    // the same native button group centered over the reading canvas.
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                ControlButton(Icons.Rounded.Toc, "Browse", content, enabled = true, onBrowse)
-                ControlButton(Icons.Rounded.SkipPrevious, "Previous", content, hasPrevious, onPrevious)
-                ControlButton(Icons.Rounded.SkipNext, "Next", content, hasNext, onNext)
-                ControlButton(Icons.Rounded.MoreHoriz, "More", content, enabled = true, onMore)
-                ControlButton(Icons.Rounded.Tune, "Display", content, enabled = true, onDisplay)
-            }
-        }
+        ReaderActionBar(
+            background = background,
+            content = content,
+            border = border,
+            onBrowse = onBrowse,
+            onSearch = onSearch,
+            onDisplay = onDisplay,
+        )
     }
 }
 
+/** Selection-style actions keep the reader chrome compact and easy to scan. */
+// The bundled Material icon set has no AutoMirrored Toc symbol, so keep the semantic Toc glyph.
+@Suppress("DEPRECATION")
 @Composable
-private fun ControlButton(
+private fun ReaderActionBar(
+    background: Color,
+    content: Color,
+    border: Color,
+    onBrowse: () -> Unit,
+    onSearch: () -> Unit,
+    onDisplay: () -> Unit,
+) {
+    BottomAppBar(
+        modifier = Modifier.drawWithContent {
+            drawContent()
+            val strokeWidth = 1.dp.toPx()
+            drawLine(
+                color = border,
+                start = androidx.compose.ui.geometry.Offset(0f, strokeWidth / 2f),
+                end = androidx.compose.ui.geometry.Offset(size.width, strokeWidth / 2f),
+                strokeWidth = strokeWidth,
+            )
+        },
+        containerColor = background.copy(alpha = 0.98f),
+        contentColor = content,
+        tonalElevation = 0.dp,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        windowInsets = WindowInsets(0),
+        actions = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ReaderToolbarAction(
+                    icon = Icons.Rounded.Toc,
+                    label = "Browse",
+                    onClick = onBrowse,
+                    tint = content,
+                    modifier = Modifier.weight(1f),
+                )
+                ReaderToolbarAction(
+                    icon = Icons.Rounded.Search,
+                    label = "Search",
+                    onClick = onSearch,
+                    tint = content,
+                    modifier = Modifier.weight(1f),
+                )
+                ReaderToolbarAction(
+                    icon = Icons.Rounded.Tune,
+                    label = "Display",
+                    onClick = onDisplay,
+                    tint = content,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun ReaderToolbarAction(
     icon: ImageVector,
     label: String,
-    content: Color,
-    enabled: Boolean,
     onClick: () -> Unit,
+    tint: Color,
+    modifier: Modifier = Modifier,
 ) {
-    TextButton(
-        onClick = onClick,
-        enabled = enabled,
-        shape = MaterialTheme.shapes.large,
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp),
-        colors = ButtonDefaults.textButtonColors(
-            contentColor = content,
-            disabledContentColor = content.copy(alpha = 0.3f),
-        ),
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(text = label, maxLines = 1)
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Text(
+            text = label,
+            color = tint,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
     }
 }
 
@@ -318,23 +363,6 @@ private fun rememberClock(): String {
         }
     }
     return time
-}
-
-@Composable
-private fun ReaderBarButton(
-    icon: ImageVector,
-    description: String,
-    tint: Color,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = tint,
-            modifier = Modifier.size(20.dp),
-        )
-    }
 }
 
 /** Horizontal battery icon: an outlined shell with a level-proportional fill + terminal nub. While

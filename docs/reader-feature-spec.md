@@ -10,12 +10,12 @@ The reader is partly built. EPUB content renders through Readium's `EpubNavigato
 | --- | --- | --- |
 | EPUB rendering (paged + scrolled) | Done | Readium `EpubNavigatorFragment` in Compose; `ReaderLayout.{Paged, Scroll}`. |
 | Position persistence + restore | Done | Locator saved to Room on each move, restored on reopen. |
-| Reader chrome (permanent compact top bar) | Done | Sleek top bar: back + current chapter name + a controls/tune button. Clears the camera cutout. |
+| Reader chrome (compact top bar + bottom navigation bar) | Done | Material top bar shows the current chapter, back, and bookmark; the revealed lower bar offers Browse, Search, and Display actions. Clears the camera cutout. |
 | Full-screen immersive (both system bars hidden) | Done | Swipe to reveal; bar/chrome/system-bar colours all match the reading theme. |
 | Optional footer | Done | Toggleable clock + custom horizontal battery indicator + reading %; each element individually toggleable. Optional edge-shadow fade behind the bars. |
-| Center-tap to open controls | Done | Center tap opens the controls sheet; edge taps fall through to Readium's default swipe navigation. **No custom navigation tap zones** (an earlier L-zone design was removed). |
-| Controls sheet (Controls / Theme / Fonts tabs) | Done | Bottom sheet with in-sheet tab bar, cross-fade + animated height. |
-| Progress scrubber | Done | Whole-book progress slider (drag to seek) with prev/next **chapter** arrows, in the Controls tab. |
+| Center-tap to open controls | Done | Center tap toggles the compact bottom navigation bar; its Browse, Search, and Display actions open the existing sheets. Edge taps fall through to Readium's default swipe navigation. **No custom navigation tap zones** (an earlier L-zone design was removed). |
+| Controls sheet (Controls / Display tabs) | Done | Bottom sheet with in-sheet tab bar, cross-fade + animated height. |
+| Progress scrubber | Done | Whole-book progress slider (drag to seek) with prev/next **chapter** arrows in the Controls sheet. |
 | Theme presets + custom colours | Partial | Presets: Light / Dark (default, soft `#16181D`, non-OLED) / Sepia / Black / Custom. Custom exposes background + text colour pickers. The longer preset/background-pattern lists below are pending. |
 | Brightness | Done | "Use system brightness" toggle or a manual slider (live preview while dragging, commit on release) applied via window `screenBrightness`. |
 | Fonts | Partial | Scroll/paged toggle; font-family chips that preview each typeface (Lora default, Karla, Rubik, Cardo, Nunito, Merriweather; bundled TTFs registered with Readium); font-size slider. Per-role serif/sans/mono assignment and custom-font import are pending. |
@@ -25,7 +25,7 @@ The reader is partly built. EPUB content renders through Readium's `EpubNavigato
 | Engine navigation | Done | `goForward`/`goBackward`, next/previous logical TOC section, `goToProgression` (position-weighted resource seek). |
 | Bookmarks | Pending | Not built. |
 | Highlighting | Pending | Not built. |
-| In-book search | Pending | Not built. |
+| In-book search | Done | Dedicated minimum-height Search sheet with live results, hit underlines, and locator jumps. |
 | Advanced typography (paragraph/page panels) | Pending | Line/word/letter spacing, margins, text-align/justify, hyphenation, multi-column, image inversion not built. |
 | Paragraph / Speed-reading modes | Pending | Not built. |
 | TTS / read-aloud, reading statistics | Pending | Not built. |
@@ -40,30 +40,29 @@ The reader is the product's center. Text should own the screen. Controls should 
 Default reader state (current):
 
 - Full-screen reading canvas; both system bars hidden (swipe to reveal).
-- No Material app bar. A permanent, compact "sleek" Yomu top bar (back + chapter name + controls button) is always present; it never sits over content and clears the camera cutout.
+- A compact Material top bar (chapter name + back/bookmark actions) is always present when immersive chrome is off; it clears the camera cutout and keeps the reading surface on the active page theme.
 - Optional footer based on user settings (the top bar is not optional today).
-- Center tap opens the controls sheet. (Planned: a tap-to-toggle-chrome model where the bar can hide.)
+- Center tap toggles the lower navigation bar; its Browse, Search, and Display actions open the corresponding sheets. Immersive mode hides the top bar and footer until the next reveal.
 - Edge taps fall through to Readium's default swipe page navigation — there are no custom navigation tap zones (an earlier L-zone design was removed).
 - Swipe/scroll behavior depends on reading mode: paged turns a page, scroll scrolls.
 - Long press selects text.
-- Progress scrubber lives in the controls sheet rather than a dedicated bottom gesture today.
+- Progress seeking remains in the Controls sheet so the bottom navigation bar stays focused on destinations.
 
 ## Reader Chrome
 
 Current chrome:
 
-- Permanent top strip: back button, current chapter name (resolved from the TOC by href, falling back to the locator title), and a controls/tune button that opens the sheet. No search/more menu yet.
+- Compact top strip: back button, current chapter name (resolved from the TOC by href), and bookmark toggle.
 - Optional footer: clock + custom horizontal battery indicator + reading %, each element toggleable. Optional edge-shadow fade behind the bars.
-- Controls sheet (bottom sheet, Controls / Theme / Fonts tabs) standing in for the planned bottom dock + appearance studio.
+- Mihon-inspired bottom navigation bar: Browse, Search, and Display use Material navigation destinations with visible labels and page-themed colours.
+- Controls sheet (bottom sheet, Controls / Display tabs) remains the deeper appearance and brightness surface.
 
 Planned chrome (target, not yet built):
 
-- Bottom dock: TOC, progress, brightness, appearance, bookmark, mode.
 - Floating quick actions: bookmark, highlight, theme, reading mode.
-- Progress scrubber overlay (currently the scrubber is inside the controls sheet).
 - Side panels on tablet.
 
-Chrome states (target model; today only the sheet open/closed and selection are realized):
+Chrome states (target model; the bottom navigation bar and sheet states are now realized):
 
 - `Hidden`
 - `Peek`
@@ -84,7 +83,7 @@ Actions (✓ = built):
 - Jump to TOC item. Planned (TOC is extracted but there's no in-reader TOC navigation panel yet).
 - Jump to bookmark. Planned.
 - Jump to highlight. Planned.
-- Search within book. Planned.
+- Search within book. ✓ (Readium search service, dedicated Search sheet, and on-page hit decorations)
 
 Progress display:
 
@@ -118,8 +117,8 @@ Controls:
 
 - Vertical scroll. ✓
 - Sticky minimal footer (optional). ✓
-- Center tap opens the controls sheet. ✓
-- Scroll progress indicator. Partial — whole-book % is shown in the footer.
+- Center tap toggles the lower navigator/action bar. ✓
+- Scroll progress indicator. ✓ — whole-book progress remains available in the Controls sheet and footer.
 
 ### Paragraph Mode
 
@@ -182,7 +181,7 @@ Actions:
 
 ## Brightness Control
 
-Current state: brightness lives in the controls sheet's Theme tab. A "use system brightness" toggle defers to the OS; turning it off reveals a manual slider that previews live while dragging and commits on release. The level is applied via the window's `screenBrightness` attribute (not a dim overlay). A standalone quick vertical rail and a night-minimum mode are still planned.
+Current state: brightness lives in the controls sheet's Controls tab. A "use system brightness" toggle defers to the OS; turning it off reveals a manual slider that previews live while dragging and commits on release. The level is applied via the window's `screenBrightness` attribute (not a dim overlay). A standalone quick vertical rail and a night-minimum mode are still planned.
 
 Brightness controls:
 
@@ -193,7 +192,7 @@ Brightness controls:
 
 ## Progress Control
 
-Current state: the scrubber is the whole-book progress slider in the controls sheet's Controls tab, flanked by previous/next **chapter** arrows, with a "% through the book" label. A separate always-available bottom scrubber overlay is still planned.
+Current state: the scrubber is the whole-book progress slider in the Controls sheet's Controls tab, flanked by previous/next **chapter** arrows.
 
 Progress controls:
 
@@ -486,9 +485,8 @@ Initial scope:
 
 - Library metadata search.
 
-Later (none built yet):
+Later:
 
-- In-book search using Readium search/content services.
 - Library full-text indexing.
 
 ## Tablet-Specific Reader

@@ -11,10 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,19 +19,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
-import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
-import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 
 /** The tabs of the consolidated reader "Browse" sheet. */
@@ -42,13 +33,13 @@ enum class BrowseTab(val label: String) {
     Contents("Contents"),
     Bookmarks("Bookmarks"),
     Highlights("Highlights"),
-    Search("Search"),
 }
 
 /**
- * One sheet consolidating the four navigate/find surfaces — Contents, Bookmarks, Highlights and
- * Search — behind a tab control, replacing four separate bottom sheets. Each tab reuses the existing
- * row composables; switching tabs uses the unified directional motion + blur. [tab] null = closed.
+ * One sheet consolidating the three navigation surfaces — Contents, Bookmarks and Highlights —
+ * behind a tab control. Search has its own dedicated sheet so results can use a taller surface.
+ * Each tab reuses the existing row composables; switching tabs uses the unified directional motion
+ * + blur. [tab] null = closed.
  */
 @Composable
 internal fun ReaderBrowseSheet(
@@ -63,14 +54,6 @@ internal fun ReaderBrowseSheet(
     highlights: List<ReaderHighlight>,
     onJumpToHighlight: (String) -> Unit,
     onDeleteHighlight: (String) -> Unit,
-    searchQuery: String,
-    searchResults: List<ReaderSearchResult>,
-    searchInProgress: Boolean,
-    searchError: String?,
-    searchPerformed: Boolean,
-    onSearchQueryChange: (String) -> Unit,
-    onSubmitSearch: () -> Unit,
-    onJumpToSearchResult: (String) -> Unit,
     onSelectTab: (BrowseTab) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -79,6 +62,11 @@ internal fun ReaderBrowseSheet(
         onDismiss = onDismiss,
         scrollable = false,
         wideAsSideSheet = true,
+        minHeight = if (tab == BrowseTab.Bookmarks || tab == BrowseTab.Highlights) {
+            360.dp
+        } else {
+            0.dp
+        },
     ) { _ ->
         val current = tab ?: BrowseTab.Contents
         Column(
@@ -109,17 +97,6 @@ internal fun ReaderBrowseSheet(
 
                         BrowseTab.Highlights ->
                             HighlightsBody(highlights, onJumpToHighlight, onDeleteHighlight)
-
-                        BrowseTab.Search -> SearchBody(
-                            searchQuery,
-                            searchResults,
-                            searchInProgress,
-                            searchError,
-                            searchPerformed,
-                            onSearchQueryChange,
-                            onSubmitSearch,
-                            onJumpToSearchResult,
-                        )
                     }
                 }
             }
@@ -209,76 +186,6 @@ private fun HighlightsBody(
                     onClick = { onJump(item.locatorJson) },
                     onDelete = { onDelete(item.id) },
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchBody(
-    query: String,
-    results: List<ReaderSearchResult>,
-    inProgress: Boolean,
-    error: String?,
-    performed: Boolean,
-    onQueryChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onJump: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        YomuTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            label = "Search in book",
-            placeholder = "Search…",
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-        )
-        Column(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-            when {
-                inProgress -> Text(
-                    text = "Searching…",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-
-                error != null -> Text(
-                    text = error,
-                    color = YomuTheme.colors.danger,
-                    style = YomuTheme.type.caption,
-                )
-
-                performed && results.isEmpty() -> Text(
-                    text = "No results",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-
-                results.isNotEmpty() -> {
-                    Text(
-                        text = if (results.size >= 150) {
-                            "First ${results.size} matches"
-                        } else {
-                            "${results.size} ${if (results.size == 1) "match" else "matches"}"
-                        },
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.caption,
-                    )
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 380.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        itemsIndexed(results) { _, r ->
-                            SearchResultRow(
-                                result = r,
-                                accent = YomuTheme.colors.accent,
-                                onClick = { onJump(r.locatorJson) },
-                            )
-                        }
-                    }
-                }
             }
         }
     }
