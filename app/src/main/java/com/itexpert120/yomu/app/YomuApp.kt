@@ -62,7 +62,7 @@ fun YomuApp(
     }
 
     YomuDesignTheme(themeMode = resolved) {
-        // Opaque app-coloured backing so the shared-axis transition never reveals the window
+        // Opaque app-coloured backing so the seamless screen transition never reveals the window
         // background (which would torch during navigation in dark mode).
         Box(
             modifier = Modifier

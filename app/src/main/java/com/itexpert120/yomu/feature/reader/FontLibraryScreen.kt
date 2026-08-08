@@ -3,17 +3,18 @@ package com.itexpert120.yomu.feature.reader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,12 +24,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
+import com.itexpert120.yomu.core.designsystem.YomuSettingDivider
+import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
+import com.itexpert120.yomu.core.designsystem.YomuSettingList
+import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTextField
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.CURATED_GOOGLE_FONTS
 import com.itexpert120.yomu.core.model.CuratedFont
@@ -48,15 +51,7 @@ fun FontLibraryRoute(onBack: () -> Unit) {
     )
 }
 
-/**
- * Full screen (not a bottom sheet) for adding reading fonts from Google Fonts. Shows a curated
- * shortlist by default and a search box over the full bundled catalog; tapping a not-yet-installed
- * font downloads it, installed fonts show a remove action. Downloads run in the ViewModel.
- *
- * A real screen rather than a `YomuBottomSheet`: Material3's `ModalBottomSheet` hosts its content in
- * its own Dialog window, which resizes under the keyboard in a way that fought this screen's search
- * field badly enough to warrant a dedicated destination instead.
- */
+/** Full screen for choosing optional reading fonts from Google Fonts. */
 @Composable
 fun FontLibraryScreen(
     state: FontLibraryUiState,
@@ -74,57 +69,99 @@ fun FontLibraryScreen(
             state.catalog.asSequence()
                 .filter { it.family.contains(trimmed, ignoreCase = true) }
                 // Prefix matches first, then the rest alphabetically.
-                .sortedWith(compareByDescending<CuratedFont> { it.family.startsWith(trimmed, true) }.thenBy { it.family })
+                .sortedWith(
+                    compareByDescending<CuratedFont> { it.family.startsWith(trimmed, true) }
+                        .thenBy { it.family },
+                )
                 .take(MAX_FONT_RESULTS)
                 .toList()
         }
     }
-    YomuScreenScaffold(title = "Add fonts", onBack = onBack) {
-        Text(
-            text = "Search Google Fonts, or pick a suggested reading font.",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
-            modifier = Modifier.padding(bottom = 4.dp),
+
+    YomuScreenScaffold(
+        title = "Reading fonts",
+        subtitle = "Choose the voice of your pages",
+        onBack = onBack,
+        showScrollEdgeShadow = false,
+    ) {
+        FontLibraryCatalog(
+            query = query,
+            onQueryChange = { query = it },
+            trimmedQuery = trimmed,
+            results = results,
+            error = state.error,
+            installedFamilies = installedFamilies,
+            downloadingFonts = state.downloadingFonts,
+            onInstall = onInstall,
+            onRemove = onRemove,
         )
+    }
+}
+
+@Composable
+private fun FontLibraryCatalog(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    trimmedQuery: String,
+    results: List<CuratedFont>,
+    error: String?,
+    installedFamilies: Set<String>,
+    downloadingFonts: Set<String>,
+    onInstall: (String) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         YomuTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = onQueryChange,
             label = "Search fonts",
             placeholder = "e.g. Merriweather",
             modifier = Modifier.fillMaxWidth(),
         )
-        if (state.error != null) {
-            Text(
-                text = state.error,
-                color = YomuTheme.colors.danger,
-                style = YomuTheme.type.caption,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
+        if (error != null) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(14.dp),
+                )
+            }
         }
-        if (trimmed.isEmpty()) {
-            Text(
-                text = "Suggested",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        } else if (results.isEmpty()) {
-            Text(
-                text = "No fonts match “$trimmed”.",
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.body,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        results.forEach { font ->
-            FontLibraryRow(
-                family = font.family,
-                subtitle = font.category.ifBlank { "Font" },
-                installed = font.family in installedFamilies,
-                downloading = font.family in state.downloadingFonts,
-                onInstall = { onInstall(font.family) },
-                onRemove = { onRemove(font.family) },
-            )
+
+        YomuSettingGroup(
+            title = if (trimmedQuery.isEmpty()) "Suggested fonts" else "Search results",
+            subtitle = if (trimmedQuery.isEmpty()) {
+                "A small shortlist to get you started."
+            } else {
+                "Up to $MAX_FONT_RESULTS matching families."
+            },
+        ) {
+            if (results.isEmpty()) {
+                Text(
+                    text = "No fonts match “$trimmedQuery”.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                YomuSettingList {
+                    results.forEachIndexed { index, font ->
+                        FontLibraryRow(
+                            family = font.family,
+                            subtitle = font.category.ifBlank { "Font" },
+                            installed = font.family in installedFamilies,
+                            downloading = font.family in downloadingFonts,
+                            onInstall = { onInstall(font.family) },
+                            onRemove = { onRemove(font.family) },
+                        )
+                        if (index < results.lastIndex) YomuSettingDivider()
+                    }
+                }
+            }
         }
     }
 }
@@ -138,56 +175,59 @@ private fun FontLibraryRow(
     onInstall: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Row(
+    val canInstall = !installed && !downloading
+    YomuSettingRow(
+        title = family,
+        subtitle = subtitle,
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
             // The whole row installs when the font isn't present yet; once installed, only the
             // trailing remove button is interactive.
-            .then(if (!installed && !downloading) Modifier.yomuPressable(onClick = onInstall) else Modifier)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .then(if (canInstall) Modifier.yomuPressable(onClick = onInstall) else Modifier),
+        leadingContent = {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Aa",
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+        },
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(text = family, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.body)
-            Text(text = subtitle, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        }
         when {
             downloading -> CircularProgressIndicator(
-                color = YomuTheme.colors.accent,
+                color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
 
             installed -> {
                 Icon(
                     imageVector = Icons.Rounded.Check,
                     contentDescription = "Installed",
-                    tint = YomuTheme.colors.accent,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
                 )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                        .yomuPressable(onClick = onRemove)
-                        .padding(6.dp),
-                ) {
+                IconButton(onClick = onRemove) {
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
                         contentDescription = "Remove $family",
-                        tint = YomuTheme.colors.textMuted,
-                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
 
-            else -> Icon(
-                imageVector = Icons.Rounded.FileDownload,
-                contentDescription = "Download $family",
-                tint = YomuTheme.colors.textSecondary,
-                modifier = Modifier.size(20.dp),
-            )
+            else -> IconButton(onClick = onInstall) {
+                Icon(
+                    imageVector = Icons.Rounded.FileDownload,
+                    contentDescription = "Download $family",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }

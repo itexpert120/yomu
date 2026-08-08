@@ -4,18 +4,22 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.core.model.ThemePreference
+import com.itexpert120.yomu.feature.reader.CustomThemeSheet
+import com.itexpert120.yomu.feature.reader.ReaderDefaultsViewModel
 
 @Composable
 fun SettingsRoute(
     appViewModel: AppViewModel,
     onBack: (() -> Unit)?,
-    onOpenStats: () -> Unit,
-    onOpenReaderDefaults: () -> Unit,
+    onOpenFontLibrary: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     val appearance by appViewModel.appearance.collectAsState()
+    val readerDefaultsViewModel: ReaderDefaultsViewModel = hiltViewModel()
+    val readerDefaults by readerDefaultsViewModel.state.collectAsState()
     val preference = appearance.themePreference
     val oledDark = appearance.oledDark
     val systemDark = isSystemInDarkTheme()
@@ -32,9 +36,25 @@ fun SettingsRoute(
         oledEnabled = darkActive,
         onSelectTheme = appViewModel::onSelectTheme,
         onToggleOled = appViewModel::onSetOledDark,
+        readerSettings = readerDefaults.settings,
+        customThemes = readerDefaults.customThemes,
+        customFonts = readerDefaults.installedFonts,
+        onUpdateReaderSettings = readerDefaultsViewModel::onUpdate,
+        onOpenCustomTheme = readerDefaultsViewModel::onOpenCustomTheme,
+        onApplyCustomTheme = readerDefaultsViewModel::onApplyCustomTheme,
+        onOpenFontLibrary = onOpenFontLibrary,
         onBack = onBack,
-        onOpenStats = onOpenStats,
-        onOpenReaderDefaults = onOpenReaderDefaults,
         onOpenAbout = onOpenAbout,
+    )
+
+    CustomThemeSheet(
+        visible = readerDefaults.customSheetVisible,
+        settings = readerDefaults.settings,
+        customThemes = readerDefaults.customThemes,
+        onDismiss = readerDefaultsViewModel::onCloseCustomTheme,
+        onUpdateSettings = readerDefaultsViewModel::onUpdate,
+        onSave = readerDefaultsViewModel::onSaveCustomTheme,
+        onApply = readerDefaultsViewModel::onApplyCustomTheme,
+        onDelete = readerDefaultsViewModel::onDeleteCustomTheme,
     )
 }

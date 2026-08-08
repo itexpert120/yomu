@@ -101,6 +101,7 @@ fun YomuSettingGroup(
     title: String,
     modifier: Modifier = Modifier,
     outlined: Boolean = false,
+    subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -119,11 +120,20 @@ fun YomuSettingGroup(
             modifier = Modifier.padding(YomuTheme.space.md),
             verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
         ) {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
             content()
         }
     }

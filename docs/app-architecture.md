@@ -61,7 +61,7 @@ com.itexpert120.yomu
 |   |-- navigation
 |   |   |-- YomuDestinations.kt  # @Serializable routes: Library, BookDetails, EditBook, Settings, About, Reader
 |   |   |-- YomuNavigationScaffold.kt # NavigationBar/NavigationRail top-level shell
-|   |   `-- YomuNavHost.kt       # shared-axis (X) transitions + adaptive top-level routing
+|   |   `-- YomuNavHost.kt       # seamless horizontal screen transitions + adaptive top-level routing
 |   |-- di
 |   |   |-- DataStoreModule.kt
 |   |   |-- DatabaseModule.kt

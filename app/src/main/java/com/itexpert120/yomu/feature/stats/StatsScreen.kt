@@ -1,13 +1,11 @@
 package com.itexpert120.yomu.feature.stats
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +13,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,7 +44,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import java.io.File
@@ -55,20 +63,61 @@ fun StatsRoute(onBack: (() -> Unit)?) {
 
 @Composable
 fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
-    YomuScreenScaffold(title = "Statistics", onBack = onBack) {
+    YomuScreenScaffold(
+        title = "Statistics",
+        onBack = onBack,
+        showScrollEdgeShadow = false,
+    ) {
         when {
-            state.isLoading -> StatusText("Loading statistics…")
+            state.isLoading -> LoadingState()
             state.error != null -> StatusText(state.error)
-            else -> {
-                Overview(state.stats)
-                if (state.stats.sessionCount == 0 && state.stats.totalReadingSeconds == 0L) {
-                    StatusText("No reading activity yet. Open a book to start your history.")
-                } else {
-                    Entries(state.stats)
-                    if (state.history.isNotEmpty()) History(state.history)
-                }
-            }
+            else -> StatsContent(stats = state.stats, history = state.history)
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.StatsContent(
+    stats: ReadingStats,
+    history: List<ReadingSessionItem>,
+) {
+    SectionHeader(
+        title = "At a glance",
+        supporting = "A quick view of your reading.",
+    )
+    AtAGlanceCard(stats)
+    if (stats.sessionCount == 0 && stats.totalReadingSeconds == 0L) {
+        EmptyActivityCard()
+    } else {
+        SectionHeader(
+            title = "Reading details",
+            supporting = "The small signals behind your routine.",
+        )
+        DetailsGrid(stats)
+        if (history.isNotEmpty()) {
+            History(history)
+        }
+    }
+}
+
+@Composable
+private fun LoadingState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(28.dp),
+            strokeWidth = 3.dp,
+        )
+        Text(
+            text = "Gathering your reading history…",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 
@@ -76,98 +125,253 @@ fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
 private fun StatusText(text: String) {
     Text(
         text = text,
-        color = YomuTheme.colors.textMuted,
-        style = YomuTheme.type.body,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 32.dp),
+            .padding(vertical = 48.dp),
         textAlign = TextAlign.Center,
     )
 }
 
 @Composable
-private fun ColumnScope.Overview(stats: ReadingStats) {
-    SectionTitle("Overview")
-    Row(
+private fun AtAGlanceCard(stats: ReadingStats) {
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        MetricCard(value = stats.booksInLibrary.toString(), label = "Library items")
-        MetricCard(value = formatReadingTime(stats.totalReadingSeconds), label = "Read duration")
-        MetricCard(value = stats.booksFinished.toString(), label = "Completed")
-    }
-}
-
-@Composable
-private fun ColumnScope.Entries(stats: ReadingStats) {
-    SectionTitle("Entries")
-    val metrics = listOf(
-        stats.chaptersRead.toString() to "Chapters read",
-        stats.sessionCount.toString() to "Reading sessions",
-        stats.daysRead.toString() to "Active days",
-        formatReadingTime(stats.averageSessionSeconds) to "Average session",
-        formatReadingTime(stats.longestSessionSeconds) to "Longest session",
-        formatReadingTime(stats.averageSecondsPerActiveDay) to "Average per day",
-        formatCount(stats.estimatedWordsRead) to "Estimated words",
-        if (stats.estimatedReadingSpeedWpm > 0) {
-            "${stats.estimatedReadingSpeedWpm} wpm" to "Estimate basis"
-        } else {
-            "—" to "Estimated speed"
-        },
-    )
-    metrics.chunked(2).forEach { row ->
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            row.forEach { (value, label) -> MetricCard(value = value, label = label) }
+            AtAGlanceMetric(
+                value = formatDays(stats.currentStreakDays),
+                label = "Current streak",
+                modifier = Modifier.weight(1f),
+                accent = MaterialTheme.colorScheme.primary,
+            )
+            AtAGlanceMetric(
+                value = formatReadingTime(stats.totalReadingSeconds),
+                label = "Total read",
+                modifier = Modifier.weight(1f),
+                accent = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AtAGlanceMetric(
+                value = stats.booksInLibrary.toString(),
+                label = "Library items",
+                modifier = Modifier.weight(1f),
+                accent = MaterialTheme.colorScheme.primary,
+            )
+            AtAGlanceMetric(
+                value = stats.booksFinished.toString(),
+                label = "Completed books",
+                modifier = Modifier.weight(1f),
+                accent = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AtAGlanceMetric(
+                value = formatReadingTime(stats.secondsLast7Days),
+                label = "Last 7 days",
+                modifier = Modifier.weight(1f),
+                accent = MaterialTheme.colorScheme.primary,
+            )
+            AtAGlanceMetric(
+                value = formatReadingTime(stats.secondsLast30Days),
+                label = "Last 30 days",
+                modifier = Modifier.weight(1f),
+                accent = MaterialTheme.colorScheme.tertiary,
+            )
         }
     }
 }
 
 @Composable
-private fun RowScope.MetricCard(value: String, label: String) {
-    val shape = RoundedCornerShape(YomuTheme.radius.md)
-
+private fun AtAGlanceMetric(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    accent: androidx.compose.ui.graphics.Color,
+) {
     Column(
-        modifier = Modifier
-            .weight(1f)
-            .heightIn(min = 80.dp)
-            .clip(shape)
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, shape)
-            .padding(horizontal = 10.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        Box(
+            modifier = Modifier
+                .width(32.dp)
+                .height(4.dp)
+                .clip(RoundedCornerShape(YomuTheme.radius.pill))
+                .background(accent),
+        )
         Text(
             text = value,
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.title,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-
-        Spacer(Modifier.height(4.dp))
-
         Text(
             text = label,
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
         )
     }
 }
 
 @Composable
+private fun EmptyActivityCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Bookmark,
+                        contentDescription = null,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "No reading activity yet",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "Open a book to start building your reading history.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    supporting: String,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            text = supporting,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private data class DetailMetric(
+    val value: String,
+    val label: String,
+)
+
+@Composable
+private fun DetailsGrid(stats: ReadingStats) {
+    val metrics = listOf(
+        DetailMetric(stats.chaptersRead.toString(), "Chapters read"),
+        DetailMetric(stats.sessionCount.toString(), "Reading sessions"),
+        DetailMetric(stats.daysRead.toString(), "Active days"),
+        DetailMetric(formatDays(stats.longestStreakDays), "Longest streak"),
+        DetailMetric(formatReadingTime(stats.averageSessionSeconds), "Average session"),
+        DetailMetric(formatReadingTime(stats.longestSessionSeconds), "Longest session"),
+        DetailMetric(formatReadingTime(stats.averageSecondsPerActiveDay), "Average per day"),
+        DetailMetric(stats.booksStarted.toString(), "Books started"),
+        DetailMetric(formatCount(stats.estimatedWordsRead), "Estimated words"),
+    )
+    metrics.chunked(2).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            row.forEach { metric ->
+                DetailMetricCard(metric = metric, modifier = Modifier.weight(1f))
+            }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun DetailMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.heightIn(min = 112.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = metric.value,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = metric.label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ColumnScope.History(history: List<ReadingSessionItem>) {
-    SectionTitle("History")
     val consolidated = remember(history) { consolidateSessions(history) }
+    val totalSessions = consolidated.sumOf { it.sessionCount }
+    val totalSeconds = consolidated.sumOf { it.seconds }
+    SectionHeader(
+        title = "Recent history",
+        supporting = "$totalSessions ${if (totalSessions == 1) "session" else "sessions"} · " +
+            "${formatReadingTime(totalSeconds)} read.",
+    )
     var visibleCount by remember { mutableIntStateOf(HistoryPage) }
     val byDay = consolidated.take(visibleCount).groupBy { session ->
         Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -176,37 +380,61 @@ private fun ColumnScope.History(history: List<ReadingSessionItem>) {
         byDay.forEach { (day, sessions) -> HistoryCard(day, sessions) }
     }
     if (consolidated.size > visibleCount) {
-        Text(
-            text = "Show more",
-            color = YomuTheme.colors.accent,
-            style = YomuTheme.type.control,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .yomuPressable(onClick = { visibleCount += HistoryPage })
-                .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        TextButton(
+            onClick = { visibleCount += HistoryPage },
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        ) {
+            Text(text = "Show more")
+        }
     }
 }
 
 @Composable
 private fun HistoryCard(day: LocalDate, sessions: List<ReadingSessionItem>) {
-    Column(
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = formatDayHeader(day),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = formatSessionSummary(sessions),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            sessions.forEachIndexed { index, session ->
+                if (index > 0) HistoryDivider()
+                HistoryRow(session)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryDivider() {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg))
-            .padding(vertical = 8.dp),
-    ) {
-        Text(
-            text = formatDayHeader(day),
-            color = YomuTheme.colors.textSecondary,
-            style = YomuTheme.type.control,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-        )
-        sessions.forEach { session -> HistoryRow(session) }
-    }
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+    )
 }
 
 @Composable
@@ -214,30 +442,39 @@ private fun HistoryRow(session: ReadingSessionItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         CoverThumbnail(session.coverImagePath)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
             Text(
                 text = session.bookTitle,
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.body,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = formatClock(session.startedAt),
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
             )
         }
-        Text(
-            text = formatMinutesRead(session.seconds),
-            color = YomuTheme.colors.textSecondary,
-            style = YomuTheme.type.caption,
-        )
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ) {
+            Text(
+                text = formatMinutesRead(session.seconds),
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            )
+        }
     }
 }
 
@@ -245,10 +482,10 @@ private fun HistoryRow(session: ReadingSessionItem) {
 private fun CoverThumbnail(path: String?) {
     Box(
         modifier = Modifier
-            .width(40.dp)
+            .width(48.dp)
             .aspectRatio(1f / 1.5f)
-            .clip(RoundedCornerShape(7.dp))
-            .background(YomuTheme.colors.surfaceSunken),
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     ) {
         if (path != null) {
             AsyncImage(
@@ -261,9 +498,12 @@ private fun CoverThumbnail(path: String?) {
     }
 }
 
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text = text, color = YomuTheme.colors.textPrimary, style = YomuTheme.type.section)
+private fun formatDays(days: Int): String = "$days ${if (days == 1) "day" else "days"}"
+
+private fun formatSessionSummary(sessions: List<ReadingSessionItem>): String {
+    val count = sessions.sumOf { it.sessionCount }
+    val totalSeconds = sessions.sumOf { it.seconds }
+    return "$count ${if (count == 1) "session" else "sessions"} · ${formatReadingTime(totalSeconds)} read"
 }
 
 private fun consolidateSessions(history: List<ReadingSessionItem>): List<ReadingSessionItem> {

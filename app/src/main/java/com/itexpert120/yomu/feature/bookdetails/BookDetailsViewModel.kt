@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingState
+import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -71,6 +72,7 @@ data class TocEntryUi(
     val depth: Int,
     val read: Boolean,
     val selected: Boolean,
+    val bookmarked: Boolean,
     val percent: Float?,
 ) {
     val jumpable: Boolean get() = locatorJson != null
@@ -93,6 +95,7 @@ class BookDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val repository: BookRepository,
+    private val bookmarkRepository: BookmarkRepository,
     private val statsRepository: StatsRepository,
 ) : ViewModel() {
 
@@ -119,12 +122,17 @@ class BookDetailsViewModel @Inject constructor(
     private val selectedUids = MutableStateFlow<Set<Int>>(emptySet())
     private val selectionMode = MutableStateFlow(false)
     private val readChapters = repository.observeReadChapters(BookId(bookId))
+    private val bookmarks = bookmarkRepository.observeForBook(BookId(bookId))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val selectionFlow = combine(selectedUids, selectionMode) { uids, mode -> uids to mode }
     private val readingFlow = combine(
         readChapters,
         repository.observeChapterProgress(BookId(bookId)),
     ) { read, progress -> read to progress }
+    private val readingAndBookmarksFlow = combine(readingFlow, bookmarks) { reading, savedBookmarks ->
+        reading to savedBookmarks
+    }
 
     private val configFlow = combine(tocLoading, tocSort) { loading, sort -> loading to sort }
 
@@ -132,12 +140,13 @@ class BookDetailsViewModel @Inject constructor(
         configFlow,
         tocItems,
         selectionFlow,
-        readingFlow,
+        readingAndBookmarksFlow,
         state,
     ) { config, items, selection, reading, currentBook ->
         val (loading, sort) = config
         val (selected, inSelection) = selection
-        val (read, progress) = reading
+        val (read, progress) = reading.first
+        val savedBookmarks = reading.second
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
         val ordered = items.withIndex().toList()
             .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
@@ -162,6 +171,7 @@ class BookDetailsViewModel @Inject constructor(
                     depth = it.depth,
                     read = isRead,
                     selected = uid in selected,
+                    bookmarked = savedBookmarks.any { bookmark -> bookmark.href == it.id },
                     percent = if (it.locatorJson == null) {
                         null
                     } else if (isRead) {
@@ -208,6 +218,29 @@ class BookDetailsViewModel @Inject constructor(
         selectedUids.value = tocItems.value
             .mapIndexedNotNull { index, item -> index.takeIf { item.locatorJson != null } }
             .toSet()
+    }
+
+    fun onDeselectAllChapters() {
+        selectedUids.value = emptySet()
+    }
+
+    fun onToggleChapterBookmark(uid: Int) {
+        val entry = toc.value.items.firstOrNull { it.uid == uid } ?: return
+        val existing = bookmarks.value.firstOrNull { it.href == entry.chapterId }
+        viewModelScope.launch {
+            if (existing != null) {
+                bookmarkRepository.delete(existing.id)
+            } else {
+                val locatorJson = entry.locatorJson ?: return@launch
+                bookmarkRepository.toggle(
+                    bookId = BookId(bookId),
+                    locatorJson = locatorJson,
+                    href = entry.chapterId,
+                    chapterTitle = entry.title,
+                    progression = null,
+                )
+            }
+        }
     }
 
     fun onMarkSelectedChapters(read: Boolean) {

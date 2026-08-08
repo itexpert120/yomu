@@ -12,7 +12,8 @@ Current technical baseline:
 - Toolchain: AGP 9.2.1, Kotlin 2.4.0, Java 17 (+ core-library desugaring), Compose BOM 2026.06.00, KSP; compileSdk 37 / minSdk 24 / targetSdk 36
 - DI: **Hilt** (`@HiltAndroidApp`, `@HiltViewModel`, modules in `app/di/`)
 - Persistence: **Room v9** (`books`, `chapter_reads`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`; additive migrations 1→9) and **DataStore**
-- Navigation: **Navigation Compose** with type-safe `@Serializable` routes and Material shared-axis (X) transitions
+- Navigation: **Navigation Compose** with type-safe `@Serializable` routes, seamless horizontal
+  screen transitions, and ordinary back callbacks for local transient states
 - Reader engine: **Readium 3.3.0** behind a Yomu `ReaderEngine` boundary (only `data/reader/readium` imports Readium); `EpubNavigatorFragment` hosted in Compose
 - Images: **Coil 3** for covers; **SAF** import with sha256 dedup
 - Custom design system: `core/designsystem` (`YomuDesignTheme`, tokens, surface/control/card primitives) applied across every screen

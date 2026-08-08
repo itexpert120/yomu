@@ -5,12 +5,7 @@
 
 package com.itexpert120.yomu.core.designsystem
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -49,7 +44,6 @@ fun YomuScreenHeader(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     elevated: Boolean = false,
-    titleVisible: Boolean = true,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     val elevation by animateDpAsState(
@@ -59,26 +53,20 @@ fun YomuScreenHeader(
     TopAppBar(
         modifier = modifier.zIndex(1f),
         title = {
-            AnimatedVisibility(
-                visible = titleVisible,
-                enter = fadeIn() + slideInVertically { it / 2 },
-                exit = fadeOut() + slideOutVertically { it / 2 },
-            ) {
-                Column {
+            Column {
+                Text(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
                     Text(
-                        text = title,
+                        text = subtitle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
                 }
             }
         },
@@ -112,6 +100,7 @@ fun YomuScreenScaffold(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     trailing: @Composable RowScope.() -> Unit = {},
+    showScrollEdgeShadow: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val navBottom = WindowInsets.navigationBarsIgnoringVisibility
@@ -132,9 +121,15 @@ fun YomuScreenScaffold(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .yomuScrollEdgeShadow(
-                        color = MaterialTheme.colorScheme.background,
-                        bottom = scrollState.canScrollForward,
+                    .then(
+                        if (showScrollEdgeShadow) {
+                            Modifier.yomuScrollEdgeShadow(
+                                color = MaterialTheme.colorScheme.background,
+                                bottom = scrollState.canScrollForward,
+                            )
+                        } else {
+                            Modifier
+                        },
                     )
                     .verticalScroll(scrollState),
                 horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,

@@ -1,7 +1,9 @@
 package com.itexpert120.yomu.feature.library
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +53,9 @@ import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
+import com.itexpert120.yomu.core.designsystem.yomuContentSwap
+import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
+import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.model.GroupMode
@@ -58,6 +63,14 @@ import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import androidx.compose.foundation.lazy.items as lazyListItems
+
+private enum class LibraryContentMode {
+    Loading,
+    Empty,
+    EmptySearch,
+    Grid,
+    List,
+}
 
 @Composable
 fun LibraryScreen(
@@ -123,13 +136,27 @@ fun LibraryScreen(
         if (state.selectionMode) onToggleSelect(book.id) else onEnterSelection(book.id)
     }
 
-    if (state.selectionMode) {
-        BackHandler(onBack = onExitSelection)
+    // Local library states have priority over route navigation. This is a regular back callback;
+    // it deliberately does not expose gesture progress.
+    BackHandler(enabled = state.selectionMode || state.searchActive) {
+        if (state.selectionMode) {
+            onExitSelection()
+        } else if (state.searchActive) {
+            onSearchToggle()
+        }
     }
 
-    val libraryContent: @Composable () -> Unit = {
-        when (state.viewMode) {
-            LibraryViewMode.Grid -> LibraryGrid(
+    val contentMode = when {
+        state.isLoading -> LibraryContentMode.Loading
+        state.totalCount == 0 -> LibraryContentMode.Empty
+        state.searchActive && state.selectableCount == 0 -> LibraryContentMode.EmptySearch
+        state.viewMode == LibraryViewMode.Grid -> LibraryContentMode.Grid
+        else -> LibraryContentMode.List
+    }
+
+    val libraryContent: @Composable (LibraryContentMode) -> Unit = { mode ->
+        when (mode) {
+            LibraryContentMode.Grid -> LibraryGrid(
                 state = gridState,
                 columns = state.gridColumns,
                 groups = state.groups,
@@ -138,13 +165,15 @@ fun LibraryScreen(
                 onBookLongPress = onCardLongPress,
             )
 
-            LibraryViewMode.List -> LibraryList(
+            LibraryContentMode.List -> LibraryList(
                 state = listState,
                 groups = state.groups,
                 selectedIds = state.selectedIds,
                 onBookClick = onCardClick,
                 onBookLongPress = onCardLongPress,
             )
+
+            else -> Unit
         }
     }
 
@@ -167,14 +196,36 @@ fun LibraryScreen(
                         .weight(1f)
                         .fillMaxWidth(),
                 ) {
-                    when {
-                        state.isLoading -> LibraryLoading()
-                        state.totalCount == 0 -> EmptyLibrary(onImport = onImport)
-                        state.searchActive && state.selectableCount == 0 -> EmptySearchResults(
-                            query = state.searchQuery,
-                            onClearSearch = { onSearchQueryChange("") },
-                        )
-                        else -> libraryContent()
+                    AnimatedContent(
+                        targetState = contentMode,
+                        transitionSpec = {
+                            if (initialState == LibraryContentMode.Loading) {
+                                // Data resolving behind the splash should settle in place; a
+                                // directional slide makes the first library frame feel late.
+                                yomuFadeThroughEnter() togetherWith yomuFadeThroughExit()
+                            } else {
+                                val forward = when {
+                                    initialState == LibraryContentMode.Grid &&
+                                        targetState == LibraryContentMode.List -> false
+
+                                    else -> true
+                                }
+                                yomuContentSwap(forward = forward)
+                            }
+                        },
+                        label = "libraryContent",
+                        modifier = Modifier.fillMaxSize(),
+                    ) { mode ->
+                        when (mode) {
+                            LibraryContentMode.Loading -> LibraryLoading()
+                            LibraryContentMode.Empty -> EmptyLibrary(onImport = onImport)
+                            LibraryContentMode.EmptySearch -> EmptySearchResults(
+                                query = state.searchQuery,
+                                onClearSearch = { onSearchQueryChange("") },
+                            )
+
+                            LibraryContentMode.Grid, LibraryContentMode.List -> libraryContent(mode)
+                        }
                     }
                 }
             }

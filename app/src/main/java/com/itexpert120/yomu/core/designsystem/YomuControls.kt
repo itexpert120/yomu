@@ -22,6 +22,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -119,6 +122,35 @@ fun YomuSegmentedControl(
                 },
                 text = { Text(text = option, maxLines = 1) },
             )
+        }
+    }
+}
+
+/** Material 3 segmented choice control for compact, mutually exclusive settings. */
+@Composable
+fun YomuSingleChoiceSegmentedControl(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (options.isEmpty()) return
+    val selected = selectedIndex.coerceIn(0, options.lastIndex)
+    SingleChoiceSegmentedButtonRow(
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        options.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = index == selected,
+                onClick = { onSelected(index) },
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = options.size,
+                ),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = option, maxLines = 1)
+            }
         }
     }
 }

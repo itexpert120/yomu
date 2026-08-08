@@ -44,8 +44,6 @@ fun BookDetailsRoute(
             onBack = onBack,
             onRead = onRead,
             onEdit = onEdit,
-            onMarkRead = viewModel::markRead,
-            onMarkUnread = viewModel::markUnread,
             onRemove = {
                 viewModel.remove()
                 onBack()
@@ -56,8 +54,10 @@ fun BookDetailsRoute(
             onSetChapterRead = viewModel::onSetChapterRead,
             onEnterChapterSelection = viewModel::onEnterChapterSelection,
             onToggleChapterSelection = viewModel::onToggleChapterSelection,
+            onToggleChapterBookmark = viewModel::onToggleChapterBookmark,
             onExitChapterSelection = viewModel::onExitChapterSelection,
             onSelectAllChapters = viewModel::onSelectAllChapters,
+            onDeselectAllChapters = viewModel::onDeselectAllChapters,
             onMarkSelectedChapters = viewModel::onMarkSelectedChapters,
             onMarkPreviousRead = viewModel::onMarkPreviousRead,
         )

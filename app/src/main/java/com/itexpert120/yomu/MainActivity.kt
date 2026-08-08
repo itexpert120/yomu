@@ -1,12 +1,16 @@
 package com.itexpert120.yomu
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.animation.PathInterpolator
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.splashscreen.SplashScreenViewProvider
 import androidx.fragment.app.FragmentActivity
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
@@ -16,6 +20,7 @@ import com.itexpert120.yomu.app.YomuSplashTheme
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
 import com.itexpert120.yomu.app.toSplashTheme
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.model.ThemePreference
 import com.itexpert120.yomu.data.reader.readium.readiumRestoreFragmentFactory
 import com.itexpert120.yomu.data.reader.readium.removeRestoredReadiumNavigatorFragments
@@ -36,6 +41,7 @@ class MainActivity : FragmentActivity() {
         setTheme(splashTheme.styleRes)
         persistPlatformSplashTheme(splashTheme)
         val splashScreen = installSplashScreen()
+        splashScreen.setOnExitAnimationListener(::animateSplashExit)
         // Set before super.onCreate so a navigator fragment saved before a config change (rotation)
         // can be re-instantiated during restore instead of crashing; the reader replaces it.
         supportFragmentManager.fragmentFactory = readiumRestoreFragmentFactory()
@@ -56,6 +62,39 @@ class MainActivity : FragmentActivity() {
                 onSplashThemeChange = ::updateSplashTheme,
             )
         }
+    }
+
+    /**
+     * Keeps the platform splash visible until the first Compose frame is ready, then lets the
+     * library take over through a short, reduced-motion-aware fade. The icon gets a small emphasis
+     * scale so the brand does not appear to blink out between the starting window and the app bar.
+     */
+    private fun animateSplashExit(provider: SplashScreenViewProvider) {
+        if (!yomuAnimationsEnabled()) {
+            provider.remove()
+            return
+        }
+
+        val splashView = provider.view
+        val exitInterpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
+        provider.iconView.animate()
+            .scaleX(1.08f)
+            .scaleY(1.08f)
+            .setDuration(SPLASH_EXIT_DURATION_MS)
+            .setInterpolator(exitInterpolator)
+            .start()
+        splashView.animate()
+            .alpha(0f)
+            .setDuration(SPLASH_EXIT_DURATION_MS)
+            .setInterpolator(exitInterpolator)
+            .setListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        provider.remove()
+                    }
+                },
+            )
+            .start()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -80,6 +119,10 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             splashScreen.setSplashScreenTheme(theme.styleRes)
         }
+    }
+
+    private companion object {
+        const val SPLASH_EXIT_DURATION_MS = 220L
     }
 }
 

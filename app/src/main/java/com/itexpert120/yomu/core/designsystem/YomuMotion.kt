@@ -7,13 +7,18 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.TransformOrigin
@@ -33,6 +38,11 @@ object YomuMotion {
 
     const val FadeInMillis = 220
     const val FadeOutMillis = 160
+    const val FadeThroughDurationMillis = 300
+    const val FadeThroughScaleFrom = 0.92f
+    const val ScreenTransitionDurationMillis = 300
+    const val ScreenTransitionFadeDurationMillis = 195
+    const val ScreenTransitionTravelDivisor = 20
 
     const val PopupScaleFrom = 0.90f
 }
@@ -79,6 +89,91 @@ fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransit
             animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
             targetScale = YomuMotion.PopupScaleFrom,
             transformOrigin = origin,
+        )
+}
+
+/** Fade-through for non-directional content handoffs, such as loading-to-library state changes. */
+fun yomuFadeThroughEnter(): EnterTransition = if (!yomuAnimationsEnabled()) {
+    EnterTransition.None
+} else {
+    val fadeOutMillis = (YomuMotion.FadeThroughDurationMillis * 0.35f).toInt()
+    fadeIn(
+        tween(
+            durationMillis = YomuMotion.FadeThroughDurationMillis - fadeOutMillis,
+            delayMillis = fadeOutMillis,
+            easing = YomuMotion.EmphasizedDecel,
+        ),
+    ) + scaleIn(
+        animationSpec = tween(
+            durationMillis = YomuMotion.FadeThroughDurationMillis,
+            easing = YomuMotion.EmphasizedDecel,
+        ),
+        initialScale = YomuMotion.FadeThroughScaleFrom,
+    )
+}
+
+fun yomuFadeThroughExit(): ExitTransition = if (!yomuAnimationsEnabled()) {
+    ExitTransition.None
+} else {
+    val fadeOutMillis = (YomuMotion.FadeThroughDurationMillis * 0.35f).toInt()
+    fadeOut(
+        tween(
+            durationMillis = fadeOutMillis,
+            easing = YomuMotion.EmphasizedAccel,
+        ),
+    ) + scaleOut(
+        animationSpec = tween(
+            durationMillis = YomuMotion.FadeThroughDurationMillis,
+            easing = YomuMotion.EmphasizedAccel,
+        ),
+        targetScale = YomuMotion.FadeThroughScaleFrom,
+    )
+}
+
+/**
+ * A restrained shared-axis X handoff. Both surfaces stay overlapped: the incoming surface travels
+ * only five percent of the viewport while the outgoing surface moves the same distance in the
+ * opposite direction. Forward navigation enters from the right; backward navigation mirrors both
+ * movements.
+ */
+fun yomuScreenEnter(forward: Boolean = true): EnterTransition = if (!yomuAnimationsEnabled()) {
+    EnterTransition.None
+} else {
+    fadeIn(
+        animationSpec = tween(
+            durationMillis = YomuMotion.ScreenTransitionFadeDurationMillis,
+            easing = LinearOutSlowInEasing,
+        ),
+    ) + slideInHorizontally(
+        animationSpec = tween(
+            durationMillis = YomuMotion.ScreenTransitionDurationMillis,
+            easing = FastOutSlowInEasing,
+        ),
+        initialOffsetX = { width ->
+            val travel = (width / YomuMotion.ScreenTransitionTravelDivisor).coerceAtLeast(1)
+            if (forward) travel else -travel
+        },
+    )
+}
+
+fun yomuScreenExit(forward: Boolean = true): ExitTransition = if (!yomuAnimationsEnabled()) {
+    ExitTransition.None
+} else {
+    fadeOut(
+        animationSpec = tween(
+            durationMillis = YomuMotion.ScreenTransitionFadeDurationMillis,
+            easing = FastOutLinearInEasing,
+        ),
+    ) +
+        slideOutHorizontally(
+            animationSpec = tween(
+                durationMillis = YomuMotion.ScreenTransitionDurationMillis,
+                easing = FastOutSlowInEasing,
+            ),
+            targetOffsetX = { width ->
+                val travel = (width / YomuMotion.ScreenTransitionTravelDivisor).coerceAtLeast(1)
+                if (forward) -travel else travel
+            },
         )
 }
 

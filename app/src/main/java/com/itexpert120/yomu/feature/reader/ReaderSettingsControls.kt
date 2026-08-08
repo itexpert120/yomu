@@ -23,8 +23,11 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
-import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
+import com.itexpert120.yomu.core.designsystem.YomuSettingDivider
+import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
+import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
+import com.itexpert120.yomu.core.designsystem.YomuSingleChoiceSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.model.CustomFontRef
@@ -104,7 +107,7 @@ internal fun ReaderLayoutControl(
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     val modes = ReaderLayout.entries
-    YomuSegmentedControl(
+    YomuSingleChoiceSegmentedControl(
         options = modes.map { it.name },
         selectedIndex = modes.indexOf(settings.layout),
         onSelected = { onUpdateSettings(settings.copy(layout = modes[it])) },
@@ -199,7 +202,7 @@ internal fun ReaderTextAlignControl(
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
     val aligns = ReaderTextAlign.entries
-    YomuSegmentedControl(
+    YomuSingleChoiceSegmentedControl(
         options = aligns.map { it.label },
         selectedIndex = aligns.indexOf(settings.textAlign),
         onSelected = { onUpdateSettings(settings.copy(textAlign = aligns[it])) },
@@ -250,70 +253,79 @@ internal fun ReaderChromeToggles(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
-    YomuSettingRow(title = "Show footer") {
-        YomuTogglePill(
-            checked = settings.showFooter,
-            onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
-        )
-    }
-    // The per-item toggles stay visible but disable when the footer is off, so the layout doesn't
-    // jump and it's clear what the footer would contain.
-    YomuSettingRow(title = "Battery") {
-        YomuTogglePill(
-            checked = settings.footerShowBattery,
-            onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) },
-            enabled = settings.showFooter,
-        )
-    }
-    YomuSettingRow(title = "Clock") {
-        YomuTogglePill(
-            checked = settings.footerShowClock,
-            onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) },
-            enabled = settings.showFooter,
-        )
-    }
-    YomuSettingRow(title = "Reading progress") {
-        YomuTogglePill(
-            checked = settings.footerShowProgress,
-            onCheckedChange = { onUpdateSettings(settings.copy(footerShowProgress = it)) },
-            enabled = settings.showFooter,
-        )
-    }
-    YomuSettingRow(title = "Chapter remaining") {
-        YomuTogglePill(
-            checked = settings.footerShowPagesLeft,
-            onCheckedChange = { onUpdateSettings(settings.copy(footerShowPagesLeft = it)) },
-            enabled = settings.showFooter,
-        )
-    }
-    YomuSettingRow(title = "Keep screen on") {
-        YomuTogglePill(
-            checked = settings.keepScreenOn,
-            onCheckedChange = { onUpdateSettings(settings.copy(keepScreenOn = it)) },
-        )
-    }
-    // The scrollbar only exists in scroll mode (a native WebView scroll), so disable the row in paged.
-    YomuSettingRow(title = "Show scrollbar") {
-        YomuTogglePill(
-            checked = settings.showScrollbar,
-            onCheckedChange = { onUpdateSettings(settings.copy(showScrollbar = it)) },
-            enabled = settings.layout == ReaderLayout.Scroll,
-        )
-    }
-    YomuSettingRow(
-        title = "Immersive",
-        subtitle = "Hide the bars on tap for a full-screen page",
-    ) {
-        YomuTogglePill(
-            checked = settings.immersiveChrome,
-            onCheckedChange = { onUpdateSettings(settings.copy(immersiveChrome = it)) },
-        )
+    YomuSettingList {
+        YomuSettingRow(title = "Show footer") {
+            YomuTogglePill(
+                checked = settings.showFooter,
+                onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
+            )
+        }
+        YomuSettingDivider()
+        // The per-item toggles stay visible but disable when the footer is off, so the layout doesn't
+        // jump and it's clear what the footer would contain.
+        YomuSettingRow(title = "Battery", enabled = settings.showFooter) {
+            YomuTogglePill(
+                checked = settings.footerShowBattery,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingDivider()
+        YomuSettingRow(title = "Clock", enabled = settings.showFooter) {
+            YomuTogglePill(
+                checked = settings.footerShowClock,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingDivider()
+        YomuSettingRow(title = "Reading progress", enabled = settings.showFooter) {
+            YomuTogglePill(
+                checked = settings.footerShowProgress,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowProgress = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingDivider()
+        YomuSettingRow(title = "Chapter remaining", enabled = settings.showFooter) {
+            YomuTogglePill(
+                checked = settings.footerShowPagesLeft,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowPagesLeft = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingDivider()
+        YomuSettingRow(title = "Keep screen on") {
+            YomuTogglePill(
+                checked = settings.keepScreenOn,
+                onCheckedChange = { onUpdateSettings(settings.copy(keepScreenOn = it)) },
+            )
+        }
+        YomuSettingDivider()
+        // The scrollbar only exists in scroll mode (a native WebView scroll), so disable the row in paged.
+        YomuSettingRow(title = "Show scrollbar", enabled = settings.layout == ReaderLayout.Scroll) {
+            YomuTogglePill(
+                checked = settings.showScrollbar,
+                onCheckedChange = { onUpdateSettings(settings.copy(showScrollbar = it)) },
+                enabled = settings.layout == ReaderLayout.Scroll,
+            )
+        }
+        YomuSettingDivider()
+        YomuSettingRow(
+            title = "Immersive",
+            subtitle = "Hide the bars on tap for a full-screen page",
+        ) {
+            YomuTogglePill(
+                checked = settings.immersiveChrome,
+                onCheckedChange = { onUpdateSettings(settings.copy(immersiveChrome = it)) },
+            )
+        }
     }
 }
 
 /**
- * The full set of reader preferences (theme, typography, chrome) used by the global Reading Defaults
- * screen. Brightness/extra-dim are intentionally excluded — they're contextual, edited in-reader.
+ * The full set of reader preferences (theme, typography, chrome) used by the app Settings screen.
+ * Brightness/extra-dim are intentionally excluded — they're contextual, edited in-reader.
  */
 @Composable
 internal fun ReaderPreferenceControls(
@@ -327,24 +339,43 @@ internal fun ReaderPreferenceControls(
     onManageFonts: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        SectionLabel("Theme")
-        ReaderThemeRow(settings, onUpdateSettings)
-        if (settings.theme == ReaderThemeMode.Custom) {
-            ReaderCustomThemeRow(settings, customThemes, onOpenCustomTheme, onApplyCustomTheme)
+        YomuSettingGroup(
+            title = "Theme",
+            subtitle = "Choose the page mood that welcomes you into every book.",
+        ) {
+            ReaderThemeRow(settings, onUpdateSettings)
+            if (settings.theme == ReaderThemeMode.Custom) {
+                ReaderCustomThemeRow(settings, customThemes, onOpenCustomTheme, onApplyCustomTheme)
+            }
         }
 
-        SectionLabel("Layout")
-        ReaderLayoutControl(settings, onUpdateSettings)
+        YomuSettingGroup(
+            title = "Layout",
+            subtitle = "Decide how chapters move under your hand.",
+        ) {
+            ReaderLayoutControl(settings, onUpdateSettings)
+        }
 
-        SectionLabel("Font")
-        ReaderFontRow(settings, onUpdateSettings, customFonts = customFonts, onManageFonts = onManageFonts)
-        ReaderFontSizeControl(settings, onUpdateSettings)
+        YomuSettingGroup(
+            title = "Typography",
+            subtitle = "Tune the voice, scale, and breathing room of the page.",
+        ) {
+            ReaderFontRow(
+                settings,
+                onUpdateSettings,
+                customFonts = customFonts,
+                onManageFonts = onManageFonts,
+            )
+            ReaderFontSizeControl(settings, onUpdateSettings)
+            ReaderTextAlignControl(settings, onUpdateSettings)
+            ReaderTypographySliders(settings, onUpdateSettings)
+        }
 
-        SectionLabel("Text")
-        ReaderTextAlignControl(settings, onUpdateSettings)
-        ReaderTypographySliders(settings, onUpdateSettings)
-
-        SectionLabel("Chrome")
-        ReaderChromeToggles(settings, onUpdateSettings)
+        YomuSettingGroup(
+            title = "Reader chrome",
+            subtitle = "Keep the controls and context you want close at hand.",
+        ) {
+            ReaderChromeToggles(settings, onUpdateSettings)
+        }
     }
 }

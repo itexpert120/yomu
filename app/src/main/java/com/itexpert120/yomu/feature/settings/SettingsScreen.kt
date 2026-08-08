@@ -1,45 +1,39 @@
 package com.itexpert120.yomu.feature.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Insights
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
-import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
-import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuSingleChoiceSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.core.model.CustomFontRef
+import com.itexpert120.yomu.core.model.CustomReaderTheme
+import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ThemePreference
+import com.itexpert120.yomu.feature.reader.ReaderPreferenceControls
 
 @Composable
 fun SettingsScreen(
@@ -48,184 +42,196 @@ fun SettingsScreen(
     oledEnabled: Boolean,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
+    readerSettings: ReaderSettings,
+    customThemes: List<CustomReaderTheme>,
+    customFonts: List<CustomFontRef>,
+    onUpdateReaderSettings: (ReaderSettings) -> Unit,
+    onOpenCustomTheme: () -> Unit,
+    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+    onOpenFontLibrary: () -> Unit,
     onBack: (() -> Unit)?,
-    onOpenStats: () -> Unit,
-    onOpenReaderDefaults: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
-    YomuScreenScaffold(title = "Settings", onBack = onBack) {
-        YomuSettingGroup(title = "Appearance") {
-            Text(
-                text = "Theme",
-                color = YomuTheme.colors.textSecondary,
-                style = YomuTheme.type.body,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemePreference.entries.forEach { pref ->
-                    ThemeOptionTile(
-                        icon = pref.themeIcon(),
-                        label = pref.label,
-                        selected = pref == selectedTheme,
-                        onClick = { onSelectTheme(pref) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            YomuSettingRow(
-                title = "Pure black (OLED)",
-                subtitle = if (oledEnabled) {
-                    "Uses true black surfaces in dark mode"
-                } else {
-                    "Available when the theme is dark"
-                },
-            ) {
-                YomuTogglePill(
-                    checked = oledDark && oledEnabled,
-                    onCheckedChange = onToggleOled,
-                    enabled = oledEnabled,
+    YomuScreenScaffold(
+        title = "Settings",
+        onBack = onBack,
+        showScrollEdgeShadow = false,
+    ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val wide = YomuWidthClass.fromWidth(maxWidth).isWide
+            val readerControls: @Composable () -> Unit = {
+                ReaderPreferenceControls(
+                    settings = readerSettings,
+                    customThemes = customThemes,
+                    onUpdateSettings = onUpdateReaderSettings,
+                    onOpenCustomTheme = onOpenCustomTheme,
+                    onApplyCustomTheme = onApplyCustomTheme,
+                    customFonts = customFonts,
+                    onManageFonts = onOpenFontLibrary,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
 
-        NavigationGroup {
-            NavigationRow(
-                icon = rememberVectorPainter(Icons.Rounded.Tune),
-                label = "Reading defaults",
-                onClick = onOpenReaderDefaults,
-            )
-            NavigationDivider()
-            NavigationRow(
-                icon = rememberVectorPainter(Icons.Rounded.Insights),
-                label = "Statistics",
-                onClick = onOpenStats,
-            )
-            NavigationDivider()
-            NavigationRow(
-                icon = painterResource(R.drawable.open_reader_logo_monochrome),
-                label = "About Open Reader",
-                onClick = onOpenAbout,
-            )
+            if (wide) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(0.9f),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        AppearanceGroup(
+                            selectedTheme = selectedTheme,
+                            oledDark = oledDark,
+                            oledEnabled = oledEnabled,
+                            onSelectTheme = onSelectTheme,
+                            onToggleOled = onToggleOled,
+                        )
+                        AboutGroup(onOpenAbout = onOpenAbout)
+                        VersionFooter()
+                    }
+                    Column(
+                        modifier = Modifier.weight(1.5f),
+                    ) {
+                        readerControls()
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    AppearanceGroup(
+                        selectedTheme = selectedTheme,
+                        oledDark = oledDark,
+                        oledEnabled = oledEnabled,
+                        onSelectTheme = onSelectTheme,
+                        onToggleOled = onToggleOled,
+                    )
+                    readerControls()
+                    AboutGroup(onOpenAbout = onOpenAbout)
+                    VersionFooter()
+                }
+            }
         }
+    }
+}
 
+@Composable
+private fun AppearanceGroup(
+    selectedTheme: ThemePreference,
+    oledDark: Boolean,
+    oledEnabled: Boolean,
+    onSelectTheme: (ThemePreference) -> Unit,
+    onToggleOled: (Boolean) -> Unit,
+) {
+    YomuSettingGroup(
+        title = "Appearance",
+        subtitle = "Set the app’s tone. Reader page themes stay independent.",
+    ) {
         Text(
-            text = "Open Reader v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 8.dp),
-            textAlign = TextAlign.Center,
+            text = "App theme",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelLarge,
+        )
+        YomuSingleChoiceSegmentedControl(
+            options = ThemePreference.entries.map { it.label },
+            selectedIndex = ThemePreference.entries.indexOf(selectedTheme),
+            onSelected = { onSelectTheme(ThemePreference.entries[it]) },
+        )
+        OledSettingRow(
+            checked = oledDark && oledEnabled,
+            enabled = oledEnabled,
+            onCheckedChange = onToggleOled,
         )
     }
 }
 
-private fun ThemePreference.themeIcon(): ImageVector = when (this) {
-    ThemePreference.System -> Icons.Rounded.BrightnessAuto
-    ThemePreference.Light -> Icons.Rounded.LightMode
-    ThemePreference.Dark -> Icons.Rounded.DarkMode
-}
-
 @Composable
-private fun ThemeOptionTile(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun OledSettingRow(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
 ) {
-    val colors = YomuTheme.colors
-    Column(
-        modifier = modifier
-            .yomuPressable(onClick = onClick)
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .background(if (selected) colors.surfaceSunken else colors.surfaceRaised)
-            .border(
-                1.dp,
-                if (selected) colors.textPrimary else colors.border,
-                RoundedCornerShape(YomuTheme.radius.md),
-            )
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    YomuSettingRow(
+        title = "OLED black",
+        subtitle = if (enabled) {
+            "Use true black surfaces in dark mode"
+        } else {
+            "Choose Dark or use a dark system theme to enable"
+        },
+        enabled = enabled,
+        leadingContent = {
+            SettingsLeadingIcon(icon = Icons.Rounded.DarkMode, enabled = enabled)
+        },
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (selected) colors.textPrimary else colors.textSecondary,
-            modifier = Modifier.size(22.dp),
-        )
-        Text(
-            text = label,
-            color = if (selected) colors.textPrimary else colors.textSecondary,
-            style = YomuTheme.type.caption,
+        YomuTogglePill(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
         )
     }
 }
 
-/** A single rounded card holding the settings navigation rows, separated by hairline dividers. */
 @Composable
-private fun NavigationGroup(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.lg))
-            .background(YomuTheme.colors.surfaceRaised)
-            .border(1.dp, YomuTheme.colors.border, RoundedCornerShape(YomuTheme.radius.lg)),
-        content = content,
-    )
-}
-
-/** Full-width hairline divider between navigation rows. */
-@Composable
-private fun NavigationDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(YomuTheme.colors.border.copy(alpha = 0.6f)),
-    )
-}
-
-@Composable
-private fun NavigationRow(
-    icon: Painter,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .yomuPressable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+private fun AboutGroup(onOpenAbout: () -> Unit) {
+    YomuSettingGroup(
+        title = "Open Reader",
+        subtitle = "Learn about the app and how it keeps your books private.",
     ) {
-        // Leading icon sits in a soft chip — a small, deliberate touch that reads more crafted.
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(YomuTheme.radius.sm))
-                .background(YomuTheme.colors.surfaceSunken),
-            contentAlignment = Alignment.Center,
+        YomuSettingRow(
+            title = "About Open Reader",
+            subtitle = "Privacy, terms, acknowledgements, and version",
+            modifier = Modifier.yomuPressable(onClick = onOpenAbout),
+            leadingContent = { SettingsLeadingIcon(icon = Icons.Rounded.Info) },
         ) {
             Icon(
-                painter = icon,
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
-                tint = YomuTheme.colors.textSecondary,
-                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
             )
         }
-        Text(
-            text = label,
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.body,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-            contentDescription = null,
-            tint = YomuTheme.colors.textMuted,
-            modifier = Modifier.size(20.dp),
-        )
+    }
+}
+
+@Composable
+private fun VersionFooter() {
+    Text(
+        text = "Open Reader v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    )
+}
+
+@Composable
+private fun SettingsLeadingIcon(
+    icon: ImageVector,
+    enabled: Boolean = true,
+) {
+    Surface(
+        modifier = Modifier.size(40.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = if (enabled) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                },
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }

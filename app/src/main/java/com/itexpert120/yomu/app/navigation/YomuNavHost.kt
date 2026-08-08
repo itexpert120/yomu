@@ -1,19 +1,13 @@
 package com.itexpert120.yomu.app.navigation
 
 import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -24,6 +18,8 @@ import androidx.navigation.toRoute
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
+import com.itexpert120.yomu.core.designsystem.yomuScreenExit
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
@@ -56,62 +52,42 @@ fun YomuNavHost(
             navController.navigate(Reader(bookId))
         }
     }
-    // Material "shared axis (X)" — the transition Google's own apps use for hierarchical
-    // navigation. Per MDC, it is exactly SlideDistance(30dp) + FadeThrough, NOT a plain
-    // slide+crossfade and NOT the 0.92 scale (that belongs to the separate "fade through"
-    // pattern). FadeThrough: the outgoing screen fades out over the first 35% of the duration
-    // and the incoming fades in over the remaining 65%, so they never overlap at full opacity.
-    // Values match MDC: 300ms, standard easing cubic-bezier(0.4,0,0.2,1), 0.35 threshold.
-    // Built from official androidx.compose.animation primitives (MaterialSharedAxis is a
-    // View-system class with no Compose drop-in). The pop transitions also drive predictive
-    // back (android:enableOnBackInvokedCallback in manifest).
-    val duration = 300
+    // Screen changes use one layered horizontal handoff. The direction follows the route pair,
+    // while back reverses the same motion from the opposite side.
     val motionEnabled = yomuAnimationsEnabled()
-    val slide = if (motionEnabled) with(LocalDensity.current) { 30.dp.roundToPx() } else 0
-    val fadeOutMs = (duration * 0.35f).toInt()
-    val fadeInMs = duration - fadeOutMs
-    val easing = FastOutSlowInEasing
-    val incoming = { fadeIn(tween(fadeInMs, delayMillis = fadeOutMs, easing = easing)) }
-    val outgoing = { fadeOut(tween(fadeOutMs, easing = easing)) }
     val navContent: @Composable (Modifier) -> Unit = { hostModifier ->
         NavHost(
             navController = navController,
             startDestination = Library,
             modifier = hostModifier,
             enterTransition = {
-                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
-                    targetState.destination.isTopLevelDestination()
-                if (!topLevelNavigation && motionEnabled) {
-                    slideInHorizontally(tween(duration, easing = easing)) { slide } + incoming()
-                } else {
-                    EnterTransition.None
+                val sameEntry = initialState.id == targetState.id
+                val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
+                when {
+                    sameEntry || !motionEnabled -> EnterTransition.None
+                    else -> yomuScreenEnter(forward = forward)
                 }
             },
             exitTransition = {
-                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
-                    targetState.destination.isTopLevelDestination()
-                if (!topLevelNavigation && motionEnabled) {
-                    slideOutHorizontally(tween(duration, easing = easing)) { -slide } + outgoing()
-                } else {
-                    androidx.compose.animation.ExitTransition.None
+                val sameEntry = initialState.id == targetState.id
+                val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
+                when {
+                    sameEntry || !motionEnabled -> ExitTransition.None
+                    else -> yomuScreenExit(forward = forward)
                 }
             },
             popEnterTransition = {
-                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
-                    targetState.destination.isTopLevelDestination()
-                if (!topLevelNavigation && motionEnabled) {
-                    slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
-                } else {
-                    EnterTransition.None
+                val sameEntry = initialState.id == targetState.id
+                when {
+                    sameEntry || !motionEnabled -> EnterTransition.None
+                    else -> yomuScreenEnter(forward = false)
                 }
             },
             popExitTransition = {
-                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
-                    targetState.destination.isTopLevelDestination()
-                if (!topLevelNavigation && motionEnabled) {
-                    slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
-                } else {
-                    androidx.compose.animation.ExitTransition.None
+                val sameEntry = initialState.id == targetState.id
+                when {
+                    sameEntry || !motionEnabled -> ExitTransition.None
+                    else -> yomuScreenExit(forward = false)
                 }
             },
         ) {
@@ -137,10 +113,7 @@ fun YomuNavHost(
                 SettingsRoute(
                     appViewModel = appViewModel,
                     onBack = null,
-                    onOpenStats = {
-                        navController.navigateTopLevel(YomuTopLevelDestination.Statistics)
-                    },
-                    onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
+                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
                     onOpenAbout = { navController.navigate(About) },
                 )
             }
@@ -165,19 +138,33 @@ fun YomuNavHost(
         }
     }
 
-    if (topLevelDestination != null) {
-        YomuTopLevelNavigation(
-            selected = topLevelDestination,
-            onSelected = navController::navigateTopLevel,
-            content = navContent,
-            modifier = modifier,
-        )
+    // Keep the NavHost in one stable composition slot. The scaffold hides its chrome for child
+    // routes instead of replacing the NavHost, so child screens retain route transitions.
+    YomuTopLevelNavigation(
+        selected = topLevelDestination,
+        onSelected = navController::navigateTopLevel,
+        content = navContent,
+        modifier = modifier,
+    )
+}
+
+/** Top-level destinations have a stable left-to-right order for directional screen changes. */
+private fun NavDestination.isForwardTransitionTo(target: NavDestination): Boolean {
+    val fromIndex = topLevelIndex()
+    val targetIndex = target.topLevelIndex()
+    return if (fromIndex != null && targetIndex != null) {
+        targetIndex > fromIndex
     } else {
-        navContent(modifier)
+        true
     }
 }
 
-private fun androidx.navigation.NavDestination.isTopLevelDestination(): Boolean = hasRoute<Library>() || hasRoute<Stats>() || hasRoute<Settings>()
+private fun NavDestination.topLevelIndex(): Int? = when {
+    hasRoute<Library>() -> 0
+    hasRoute<Stats>() -> 1
+    hasRoute<Settings>() -> 2
+    else -> null
+}
 
 private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination) {
     when (destination) {

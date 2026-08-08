@@ -96,13 +96,10 @@ fun GridBookCard(
                     .fillMaxWidth()
                     .height(4.dp),
             ) {
-                if (book.progress > 0f) {
-                    LinearProgressIndicator(
-                        progress = { book.progress.coerceIn(0f, 1f) },
-                        drawStopIndicator = {},
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+                LibraryProgressIndicator(
+                    progress = book.progress,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -159,13 +156,10 @@ fun BookListRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (book.progress > 0f) {
-                        LinearProgressIndicator(
-                            progress = { book.progress.coerceIn(0f, 1f) },
-                            drawStopIndicator = {},
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    LibraryProgressIndicator(
+                        progress = book.progress,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             },
             trailingContent = {
@@ -175,9 +169,10 @@ fun BookListRow(
                         contentDescription = "Selected",
                         tint = MaterialTheme.colorScheme.primary,
                     )
-                } else if (book.progress > 0f) {
+                } else {
+                    val percent = (book.progress.coerceIn(0f, 1f) * 100).toInt()
                     Text(
-                        text = "${(book.progress * 100).toInt()}%",
+                        text = "$percent%",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium,
                     )
@@ -313,11 +308,27 @@ private fun BookCoverImage(
     }
 }
 
+/** Shows a muted track for untouched books so every card exposes the same progress affordance. */
+@Composable
+private fun LibraryProgressIndicator(
+    progress: Float,
+    modifier: Modifier = Modifier,
+) {
+    val fraction = progress.coerceIn(0f, 1f)
+    LinearProgressIndicator(
+        progress = { fraction },
+        color = if (fraction > 0f) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
+        },
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+        drawStopIndicator = {},
+        modifier = modifier,
+    )
+}
+
 @Composable
 fun ProgressLine(progress: Float) {
-    LinearProgressIndicator(
-        progress = { progress.coerceIn(0f, 1f) },
-        drawStopIndicator = {},
-        modifier = Modifier.fillMaxWidth(),
-    )
+    LibraryProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
 }
