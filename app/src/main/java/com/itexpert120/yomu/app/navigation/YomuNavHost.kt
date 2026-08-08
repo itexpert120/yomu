@@ -79,46 +79,43 @@ fun YomuNavHost(
             startDestination = Library,
             modifier = hostModifier,
             enterTransition = {
-                if (motionEnabled) {
+                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
+                    targetState.destination.isTopLevelDestination()
+                if (!topLevelNavigation && motionEnabled) {
                     slideInHorizontally(tween(duration, easing = easing)) { slide } + incoming()
                 } else {
                     EnterTransition.None
                 }
             },
             exitTransition = {
-                if (motionEnabled) {
+                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
+                    targetState.destination.isTopLevelDestination()
+                if (!topLevelNavigation && motionEnabled) {
                     slideOutHorizontally(tween(duration, easing = easing)) { -slide } + outgoing()
                 } else {
                     androidx.compose.animation.ExitTransition.None
                 }
             },
             popEnterTransition = {
-                if (motionEnabled) {
+                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
+                    targetState.destination.isTopLevelDestination()
+                if (!topLevelNavigation && motionEnabled) {
                     slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
                 } else {
                     EnterTransition.None
                 }
             },
             popExitTransition = {
-                if (motionEnabled) {
+                val topLevelNavigation = initialState.destination.isTopLevelDestination() &&
+                    targetState.destination.isTopLevelDestination()
+                if (!topLevelNavigation && motionEnabled) {
                     slideOutHorizontally(tween(duration, easing = easing)) { slide } + outgoing()
                 } else {
                     androidx.compose.animation.ExitTransition.None
                 }
             },
         ) {
-            composable<Library>(
-                // Avoid replaying the page entrance over the platform splash on a cold launch, while
-                // keeping the reverse shared-axis motion when Library is revealed by a back action.
-                enterTransition = { EnterTransition.None },
-                popEnterTransition = {
-                    if (motionEnabled) {
-                        slideInHorizontally(tween(duration, easing = easing)) { -slide } + incoming()
-                    } else {
-                        EnterTransition.None
-                    }
-                },
-            ) {
+            composable<Library> {
                 LibraryRoute(
                     onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
                     onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
@@ -179,6 +176,8 @@ fun YomuNavHost(
         navContent(modifier)
     }
 }
+
+private fun androidx.navigation.NavDestination.isTopLevelDestination(): Boolean = hasRoute<Library>() || hasRoute<Stats>() || hasRoute<Settings>()
 
 private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination) {
     when (destination) {

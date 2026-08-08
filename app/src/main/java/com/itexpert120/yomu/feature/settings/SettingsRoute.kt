@@ -18,7 +18,6 @@ fun SettingsRoute(
     val appearance by appViewModel.appearance.collectAsState()
     val preference = appearance.themePreference
     val oledDark = appearance.oledDark
-    val accentSelection = appearance.accentSelection
     val systemDark = isSystemInDarkTheme()
     // The OLED toggle only has an effect when the resolved theme is dark.
     val darkActive = when (preference) {
@@ -31,12 +30,8 @@ fun SettingsRoute(
         selectedTheme = preference,
         oledDark = oledDark,
         oledEnabled = darkActive,
-        accentSelection = accentSelection,
-        accentIsDark = darkActive,
         onSelectTheme = appViewModel::onSelectTheme,
         onToggleOled = appViewModel::onSetOledDark,
-        onSelectAccent = appViewModel::onSelectAccent,
-        onSelectCustomAccent = appViewModel::onSelectCustomAccent,
         onBack = onBack,
         onOpenStats = onOpenStats,
         onOpenReaderDefaults = onOpenReaderDefaults,

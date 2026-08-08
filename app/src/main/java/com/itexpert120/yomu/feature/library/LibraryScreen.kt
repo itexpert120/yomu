@@ -2,8 +2,6 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -31,11 +29,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,11 +48,11 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
-import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
+import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
@@ -75,7 +76,6 @@ fun LibraryScreen(
     onExitSelection: () -> Unit = {},
     onSelectAll: () -> Unit = {},
     onDeselectAll: () -> Unit = {},
-    onInvertSelection: () -> Unit = {},
     onRemoveSelected: () -> Unit = {},
     onMarkSelectedRead: () -> Unit = {},
     onMarkSelectedUnread: () -> Unit = {},
@@ -88,6 +88,31 @@ fun LibraryScreen(
     val elevated = when (state.viewMode) {
         LibraryViewMode.Grid -> gridState.canScrollBackward
         LibraryViewMode.List -> listState.canScrollBackward
+    }
+    var resumeCollapsed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.viewMode) {
+        resumeCollapsed = false
+        val positions = when (state.viewMode) {
+            LibraryViewMode.Grid -> snapshotFlow {
+                gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+            }
+
+            LibraryViewMode.List -> snapshotFlow {
+                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            }
+        }
+        var previous: Pair<Int, Int>? = null
+        positions.collect { current ->
+            previous?.let { before ->
+                if (current != before) {
+                    resumeCollapsed = current.first > before.first ||
+                        current.first == before.first &&
+                        current.second > before.second
+                }
+            }
+            previous = current
+        }
     }
 
     // Tap opens book details; long-press starts multi-select. While selecting, both toggle.
@@ -103,42 +128,39 @@ fun LibraryScreen(
     }
 
     val libraryContent: @Composable () -> Unit = {
-        Crossfade(
-            targetState = state.viewMode,
-            animationSpec = tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel),
-            label = "libraryViewMode",
-        ) { mode ->
-            when (mode) {
-                LibraryViewMode.Grid -> LibraryGrid(
-                    state = gridState,
-                    columns = state.gridColumns,
-                    groups = state.groups,
-                    selectedIds = state.selectedIds,
-                    onBookClick = onCardClick,
-                    onBookLongPress = onCardLongPress,
-                )
+        when (state.viewMode) {
+            LibraryViewMode.Grid -> LibraryGrid(
+                state = gridState,
+                columns = state.gridColumns,
+                groups = state.groups,
+                selectedIds = state.selectedIds,
+                onBookClick = onCardClick,
+                onBookLongPress = onCardLongPress,
+            )
 
-                LibraryViewMode.List -> LibraryList(
-                    state = listState,
-                    groups = state.groups,
-                    selectedIds = state.selectedIds,
-                    onBookClick = onCardClick,
-                    onBookLongPress = onCardLongPress,
-                )
-            }
+            LibraryViewMode.List -> LibraryList(
+                state = listState,
+                groups = state.groups,
+                selectedIds = state.selectedIds,
+                onBookClick = onCardClick,
+                onBookLongPress = onCardLongPress,
+            )
         }
     }
 
     YomuAppSurface {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                LibraryTopBar(
-                    searchActive = state.searchActive,
-                    searchQuery = state.searchQuery,
+                LibraryTopBarTransition(
+                    state = state,
+                    elevated = elevated,
                     onSearchToggle = onSearchToggle,
                     onSearchQueryChange = onSearchQueryChange,
+                    onImport = onImport,
                     onOptionsSheetToggle = { showOptionsSheet = true },
-                    elevated = elevated,
+                    onExitSelection = onExitSelection,
+                    onSelectAll = onSelectAll,
+                    onDeselectAll = onDeselectAll,
                 )
                 Box(
                     Modifier
@@ -148,6 +170,10 @@ fun LibraryScreen(
                     when {
                         state.isLoading -> LibraryLoading()
                         state.totalCount == 0 -> EmptyLibrary(onImport = onImport)
+                        state.searchActive && state.selectableCount == 0 -> EmptySearchResults(
+                            query = state.searchQuery,
+                            onClearSearch = { onSearchQueryChange("") },
+                        )
                         else -> libraryContent()
                     }
                 }
@@ -166,25 +192,31 @@ fun LibraryScreen(
                 onDismiss = { showOptionsSheet = false },
             )
 
-            if (!state.selectionMode && state.totalCount > 0) {
-                FloatingAddBookButton(
-                    onImport = onImport,
-                    modifier = Modifier.align(Alignment.BottomEnd),
+            AnimatedVisibility(
+                visible = state.selectionMode,
+                enter = yomuChromeEnter(),
+                exit = yomuChromeExit(),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                LibrarySelectionToolbar(
+                    onMarkRead = onMarkSelectedRead,
+                    onMarkUnread = onMarkSelectedUnread,
+                    onDelete = { showDeleteConfirm = true },
                 )
             }
 
             val continueReading = state.continueReading
-            if (continueReading != null) {
-                AnimatedVisibility(
-                    visible = !state.selectionMode,
-                    enter = yomuChromeEnter(),
-                    exit = yomuChromeExit(),
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                ) {
+            AnimatedVisibility(
+                visible = continueReading != null && !state.selectionMode,
+                enter = yomuPopupEnter(),
+                exit = yomuPopupExit(),
+                modifier = Modifier.align(Alignment.BottomEnd),
+            ) {
+                continueReading?.let { book ->
                     FloatingResumeButton(
-                        book = continueReading,
-                        onResume = { onOpenReader(continueReading.id) },
-                        bottomOffset = if (state.totalCount > 0) 72.dp else 0.dp,
+                        book = book,
+                        collapsed = resumeCollapsed,
+                        onResume = { onOpenReader(book.id) },
                     )
                 }
             }
@@ -197,30 +229,6 @@ fun LibraryScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
 
-            AnimatedVisibility(
-                visible = state.selectionMode,
-                enter = yomuChromeEnter(),
-                exit = yomuChromeExit(),
-                modifier = Modifier.align(Alignment.BottomCenter),
-            ) {
-                LibrarySelectionDock(
-                    allSelected = state.selectedIds.isNotEmpty() &&
-                        state.selectedIds.size == state.selectableCount,
-                    onClose = onExitSelection,
-                    onSelectAll = onSelectAll,
-                    onDeselectAll = onDeselectAll,
-                    onInvert = onInvertSelection,
-                    onMarkRead = onMarkSelectedRead,
-                    onMarkUnread = onMarkSelectedUnread,
-                    onDelete = { showDeleteConfirm = true },
-                    onOpenDetails = if (state.selectedIds.size == 1) {
-                        { onOpenDetails(state.selectedIds.first()) }
-                    } else {
-                        null
-                    },
-                )
-            }
-
             ConfirmRemoveDialog(
                 visible = showDeleteConfirm,
                 count = state.selectedIds.size,
@@ -230,9 +238,51 @@ fun LibraryScreen(
                     onRemoveSelected()
                 },
             )
+        }
+    }
+}
 
-            SystemBarTopScrim(Modifier.align(Alignment.TopCenter))
-            SystemBarBottomScrim(Modifier.align(Alignment.BottomCenter))
+@Composable
+private fun LibraryTopBarTransition(
+    state: LibraryUiState,
+    elevated: Boolean,
+    onSearchToggle: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onImport: () -> Unit,
+    onOptionsSheetToggle: () -> Unit,
+    onExitSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+) {
+    Box {
+        AnimatedVisibility(
+            visible = !state.selectionMode,
+            enter = yomuChromeEnter(fromBottom = false),
+            exit = yomuChromeExit(toBottom = false),
+        ) {
+            LibraryTopBar(
+                searchActive = state.searchActive,
+                searchQuery = state.searchQuery,
+                onSearchToggle = onSearchToggle,
+                onSearchQueryChange = onSearchQueryChange,
+                onImport = onImport,
+                onOptionsSheetToggle = onOptionsSheetToggle,
+                elevated = elevated,
+            )
+        }
+        AnimatedVisibility(
+            visible = state.selectionMode,
+            enter = yomuChromeEnter(fromBottom = false),
+            exit = yomuChromeExit(toBottom = false),
+        ) {
+            LibrarySelectionTopBar(
+                selectedCount = state.selectedIds.size,
+                allSelected = state.selectedIds.isNotEmpty() &&
+                    state.selectedIds.size == state.selectableCount,
+                onClose = onExitSelection,
+                onSelectAll = onSelectAll,
+                onDeselectAll = onDeselectAll,
+            )
         }
     }
 }
@@ -308,6 +358,36 @@ private fun EmptyLibrary(onImport: () -> Unit) {
 }
 
 @Composable
+private fun EmptySearchResults(
+    query: String,
+    onClearSearch: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "No books found",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Nothing matches “$query”.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+        TextButton(onClick = onClearSearch) {
+            Text("Clear search")
+        }
+    }
+}
+
+@Composable
 private fun LibraryGrid(
     state: LazyGridState,
     columns: Int,
@@ -337,11 +417,7 @@ private fun LibraryGrid(
                 GridCells.Fixed(columns)
             },
             modifier = Modifier
-                .fillMaxSize()
-                .yomuScrollEdgeShadow(
-                    color = MaterialTheme.colorScheme.background,
-                    bottom = state.canScrollForward,
-                ),
+                .fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -349,7 +425,7 @@ private fun LibraryGrid(
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        GroupSectionHeader(title = group.label, modifier = Modifier.animateItem())
+                        GroupSectionHeader(title = group.label)
                     }
                 }
                 items(group.books, key = { it.id }) { book ->
@@ -358,7 +434,6 @@ private fun LibraryGrid(
                         onClick = { onBookClick(book) },
                         onLongPress = { onBookLongPress(book) },
                         selected = book.id in selectedIds,
-                        modifier = Modifier.animateItem(),
                     )
                 }
             }
@@ -382,17 +457,13 @@ private fun LibraryList(
             modifier = Modifier
                 .widthIn(max = 720.dp)
                 .fillMaxSize()
-                .align(Alignment.TopCenter)
-                .yomuScrollEdgeShadow(
-                    color = MaterialTheme.colorScheme.background,
-                    bottom = state.canScrollForward,
-                ),
+                .align(Alignment.TopCenter),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
-                    item { GroupSectionHeader(title = group.label, modifier = Modifier.animateItem()) }
+                    item { GroupSectionHeader(title = group.label) }
                 }
                 lazyListItems(group.books, key = { it.id }) { book ->
                     BookListRow(
@@ -400,7 +471,6 @@ private fun LibraryList(
                         onClick = { onBookClick(book) },
                         onLongPress = { onBookLongPress(book) },
                         selected = book.id in selectedIds,
-                        modifier = Modifier.animateItem(),
                     )
                 }
             }

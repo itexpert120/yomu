@@ -49,7 +49,7 @@ Do not copy these products. Use them as proof that native Android can feel custo
 Use these as the baseline for every redesign:
 
 - Prefer native Material components and semantics for app chrome, controls, dialogs, lists, cards, sheets, and navigation.
-- Use Material colour roles and dynamic/system-aware colour where the user's accent/theme settings allow it; do not hard-code a generic purple product palette.
+- Use Material colour roles and dynamic/system-aware colour from the device/system theme; custom accent controls are not exposed in the app.
 - Use the Material typography hierarchy, readable line lengths, clear emphasis, and expressive type only where it improves the reading task.
 - Use a consistent conventional shape scale; expressive shapes should communicate hierarchy, not decorate every surface.
 - Use native touch targets, focus/selection semantics, ripples, reduced-motion support, and accessible contrast.
@@ -76,7 +76,7 @@ Color:
 - `YomuColor.TextSecondary`
 - `YomuColor.TextMuted`
 - `YomuColor.Link`
-- `YomuColor.Accent`
+- Material `primary` and `secondary` roles from the active system scheme
 - `YomuColor.Danger`
 - `YomuColor.HighlightYellow`
 - `YomuColor.HighlightGreen`
@@ -227,7 +227,7 @@ Each theme should define both light and dark variants:
 - App surface color
 - Panel surface color
 - Muted text color
-- Accent color
+- Material primary/secondary roles
 - Highlight color set
 - Optional image inversion behavior
 - Optional background texture/pattern

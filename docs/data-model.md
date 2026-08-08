@@ -8,7 +8,7 @@ Room is live at **schema version 11** (`core/database/YomuDatabase`, schemas exp
 
 - Built tables: `books`, `chapter_reads`, `chapter_progress`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
-- Library view preferences and app settings (theme, OLED toggle, accent) live in Preferences DataStore.
+- Library view preferences and app settings (theme and OLED toggle) live in Preferences DataStore. The legacy accent preference remains persisted but is ignored; active app colors come from the system Material scheme.
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
 - Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
@@ -268,7 +268,7 @@ Rules:
 
 ### ThemePreset
 
-> Partly built. App theme choice (`ThemePreference`: System/Light/Dark), a pure-black/OLED toggle, and the accent (`AccentColor` presets or a custom ARGB, via `AccentSelection`) are persisted in DataStore. Reader colour themes are a code-defined enum (`ReaderThemeMode`: Light/Dark/Sepia/Black/Custom). The persisted **custom** `ThemePreset` table below is planned.
+> Partly built. App theme choice (`ThemePreference`: System/Light/Dark) and a pure-black/OLED toggle are persisted in DataStore. The legacy `AccentSelection` value remains stored for compatibility but does not override the system Material scheme. Reader colour themes are a code-defined enum (`ReaderThemeMode`: Light/Dark/Sepia/Black/Custom). The persisted **custom** `ThemePreset` table below is planned.
 
 Built-in presets can be code-defined. User themes should be persisted.
 
@@ -449,7 +449,7 @@ Inactive reasons:
 Built (`core/model/LibraryPreferences`, persisted in DataStore). Implemented fields:
 
 - `viewMode`: Grid/List (`LibraryViewMode`).
-- `gridColumns`: 0 = Auto (adapts to width) or a forced count (3–7). A single column field, not separate compact/expanded values.
+- `gridColumns`: 0 = Automatic (adapts to width) or a forced count (2–7). The library exposes this as a discrete Material slider. A single column field, not separate compact/expanded values.
 - `coverCrop`: crop vs fit.
 - `groupMode`: None/Author only (`GroupMode`); series/group/status grouping is planned.
 - `sortMode`: Recent/Title/Author/Unread (`SortMode`).

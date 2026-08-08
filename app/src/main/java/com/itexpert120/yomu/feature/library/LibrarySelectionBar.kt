@@ -1,134 +1,157 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.itexpert120.yomu.feature.library
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Deselect
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.SelectAll
-import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 
-/** Floating bottom dock with labeled multi-select actions; the top library bar stays unchanged. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Contextual top bar that keeps selection state and primary selection controls visible. */
 @Composable
-internal fun LibrarySelectionDock(
+internal fun LibrarySelectionTopBar(
+    selectedCount: Int,
     allSelected: Boolean,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
-    onInvert: () -> Unit,
+) {
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Exit selection",
+                )
+            }
+        },
+        title = {
+            Text(
+                text = if (selectedCount == 1) "1 book selected" else "$selectedCount books selected",
+            )
+        },
+        actions = {
+            IconButton(
+                onClick = if (allSelected) onDeselectAll else onSelectAll,
+            ) {
+                Icon(
+                    imageVector = if (allSelected) {
+                        Icons.Rounded.Deselect
+                    } else {
+                        Icons.Rounded.SelectAll
+                    },
+                    contentDescription = if (allSelected) "Deselect all" else "Select all",
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    )
+}
+
+/** Direct bulk actions moved out of the selection top-bar overflow menu. */
+@Composable
+internal fun LibrarySelectionToolbar(
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDelete: () -> Unit,
-    onOpenDetails: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val navBottom =
-        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-    val panel = YomuTheme.colors.panel
-    Box(
-        modifier = modifier
-            .padding(start = 12.dp, end = 12.dp, bottom = navBottom + 16.dp)
-            .shadow(12.dp, RoundedCornerShape(YomuTheme.radius.panel))
-            .clip(RoundedCornerShape(YomuTheme.radius.panel))
-            .background(panel),
-    ) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            LabeledAction(Icons.Rounded.Close, "Done", onClose)
-            if (allSelected) {
-                LabeledAction(Icons.Rounded.Deselect, "None", onDeselectAll)
-            } else {
-                LabeledAction(Icons.Rounded.SelectAll, "All", onSelectAll)
+    BottomAppBar(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        actions = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SelectionToolbarAction(
+                    icon = Icons.Rounded.CheckCircle,
+                    label = "Read",
+                    onClick = onMarkRead,
+                    modifier = Modifier.weight(1f),
+                )
+                SelectionToolbarAction(
+                    icon = Icons.Rounded.RemoveDone,
+                    label = "Unread",
+                    onClick = onMarkUnread,
+                    modifier = Modifier.weight(1f),
+                )
+                SelectionToolbarAction(
+                    icon = Icons.Rounded.Delete,
+                    label = "Remove",
+                    onClick = onDelete,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
             }
-            LabeledAction(Icons.Rounded.SwapHoriz, "Invert", onInvert)
-            LabeledAction(Icons.Rounded.CheckCircle, "Read", onMarkRead)
-            LabeledAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread)
-            if (onOpenDetails != null) {
-                LabeledAction(Icons.Rounded.Info, "Details", onOpenDetails)
-            }
-            LabeledAction(Icons.Rounded.Delete, "Remove", onDelete, tint = YomuTheme.colors.danger)
-        }
-        // Edge fades hint that the row scrolls when actions overflow. matchParentSize keeps the
-        // dock sized to the row (a fillMaxHeight overlay would stretch it to the whole screen).
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0.00f to panel,
-                        0.05f to panel.copy(alpha = 0f),
-                        0.95f to panel.copy(alpha = 0f),
-                        1.00f to panel,
-                    ),
-                ),
-        )
-    }
+        },
+    )
 }
 
 @Composable
-private fun LabeledAction(
+private fun SelectionToolbarAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    tint: Color = YomuTheme.colors.textSecondary,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .widthIn(min = 56.dp)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(22.dp),
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Text(
+            text = label,
+            color = tint,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
         )
-        Text(text = label, color = tint, style = YomuTheme.type.caption)
     }
 }

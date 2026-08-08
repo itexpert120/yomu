@@ -15,7 +15,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -148,7 +147,6 @@ object YomuTheme {
 fun YomuDesignTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeMode: YomuThemeMode? = null,
-    accent: Color? = null,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
@@ -175,8 +173,7 @@ fun YomuDesignTheme(
     } else {
         systemScheme
     }
-    val safeAccent = accent?.takeIf { contrastRatio(it, baseScheme.background) >= 4.5f }
-    val colorScheme = safeAccent?.let { baseScheme.copy(primary = it) } ?: baseScheme
+    val colorScheme = baseScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -239,9 +236,3 @@ private fun yomuType(typography: Typography): YomuType = YomuType(
         lineHeight = 16.sp,
     ),
 )
-
-private fun contrastRatio(a: Color, b: Color): Float {
-    val lighter = maxOf(a.luminance(), b.luminance())
-    val darker = minOf(a.luminance(), b.luminance())
-    return (lighter + 0.05f) / (darker + 0.05f)
-}

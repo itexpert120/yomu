@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -33,6 +34,7 @@ internal fun LibraryTopBar(
     searchQuery: String,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onImport: () -> Unit,
     onOptionsSheetToggle: () -> Unit,
     elevated: Boolean,
 ) {
@@ -40,6 +42,12 @@ internal fun LibraryTopBar(
         TopAppBar(
             title = { Text("Library") },
             actions = {
+                IconButton(onClick = onImport) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "Import EPUB",
+                    )
+                }
                 IconButton(onClick = onSearchToggle) {
                     Icon(
                         imageVector = if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search,
@@ -67,7 +75,6 @@ internal fun LibraryTopBar(
             LibrarySearchBar(
                 query = searchQuery,
                 onQueryChange = onSearchQueryChange,
-                onClose = onSearchToggle,
             )
         }
     }
@@ -77,7 +84,6 @@ internal fun LibraryTopBar(
 private fun LibrarySearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    onClose: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
 
@@ -100,22 +106,6 @@ private fun LibrarySearchBar(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = null,
                     )
-                },
-                trailingIcon = {
-                    IconButton(
-                        onClick = {
-                            if (query.isEmpty()) onClose() else onQueryChange("")
-                        },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = if (query.isEmpty()) {
-                                "Close search"
-                            } else {
-                                "Clear search"
-                            },
-                        )
-                    }
                 },
             )
         },

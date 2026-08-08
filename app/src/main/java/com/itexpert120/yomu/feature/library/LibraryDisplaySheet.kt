@@ -4,32 +4,34 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Native Material 3 arrangement sheet; choices apply immediately and the sheet stays simple. */
 @Composable
@@ -47,13 +49,25 @@ internal fun LibraryOptionsSheet(
 ) {
     if (!visible) return
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val dismissSheet: () -> Unit = {
+        scope.launch {
+            sheetState.hide()
+            onDismiss()
+        }
+    }
+
+    ModalBottomSheet(
+        sheetState = sheetState,
+        onDismissRequest = dismissSheet,
+        contentWindowInsets = { WindowInsets(0) },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Text(
@@ -68,34 +82,36 @@ internal fun LibraryOptionsSheet(
                 label = { it.label },
                 onSelected = onSortModeChange,
             )
-            ArrangementChoiceGroup(
-                title = "Group by",
-                options = GroupMode.entries,
-                selected = groupMode,
-                label = { it.label },
-                onSelected = onGroupModeChange,
-            )
-            ArrangementChoiceGroup(
-                title = "View",
-                options = LibraryViewMode.entries,
-                selected = viewMode,
-                label = { it.label },
-                onSelected = onViewModeChange,
-            )
-            if (viewMode == LibraryViewMode.Grid) {
-                val values = listOf(LibraryPreferences.AUTO_COLUMNS) +
-                    (LibraryPreferences.MIN_COLUMNS..LibraryPreferences.MAX_COLUMNS).toList()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
                 ArrangementChoiceGroup(
-                    title = "Grid columns",
-                    options = values,
-                    selected = columns,
-                    label = { if (it == LibraryPreferences.AUTO_COLUMNS) "Automatic" else it.toString() },
-                    onSelected = onColumnsChange,
+                    modifier = Modifier.weight(1f),
+                    title = "Group by",
+                    options = GroupMode.entries,
+                    selected = groupMode,
+                    label = { it.label },
+                    onSelected = onGroupModeChange,
+                )
+                ArrangementChoiceGroup(
+                    modifier = Modifier.weight(1f),
+                    title = "View",
+                    options = LibraryViewMode.entries,
+                    selected = viewMode,
+                    label = { it.label },
+                    onSelected = onViewModeChange,
                 )
             }
+            GridColumnsControl(
+                columns = columns,
+                enabled = viewMode == LibraryViewMode.Grid,
+                onColumnsChange = onColumnsChange,
+            )
 
             Button(
-                onClick = onDismiss,
+                onClick = dismissSheet,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Done")
@@ -106,47 +122,115 @@ internal fun LibraryOptionsSheet(
 }
 
 @Composable
-private fun <T> ColumnScope.ArrangementChoiceGroup(
+private fun GridColumnsControl(
+    columns: Int,
+    enabled: Boolean,
+    onColumnsChange: (Int) -> Unit,
+) {
+    val value = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
+        LibraryPreferences.AUTO_COLUMNS
+    } else {
+        columns.coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS)
+    }
+    val sliderValue = if (value == LibraryPreferences.AUTO_COLUMNS) {
+        0f
+    } else {
+        (value - LibraryPreferences.MIN_COLUMNS + 1).toFloat()
+    }
+    val disabledColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val labelColor = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else disabledColor
+    val valueColor = if (enabled) MaterialTheme.colorScheme.primary else disabledColor
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Grid columns",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = if (value == LibraryPreferences.AUTO_COLUMNS) {
+                    "Automatic"
+                } else {
+                    "$value columns"
+                },
+                color = valueColor,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        Slider(
+            value = sliderValue,
+            onValueChange = { position ->
+                val index = position.roundToInt()
+                onColumnsChange(
+                    if (index == 0) {
+                        LibraryPreferences.AUTO_COLUMNS
+                    } else {
+                        index + LibraryPreferences.MIN_COLUMNS - 1
+                    },
+                )
+            },
+            valueRange = 0f..(
+                LibraryPreferences.MAX_COLUMNS - LibraryPreferences.MIN_COLUMNS + 1
+                ).toFloat(),
+            steps = LibraryPreferences.MAX_COLUMNS - LibraryPreferences.MIN_COLUMNS,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Automatic",
+                color = labelColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = "7 columns",
+                color = labelColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun <T> ArrangementChoiceGroup(
+    modifier: Modifier = Modifier,
     title: String,
     options: List<T>,
     selected: T,
     label: (T) -> String,
     onSelected: (T) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
         )
-        Surface(
-            modifier = Modifier.selectableGroup(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Column {
-                options.forEachIndexed { index, option ->
-                    ListItem(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = option == selected,
-                                onClick = { onSelected(option) },
-                                role = Role.RadioButton,
-                            ),
-                        headlineContent = { Text(label(option)) },
-                        trailingContent = {
-                            RadioButton(
-                                selected = option == selected,
-                                onClick = null,
-                            )
-                        },
-                        colors = androidx.compose.material3.ListItemDefaults.colors(
-                            containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        ),
+            options.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = option == selected,
+                    onClick = { onSelected(option) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = options.size,
+                    ),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = label(option),
+                        maxLines = 1,
                     )
-                    if (index < options.lastIndex) {
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    }
                 }
             }
         }

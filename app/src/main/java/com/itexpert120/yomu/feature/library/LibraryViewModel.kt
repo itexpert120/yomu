@@ -65,10 +65,9 @@ class LibraryViewModel @Inject constructor(
         selection.value = SelectionState(active = true, ids = setOf(bookId))
     }
 
-    // Stays in selection mode even when the set empties; the user exits explicitly.
     fun onToggleSelect(bookId: String) = selection.update { current ->
         val ids = if (bookId in current.ids) current.ids - bookId else current.ids + bookId
-        current.copy(active = true, ids = ids)
+        SelectionState(active = ids.isNotEmpty(), ids = ids)
     }
 
     fun onExitSelection() {
@@ -79,11 +78,8 @@ class LibraryViewModel @Inject constructor(
         selection.value = SelectionState(active = true, ids = visibleBookIds())
     }
 
-    fun onDeselectAll() = selection.update { it.copy(active = true, ids = emptySet()) }
-
-    fun onInvertSelection() {
-        val all = visibleBookIds()
-        selection.update { it.copy(active = true, ids = all - it.ids) }
+    fun onDeselectAll() {
+        selection.value = SelectionState()
     }
 
     fun onRemoveSelected() {

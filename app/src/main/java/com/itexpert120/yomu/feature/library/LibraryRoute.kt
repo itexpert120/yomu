@@ -53,7 +53,6 @@ fun LibraryRoute(
         onExitSelection = viewModel::onExitSelection,
         onSelectAll = viewModel::onSelectAll,
         onDeselectAll = viewModel::onDeselectAll,
-        onInvertSelection = viewModel::onInvertSelection,
         onRemoveSelected = viewModel::onRemoveSelected,
         onMarkSelectedRead = viewModel::onMarkSelectedRead,
         onMarkSelectedUnread = viewModel::onMarkSelectedUnread,

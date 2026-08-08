@@ -114,7 +114,7 @@ Acceptance criteria:
 - Settings resolution supports global, theme, book, mode, and session layers.
 - UI can show inactive/unsupported setting states.
 
-**Status: Complete (simplified layering).** `ReaderSettings` (+ `ReaderLayout`/`ReaderThemeMode`/`ReaderFont`), `LibraryPreferences`, and app theme/accent models exist. Reader settings resolve as global default (DataStore) ⊕ per-book override (Room `reader_settings`), per-book-on-edit. Theme presets (Light/Dark/Sepia/Black/Custom with custom bg/text). The full global→theme→book→mode→session stack is collapsed to global + per-book for now.
+**Status: Complete (simplified layering).** `ReaderSettings` (+ `ReaderLayout`/`ReaderThemeMode`/`ReaderFont`), `LibraryPreferences`, and app theme models exist. Reader settings resolve as global default (DataStore) ⊕ per-book override (Room `reader_settings`), per-book-on-edit. Theme presets (Light/Dark/Sepia/Black/Custom with custom bg/text). Legacy accent data remains for compatibility but active app colors follow the system Material scheme. The full global→theme→book→mode→session stack is collapsed to global + per-book for now.
 
 ## Phase 5: Data Layer And Import
 
