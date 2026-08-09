@@ -6,68 +6,52 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Native Material 3 arrangement sheet; choices apply immediately and the sheet stays simple. */
+/** Arrange controls use a centered tablet dialog and retain a bottom sheet on phones. */
 @Composable
 internal fun LibraryOptionsSheet(
     visible: Boolean,
     sortMode: SortMode,
     groupMode: GroupMode,
     viewMode: LibraryViewMode,
-    columns: Int,
+    portraitColumns: Int,
+    landscapeColumns: Int,
     onSortModeChange: (SortMode) -> Unit,
     onGroupModeChange: (GroupMode) -> Unit,
     onViewModeChange: (LibraryViewMode) -> Unit,
-    onColumnsChange: (Int) -> Unit,
+    onPortraitColumnsChange: (Int) -> Unit,
+    onLandscapeColumnsChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    if (!visible) return
-
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    val dismissSheet: () -> Unit = {
-        scope.launch {
-            sheetState.hide()
-            onDismiss()
-        }
-    }
-
-    ModalBottomSheet(
-        sheetState = sheetState,
-        onDismissRequest = dismissSheet,
-        contentWindowInsets = { WindowInsets(0) },
-    ) {
+    YomuBottomSheet(
+        visible = visible,
+        onDismiss = onDismiss,
+        wideMaxWidth = 460.dp,
+    ) { dismiss ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .windowInsetsPadding(WindowInsets.navigationBars),
+                .padding(horizontal = 0.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Text(
@@ -105,13 +89,20 @@ internal fun LibraryOptionsSheet(
                 )
             }
             GridColumnsControl(
-                columns = columns,
-                enabled = viewMode == LibraryViewMode.Grid,
-                onColumnsChange = onColumnsChange,
+                title = "Portrait columns",
+                columns = portraitColumns,
+                enabled = viewMode != LibraryViewMode.List,
+                onColumnsChange = onPortraitColumnsChange,
+            )
+            GridColumnsControl(
+                title = "Landscape columns",
+                columns = landscapeColumns,
+                enabled = viewMode != LibraryViewMode.List,
+                onColumnsChange = onLandscapeColumnsChange,
             )
 
             Button(
-                onClick = dismissSheet,
+                onClick = dismiss,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Done")
@@ -123,6 +114,7 @@ internal fun LibraryOptionsSheet(
 
 @Composable
 private fun GridColumnsControl(
+    title: String,
     columns: Int,
     enabled: Boolean,
     onColumnsChange: (Int) -> Unit,
@@ -147,7 +139,7 @@ private fun GridColumnsControl(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Grid columns",
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(

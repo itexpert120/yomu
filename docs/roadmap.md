@@ -93,7 +93,7 @@ Acceptance criteria:
 - Library feels closer to a polished media app than a file picker.
 - Tablet layout has sidebar, main content, and optional inspector.
 
-**Status: Complete (now backed by real data).** Library grid/list, continue-reading hero, search, sort (Recent/Title/Author/Unread), group (None/Author), adaptive grid columns (Auto + manual override), multi-select with bulk actions, and a full book-details screen are all implemented and backed by Room rather than fake data.
+**Status: Complete (now backed by real data).** Library Comfortable/Compact/Cover-only grid and List modes, continue-reading hero, search, sort (Recent/Title/Author/Unread), group (None/Author), orientation-specific adaptive grid columns (Auto + 2–7), multi-select with bulk actions, and a full book-details screen are all implemented and backed by Room rather than fake data.
 
 ## Phase 4: Settings And Theme Model
 
@@ -301,3 +301,7 @@ Possible later features:
 - LCP DRM if required.
 
 These should not distract from the first EPUB reader product.
+
+## Phase 13: Mihon-Inspired Tablet Adaptation
+
+**Status: Complete.** A shared 720dp two-pane primitive now caps the leading pane at 450dp and keeps pane scrolling independent. Tablet-only Settings master–detail, flexible Book Details sizing with a 176dp cover, compact Statistics overview/history panes, and adaptive centered dialogs capped at 460dp are implemented while phone layouts remain single-pane. Library preferences migrate legacy `Grid`/`library_columns` values and expose four view modes plus portrait/landscape column controls.

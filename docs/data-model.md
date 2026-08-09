@@ -448,13 +448,13 @@ Inactive reasons:
 
 Built (`core/model/LibraryPreferences`, persisted in DataStore). Implemented fields:
 
-- `viewMode`: Grid/List (`LibraryViewMode`).
-- `gridColumns`: 0 = Automatic (adapts to width) or a forced count (2–7). The library exposes this as a discrete Material slider. A single column field, not separate compact/expanded values.
+- `viewMode`: `ComfortableGrid`, `CompactGrid`, `CoverOnlyGrid`, or `List` (`LibraryViewMode`). The legacy persisted `Grid` value maps to `ComfortableGrid`.
+- `portraitGridColumns` and `landscapeGridColumns`: each is 0 = Automatic (adapts to width) or a forced count (2–7). Legacy `library_columns` seeds both orientation-specific keys when they are absent; invalid values are clamped.
 - `coverCrop`: crop vs fit.
 - `groupMode`: None/Author only (`GroupMode`); series/group/status grouping is planned.
 - `sortMode`: Recent/Title/Author/Unread (`SortMode`).
 
-Planned (not yet persisted): `sortDirection`, `showArchived`, separate compact/expanded column counts, and richer grouping modes.
+Planned (not yet persisted): `sortDirection`, `showArchived`, and richer grouping modes.
 
 These can live in DataStore unless per-group persistence becomes relational.
 

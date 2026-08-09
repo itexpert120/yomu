@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -281,11 +280,10 @@ fun YomuBottomSheet(
     onDismiss: () -> Unit,
     // Sheets with their own scroll container (e.g. a LazyColumn) should pass false.
     scrollable: Boolean = true,
-    // Expanded tablets can keep reader navigation visible as a side sheet instead of a centered
-    // dialog. Other sheets retain the centered dialog treatment.
-    wideAsSideSheet: Boolean = false,
     // Optional lower bound for focused sheets such as in-book search.
     minHeight: Dp = 0.dp,
+    // Centered tablet dialogs share Mihon's compact maximum.
+    wideMaxWidth: Dp = 460.dp,
     // Override the standard 20–24 dp horizontal gutter for full-width list surfaces.
     horizontalContentPadding: Dp? = null,
     // Some controls contain their own visual hierarchy and do not need a fading scroll edge.
@@ -310,8 +308,8 @@ fun YomuBottomSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
-                    .padding(if (wideAsSideSheet) 0.dp else 24.dp),
-                contentAlignment = if (wideAsSideSheet) Alignment.CenterEnd else Alignment.Center,
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 // The wide layout fills the Dialog window, so platform outside-click handling never
                 // sees a click as being outside. Make the visible scrim dismiss explicitly instead.
@@ -324,21 +322,12 @@ fun YomuBottomSheet(
                 )
                 Column(
                     modifier = Modifier
-                        .then(
-                            if (wideAsSideSheet) {
-                                Modifier
-                                    .fillMaxHeight()
-                                    .widthIn(min = 320.dp, max = 440.dp)
-                                    .padding(vertical = 16.dp)
-                            } else {
-                                Modifier
-                                    .fillMaxWidth(0.86f)
-                                    .widthIn(max = 560.dp)
-                                    .heightIn(
-                                        min = minHeight.coerceAtMost(maxHeight),
-                                        max = maxHeight,
-                                    )
-                            },
+                        // Do not impose a percentage minimum before the cap: on a landscape tablet
+                        // that would make widthIn(max=460.dp) ineffective.
+                        .widthIn(min = 280.dp, max = wideMaxWidth)
+                        .heightIn(
+                            min = minHeight.coerceAtMost(maxHeight),
+                            max = maxHeight,
                         )
                         .shadow(18.dp, MaterialTheme.shapes.extraLarge)
                         .clip(MaterialTheme.shapes.extraLarge)

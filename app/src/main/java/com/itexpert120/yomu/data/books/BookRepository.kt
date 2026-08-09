@@ -2,6 +2,7 @@ package com.itexpert120.yomu.data.books
 
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import kotlinx.coroutines.flow.Flow
 
@@ -10,6 +11,7 @@ data class ReadingTarget(
     val storagePath: String,
     val locatorJson: String?,
     val title: String,
+    val publicationCache: ReaderPublicationCache? = null,
 )
 
 data class ReadingProgressSnapshot(

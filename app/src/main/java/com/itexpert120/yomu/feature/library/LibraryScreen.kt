@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -502,6 +502,7 @@ private fun EmptySearchResults(
 @Composable
 private fun LibraryGrid(
     state: LazyGridState,
+    viewMode: LibraryViewMode,
     columns: Int,
     groups: List<LibraryGroup>,
     selectedIds: Set<String>,
@@ -541,12 +542,30 @@ private fun LibraryGrid(
                     }
                 }
                 items(group.books, key = { it.id }) { book ->
-                    GridBookCard(
-                        book = book,
-                        onClick = { onBookClick(book) },
-                        onLongPress = { onBookLongPress(book) },
-                        selected = book.id in selectedIds,
-                    )
+                    when (viewMode) {
+                        LibraryViewMode.ComfortableGrid -> GridBookCard(
+                            book = book,
+                            onClick = { onBookClick(book) },
+                            onLongPress = { onBookLongPress(book) },
+                            selected = book.id in selectedIds,
+                        )
+
+                        LibraryViewMode.CompactGrid -> CompactGridBookCard(
+                            book = book,
+                            onClick = { onBookClick(book) },
+                            onLongPress = { onBookLongPress(book) },
+                            selected = book.id in selectedIds,
+                        )
+
+                        LibraryViewMode.CoverOnlyGrid -> CoverOnlyGridBookCard(
+                            book = book,
+                            onClick = { onBookClick(book) },
+                            onLongPress = { onBookLongPress(book) },
+                            selected = book.id in selectedIds,
+                        )
+
+                        LibraryViewMode.List -> Unit
+                    }
                 }
             }
         }
@@ -592,20 +611,75 @@ private fun LibraryList(
 
 @Preview(widthDp = 390, heightDp = 900, showBackground = true)
 @Composable
-private fun LibraryScreenPreview() {
+private fun LibraryPhonePreview() {
+    LibraryPreview(mode = LibraryViewMode.ComfortableGrid)
+}
+
+@Preview(widthDp = 600, heightDp = 900, showBackground = true)
+@Composable
+private fun LibraryRailPreview() {
+    LibraryPreview(mode = LibraryViewMode.CompactGrid)
+}
+
+@Preview(widthDp = 720, heightDp = 900, showBackground = true)
+@Composable
+private fun LibraryTwoPanePreview() {
+    LibraryPreview(mode = LibraryViewMode.CoverOnlyGrid)
+}
+
+@Preview(widthDp = 1280, heightDp = 900, showBackground = true)
+@Composable
+private fun LibraryWidePreview() {
+    LibraryPreview(mode = LibraryViewMode.List)
+}
+
+@Composable
+private fun LibraryPreview(mode: LibraryViewMode) {
     YomuDesignTheme {
         LibraryScreen(
             state = LibraryUiState(
                 isLoading = false,
                 totalCount = 6,
-                groups = listOf(LibraryGroup("", emptyList())),
+                selectableCount = 6,
+                viewMode = mode,
+                groups = listOf(
+                    LibraryGroup(
+                        "",
+                        List(6) { index ->
+                            LibraryBook(
+                                id = index.toString(),
+                                title = listOf(
+                                    "The Wind in the Willows",
+                                    "A Long Way Home",
+                                    "The Quiet Archive",
+                                    "Letters from the Coast",
+                                    "The Glass Garden",
+                                    "Small Things, Brightly",
+                                )[index],
+                                shortTitle = "Preview book",
+                                author = "Open Reader",
+                                authorLastName = "READER",
+                                progress = (index + 1) / 8f,
+                                remaining = "12 min",
+                                coverImagePath = null,
+                                coverColors = listOf(
+                                    Color(0xFF284B63),
+                                    Color(0xFF9B5DE5),
+                                ),
+                                lastOpenedAt = 0L,
+                                series = null,
+                            )
+                        },
+                    ),
+                ),
             ),
             onSearchToggle = {},
             onSearchQueryChange = {},
             onSortModeChange = {},
             onGroupModeChange = {},
             onViewModeChange = {},
-            onGridColumnsChange = {},
+            onPortraitGridColumnsChange = {},
+            onLandscapeGridColumnsChange = {},
             onOpenReader = {},
             onOpenDetails = {},
             onImport = {},

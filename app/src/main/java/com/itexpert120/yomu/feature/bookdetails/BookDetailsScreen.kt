@@ -103,14 +103,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
+import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
-import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
@@ -240,7 +243,7 @@ fun BookDetailsScreen(
                 // On a tablet-wide screen, split the cover/metadata/actions into a left column
                 // and the contents/description into a right column so the two read side by side
                 // instead of the cover sitting alone above a long scroll. Phones stay single-pane.
-                val wideEnough = YomuWidthClass.fromWidth(maxWidth).isWide
+                val wideEnough = maxWidth.supportsYomuTwoPane()
 
                 if (wideEnough && book != null) {
                     TwoPaneDetails(
@@ -549,12 +552,13 @@ private fun TwoPaneDetails(
     onToggleChapterSelection: (Int) -> Unit,
     onToggleChapterBookmark: (Int) -> Unit,
 ) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Row(modifier = Modifier.fillMaxSize()) {
+    YomuTwoPane(
+        modifier = Modifier.fillMaxSize(),
+        startContent = {
             // Left pane: book identity + actions + description, independently scrollable.
             Box(
                 modifier = Modifier
-                    .width(420.dp)
+                    .fillMaxWidth()
                     .fillMaxHeight(),
             ) {
                 Column(
@@ -568,6 +572,7 @@ private fun TwoPaneDetails(
                         book = book,
                         topInset = topInset,
                         onCoverClick = onCoverClick,
+                        coverWidth = 176.dp,
                     )
                 }
                 YomuVerticalScrollIndicator(
@@ -582,11 +587,12 @@ private fun TwoPaneDetails(
                         ),
                 )
             }
-
+        },
+        endContent = {
             // Right pane: the contents list (virtualized).
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .fillMaxHeight(),
             ) {
                 LazyColumn(
@@ -622,8 +628,8 @@ private fun TwoPaneDetails(
                         ),
                 )
             }
-        }
-    }
+        },
+    )
 }
 
 /** The fixed, non-list portion of the screen: cover, metadata, progress, and description. */
@@ -632,6 +638,7 @@ private fun BookHeader(
     book: BookDetailsUi,
     onCoverClick: () -> Unit,
     topInset: Dp = 0.dp,
+    coverWidth: Dp = 108.dp,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -651,7 +658,7 @@ private fun BookHeader(
                     modifier = Modifier
                         .matchParentSize()
                         .blur(18.dp)
-                        .alpha(0.18f),
+                        .alpha(0.28f),
                 )
                 Box(
                     modifier = Modifier
@@ -683,7 +690,7 @@ private fun BookHeader(
                     DetailCover(
                         book,
                         onClick = onCoverClick,
-                        modifier = Modifier.width(108.dp),
+                        modifier = Modifier.width(coverWidth),
                     )
                     Column(
                         modifier = Modifier
@@ -1457,5 +1464,64 @@ private fun DetailCover(book: BookDetailsUi, onClick: () -> Unit, modifier: Modi
                 }
             }
         }
+    }
+}
+
+@Preview(widthDp = 720, heightDp = 900, showBackground = true)
+@Composable
+private fun TabletBookDetailsPreview() {
+    YomuDesignTheme {
+        BookDetailsScreen(
+            book = BookDetailsUi(
+                id = "preview",
+                title = "A long book title that should remain readable beside the cover",
+                author = "Open Reader",
+                series = "Preview collection",
+                description = "A quiet sample description for validating the tablet two-pane layout.",
+                progress = 0.42f,
+                remaining = "4h 12m remaining",
+                readingTime = "2h 18m",
+                addedDate = "14 Jul 2026",
+                startedDate = "15 Jul 2026",
+                lastReadDate = "16 Jul 2026",
+                finishedDate = null,
+                coverImagePath = null,
+                coverColors = listOf(Color(0xFF284B63), Color(0xFF9B5DE5)),
+                readingState = ReadingState.Reading,
+            ),
+            bookLoaded = true,
+            toc = TocUiState(
+                loading = false,
+                items = List(8) { index ->
+                    TocEntryUi(
+                        uid = index,
+                        chapterId = "chapter-$index",
+                        title = "Chapter ${index + 1}: A sample chapter title",
+                        locatorJson = "{}",
+                        depth = 0,
+                        read = index < 3,
+                        selected = false,
+                        bookmarked = index == 1,
+                        percent = if (index == 3) 0.42f else null,
+                    )
+                },
+            ),
+            onBack = {},
+            onRead = {},
+            onEdit = {},
+            onRemove = {},
+            onSaveCover = {},
+            onTocSortChange = {},
+            onOpenChapter = {},
+            onSetChapterRead = { _, _ -> },
+            onEnterChapterSelection = {},
+            onToggleChapterSelection = {},
+            onToggleChapterBookmark = {},
+            onExitChapterSelection = {},
+            onSelectAllChapters = {},
+            onDeselectAllChapters = {},
+            onMarkSelectedChapters = {},
+            onMarkPreviousRead = {},
+        )
     }
 }

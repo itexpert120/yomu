@@ -54,7 +54,6 @@ internal fun ReaderSearchSheet(
         visible = visible,
         onDismiss = onDismiss,
         scrollable = false,
-        wideAsSideSheet = true,
         minHeight = 360.dp,
     ) { _ ->
         Column(

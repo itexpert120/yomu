@@ -3,6 +3,7 @@ package com.itexpert120.yomu.feature.stats
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -15,7 +16,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material3.Card
@@ -39,11 +42,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.YomuAppSurface
+import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuTwoPane
+import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import java.io.File
@@ -63,15 +71,156 @@ fun StatsRoute(onBack: (() -> Unit)?) {
 
 @Composable
 fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
-    YomuScreenScaffold(
-        title = "Statistics",
-        onBack = onBack,
-        showScrollEdgeShadow = false,
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth.supportsYomuTwoPane() && !state.isLoading && state.error == null) {
+            TabletStatsLayout(
+                stats = state.stats,
+                history = state.history,
+                onBack = onBack,
+            )
+        } else {
+            YomuScreenScaffold(
+                title = "Statistics",
+                onBack = onBack,
+                showScrollEdgeShadow = false,
+            ) {
+                when {
+                    state.isLoading -> LoadingState()
+                    state.error != null -> StatusText(state.error)
+                    else -> StatsContent(stats = state.stats, history = state.history)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabletStatsLayout(
+    stats: ReadingStats,
+    history: List<ReadingSessionItem>,
+    onBack: (() -> Unit)?,
+) {
+    YomuAppSurface {
+        Column(Modifier.fillMaxSize()) {
+            YomuScreenHeader(title = "Statistics", onBack = onBack)
+            YomuTwoPane(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                startModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                endModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                startContent = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        SectionHeader(
+                            title = "At a glance",
+                            supporting = "A quick view of your reading.",
+                        )
+                        TabletMetricGrid(
+                            metrics = listOf(
+                                DetailMetric(formatDays(stats.currentStreakDays), "Current streak"),
+                                DetailMetric(formatReadingTime(stats.totalReadingSeconds), "Total read"),
+                                DetailMetric(stats.booksInLibrary.toString(), "Library items"),
+                                DetailMetric(stats.booksFinished.toString(), "Completed books"),
+                                DetailMetric(formatReadingTime(stats.secondsLast7Days), "Last 7 days"),
+                                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days"),
+                            ),
+                        )
+                        SectionHeader(
+                            title = "Reading details",
+                            supporting = "The small signals behind your routine.",
+                        )
+                        TabletMetricGrid(
+                            metrics = listOf(
+                                DetailMetric(stats.chaptersRead.toString(), "Chapters read"),
+                                DetailMetric(stats.sessionCount.toString(), "Reading sessions"),
+                                DetailMetric(stats.daysRead.toString(), "Active days"),
+                                DetailMetric(formatDays(stats.longestStreakDays), "Longest streak"),
+                                DetailMetric(formatReadingTime(stats.averageSessionSeconds), "Average session"),
+                                DetailMetric(formatReadingTime(stats.longestSessionSeconds), "Longest session"),
+                                DetailMetric(formatReadingTime(stats.averageSecondsPerActiveDay), "Average per day"),
+                                DetailMetric(stats.booksStarted.toString(), "Books started"),
+                                DetailMetric(formatCount(stats.estimatedWordsRead), "Estimated words"),
+                            ),
+                        )
+                    }
+                },
+                endContent = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        if (history.isEmpty()) {
+                            SectionHeader(
+                                title = "Recent history",
+                                supporting = "Your reading sessions will appear here.",
+                            )
+                            EmptyActivityCard()
+                        } else {
+                            History(history)
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TabletMetricGrid(metrics: List<DetailMetric>) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        when {
-            state.isLoading -> LoadingState()
-            state.error != null -> StatusText(state.error)
-            else -> StatsContent(stats = state.stats, history = state.history)
+        metrics.chunked(3).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                row.forEach { metric ->
+                    TabletMetricCard(metric, Modifier.weight(1f))
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabletMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.heightIn(min = 88.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = metric.value,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = metric.label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -572,3 +721,25 @@ private fun formatCount(value: Long): String = when {
 private const val HistoryPage = 12
 private const val MergeGapSeconds = 20 * 60L
 private const val ShortSessionSeconds = 3 * 60L
+
+@Preview(widthDp = 720, heightDp = 900, showBackground = true)
+@Composable
+private fun TabletStatsPreview() {
+    com.itexpert120.yomu.core.designsystem.YomuDesignTheme {
+        StatsScreen(
+            state = StatsUiState(isLoading = false),
+            onBack = {},
+        )
+    }
+}
+
+@Preview(widthDp = 1280, heightDp = 900, showBackground = true)
+@Composable
+private fun WideStatsPreview() {
+    com.itexpert120.yomu.core.designsystem.YomuDesignTheme {
+        StatsScreen(
+            state = StatsUiState(isLoading = false),
+            onBack = {},
+        )
+    }
+}

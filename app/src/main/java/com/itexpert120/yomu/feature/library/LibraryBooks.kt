@@ -34,7 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -102,6 +105,87 @@ fun GridBookCard(
                 )
             }
         }
+    }
+}
+
+/** Borderless cover treatment for dense tablet grids. */
+@Composable
+fun CompactGridBookCard(
+    book: LibraryBook,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+) {
+    val shape = MaterialTheme.shapes.large
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
+            .semantics { contentDescription = book.title },
+    ) {
+        BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(72.dp)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.86f)),
+                        tileMode = TileMode.Clamp,
+                    ),
+                ),
+        )
+        Text(
+            text = book.title,
+            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(4.dp),
+        ) {
+            LibraryProgressIndicator(book.progress, Modifier.fillMaxSize())
+        }
+        SelectionMarker(selected)
+    }
+}
+
+/** Borderless cover-only treatment; title remains available to accessibility services. */
+@Composable
+fun CoverOnlyGridBookCard(
+    book: LibraryBook,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+) {
+    val shape = MaterialTheme.shapes.large
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
+            .semantics { contentDescription = book.title },
+    ) {
+        BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(4.dp),
+        ) {
+            LibraryProgressIndicator(book.progress, Modifier.fillMaxSize())
+        }
+        SelectionMarker(selected)
     }
 }
 
@@ -186,7 +270,7 @@ fun BookListRow(
 }
 
 @Composable
-private fun BoxScope.SelectionMarker(selected: Boolean) {
+internal fun BoxScope.SelectionMarker(selected: Boolean) {
     if (!selected) return
     val shape = MaterialTheme.shapes.medium
     Box(
@@ -253,7 +337,7 @@ fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BookCoverImage(
+internal fun BookCoverImage(
     book: LibraryBook,
     modifier: Modifier = Modifier,
 ) {
@@ -310,7 +394,7 @@ private fun BookCoverImage(
 
 /** Shows a muted track for untouched books so every card exposes the same progress affordance. */
 @Composable
-private fun LibraryProgressIndicator(
+internal fun LibraryProgressIndicator(
     progress: Float,
     modifier: Modifier = Modifier,
 ) {

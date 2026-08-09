@@ -102,7 +102,7 @@ internal fun ReaderTopBar(
         TopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(32.dp)
                 .onSizeChanged { onContentHeight(it.height) },
             title = {
                 Text(

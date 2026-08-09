@@ -23,13 +23,13 @@ The reader is partly built. EPUB content renders through Readium's `EpubNavigato
 | Chapter read-tracking | Done | Position-weighted per-section percentages persist in Room; a section is marked read only at its logical end. |
 | Reader settings model | Done | One `ReaderSettings`: global default (DataStore) overridden per-book (Room `reader_settings`); editing inside the reader writes that book's override (per-book-on-edit). |
 | Engine navigation | Done | `goForward`/`goBackward`, next/previous logical TOC section, `goToProgression` (position-weighted resource seek). |
-| Bookmarks | Pending | Not built. |
-| Highlighting | Pending | Not built. |
+| Bookmarks | Done | Room-backed bookmarks reuse the reader locator boundary and appear in the Browse sheet. |
+| Highlighting | Done | Room-backed highlights render through reader decorations and can be edited from the Browse sheet. |
 | In-book search | Done | Dedicated minimum-height Search sheet with live results, hit underlines, and locator jumps. |
 | Advanced typography (paragraph/page panels) | Pending | Line/word/letter spacing, margins, text-align/justify, hyphenation, multi-column, image inversion not built. |
 | Paragraph / Speed-reading modes | Pending | Not built. |
-| TTS / read-aloud, reading statistics | Pending | Not built. |
-| Quick actions, side panels, tablet multi-column | Pending | Not built. |
+| TTS / read-aloud, reading statistics | Done | Reader TTS and the Statistics destination are implemented. |
+| Quick actions, side panels, tablet multi-column | Partial | Browse/Search and short actions use centered tablet dialogs capped at 460dp. Multi-column EPUB layout remains a future engine capability. |
 
 Note on link colour: this is intentionally **not** offered. Readium's `EpubPreferences` exposes only background and text colours, so the reader maps exactly those (plus scroll, font size, font family, line height, `publisherStyles=false`).
 
@@ -171,7 +171,7 @@ Phone:
 
 Tablet:
 
-- Left side panel beside reading canvas.
+- Centered Browse/TOC dialog capped at 460dp so the reading canvas remains visually stable.
 
 Actions:
 
@@ -489,19 +489,20 @@ Later:
 
 ## Tablet-Specific Reader
 
-**Not built.** The reader is currently a single full-screen layout with no side panels or multi-column; the layouts below are the tablet target.
+The reader remains full-screen for EPUB content, and its interaction surfaces adapt on tablets with centered dialogs capped at 460dp. Browse, Search, controls, lookup, footnotes, highlight editing, and short actions all use the same bounded modal treatment. No Readium or reader-engine interface changes are needed for this chrome adaptation.
 
 Tablet reader layouts:
 
 - Content only.
-- Content plus left TOC.
-- Content plus right Appearance Studio.
+- Content plus centered Browse/Search dialogs.
+- Centered controls and annotation dialogs.
 - Content plus notes/highlights panel later.
 - Multi-column reading.
 
 Tablet rules:
 
-- Panels should not cover text unless screen is narrow.
+- Panels should not cover text unless the window is narrow.
+- Dialog content scrolls independently within the 460dp modal cap.
 - Page width must stay readable.
 - Column count should be constrained by max column width, not screen width alone.
 

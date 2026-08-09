@@ -26,10 +26,16 @@ class LibraryPrefsRepository @Inject constructor(
             sortMode = prefs[KeySort].toEnum(SortMode.entries, SortMode.Recent),
             groupMode = prefs[KeyGroup].toEnum(GroupMode.entries, GroupMode.None),
             viewMode = prefs[KeyView].toLibraryViewMode(),
-            portraitGridColumns = (prefs[KeyPortraitColumns] ?: legacyColumns ?: LibraryPreferences().portraitGridColumns)
-                .coerceColumns(),
-            landscapeGridColumns = (prefs[KeyLandscapeColumns] ?: legacyColumns ?: LibraryPreferences().landscapeGridColumns)
-                .coerceColumns(),
+            portraitGridColumns = resolveLibraryColumns(
+                value = prefs[KeyPortraitColumns],
+                legacy = legacyColumns,
+                fallback = LibraryPreferences().portraitGridColumns,
+            ),
+            landscapeGridColumns = resolveLibraryColumns(
+                value = prefs[KeyLandscapeColumns],
+                legacy = legacyColumns,
+                fallback = LibraryPreferences().landscapeGridColumns,
+            ),
             coverCrop = prefs[KeyCoverCrop] ?: true,
         )
     }
@@ -76,15 +82,17 @@ class LibraryPrefsRepository @Inject constructor(
 
 private fun <E : Enum<E>> String?.toEnum(entries: List<E>, default: E): E = this?.let { name -> entries.firstOrNull { it.name == name } } ?: default
 
-private fun String?.toLibraryViewMode(): LibraryViewMode = when (this) {
+internal fun String?.toLibraryViewMode(): LibraryViewMode = when (this) {
     // The old persisted Grid value is intentionally treated as the richer default presentation.
     "Grid" -> LibraryViewMode.ComfortableGrid
     else -> toEnum(LibraryViewMode.entries, LibraryViewMode.ComfortableGrid)
 }
 
 /** Keep Automatic (0) as-is; clamp any explicit count into the supported range. */
-private fun Int.coerceColumns(): Int = if (this <= LibraryPreferences.AUTO_COLUMNS) {
+internal fun Int.coerceColumns(): Int = if (this <= LibraryPreferences.AUTO_COLUMNS) {
     LibraryPreferences.AUTO_COLUMNS
 } else {
     coerceIn(LibraryPreferences.MIN_COLUMNS, LibraryPreferences.MAX_COLUMNS)
 }
+
+internal fun resolveLibraryColumns(value: Int?, legacy: Int?, fallback: Int): Int = (value ?: legacy ?: fallback).coerceColumns()

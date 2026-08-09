@@ -61,7 +61,6 @@ internal fun ReaderBrowseSheet(
         visible = tab != null,
         onDismiss = onDismiss,
         scrollable = false,
-        wideAsSideSheet = true,
         horizontalContentPadding = 0.dp,
         minHeight = if (tab == BrowseTab.Bookmarks || tab == BrowseTab.Highlights) {
             360.dp

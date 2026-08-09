@@ -275,10 +275,11 @@ Phone:
 
 Tablet:
 
-- Reader can show side panels without covering the reading column.
-- Library uses left sidebar, main grid/list, optional right inspector.
-- Appearance settings can sit side-by-side with live reader preview.
-- Multi-column reading becomes a first-class mode.
+- Navigation rails activate at 600dp of available width; phone layouts remain unchanged below that breakpoint.
+- Shared two-pane layouts activate at 720dp of actual content width. The leading pane receives half the width up to 450dp and the trailing pane receives the remainder; both panes own their scroll state and follow RTL layout direction.
+- Library, Settings, Book Details, and Statistics add context with side-by-side panes instead of stretching a phone column.
+- Reader Browse, Search, and short actions use centered tablet dialogs capped at 460dp; no tablet sheet stretches to a percentage of the landscape window.
+- The library supports Comfortable, Compact, Cover-only, and List modes with independent portrait and landscape column preferences.
 
 Large/foldable/desktop window:
 

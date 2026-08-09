@@ -7,6 +7,36 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 
+/** Immutable publication metadata that can be reused when opening a book. */
+@Serializable
+data class ReaderPublicationCache(
+    val toc: List<ReaderTocItem> = emptyList(),
+    val resourceWeights: Map<String, Int> = emptyMap(),
+)
+
+/** Request used to open a publication without exposing Readium types across the reader boundary. */
+data class ReaderOpenRequest(
+    val filePath: String,
+    val initialLocatorJson: String?,
+    val initialSettings: ReaderSettings,
+    val publicationCache: ReaderPublicationCache? = null,
+)
+
+/** Result of opening a publication, including cache data generated for a cache miss or repair. */
+data class ReaderOpenResult(
+    val session: ReaderSession,
+    val publicationCache: ReaderPublicationCache,
+)
+
+/** Atomic presentation state for the navigator. */
+sealed interface ReaderRenderState {
+    data object Opening : ReaderRenderState
+
+    data class Transitioning(val forward: Boolean) : ReaderRenderState
+
+    data class Ready(val href: String?) : ReaderRenderState
+}
+
 /** Yomu-owned reading position (wraps the engine's native locator JSON). */
 data class ReaderLocator(
     val locatorJson: String,
@@ -66,11 +96,7 @@ data class ReaderSearchResult(
 
 /** Opens books for reading. Implemented by the Readium adapter; no engine types leak out. */
 interface ReaderEngine {
-    suspend fun open(
-        filePath: String,
-        initialLocatorJson: String?,
-        initialSettings: ReaderSettings = ReaderSettings(),
-    ): ReaderSession?
+    suspend fun open(request: ReaderOpenRequest): ReaderOpenResult?
 
     /** Reads the book's table of contents without starting a reading session. */
     suspend fun tableOfContents(filePath: String): List<ReaderTocItem>?
@@ -91,7 +117,7 @@ interface ReaderSession {
      * out). Starts false. Gate the loading UI on this rather than on session creation, so "Opening…"
      * stays up until the page is actually painted instead of flashing a blank/half-rendered view.
      */
-    val ready: StateFlow<Boolean>
+    val renderState: StateFlow<ReaderRenderState>
 
     /**
      * True once the current resource's layout CSS — including the immersive chapter-start top padding —
@@ -100,14 +126,12 @@ interface ReaderSession {
      * new resource has been styled. Gate a per-chapter content cover on this so a chapter never paints
      * in its unstyled (padding-less) state.
      */
-    val styled: StateFlow<Boolean>
 
     /**
      * Direction of the in-progress chapter change: true when moving forward (next chapter), false when
      * moving back (previous chapter). Set before [styled] flips, so the UI can play a directional
      * fade-slide as the new chapter is revealed.
      */
-    val transitionForward: StateFlow<Boolean>
 
     /** Emits when the user taps the centre of the page (used to open the controls sheet). */
     val centerTaps: SharedFlow<Unit>
