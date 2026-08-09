@@ -66,28 +66,20 @@ internal fun LibraryOptionsSheet(
                 label = { it.label },
                 onSelected = onSortModeChange,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                ArrangementChoiceGroup(
-                    modifier = Modifier.weight(1f),
-                    title = "Group by",
-                    options = GroupMode.entries,
-                    selected = groupMode,
-                    label = { it.label },
-                    onSelected = onGroupModeChange,
-                )
-                ArrangementChoiceGroup(
-                    modifier = Modifier.weight(1f),
-                    title = "View",
-                    options = LibraryViewMode.entries,
-                    selected = viewMode,
-                    label = { it.label },
-                    onSelected = onViewModeChange,
-                )
-            }
+            ArrangementChoiceGroup(
+                title = "Group by",
+                options = GroupMode.entries,
+                selected = groupMode,
+                label = { it.label },
+                onSelected = onGroupModeChange,
+            )
+            ArrangementChoiceGroup(
+                title = "Library view",
+                options = LibraryViewMode.entries,
+                selected = viewMode,
+                label = { it.label },
+                onSelected = onViewModeChange,
+            )
             GridColumnsControl(
                 title = "Portrait columns",
                 columns = portraitColumns,
@@ -221,7 +213,8 @@ private fun <T> ArrangementChoiceGroup(
                 ) {
                     Text(
                         text = label(option),
-                        maxLines = 1,
+                        maxLines = 2,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
             }

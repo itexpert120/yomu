@@ -4,6 +4,9 @@ import kotlinx.serialization.Serializable
 
 /** Type-safe Navigation Compose destinations. */
 @Serializable
+object Home
+
+@Serializable
 object Library
 
 @Serializable

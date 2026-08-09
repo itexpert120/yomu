@@ -63,11 +63,13 @@ import androidx.lifecycle.LifecycleOwner
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSession
 
 // Intentionally colours the system bars to the reading theme via the (now-deprecated) window
@@ -356,7 +358,8 @@ fun ReaderScreen(
     // Non-immersive keeps the page inset below the bars (their height reserved). The chrome always
     // stays shown while loading or when immersive is off (title/Back/footer visible).
     val immersive = state.settings.immersiveChrome
-    val chromeShown = state.loading || !immersive || state.chapterControlsVisible
+    val pageReady = state.renderState is ReaderRenderState.Ready
+    val chromeShown = !pageReady || !immersive || state.chapterControlsVisible
     val topInset by animateDpAsState(
         targetValue = when {
             immersive && state.settings.layout == ReaderLayout.Paged -> pagedSafeTop
@@ -378,20 +381,17 @@ fun ReaderScreen(
     val onBackground = Color(state.settings.textArgb)
     val readerBorder = Color(state.settings.colorPalette.borderArgb)
 
-    val scrollReveal = state.settings.layout == ReaderLayout.Scroll
     val reveal = remember { Animatable(1f) }
-    LaunchedEffect(state.contentStyled, scrollReveal) {
+    LaunchedEffect(state.renderState) {
         when {
-            !scrollReveal -> reveal.snapTo(1f)
-            !state.contentStyled -> reveal.snapTo(0f)
+            state.renderState !is ReaderRenderState.Ready -> reveal.snapTo(0f)
+            !yomuAnimationsEnabled() -> reveal.snapTo(1f)
             else -> reveal.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 300, easing = YomuMotion.EmphasizedDecel),
+                animationSpec = tween(durationMillis = 120, easing = YomuMotion.EmphasizedDecel),
             )
         }
     }
-    val revealSlidePx = with(density) { 36.dp.toPx() }
-    val revealDir = if (state.transitionForward) 1f else -1f
     // Session creation changes which layer owns the opening scrim. Keep the indicator as movable
     // content so Compose transfers its animation state instead of disposing and restarting it.
     val openingContent = remember {
@@ -417,7 +417,6 @@ fun ReaderScreen(
                         .padding(top = topInset, bottom = bottomInset)
                         .graphicsLayer {
                             alpha = reveal.value
-                            translationY = (1f - reveal.value) * revealSlidePx * revealDir
                         },
                 )
 
@@ -433,13 +432,10 @@ fun ReaderScreen(
                     }
                 }
 
-                // Between chapters in scroll mode, hold an opaque cover (no message) until the new
+                // During any chapter transition, hold an opaque cover (no message) until the new
                 // chapter's layout CSS — chiefly the chapter-start top padding — has applied, so the
-                // page is revealed already-padded instead of the padding popping in a few frames later
-                // (the jolt seen when the rubberband loads the next/previous chapter).
-                val coverChapterTransition = !state.loading &&
-                    !state.contentStyled &&
-                    scrollReveal
+                // page is revealed already-padded instead of the padding popping in a few frames later.
+                val coverChapterTransition = state.renderState is ReaderRenderState.Transitioning
                 if (coverChapterTransition) {
                     Box(
                         modifier = Modifier
@@ -457,7 +453,9 @@ fun ReaderScreen(
                     modifier = Modifier.align(Alignment.TopCenter),
                 ) {
                     ReaderTopBar(
-                        chapter = if (state.loading) "" else state.chapterTitle ?: "Reading",
+                        // Keep the last known chapter title visible while the next resource is
+                        // covered and styled; blanking it here exposes the generic "Reading" label.
+                        chapter = state.chapterTitle ?: "Reading",
                         background = background,
                         content = onBackground,
                         isBookmarked = state.currentPageBookmarked,
@@ -467,8 +465,8 @@ fun ReaderScreen(
                     )
                 }
 
-                // Footer, overlays and all sheets only appear once the first page has painted.
-                if (!state.loading) {
+                // Footer, overlays and all sheets only appear once the first stable page has painted.
+                if (pageReady) {
                     if (state.settings.showFooter) {
                         // Keep the footer composed even while hidden so its measured height is always known —
                         // the controls bar can anchor above it on the first immersive reveal, and the EPUB

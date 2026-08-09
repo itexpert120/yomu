@@ -15,6 +15,9 @@ import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderLocator
+import com.itexpert120.yomu.core.reader.ReaderOpenRequest
+import com.itexpert120.yomu.core.reader.ReaderOpenTrace
+import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
@@ -32,6 +35,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,11 +52,8 @@ import javax.inject.Inject
 
 data class ReaderUiState(
     val loading: Boolean = true,
-    // False while a chapter is (re)loading until its layout CSS (incl. the immersive chapter-start
-    // padding) has applied, so the reader can keep it covered and reveal it already-padded.
-    val contentStyled: Boolean = false,
-    // Direction of the current chapter change (true = next, false = previous), for the reveal slide.
-    val transitionForward: Boolean = true,
+    /** Atomic navigator presentation state; the cover and reveal are derived from this value. */
+    val renderState: ReaderRenderState = ReaderRenderState.Opening,
     val failed: Boolean = false,
     val title: String = "",
     val chapterTitle: String? = null,
@@ -168,12 +170,24 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun openReader() {
+        val traceCookie = ReaderOpenTrace.beginAsync("reader.open")
         viewModelScope.launch {
+            var traceEnded = false
+            fun endOpenTrace() {
+                if (!traceEnded) {
+                    traceEnded = true
+                    ReaderOpenTrace.endAsync("reader.open", traceCookie)
+                }
+            }
             try {
-                val target = repository.readingTarget(BookId(bookId))
-                val initialSettings =
-                    target?.let { settingsRepository.effective(BookId(bookId)).first() }
-                        ?: ReaderSettings()
+                // These are independent Room/DataStore reads. Starting them together removes a
+                // full round-trip from the tap-to-publication path.
+                val (target, initialSettings) = coroutineScope {
+                    val targetDeferred = async { repository.readingTarget(BookId(bookId)) }
+                    val settingsDeferred = async { settingsRepository.effective(BookId(bookId)).first() }
+                    targetDeferred.await() to settingsDeferred.await()
+                }
+                ReaderOpenTrace.mark("reader.target-settings-resolved")
                 _state.update { it.copy(settings = initialSettings) }
                 // Prime the chapter-title lookup from the in-memory TOC cache (present if this book was
                 // opened earlier this session) so the top bar shows the correct chapter title on the very
@@ -183,40 +197,82 @@ class ReaderViewModel @Inject constructor(
                     cached.forEach { map.putIfAbsent(it.id, it.title) }
                     tocTitles = map
                 }
-                val opened = target?.let {
+                val openedResult = target?.let {
+                    ReaderOpenTrace.mark("reader.publication-open-start")
                     engine.open(
-                        filePath = it.storagePath,
-                        initialLocatorJson = locatorOverride ?: it.locatorJson,
-                        initialSettings = initialSettings,
+                        ReaderOpenRequest(
+                            filePath = it.storagePath,
+                            initialLocatorJson = locatorOverride ?: it.locatorJson,
+                            initialSettings = initialSettings,
+                            publicationCache = it.publicationCache,
+                        ),
                     )
                 }
-                if (opened == null) {
+                if (openedResult == null) {
+                    endOpenTrace()
                     _state.update { it.copy(loading = false, failed = true) }
                     return@launch
                 }
+                val opened = openedResult.session
+                ReaderOpenTrace.mark("reader.session-created")
                 _session.value = opened
                 if (readingStart != null) opened.onForegroundResumed()
-                _state.update { it.copy(title = opened.title) }
-                // Keep "Opening…" up until the navigator paints its first page (or an 8s fallback),
-                // instead of dropping it the instant the session is created.
-                launch {
-                    withTimeoutOrNull(8_000) { opened.ready.first { it } }
-                    _state.update { it.copy(loading = false) }
+                _state.update {
+                    it.copy(
+                        title = opened.title,
+                        loading = true,
+                        failed = false,
+                        renderState = ReaderRenderState.Opening,
+                    )
                 }
-                // Keep the page covered across chapter changes until its layout CSS has applied, so the
-                // chapter-start padding is present in the first visible frame instead of popping in.
+                var reachedReady = false
+                var cachePersisted = false
+                // The render state is atomic: the UI never observes a styled flag from one
+                // resource together with a locator from another resource.
                 launch {
-                    opened.styled.collect { styled -> _state.update { it.copy(contentStyled = styled) } }
-                }
-                launch {
-                    opened.transitionForward.collect { fwd ->
-                        _state.update { it.copy(transitionForward = fwd) }
+                    opened.renderState.collect { renderState ->
+                        if (renderState is ReaderRenderState.Ready) {
+                            ReaderOpenTrace.mark("reader.ready")
+                            endOpenTrace()
+                            reachedReady = true
+                            if (!cachePersisted) {
+                                cachePersisted = true
+                                // Cache repair is deliberately off the critical render path.
+                                launch {
+                                    repository.cachePublicationMetadata(
+                                        BookId(bookId),
+                                        openedResult.publicationCache,
+                                    )
+                                }
+                            }
+                            lastLocator?.let { locator ->
+                                locator.bookProgress?.let { progression ->
+                                    scheduleProgressSave(locator.toProgressSnapshot(progression))
+                                }
+                            }
+                            if (readingStart != null) readingStart = System.currentTimeMillis()
+                        }
+                        _state.update {
+                            it.copy(
+                                renderState = renderState,
+                                loading = renderState is ReaderRenderState.Opening,
+                            )
+                        }
                     }
                 }
-                // If timing already started during the loading spinner, re-arm from now so only actual
-                // reading time (post-open) is counted.
-                if (readingStart != null) readingStart = System.currentTimeMillis()
-
+                // Do not reveal a timer-expired blank navigator. The retry state is the only visible
+                // outcome when no renderable content reached Ready.
+                launch {
+                    val ready = withTimeoutOrNull(8_000) {
+                        opened.renderState.first { it is ReaderRenderState.Ready }
+                    }
+                    if (ready == null && !reachedReady && _session.value === opened) {
+                        endOpenTrace()
+                        opened.close()
+                        _session.value = null
+                        _state.update { it.copy(loading = false, failed = true) }
+                    }
+                }
                 // The live publication already contains Readium's parsed navigation tree. Use it
                 // directly instead of opening the EPUB again just to populate Browse.
                 val items = opened.tableOfContents
@@ -232,8 +288,6 @@ class ReaderViewModel @Inject constructor(
                         chapterTitle = lastChapterTitle ?: it.chapterTitle,
                     )
                 }
-                launch { repository.cacheTableOfContents(BookId(bookId), items) }
-
                 // Resolve effective settings (per-book override or global) and keep them applied live.
                 launch {
                     settingsRepository.effective(BookId(bookId)).collect { settings ->
@@ -266,17 +320,9 @@ class ReaderViewModel @Inject constructor(
                                 )
                             }
                             val chapterChanged = currentHref != null && locator.chapterId != currentHref
-                            if (progression != null) {
+                            if (progression != null && opened.renderState.value is ReaderRenderState.Ready) {
                                 scheduleProgressSave(
-                                    ReadingProgressSnapshot(
-                                        locatorJson = locator.locatorJson,
-                                        bookProgress = progression,
-                                        currentHref = locator.href,
-                                        chapterId = locator.chapterId,
-                                        chapterProgress = locator.chapterProgression,
-                                        completedChapterId = locator.completedChapterId,
-                                        completed = locator.completed,
-                                    ),
+                                    locator.toProgressSnapshot(progression),
                                 )
                                 if (chapterChanged) persistPendingProgress()
                             }
@@ -337,14 +383,26 @@ class ReaderViewModel @Inject constructor(
                     }
                 }
             } catch (cancelled: CancellationException) {
+                endOpenTrace()
                 throw cancelled
             } catch (_: Throwable) {
+                endOpenTrace()
                 _session.value?.close()
                 _session.value = null
                 _state.update { it.copy(loading = false, failed = true) }
             }
         }
     }
+
+    private fun ReaderLocator.toProgressSnapshot(progression: Double): ReadingProgressSnapshot = ReadingProgressSnapshot(
+        locatorJson = locatorJson,
+        bookProgress = progression,
+        currentHref = href,
+        chapterId = chapterId,
+        chapterProgress = chapterProgression,
+        completedChapterId = completedChapterId,
+        completed = completed,
+    )
 
     fun onRetryOpen() {
         if (_session.value != null || _state.value.loading) return

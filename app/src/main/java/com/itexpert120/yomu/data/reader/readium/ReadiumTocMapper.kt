@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.data.reader.readium
 
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import org.json.JSONObject
 import org.readium.r2.shared.DelicateReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
@@ -83,6 +84,33 @@ internal fun Publication.flattenedTableOfContents(): List<ReadiumTocEntry> = bui
     }
 
     addLinks(tableOfContents, depth = 0)
+}
+
+/** Rehydrates the import-time TOC against the current publication without walking the TOC tree. */
+@OptIn(DelicateReadiumApi::class)
+internal fun Publication.cachedTableOfContents(items: List<ReaderTocItem>): List<ReadiumTocEntry>? {
+    val orderIndices = buildMap {
+        readingOrder.forEachIndexed { index, link ->
+            putIfAbsent(link.url().normalize().removeFragment().removeQuery().toString(), index)
+        }
+    }
+    val entries = items.map { item ->
+        val locator = item.locatorJson?.let {
+            runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull()
+        }
+        if (item.locatorJson != null && locator == null) return null
+        val orderIndex = locator?.let {
+            orderIndices[it.href.normalize().removeFragment().removeQuery().toString()]
+                ?: return null
+        } ?: -1
+        ReadiumTocEntry(
+            item = item,
+            locator = locator,
+            readingOrderIndex = orderIndex,
+            startProgression = locator?.locations?.progression ?: 0.0,
+        )
+    }
+    return entries
 }
 
 private fun Locator.stableTocId(): String = buildString {

@@ -1,10 +1,5 @@
 package com.itexpert120.yomu.app.navigation
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,41 +36,35 @@ internal enum class YomuTopLevelDestination(
 /** Material's compact bottom navigation becomes a side rail on medium and expanded screens. */
 @Composable
 internal fun YomuTopLevelNavigation(
-    selected: YomuTopLevelDestination?,
+    selected: YomuTopLevelDestination,
     onSelected: (YomuTopLevelDestination) -> Unit,
-    content: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
+    content: @Composable (Modifier) -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val wide = YomuWidthClass.fromWidth(maxWidth).isWide
         if (wide) {
             Row(Modifier.fillMaxSize()) {
-                AnimatedVisibility(
-                    visible = selected != null,
-                    enter = expandHorizontally(),
-                    exit = shrinkHorizontally(),
+                NavigationRail(
+                    modifier = Modifier.fillMaxHeight(),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
-                    NavigationRail(
+                    Column(
                         modifier = Modifier.fillMaxHeight(),
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        verticalArrangement = Arrangement.Center,
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxHeight(),
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            YomuTopLevelDestination.entries.forEach { destination ->
-                                NavigationRailItem(
-                                    selected = selected == destination,
-                                    onClick = { onSelected(destination) },
-                                    icon = {
-                                        Icon(
-                                            imageVector = destination.icon,
-                                            contentDescription = destination.label,
-                                        )
-                                    },
-                                    label = { Text(destination.label) },
-                                )
-                            }
+                        YomuTopLevelDestination.entries.forEach { destination ->
+                            NavigationRailItem(
+                                selected = selected == destination,
+                                onClick = { onSelected(destination) },
+                                icon = {
+                                    Icon(
+                                        imageVector = destination.icon,
+                                        contentDescription = destination.label,
+                                    )
+                                },
+                                label = { Text(destination.label) },
+                            )
                         }
                     }
                 }
@@ -94,27 +83,21 @@ internal fun YomuTopLevelNavigation(
                 ) {
                     content(Modifier.fillMaxSize())
                 }
-                AnimatedVisibility(
-                    visible = selected != null,
-                    enter = expandVertically(),
-                    exit = shrinkVertically(),
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ) {
-                        YomuTopLevelDestination.entries.forEach { destination ->
-                            NavigationBarItem(
-                                selected = selected == destination,
-                                onClick = { onSelected(destination) },
-                                icon = {
-                                    Icon(
-                                        imageVector = destination.icon,
-                                        contentDescription = destination.label,
-                                    )
-                                },
-                                label = { Text(destination.label) },
-                            )
-                        }
+                    YomuTopLevelDestination.entries.forEach { destination ->
+                        NavigationBarItem(
+                            selected = selected == destination,
+                            onClick = { onSelected(destination) },
+                            icon = {
+                                Icon(
+                                    imageVector = destination.icon,
+                                    contentDescription = destination.label,
+                                )
+                            },
+                            label = { Text(destination.label) },
+                        )
                     }
                 }
             }

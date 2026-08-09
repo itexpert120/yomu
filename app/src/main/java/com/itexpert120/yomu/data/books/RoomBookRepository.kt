@@ -11,11 +11,12 @@ import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.reader.ReaderEngine
+import com.itexpert120.yomu.core.reader.ReaderPublicationCache
+import com.itexpert120.yomu.core.reader.ReaderPublicationCacheCodec
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.Collections
 import java.util.LinkedHashMap
@@ -34,16 +35,14 @@ class RoomBookRepository @Inject constructor(
     @ApplicationScope applicationScope: CoroutineScope,
 ) : BookRepository {
 
-    private val tocJson = Json { ignoreUnknownKeys = true }
-
     private val tocLoads = SingleFlight<String, List<ReaderTocItem>>(applicationScope)
 
-    // Process-lifetime cache of parsed TOCs, so navigating details <-> reader <-> details doesn't
-    // re-read or reparse from disk. The TOC is immutable per book, so entries never go stale.
-    private val tocMemory = Collections.synchronizedMap(
-        object : LinkedHashMap<String, List<ReaderTocItem>>(TOC_CACHE_SIZE, 0.75f, true) {
+    // Process-lifetime cache of immutable reader metadata, so navigating details <-> reader does not
+    // re-read or reparse the EPUB's TOC and resource weights.
+    private val publicationCacheMemory = Collections.synchronizedMap(
+        object : LinkedHashMap<String, ReaderPublicationCache>(TOC_CACHE_SIZE, 0.75f, true) {
             override fun removeEldestEntry(
-                eldest: MutableMap.MutableEntry<String, List<ReaderTocItem>>?,
+                eldest: MutableMap.MutableEntry<String, ReaderPublicationCache>?,
             ): Boolean = size > TOC_CACHE_SIZE
         },
     )
@@ -68,7 +67,7 @@ class RoomBookRepository @Inject constructor(
         if (keys.isEmpty()) return
         val entities = dao.getBooks(keys)
         deletedBookIds.addAll(keys)
-        keys.forEach { tocMemory.remove(it) }
+        keys.forEach { publicationCacheMemory.remove(it) }
         val staged = stageForDeletion(
             entities.flatMap { entity ->
                 buildList {
@@ -113,8 +112,16 @@ class RoomBookRepository @Inject constructor(
     override suspend fun findIdByHash(sha256: String): BookId? = dao.findIdByHash(sha256)?.let { BookId(it) }
 
     override suspend fun insert(book: ImportedBook): Boolean {
-        val cachedToc = book.tableOfContents?.let { items ->
-            BookTocEntity(book.id, tocJson.encodeToString(items))
+        val publicationCache = book.publicationCache ?: book.tableOfContents?.let { items ->
+            ReaderPublicationCache(toc = items)
+        }
+        val cachedToc = publicationCache?.let { cache ->
+            BookTocEntity(
+                bookId = book.id,
+                json = ReaderPublicationCacheCodec.encodeToc(cache.toc),
+                resourceWeightsJson = cache.resourceWeights.takeIf { it.isNotEmpty() }
+                    ?.let(ReaderPublicationCacheCodec::encodeWeights),
+            )
         }
         val inserted = database.withTransaction {
             if (dao.insert(book.toEntity()) == -1L) {
@@ -126,16 +133,18 @@ class RoomBookRepository @Inject constructor(
         }
         if (!inserted) return false
         deletedBookIds.remove(book.id)
-        book.tableOfContents?.let { tocMemory[book.id] = it }
+        publicationCache?.let { publicationCacheMemory[book.id] = it }
         return true
     }
 
     override suspend fun readingTarget(id: BookId): ReadingTarget? {
-        val entity = dao.getBook(id.value) ?: return null
+        val row = dao.getReadingTarget(id.value) ?: return null
         return ReadingTarget(
-            storagePath = entity.storagePath,
-            locatorJson = entity.locatorJson,
-            title = entity.title,
+            storagePath = row.storagePath,
+            locatorJson = row.locatorJson,
+            title = row.title,
+            publicationCache = decodePublicationCache(row.tocJson, row.resourceWeightsJson)
+                ?.also { publicationCacheMemory[id.value] = it },
         )
     }
 
@@ -196,44 +205,67 @@ class RoomBookRepository @Inject constructor(
 
     override suspend fun recentBooks(limit: Int): List<Book> = dao.getRecentBooks(limit).map { it.toBook() }
 
-    override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = tocMemory[id.value]
+    override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = publicationCacheMemory[id.value]?.toc
 
     override suspend fun tableOfContents(id: BookId): List<ReaderTocItem> {
         if (id.value in deletedBookIds) return emptyList()
-        tocMemory[id.value]?.let { return it }
+        publicationCacheMemory[id.value]?.let { return it.toc }
         readCachedTableOfContents(id.value)?.let { return it }
         return tocLoads.run(id.value) {
             if (id.value in deletedBookIds) return@run emptyList()
-            tocMemory[id.value]?.let { return@run it }
+            publicationCacheMemory[id.value]?.let { return@run it.toc }
             readCachedTableOfContents(id.value)?.let { return@run it }
             val entity = dao.getBook(id.value) ?: return@run emptyList()
             val items = runCatching { readerEngine.tableOfContents(entity.storagePath) }
                 .getOrNull()
                 ?: return@run emptyList()
-            if (persistTableOfContents(id.value, items)) items else emptyList()
+            if (persistPublicationCache(id.value, ReaderPublicationCache(toc = items))) {
+                items
+            } else {
+                emptyList()
+            }
         }
     }
 
     override suspend fun cacheTableOfContents(id: BookId, items: List<ReaderTocItem>) {
         if (id.value in deletedBookIds) return
-        tocMemory[id.value]?.let { return }
+        publicationCacheMemory[id.value]?.let { return }
         readCachedTableOfContents(id.value)?.let { return }
-        persistTableOfContents(id.value, items)
+        persistPublicationCache(id.value, ReaderPublicationCache(toc = items))
     }
 
-    private suspend fun readCachedTableOfContents(bookId: String): List<ReaderTocItem>? {
+    override suspend fun cachePublicationMetadata(id: BookId, cache: ReaderPublicationCache) {
+        if (id.value in deletedBookIds) return
+        persistPublicationCache(id.value, cache)
+    }
+
+    private suspend fun readCachedTableOfContents(bookId: String): List<ReaderTocItem>? = readCachedPublicationCache(bookId)?.toc
+
+    private suspend fun readCachedPublicationCache(bookId: String): ReaderPublicationCache? {
         val cached = dao.getCachedToc(bookId) ?: return null
-        return runCatching { tocJson.decodeFromString<List<ReaderTocItem>>(cached) }
-            .getOrNull()
-            ?.also { tocMemory[bookId] = it }
+        return decodePublicationCache(cached.json, cached.resourceWeightsJson)
+            ?.also { publicationCacheMemory[bookId] = it }
     }
 
-    private suspend fun persistTableOfContents(
+    private fun decodePublicationCache(
+        tocRaw: String?,
+        resourceWeightsRaw: String?,
+    ): ReaderPublicationCache? {
+        if (tocRaw == null) return null
+        return ReaderPublicationCacheCodec.decode(tocRaw, resourceWeightsRaw)
+    }
+
+    private suspend fun persistPublicationCache(
         bookId: String,
-        items: List<ReaderTocItem>,
+        cache: ReaderPublicationCache,
     ): Boolean {
         if (bookId in deletedBookIds) return false
-        val entity = BookTocEntity(bookId, tocJson.encodeToString(items))
+        val entity = BookTocEntity(
+            bookId = bookId,
+            json = ReaderPublicationCacheCodec.encodeToc(cache.toc),
+            resourceWeightsJson = cache.resourceWeights.takeIf { it.isNotEmpty() }
+                ?.let(ReaderPublicationCacheCodec::encodeWeights),
+        )
         val persisted = database.withTransaction {
             if (bookId in deletedBookIds || dao.getBook(bookId) == null) {
                 false
@@ -242,7 +274,7 @@ class RoomBookRepository @Inject constructor(
                 true
             }
         }
-        if (persisted && bookId !in deletedBookIds) tocMemory[bookId] = items
+        if (persisted && bookId !in deletedBookIds) publicationCacheMemory[bookId] = cache
         return persisted
     }
 

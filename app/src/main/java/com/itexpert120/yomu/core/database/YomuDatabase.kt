@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HighlightEntity::class,
         BookmarkEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
@@ -163,6 +163,15 @@ abstract class YomuDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `chapter_progress` ADD COLUMN " +
                         "`manuallyRead` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /** v12 caches per-resource weights alongside the existing flattened TOC. */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `book_toc` ADD COLUMN `resourceWeightsJson` TEXT",
                 )
             }
         }

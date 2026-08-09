@@ -16,7 +16,7 @@ enum class GroupMode(val label: String) {
 enum class LibraryViewMode(val label: String) {
     ComfortableGrid("Comfortable grid"),
     CompactGrid("Compact grid"),
-    CoverOnlyGrid("Cover only"),
+    CoverOnlyGrid("Cover-only grid"),
     List("List"),
 }
 

@@ -101,6 +101,7 @@ class ImportBooksUseCase @Inject constructor(
                     fileSizeBytes = copied.sizeBytes,
                     addedAt = System.currentTimeMillis(),
                     tableOfContents = metadata?.tableOfContents,
+                    publicationCache = metadata?.publicationCache,
                 ),
             )
             if (!inserted) {

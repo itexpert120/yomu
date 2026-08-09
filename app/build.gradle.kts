@@ -13,7 +13,7 @@ android {
     defaultConfig {
         applicationId = "com.itexpert120.yomu"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -45,6 +45,7 @@ android {
         // VectorPath: the app icon / wordmark is a single detailed logo with a long path — expected.
         disable += setOf("OldTargetApi", "VectorPath")
     }
+    compileSdkMinor = 0
 }
 
 ksp {

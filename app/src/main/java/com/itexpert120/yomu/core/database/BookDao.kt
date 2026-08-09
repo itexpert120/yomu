@@ -9,6 +9,16 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface BookDao {
 
+    /** Single-row projection used by the reader opening path. */
+    @Query(
+        "SELECT books.storagePath AS storagePath, books.locatorJson AS locatorJson, " +
+            "books.title AS title, book_toc.json AS tocJson, " +
+            "book_toc.resourceWeightsJson AS resourceWeightsJson " +
+            "FROM books LEFT JOIN book_toc ON book_toc.bookId = books.id " +
+            "WHERE books.id = :id",
+    )
+    suspend fun getReadingTarget(id: String): ReadingTargetRow?
+
     @Query("SELECT * FROM books ORDER BY lastOpenedAt DESC")
     fun observeBooks(): Flow<List<BookEntity>>
 
@@ -163,8 +173,8 @@ interface BookDao {
 
     // region Cached table of contents
 
-    @Query("SELECT json FROM book_toc WHERE bookId = :bookId")
-    suspend fun getCachedToc(bookId: String): String?
+    @Query("SELECT * FROM book_toc WHERE bookId = :bookId")
+    suspend fun getCachedToc(bookId: String): BookTocEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertToc(entity: BookTocEntity)
@@ -215,6 +225,15 @@ interface BookDao {
 
     // endregion
 }
+
+/** Raw Room projection for the reader's single database lookup. */
+data class ReadingTargetRow(
+    val storagePath: String,
+    val locatorJson: String?,
+    val title: String,
+    val tocJson: String?,
+    val resourceWeightsJson: String?,
+)
 
 /** Lightweight projection of a reading session: when it started and how long it lasted. */
 data class SessionAggregate(

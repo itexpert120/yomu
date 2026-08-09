@@ -48,20 +48,20 @@ fun ReaderNavigatorHost(
                     // After a config change a placeholder navigator may have been restored (via the
                     // activity's restore factory). Remove whatever is there and add a fresh fragment
                     // bound to the real session factory, so the reader rebuilds correctly.
-                    fragmentManager.findFragmentByTag(tag)?.let { stale ->
-                        fragmentManager.beginTransaction()
-                            .remove(stale)
-                            .commitNowAllowingStateLoss()
-                    }
                     @Suppress("UNCHECKED_CAST")
                     val fragmentClass =
                         Class.forName(session.fragmentClassName) as Class<out Fragment>
                     fragmentManager.fragmentFactory = session.fragmentFactory
-                    fragmentManager.beginTransaction()
+                    val transaction = fragmentManager.beginTransaction()
                         .setReorderingAllowed(true)
+                    fragmentManager.findFragmentByTag(tag)?.let(transaction::remove)
+                    transaction
                         .add(id, fragmentClass, Bundle(), tag)
-                        .commitNow()
-                    session.onFragmentHosted(fragmentManager, tag)
+                        // Let Compose render the shell and cover before Readium constructs its
+                        // WebView. Hosting is still one ordered transaction, but no longer blocks
+                        // the first frame with commitNow/remove+add work.
+                        .runOnCommit { session.onFragmentHosted(fragmentManager, tag) }
+                        .commitAllowingStateLoss()
                 }
             }
         },

@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "open-reader"
 include(":app")
+include(":benchmark")

@@ -56,8 +56,8 @@ private val ScrollIndicatorMinThumbHeight = 48.dp
  * A compact Material-aligned vertical scrollbar for any Compose scroll container that exposes a
  * [ScrollIndicatorState]. It remains subtly visible at rest and strengthens while content moves,
  * making long reading and chapter surfaces easy to orient without competing with their content.
- * The wider transparent drag lane keeps the visible rail delicate while supporting thumb dragging
- * and tap-to-jump anywhere along the track.
+ * The wider transparent drag lane keeps the visible rail delicate while supporting thumb dragging.
+ * Track taps are ignored so an incidental touch beside book-details content never jumps the list.
  */
 @Composable
 fun YomuVerticalScrollIndicator(
@@ -153,17 +153,16 @@ private fun VerticalScrollIndicator(
                         return@awaitEachGesture
                     }
 
-                    down.consume()
                     val minThumbHeight = ScrollIndicatorMinThumbHeight.toPx()
                     val initialThumb = initialMetrics.thumbGeometry(
                         trackHeight = size.height.toFloat(),
                         minThumbHeight = minThumbHeight,
                     )
-                    val grabOffset = if (down.position.y in initialThumb.top..(initialThumb.top + initialThumb.height)) {
-                        down.position.y - initialThumb.top
-                    } else {
-                        initialThumb.height / 2f
+                    if (down.position.y !in initialThumb.top..(initialThumb.top + initialThumb.height)) {
+                        return@awaitEachGesture
                     }
+                    down.consume()
+                    val grabOffset = down.position.y - initialThumb.top
 
                     fun scrollTo(pointerY: Float) {
                         val latestMetrics = currentMetrics.value
@@ -177,7 +176,6 @@ private fun VerticalScrollIndicator(
                         dragProgress.trySend(progress)
                     }
 
-                    scrollTo(down.position.y)
                     while (true) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
                             ?: break

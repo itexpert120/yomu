@@ -2,6 +2,7 @@ package com.itexpert120.yomu.data.reader.readium
 
 import android.content.Context
 import android.graphics.Bitmap
+import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.readium.r2.shared.publication.services.cover
@@ -31,6 +32,7 @@ class ReadiumMetadataExtractor @Inject constructor(
         val publisher: String?,
         val cover: Bitmap?,
         val tableOfContents: List<ReaderTocItem>?,
+        val publicationCache: ReaderPublicationCache?,
     )
 
     private val httpClient = DefaultHttpClient()
@@ -55,6 +57,7 @@ class ReadiumMetadataExtractor @Inject constructor(
             }
         return try {
             val metadata = publication.metadata
+            val tableOfContents = publication.flattenedTableOfContents().map { it.item }
             ExtractedMetadata(
                 title = metadata.title,
                 author = metadata.authors.mapNotNull { it.name }.joinToString(", ")
@@ -63,7 +66,11 @@ class ReadiumMetadataExtractor @Inject constructor(
                 language = metadata.languages.firstOrNull(),
                 publisher = metadata.publishers.mapNotNull { it.name }.firstOrNull(),
                 cover = publication.cover(),
-                tableOfContents = publication.flattenedTableOfContents().map { it.item },
+                tableOfContents = tableOfContents,
+                publicationCache = ReaderPublicationCache(
+                    toc = tableOfContents,
+                    resourceWeights = resourceWeightMap(file.absolutePath, publication.readingOrder),
+                ),
             )
         } finally {
             publication.close()

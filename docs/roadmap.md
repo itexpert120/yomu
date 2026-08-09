@@ -284,7 +284,7 @@ Acceptance criteria:
 - Reader opens quickly enough for daily use.
 - Settings/theme changes do not visibly jank.
 
-**Status: Not started.**
+**Status: Partial.** The on-demand reader-open path now resolves target/settings concurrently, reuses a persisted TOC/resource-weight cache, creates the navigator in one asynchronous transaction, preloads only the active bundled upright font, and reveals one generation-safe page after critical styling plus the next WebView pre-draw. `ReaderOpenTrace` markers cover tap/navigation, target/settings, publication/cache preparation, fragment attach, resource load, bootstrap, pre-draw, and final reveal. The `:benchmark` module generates normal and 1,500-chapter stress EPUB fixtures and contains Library Resume, Book Details Resume, and non-current chapter harnesses. Baseline profiles, seeded-device fixture automation, and the 30%/20% performance acceptance run remain to be measured on reference hardware.
 
 ## Phase 12: Optional Expansion
 

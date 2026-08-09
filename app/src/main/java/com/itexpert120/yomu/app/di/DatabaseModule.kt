@@ -31,6 +31,7 @@ object DatabaseModule {
             YomuDatabase.MIGRATION_8_9,
             YomuDatabase.MIGRATION_9_10,
             YomuDatabase.MIGRATION_10_11,
+            YomuDatabase.MIGRATION_11_12,
         )
         .build()
 

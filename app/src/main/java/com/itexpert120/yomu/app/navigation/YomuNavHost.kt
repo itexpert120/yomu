@@ -24,6 +24,7 @@ import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
 import com.itexpert120.yomu.core.designsystem.yomuScreenExit
+import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
@@ -41,23 +42,24 @@ fun YomuNavHost(
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
-    val currentDestination = navController.currentBackStackEntryAsState().value?.destination
-    val topLevelDestination = when {
-        currentDestination?.hasRoute<Library>() == true -> YomuTopLevelDestination.Library
-        currentDestination?.hasRoute<Stats>() == true -> YomuTopLevelDestination.Statistics
-        currentDestination?.hasRoute<Settings>() == true -> YomuTopLevelDestination.Settings
-        else -> null
+
+    // A Resume/chapter tap can arrive twice while Navigation is moving the current entry out. The
+    // lifecycle check makes the first navigation win without queuing duplicate reader destinations.
+    fun navigateToReader(destination: Reader, reason: String) {
+        val entry = navController.currentBackStackEntry
+        if (entry?.lifecycle?.currentState != Lifecycle.State.RESUMED) return
+        ReaderOpenTrace.mark("reader.tap.$reason")
+        navController.navigate(destination)
     }
 
     // An EPUB opened from outside the app (file manager / share) is imported off-screen, then we
     // jump straight into the reader for the resolved book (an existing entry on a duplicate).
     LaunchedEffect(Unit) {
         externalOpenViewModel.openBook.collect { bookId ->
-            navController.navigate(Reader(bookId))
+            navigateToReader(Reader(bookId), "external")
         }
     }
-    // Screen changes use one layered horizontal handoff. The direction follows the route pair,
-    // while back reverses the same motion from the opposite side.
+
     val motionEnabled = yomuAnimationsEnabled()
     val layoutDirection = LocalLayoutDirection.current
     val screenTravelDistancePx = with(LocalDensity.current) {
@@ -67,7 +69,126 @@ fun YomuNavHost(
         LayoutDirection.Ltr -> forward
         LayoutDirection.Rtl -> !forward
     }
-    val navContent: @Composable (Modifier) -> Unit = { hostModifier ->
+
+    // Like Mihon, Home owns both the top-level content and its navigation chrome. The root
+    // transition therefore moves the whole Home frame—including the bar or rail—to a child screen.
+    NavHost(
+        navController = navController,
+        startDestination = Home,
+        modifier = modifier,
+        enterTransition = {
+            val sameEntry = initialState.id == targetState.id
+            val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
+            when {
+                sameEntry || !motionEnabled -> EnterTransition.None
+                else -> yomuScreenEnter(
+                    travelDistancePx = screenTravelDistancePx,
+                    forward = physicalDirection(forward),
+                )
+            }
+        },
+        exitTransition = {
+            val sameEntry = initialState.id == targetState.id
+            val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
+            when {
+                sameEntry || !motionEnabled -> ExitTransition.None
+                else -> yomuScreenExit(
+                    travelDistancePx = screenTravelDistancePx,
+                    forward = physicalDirection(forward),
+                )
+            }
+        },
+        popEnterTransition = {
+            val sameEntry = initialState.id == targetState.id
+            when {
+                sameEntry || !motionEnabled -> EnterTransition.None
+                else -> yomuScreenEnter(
+                    travelDistancePx = screenTravelDistancePx,
+                    forward = physicalDirection(false),
+                )
+            }
+        },
+        popExitTransition = {
+            val sameEntry = initialState.id == targetState.id
+            when {
+                sameEntry || !motionEnabled -> ExitTransition.None
+                else -> yomuScreenExit(
+                    travelDistancePx = screenTravelDistancePx,
+                    forward = physicalDirection(false),
+                )
+            }
+        },
+    ) {
+        composable<Home> {
+            TopLevelNavigationShell(
+                appViewModel = appViewModel,
+                onOpenReader = ::navigateToReader,
+                onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
+                onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                onOpenAbout = { navController.navigate(About) },
+            )
+        }
+        composable<BookDetails> { entry ->
+            val args = entry.toRoute<BookDetails>()
+            BookDetailsRoute(
+                onBack = navController::popBackStackIfResumed,
+                onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
+                onEdit = { navController.navigate(EditBook(args.bookId)) },
+                onOpenChapter = { locator ->
+                    navigateToReader(Reader(args.bookId, locator), "chapter")
+                },
+            )
+        }
+        composable<EditBook> {
+            EditBookRoute(onBack = navController::popBackStackIfResumed)
+        }
+        composable<ReaderDefaults> {
+            ReaderDefaultsRoute(
+                onBack = navController::popBackStackIfResumed,
+                onOpenFontLibrary = { navController.navigate(FontLibrary) },
+            )
+        }
+        composable<FontLibrary> {
+            FontLibraryRoute(onBack = navController::popBackStackIfResumed)
+        }
+        composable<About> {
+            AboutRoute(onBack = navController::popBackStackIfResumed)
+        }
+        composable<Reader> {
+            ReaderRoute(onBack = navController::popBackStackIfResumed)
+        }
+    }
+}
+
+@Composable
+private fun TopLevelNavigationShell(
+    appViewModel: AppViewModel,
+    onOpenReader: (Reader, String) -> Unit,
+    onOpenDetails: (String) -> Unit,
+    onOpenFontLibrary: () -> Unit,
+    onOpenAbout: () -> Unit,
+) {
+    val navController = rememberNavController()
+    val currentDestination = navController.currentBackStackEntryAsState().value?.destination
+    val selected = when {
+        currentDestination?.hasRoute<Stats>() == true -> YomuTopLevelDestination.Statistics
+        currentDestination?.hasRoute<Settings>() == true -> YomuTopLevelDestination.Settings
+        else -> YomuTopLevelDestination.Library
+    }
+    val motionEnabled = yomuAnimationsEnabled()
+    val layoutDirection = LocalLayoutDirection.current
+    val screenTravelDistancePx = with(LocalDensity.current) {
+        YomuMotion.ScreenTransitionDistance.roundToPx()
+    }
+    fun physicalDirection(forward: Boolean): Boolean = when (layoutDirection) {
+        LayoutDirection.Ltr -> forward
+        LayoutDirection.Rtl -> !forward
+    }
+
+    YomuTopLevelNavigation(
+        selected = selected,
+        onSelected = navController::navigateTopLevel,
+    ) { hostModifier ->
         NavHost(
             navController = navController,
             startDestination = Library,
@@ -117,59 +238,23 @@ fun YomuNavHost(
         ) {
             composable<Library> {
                 LibraryRoute(
-                    onOpenReader = { bookId -> navController.navigate(Reader(bookId)) },
-                    onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
+                    onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
+                    onOpenDetails = onOpenDetails,
                 )
             }
-            composable<BookDetails> { entry ->
-                val args = entry.toRoute<BookDetails>()
-                BookDetailsRoute(
-                    onBack = navController::popBackStackIfResumed,
-                    onRead = { navController.navigate(Reader(args.bookId)) },
-                    onEdit = { navController.navigate(EditBook(args.bookId)) },
-                    onOpenChapter = { locator -> navController.navigate(Reader(args.bookId, locator)) },
-                )
-            }
-            composable<EditBook> {
-                EditBookRoute(onBack = navController::popBackStackIfResumed)
+            composable<Stats> {
+                StatsRoute(onBack = null)
             }
             composable<Settings> {
                 SettingsRoute(
                     appViewModel = appViewModel,
                     onBack = null,
-                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                    onOpenAbout = { navController.navigate(About) },
+                    onOpenFontLibrary = onOpenFontLibrary,
+                    onOpenAbout = onOpenAbout,
                 )
-            }
-            composable<ReaderDefaults> {
-                ReaderDefaultsRoute(
-                    onBack = navController::popBackStackIfResumed,
-                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                )
-            }
-            composable<FontLibrary> {
-                FontLibraryRoute(onBack = navController::popBackStackIfResumed)
-            }
-            composable<Stats> {
-                StatsRoute(onBack = null)
-            }
-            composable<About> {
-                AboutRoute(onBack = navController::popBackStackIfResumed)
-            }
-            composable<Reader> {
-                ReaderRoute(onBack = navController::popBackStackIfResumed)
             }
         }
     }
-
-    // Keep the NavHost in one stable composition slot. The scaffold hides its chrome for child
-    // routes instead of replacing the NavHost, so child screens retain route transitions.
-    YomuTopLevelNavigation(
-        selected = topLevelDestination,
-        onSelected = navController::navigateTopLevel,
-        content = navContent,
-        modifier = modifier,
-    )
 }
 
 /** Top-level destinations have a stable left-to-right order for directional screen changes. */
@@ -191,8 +276,6 @@ private fun NavDestination.topLevelIndex(): Int? = when {
 }
 
 private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination) {
-    // Keep one coordinated shared-axis handoff in flight. Stacking destinations from rapid rail
-    // or bar taps interrupts the easing curve and produces a visible position jump.
     if (currentBackStackEntry?.lifecycle?.currentState != Lifecycle.State.RESUMED) return
 
     when (destination) {

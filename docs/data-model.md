@@ -4,7 +4,7 @@ This document defines the first-pass data model for Yomu. It is intentionally im
 
 ## Implementation status (current)
 
-Room is live at **schema version 11** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→11 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
+Room is live at **schema version 12** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→12 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
 
 - Built tables: `books`, `chapter_reads`, `chapter_progress`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
@@ -12,9 +12,9 @@ Room is live at **schema version 11** (`core/database/YomuDatabase`, schemas exp
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
 - Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
-The "As-built schema (v11)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
+The "As-built schema (v12)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
 
-## As-built schema (v11)
+## As-built schema (v12)
 
 ### `books` (BookEntity)
 
@@ -42,7 +42,7 @@ Primary key `bookId`; `json` holds a serialised per-book `ReaderSettings` overri
 
 ### `book_toc` (BookTocEntity)
 
-Primary key `bookId`; `json` holds Readium's flattened navigation tree. New imports write this row atomically with the book after extracting metadata, cover, and TOC from one publication instance. A cached `[]` is a valid publication with no TOC; absence means extraction has not succeeded and remains retryable. Legacy cache misses are single-flight per book.
+Primary key `bookId`; `json` holds the flattened Yomu TOC and nullable `resourceWeightsJson` holds positive ZIP-size weights keyed by normalized reading-order href. New imports write this row atomically with the book after extracting metadata, cover, TOC, and weights from one publication instance. A cached `[]` is a valid publication with no TOC; absence means extraction has not succeeded and remains retryable. Legacy v11 rows keep their TOC and lazily receive weights after the first successful open. Reader opening fetches the book row and cache through one projection, validates it against the opened publication, and persists repaired metadata after the page is visible.
 
 ### Migrations
 
@@ -56,6 +56,7 @@ Primary key `bookId`; `json` holds Readium's flattened navigation tree. New impo
 - `8→9`: adds `bookmarks`.
 - `9→10`: adds logical chapter progress, the active chapter id on books, and fragment-safe TOC cache rebuilding.
 - `10→11`: records whether chapter completion was explicitly marked by the user.
+- `11→12`: adds nullable `book_toc.resourceWeightsJson`; existing TOC JSON remains valid and is enriched lazily.
 
 No destructive migrations are used for library data.
 
@@ -76,7 +77,7 @@ Use strongly typed IDs in Kotlin models even if Room stores strings/longs.
 
 ## Core Entities
 
-> Target model. The current v9 schema keeps books flat while adding focused TOC, statistics, highlight, and bookmark tables. Richer `BookFile`, `Author`, `Series`, `Group`, and cross-reference entities remain planned.
+> Target model. The current v12 schema keeps books flat while adding focused TOC/cache, statistics, highlight, and bookmark tables. Richer `BookFile`, `Author`, `Series`, `Group`, and cross-reference entities remain planned.
 
 ### Book
 
@@ -475,7 +476,7 @@ Do not build full-text indexing before import and reader are stable.
 
 ## Room Migration Rules
 
-The schema is live at version 11 with explicit, additive migrations (1→11), exported schema JSON under `app/schemas`, and an instrumentation migration test. The rules below remain in force:
+The schema is live at version 12 with explicit, additive migrations (1→12), exported schema JSON under `app/schemas`, and an instrumentation migration test. The rules below remain in force:
 
 - Add migration tests from the first schema.
 - Never use destructive migrations for user library data.

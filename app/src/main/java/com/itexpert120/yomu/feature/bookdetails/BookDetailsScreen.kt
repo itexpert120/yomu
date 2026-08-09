@@ -244,6 +244,7 @@ fun BookDetailsScreen(
                 // and the contents/description into a right column so the two read side by side
                 // instead of the cover sitting alone above a long scroll. Phones stay single-pane.
                 val wideEnough = maxWidth.supportsYomuTwoPane()
+                val portraitTablet = wideEnough && maxHeight > maxWidth
 
                 if (wideEnough && book != null) {
                     TwoPaneDetails(
@@ -253,6 +254,7 @@ fun BookDetailsScreen(
                         detailsScrollState = detailsScrollState,
                         navBottom = navBottom,
                         topInset = topBarHeight,
+                        stackBookIdentity = portraitTablet,
                         onCoverClick = { if (book.coverImagePath != null) showCover = true },
                         onTocSortChange = onTocSortChange,
                         onOpenChapter = onOpenChapter,
@@ -544,6 +546,7 @@ private fun TwoPaneDetails(
     detailsScrollState: androidx.compose.foundation.ScrollState,
     navBottom: androidx.compose.ui.unit.Dp,
     topInset: Dp,
+    stackBookIdentity: Boolean,
     onCoverClick: () -> Unit,
     onTocSortChange: (TocSortMode) -> Unit,
     onOpenChapter: (String) -> Unit,
@@ -565,7 +568,8 @@ private fun TwoPaneDetails(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(detailsScrollState)
-                        .padding(top = 4.dp, bottom = navBottom + 28.dp),
+                        // The backdrop begins at the window edge beneath the transparent top bar.
+                        .padding(bottom = navBottom + 28.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     BookHeader(
@@ -573,6 +577,7 @@ private fun TwoPaneDetails(
                         topInset = topInset,
                         onCoverClick = onCoverClick,
                         coverWidth = 176.dp,
+                        stackIdentity = stackBookIdentity,
                     )
                 }
                 YomuVerticalScrollIndicator(
@@ -639,6 +644,7 @@ private fun BookHeader(
     onCoverClick: () -> Unit,
     topInset: Dp = 0.dp,
     coverWidth: Dp = 108.dp,
+    stackIdentity: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -680,42 +686,42 @@ private fun BookHeader(
                     .padding(top = topInset + 16.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    DetailCover(
-                        book,
-                        onClick = onCoverClick,
-                        modifier = Modifier.width(coverWidth),
-                    )
+                if (stackIdentity) {
                     Column(
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(top = 2.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        Text(
-                            text = book.title,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.headlineSmall,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
+                        DetailCover(
+                            book,
+                            onClick = onCoverClick,
+                            modifier = Modifier.width(coverWidth),
                         )
-                        Text(
-                            text = book.author,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
+                        BookIdentityDetails(
+                            book = book,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        book.series?.let { SeriesTag(it) }
-                        ReadingStatus(
-                            state = book.readingState,
-                            readingTime = book.readingTime,
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        DetailCover(
+                            book,
+                            onClick = onCoverClick,
+                            modifier = Modifier.width(coverWidth),
+                        )
+                        BookIdentityDetails(
+                            book = book,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 2.dp),
                         )
                     }
                 }
@@ -765,6 +771,37 @@ private fun BookHeader(
                 ExpandableBookDescription(description = description)
             }
         }
+    }
+}
+
+@Composable
+private fun BookIdentityDetails(
+    book: BookDetailsUi,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = book.title,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.headlineSmall,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = book.author,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        book.series?.let { SeriesTag(it) }
+        ReadingStatus(
+            state = book.readingState,
+            readingTime = book.readingTime,
+        )
     }
 }
 

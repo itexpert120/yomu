@@ -23,7 +23,7 @@ class DatabaseMigrationTest {
         helper.createDatabase(DatabaseName, 1).close()
         helper.runMigrationsAndValidate(
             DatabaseName,
-            11,
+            12,
             true,
             YomuDatabase.MIGRATION_1_2,
             YomuDatabase.MIGRATION_2_3,
@@ -35,6 +35,7 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_8_9,
             YomuDatabase.MIGRATION_9_10,
             YomuDatabase.MIGRATION_10_11,
+            YomuDatabase.MIGRATION_11_12,
         ).close()
     }
 

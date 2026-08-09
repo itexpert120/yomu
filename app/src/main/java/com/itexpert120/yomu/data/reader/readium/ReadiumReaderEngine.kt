@@ -15,6 +15,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.webkit.WebView
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.view.ViewCompat
@@ -29,6 +30,11 @@ import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderLocator
+import com.itexpert120.yomu.core.reader.ReaderOpenRequest
+import com.itexpert120.yomu.core.reader.ReaderOpenResult
+import com.itexpert120.yomu.core.reader.ReaderOpenTrace
+import com.itexpert120.yomu.core.reader.ReaderPublicationCache
+import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
@@ -37,7 +43,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +56,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
@@ -81,10 +90,9 @@ import org.readium.r2.shared.util.toUrl
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
-import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.ceil
+import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
@@ -93,6 +101,8 @@ import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 class ReadiumReaderEngine @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ReaderEngine {
+
+    private val customFontCssCache = CustomFontCssCache()
 
     private val httpClient = DefaultHttpClient()
     private val assetRetriever = AssetRetriever(context.contentResolver, httpClient)
@@ -105,24 +115,60 @@ class ReadiumReaderEngine @Inject constructor(
         ),
     )
 
-    override suspend fun open(
-        filePath: String,
-        initialLocatorJson: String?,
-        initialSettings: ReaderSettings,
-    ): ReaderSession? {
-        val publication = openPublication(filePath) ?: return null
-        val resourceWeights = loadResourceWeights(filePath, publication.readingOrder)
-        val tableOfContents = withContext(Dispatchers.Default) {
-            publication.flattenedTableOfContents()
+    override suspend fun open(request: ReaderOpenRequest): ReaderOpenResult? {
+        ReaderOpenTrace.mark("reader.publication-open")
+        val publication = openPublication(request.filePath) ?: return null
+        ReaderOpenTrace.mark("reader.publication-opened")
+        return try {
+            coroutineScope {
+                val cachedToc = async(Dispatchers.Default) {
+                    request.publicationCache?.toc?.let { cached ->
+                        publication.cachedTableOfContents(cached)
+                    }
+                }
+                val readingOrderKeys = publication.readingOrder.map { it.normalizedResourceCacheKey() }
+                val cachedWeightsInOrder = request.publicationCache?.validatedWeights(readingOrderKeys)
+                val weights = if (cachedWeightsInOrder != null) {
+                    async(Dispatchers.Default) {
+                        cachedWeightsInOrder
+                    }
+                } else {
+                    async { resourceWeightMap(request.filePath, publication.readingOrder) }
+                        .let { deferred ->
+                            async(Dispatchers.Default) {
+                                val map = deferred.await()
+                                readingOrderKeys.map { map[it] ?: 1 }
+                            }
+                        }
+                }
+                val tableOfContents = cachedToc.await()
+                    ?: async(Dispatchers.Default) { publication.flattenedTableOfContents() }.await()
+                val resourceWeights = weights.await()
+                ReaderOpenTrace.mark("reader.cache-prepared")
+                val tocItems = tableOfContents.map { it.item }
+                val effectiveCache = ReaderPublicationCache(
+                    toc = tocItems,
+                    resourceWeights = readingOrderKeys.zip(resourceWeights).toMap(),
+                )
+                val session = ReadiumReaderSession(
+                    context = context,
+                    publication = publication,
+                    initialLocatorJson = request.initialLocatorJson,
+                    initialSettings = request.initialSettings,
+                    resourceWeights = resourceWeights,
+                    mappedTableOfContents = tableOfContents,
+                    customFontCssCache = customFontCssCache,
+                )
+                ReaderOpenTrace.mark("reader.session-assembled")
+                ReaderOpenResult(session, effectiveCache)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            runCatching { publication.close() }
+            throw cancelled
+        } catch (_: Throwable) {
+            runCatching { publication.close() }
+            null
         }
-        return ReadiumReaderSession(
-            context,
-            publication,
-            initialLocatorJson,
-            initialSettings,
-            resourceWeights,
-            tableOfContents,
-        )
     }
 
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem>? {
@@ -143,32 +189,25 @@ class ReadiumReaderEngine @Inject constructor(
                 null
             }
     }
+}
 
-    private suspend fun loadResourceWeights(
-        filePath: String,
-        readingOrder: List<Link>,
-    ): List<Int> = withContext(Dispatchers.IO) {
-        runCatching {
-            ZipFile(File(filePath)).use { archive ->
-                readingOrder.map { link ->
-                    val entryName = link.url().toString()
-                        .substringBefore('#')
-                        .substringBefore('?')
-                        .removePrefix("/")
-                    val length = (
-                        archive.getEntry(entryName)
-                            ?: archive.getEntry(Uri.decode(entryName))
-                        )?.size ?: 0L
-                    ceil(length.coerceAtLeast(1L).toDouble() / POSITION_CHUNK_BYTES)
-                        .toInt()
-                        .coerceAtLeast(1)
-                }
-            }
-        }.getOrElse { List(readingOrder.size) { 1 } }
-    }
+/** Process-lifetime cache for one active custom font; bounded to avoid pinning large font blobs. */
+private class CustomFontCssCache {
+    private var key: String? = null
+    private var css: String? = null
 
-    private companion object {
-        const val POSITION_CHUNK_BYTES = 1024.0
+    @Synchronized
+    fun get(key: String): String? = css?.takeIf { this.key == key }
+
+    @Synchronized
+    fun put(key: String, css: String) {
+        if (css.length <= 16 * 1024 * 1024) {
+            this.key = key
+            this.css = css
+        } else {
+            this.key = null
+            this.css = null
+        }
     }
 }
 
@@ -180,6 +219,7 @@ private class ReadiumReaderSession(
     initialSettings: ReaderSettings,
     private val resourceWeights: List<Int>,
     mappedTableOfContents: List<ReadiumTocEntry>,
+    private val customFontCssCache: CustomFontCssCache,
 ) : ReaderSession {
 
     override val title: String = publication.metadata.title ?: "Reading"
@@ -188,17 +228,9 @@ private class ReadiumReaderSession(
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
-    // Flips true on the navigator's first onPageLoaded (real first paint) — the loading gate.
-    private val _ready = MutableStateFlow(false)
-    override val ready: StateFlow<Boolean> = _ready.asStateFlow()
-
-    // Flips false at the start of a chapter change and true once the new resource's layout CSS (incl.
-    // the immersive chapter-start top padding) has applied — so the page is revealed already padded
-    // instead of jolting when the spacer pops in a few frames after first paint.
-    private val _styled = MutableStateFlow(false)
-    override val styled: StateFlow<Boolean> = _styled.asStateFlow()
-    private val _transitionForward = MutableStateFlow(true)
-    override val transitionForward: StateFlow<Boolean> = _transitionForward.asStateFlow()
+    // The page remains covered until its target resource and all layout-affecting styling are ready.
+    private val _renderState = MutableStateFlow<ReaderRenderState>(ReaderRenderState.Opening)
+    override val renderState: StateFlow<ReaderRenderState> = _renderState.asStateFlow()
     private var revealWatchdog: Job? = null
 
     // Cached @font-face CSS (base64 data URLs) for the active custom font, keyed by its family+paths so
@@ -236,6 +268,8 @@ private class ReadiumReaderSession(
     private var locatorCollectionJob: Job? = null
     private var scrollProgressJob: Job? = null
     private var restorationJob: Job? = null
+    private var styleJob: Job? = null
+    private var renderGeneration = 0L
     private var restorationGeneration = 0L
     private var hostedFragmentManager: FragmentManager? = null
     private var hostedFragmentTag: String? = null
@@ -253,12 +287,6 @@ private class ReadiumReaderSession(
 
     private var latestVisualPage: VisualPageState? = null
     private var pendingCompletedChapterId: String? = null
-
-    // The resource we last injected the scroll-width CSS override into (re-injected per resource).
-    private var lastStyledHref: String? = null
-
-    // Settings requested before the navigator exists; applied once it is hosted.
-    private var pendingSettings: ReaderSettings? = initialSettings
 
     // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
     private var currentSettings: ReaderSettings = initialSettings
@@ -315,36 +343,16 @@ private class ReadiumReaderSession(
         }
     }
 
-    // Inject the scroll-width CSS fix the moment each resource finishes loading — earlier than the
-    // currentLocator settle, so the page doesn't briefly flash at the narrow default width first.
+    // Readium creates a fresh WebView for each resource. One generation-aware finalizer owns all
+    // critical styling and is the only place allowed to reveal that resource.
     private val paginationListener = object : EpubNavigatorFragment.PaginationListener {
         override fun onPageLoaded() {
-            // First real paint — release the "Opening…" gate. Idempotent (fires per resource).
-            _ready.value = true
-            // Readium builds a fresh WebView per resource, so every script must be re-injected here —
-            // this is the one authoritative per-resource hook.
-            scope.launch {
-                // Apply the layout CSS (incl. the immersive chapter-start top padding) and reveal the
-                // page only AFTER it lands, so the padding is part of the first visible frame instead
-                // of shoving the content down a few frames later. Best-effort: reveal anyway if the
-                // injection can't be confirmed, rather than leaving the page covered.
-                evalWithRetry(scrollCssJsForCurrent())
-                // Readium owns the page background/text preferences; these extra semantic roles
-                // keep links, selections, captions and separators on the complete Yomu palette.
-                evalWithRetry(readerPaletteJs(currentSettings))
-                // Embed the custom font (if any) before revealing, so text paints in it directly
-                // rather than flashing a fallback and re-flowing.
-                applyCustomFontInline()
-                revealWatchdog?.cancel()
-                _styled.value = true
-                // Non-visual injections can follow once the page is shown.
-                injectViewportFit()
-                // Overscroll used to be injected ONLY from the currentLocator path (gated on href
-                // change), so a chapter that loaded without a fresh locator emission could be left
-                // without the rubberband gesture; inject it here too.
-                injectOverscroll()
-                applyScrollbars(currentSettings)
-                clearImmersiveScrollTopPadding()
+            ReaderOpenTrace.mark("reader.target-resource-loaded")
+            // Initial opening has no prior resource transition to finalize. Chapter changes are
+            // finalized from updateCurrentLocator instead: Readium invokes this callback before it
+            // publishes the new locator, and starting both passes can mutate the WebView twice.
+            if (_renderState.value is ReaderRenderState.Opening) {
+                scheduleCriticalStyling()
             }
         }
 
@@ -360,11 +368,51 @@ private class ReadiumReaderSession(
         }
     }
 
-    override val fragmentFactory: FragmentFactory =
-        navigatorFactory.createFragmentFactory(
-            initialLocator = initialLocator,
+    private fun shouldPreloadBundledFont(family: String): Boolean = currentSettings.customFont == null && currentSettings.font.cssFamily == family
+
+    private suspend fun criticalBootstrapJs(): String {
+        val customFontCss = currentSettings.customFont?.let { ensureCustomFontCss(it) }
+        val fontMutation = customFontCss?.let(::customFontInjectJs) ?: CUSTOM_FONT_CLEAR_JS
+        return listOf(
+            viewportFitJs(
+                enabled = currentSettings.immersiveChrome && currentSettings.layout == ReaderLayout.Scroll,
+            ),
+            scrollCssJsForCurrent(),
+            readerPaletteJs(currentSettings),
+            fontMutation,
+        ).joinToString("\n")
+    }
+
+    private fun scheduleCriticalStyling() {
+        styleJob?.cancel()
+        val generation = renderGeneration
+        val expectedHref = lastLocator?.href?.toString()
+        styleJob = scope.launch {
+            ReaderOpenTrace.mark("reader.critical-bootstrap-start")
+            applyScrollbars(currentSettings)
+            // All layout-affecting mutations go through one idempotent bootstrap. This prevents
+            // locator, settings, and page-loaded callbacks from racing one another on first paint.
+            if (!evalWithRetry(criticalBootstrapJs())) return@launch
+            clearImmersiveScrollTopPadding()
+            val nav = navigator ?: return@launch
+            if (generation != renderGeneration || expectedHref != lastLocator?.href?.toString()) return@launch
+            if (!awaitRenderableContent(nav)) return@launch
+            if (!awaitNextPreDraw(nav)) return@launch
+            if (generation != renderGeneration || expectedHref != lastLocator?.href?.toString()) return@launch
+            revealWatchdog?.cancel()
+            ReaderOpenTrace.mark("reader.pre-draw")
+            _renderState.value = ReaderRenderState.Ready(lastLocator?.href?.toString())
+            ReaderOpenTrace.mark("reader.final-reveal")
+            // Gesture work is deliberately after the first stable frame.
+            injectOverscroll()
+        }
+    }
+
+    override val fragmentFactory: FragmentFactory
+        get() = navigatorFactory.createFragmentFactory(
+            initialLocator = lastLocator ?: initialLocator,
             readingOrder = publication.readingOrder,
-            initialPreferences = initialSettings.toPreferences(),
+            initialPreferences = currentSettings.toPreferences(),
             listener = listener,
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration {
@@ -374,6 +422,9 @@ private class ReadiumReaderSession(
                 // the engine-level guard the InputListener.onDrag swallow couldn't provide. Paged
                 // mode is untouched — the flag only gates scroll-mode swipes.
                 disablePageTurnsWhileScrolling = true
+                // Avoid a native inset pass on the first immersive layout; the host still consumes
+                // insets so a later live preference change can be applied safely.
+                shouldApplyInsetsPadding = !currentSettings.immersiveChrome
 
                 // Readium caps the text column at an "optimal line length" and centres it, which
                 // leaves huge side margins on a wide tablet. Raise the cap far past any screen so the
@@ -445,7 +496,7 @@ private class ReadiumReaderSession(
                 // Variable fonts: one upright + one italic face, each spanning the full weight axis.
                 addFontFamilyDeclaration(FontFamily("Lora")) {
                     addFontFace {
-                        addSource("fonts/Lora-Regular.ttf", preload = true)
+                        addSource("fonts/Lora-Regular.ttf", preload = shouldPreloadBundledFont("Lora"))
                         setFontStyle(FontStyle.NORMAL)
                         setFontWeight(100..900)
                     }
@@ -457,7 +508,7 @@ private class ReadiumReaderSession(
                 }
                 addFontFamilyDeclaration(FontFamily("Karla")) {
                     addFontFace {
-                        addSource("fonts/Karla-Regular.ttf", preload = true)
+                        addSource("fonts/Karla-Regular.ttf", preload = shouldPreloadBundledFont("Karla"))
                         setFontStyle(FontStyle.NORMAL)
                         setFontWeight(100..900)
                     }
@@ -469,7 +520,7 @@ private class ReadiumReaderSession(
                 }
                 addFontFamilyDeclaration(FontFamily("Rubik")) {
                     addFontFace {
-                        addSource("fonts/Rubik-Regular.ttf", preload = true)
+                        addSource("fonts/Rubik-Regular.ttf", preload = shouldPreloadBundledFont("Rubik"))
                         setFontStyle(FontStyle.NORMAL)
                         setFontWeight(100..900)
                     }
@@ -482,7 +533,7 @@ private class ReadiumReaderSession(
                 // Cardo ships as static faces: a regular, a bold, and an italic.
                 addFontFamilyDeclaration(FontFamily("Cardo")) {
                     addFontFace {
-                        addSource("fonts/Cardo-Regular.ttf", preload = true)
+                        addSource("fonts/Cardo-Regular.ttf", preload = shouldPreloadBundledFont("Cardo"))
                         setFontStyle(FontStyle.NORMAL)
                         setFontWeight(FontWeight.NORMAL)
                     }
@@ -499,7 +550,7 @@ private class ReadiumReaderSession(
                 }
                 addFontFamilyDeclaration(FontFamily("Nunito")) {
                     addFontFace {
-                        addSource("fonts/Nunito-Regular.ttf", preload = true)
+                        addSource("fonts/Nunito-Regular.ttf", preload = shouldPreloadBundledFont("Nunito"))
                         setFontStyle(FontStyle.NORMAL)
                         setFontWeight(100..900)
                     }
@@ -511,7 +562,7 @@ private class ReadiumReaderSession(
                 }
                 addFontFamilyDeclaration(FontFamily("Merriweather")) {
                     addFontFace {
-                        addSource("fonts/Merriweather-Regular.ttf", preload = true)
+                        addSource("fonts/Merriweather-Regular.ttf", preload = shouldPreloadBundledFont("Merriweather"))
                         setFontStyle(FontStyle.NORMAL)
                         setFontWeight(100..900)
                     }
@@ -527,6 +578,11 @@ private class ReadiumReaderSession(
     override val fragmentClassName: String = EpubNavigatorFragment::class.java.name
 
     override fun onFragmentHosted(fragmentManager: FragmentManager, tag: String) {
+        ReaderOpenTrace.mark("reader.fragment-attached")
+        val rehost = navigator != null
+        if (rehost) {
+            beginChapterTransition()
+        }
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
         restorationGeneration++
         restorationJob?.cancel()
@@ -536,23 +592,17 @@ private class ReadiumReaderSession(
         hostedFragmentManager = fragmentManager
         hostedFragmentTag = tag
         locatorCollectionJob?.cancel()
-        pendingSettings?.let { nav.submitPreferences(it.toPreferences()) }
-        // On a re-host (config change), the fresh fragment opens at the original initialLocator. If we
-        // already have a position, restore it so the reader doesn't snap back to an earlier chapter —
-        // and ignore the fragment's transient emissions until then so they can't overwrite progress.
-        val restoreTarget = lastLocator
-        if (restoreTarget != null) {
-            lastStyledHref = null
-        }
         locatorCollectionJob = scope.launch {
             nav.currentLocator.collect { locator ->
                 updateCurrentLocator(locator)
             }
         }
-        // Restore the latest reading position into the freshly re-hosted fragment, then resume
-        // reporting locator changes (the suppression above kept the transient open-position out).
-        if (restoreTarget != null) {
-            startRestoration(nav, restoreTarget, recreateOnFailure = false)
+        // A restored/configuration-hosted navigator can emit its locator before the pagination
+        // callback is wired. Use that first locator as a second, generation-safe trigger; it does
+        // not navigate, it only lets the single bootstrap wait for the actual page.
+        scope.launch {
+            nav.currentLocator.first()
+            if (_renderState.value !is ReaderRenderState.Ready) scheduleCriticalStyling()
         }
         // Tap zones: in PAGED mode the left/right thirds turn pages and the centre toggles the
         // controls bar. In SCROLL mode there are no page-turn zones, so a tap *anywhere* toggles the
@@ -596,9 +646,14 @@ private class ReadiumReaderSession(
             },
         )
 
-        // Re-apply any highlights / search underlines requested before the navigator existed.
-        if (pendingHighlights.isNotEmpty()) renderHighlights(pendingHighlights)
-        if (pendingSearchDecorations.isNotEmpty()) renderSearchDecorations(pendingSearchDecorations)
+        // Re-apply non-critical decorations after the first stable page, never during opening.
+        if (pendingHighlights.isNotEmpty() || pendingSearchDecorations.isNotEmpty()) {
+            scope.launch {
+                renderState.filter { it is ReaderRenderState.Ready }.first()
+                renderHighlights(pendingHighlights)
+                renderSearchDecorations(pendingSearchDecorations)
+            }
+        }
     }
 
     override fun applyHighlights(highlights: List<ReaderHighlight>) {
@@ -607,6 +662,7 @@ private class ReadiumReaderSession(
     }
 
     private fun renderHighlights(highlights: List<ReaderHighlight>) {
+        if (renderState.value !is ReaderRenderState.Ready) return
         val nav = navigator as? DecorableNavigator ?: return
         val decorations = highlights.mapNotNull { highlight ->
             val locator = runCatching {
@@ -663,6 +719,7 @@ private class ReadiumReaderSession(
     }
 
     private fun renderSearchDecorations(results: List<ReaderSearchResult>) {
+        if (renderState.value !is ReaderRenderState.Ready) return
         val nav = navigator as? DecorableNavigator ?: return
         val decorations = results.mapIndexedNotNull { index, result ->
             val locator = runCatching {
@@ -707,8 +764,20 @@ private class ReadiumReaderSession(
         if (restoring) return
         visualPage?.let { latestVisualPage = it }
         val previousHref = lastLocator?.href?.toString()
-        lastLocator = locator
         val hrefStr = locator.href.toString()
+        val resourceChanged = previousHref != null && previousHref != hrefStr
+        if (resourceChanged) {
+            // Links and navigator-driven chapter changes do not always pass through one of Yomu's
+            // explicit navigation helpers. Start a new generation here so a late page-loaded
+            // callback from the old resource cannot reveal the new transition.
+            val order = publication.readingOrder
+            val previousIndex = order.indexOfFirst { it.url().toString() == previousHref }
+            val currentIndex = order.indexOfFirst { it.url().toString() == hrefStr }
+            beginChapterTransition(
+                forward = currentIndex >= previousIndex,
+            )
+        }
+        lastLocator = locator
         if (latestScrollProgress?.href != hrefStr) latestScrollProgress = null
         measuredScrollProgress?.let {
             latestScrollProgress = ScrollProgressState(hrefStr, it.coerceIn(0.0, 1.0))
@@ -716,9 +785,6 @@ private class ReadiumReaderSession(
         if (currentSettings.layout == ReaderLayout.Scroll && queryScrollProgress) {
             requestScrollProgress(locator)
         }
-        // Scroll mode forces body{max-width:40rem!important} in Readium CSS, which our
-        // RsProperties maxLineLength can't override (it's set per-resource on body). Inject a
-        // style override so scroll mode fills the width too. Re-applied per resource.
         val order = publication.readingOrder
         val index = order.indexOfFirst { it.url().toString() == hrefStr }
         val metrics = progressMetrics(locator, visualPage ?: latestVisualPage)
@@ -739,16 +805,6 @@ private class ReadiumReaderSession(
                 val pageIndex = it.pageIndex.coerceIn(0, it.totalPages - 1)
                 (it.totalPages - pageIndex - 1).coerceAtLeast(0)
             }
-        if (hrefStr != lastStyledHref) {
-            lastStyledHref = hrefStr
-            scope.launch {
-                injectScrollCss()
-                injectViewportFit()
-                clearImmersiveScrollTopPadding()
-            }
-            // Arm the scroll-mode rubberband chapter gesture.
-            injectOverscroll()
-        }
         _currentLocator.value = ReaderLocator(
             locatorJson = locator.toJSON().toString(),
             totalProgression = locator.locations.totalProgression,
@@ -763,6 +819,11 @@ private class ReadiumReaderSession(
             completedChapterId = crossedChapterId,
             completed = metrics.completed,
         )
+        if (resourceChanged) {
+            // Readium publishes the canonical locator after loading the resource. Finalize styling
+            // here exactly once so the new chapter is not reflowed by two competing bootstraps.
+            scheduleCriticalStyling()
+        }
     }
 
     private fun progressMetrics(locator: Locator, visualPage: VisualPageState?): ProgressMetrics {
@@ -803,26 +864,18 @@ private class ReadiumReaderSession(
         )
     }
     override fun applySettings(settings: ReaderSettings) {
-        pendingSettings = settings
+        if (settings == currentSettings) return
         currentSettings = settings
         if (settings.layout != ReaderLayout.Scroll) {
             scrollProgressJob?.cancel()
             latestScrollProgress = null
         }
-        navigator?.submitPreferences(settings.toPreferences())
-        // Re-toggle/re-theme the native scrollbar (it's scroll-mode only and tracks the text colour).
-        applyScrollbars(settings)
-        // Refresh scroll-only CSS overrides when layout or immersive mode changes.
-        injectScrollCss()
-        // Update semantic document colours immediately when switching reader themes.
-        injectReaderPalette()
-        // Toggle viewport-fit=cover with immersive scroll mode so normal reading keeps status-bar space.
-        injectViewportFit()
-        clearImmersiveScrollTopPadding(settings)
-        // Re-arm or tear down the rubberband gesture on a scroll<->paged or theme change.
-        injectOverscroll()
-        // Embed/clear the custom font live so switching fonts in the sheet applies without reopening.
-        scope.launch { applyCustomFontInline() }
+        val nav = navigator
+        if (nav != null) {
+            beginChapterTransition()
+            nav.submitPreferences(settings.toPreferences())
+            scheduleCriticalStyling()
+        }
     }
 
     override fun refreshImmersiveLayout() {
@@ -858,12 +911,31 @@ private class ReadiumReaderSession(
     }
 
     private suspend fun ensureCustomFontCss(ref: CustomFontRef): String? {
-        val key = "${ref.family}|${ref.regularPath}|${ref.italicPath}"
+        val key = buildCustomFontCacheKey(ref)
         if (key == customFontKey && customFontCss != null) return customFontCss
+        customFontCssCache.get(key)?.let {
+            customFontKey = key
+            customFontCss = it
+            return it
+        }
         val css = withContext(Dispatchers.IO) { buildFontFaceCss(ref) }
         customFontKey = key
         customFontCss = css
+        css?.let { customFontCssCache.put(key, it) }
         return css
+    }
+
+    private fun buildCustomFontCacheKey(ref: CustomFontRef): String = buildString {
+        append(ref.family)
+        listOf(ref.regularPath, ref.italicPath).forEach { path ->
+            append('|')
+            if (path == null) {
+                append("null")
+            } else {
+                val file = File(path)
+                append(path).append(':').append(file.length()).append(':').append(file.lastModified())
+            }
+        }
     }
 
     private fun buildFontFaceCss(ref: CustomFontRef): String? {
@@ -928,26 +1000,19 @@ private class ReadiumReaderSession(
         )
     }
 
-    private fun injectScrollCss() {
-        navigator ?: return
-        injectJs(scrollCssJsForCurrent())
-    }
-
-    private fun injectReaderPalette() {
-        navigator ?: return
-        injectJs(readerPaletteJs(currentSettings))
-    }
-
-    // Cover the page during a chapter change so it is revealed only once the new resource is re-styled
-    // (see [styled]). A watchdog guarantees we never stay covered if the new page somehow never fires
-    // onPageLoaded (e.g. a failed load), since a stuck cover would mean a blank reader.
+    // Cover the page during a chapter change so it is revealed only once the new resource is re-styled.
     private fun beginChapterTransition(forward: Boolean = true) {
-        _transitionForward.value = forward
-        _styled.value = false
+        renderGeneration++
+        styleJob?.cancel()
+        _renderState.value = ReaderRenderState.Transitioning(forward)
         revealWatchdog?.cancel()
+        val generation = renderGeneration
         revealWatchdog = scope.launch {
             delay(STYLE_REVEAL_TIMEOUT_MS)
-            _styled.value = true
+            val nav = navigator
+            if (generation == renderGeneration && nav != null && awaitRenderableContent(nav)) {
+                _renderState.value = ReaderRenderState.Ready(lastLocator?.href?.toString())
+            }
         }
     }
 
@@ -990,6 +1055,15 @@ private class ReadiumReaderSession(
             enabled = currentSettings.immersiveChrome && currentSettings.layout == ReaderLayout.Scroll,
         )
         injectJs(js)
+    }
+
+    private suspend fun injectViewportFitAwaited() {
+        if (navigator == null) return
+        evalWithRetry(
+            viewportFitJs(
+                enabled = currentSettings.immersiveChrome && currentSettings.layout == ReaderLayout.Scroll,
+            ),
+        )
     }
 
     private fun clearImmersiveScrollTopPadding(settings: ReaderSettings = currentSettings) {
@@ -1233,6 +1307,25 @@ private class ReadiumReaderSession(
         return false
     }
 
+    /** Waits for the next navigator pre-draw so the cover is removed only after WebView layout. */
+    private suspend fun awaitNextPreDraw(nav: EpubNavigatorFragment): Boolean {
+        val view = nav.view ?: return false
+        if (!view.isAttachedToWindow) return false
+        return suspendCancellableCoroutine { continuation ->
+            val observer = view.viewTreeObserver
+            lateinit var listener: ViewTreeObserver.OnPreDrawListener
+            listener = ViewTreeObserver.OnPreDrawListener {
+                if (observer.isAlive) observer.removeOnPreDrawListener(listener)
+                if (continuation.isActive) continuation.resume(Unit)
+                true
+            }
+            observer.addOnPreDrawListener(listener)
+            continuation.invokeOnCancellation {
+                if (observer.isAlive) observer.removeOnPreDrawListener(listener)
+            }
+        }.let { true }
+    }
+
     private fun scheduleNavigatorRecreation(expected: EpubNavigatorFragment) {
         scope.launch {
             if (navigator !== expected) return@launch
@@ -1260,7 +1353,7 @@ private class ReadiumReaderSession(
     private fun clearChapterTransitionCover() {
         revealWatchdog?.cancel()
         revealWatchdog = null
-        _styled.value = true
+        _renderState.value = ReaderRenderState.Ready(lastLocator?.href?.toString())
     }
 
     override fun close() {
@@ -1271,6 +1364,8 @@ private class ReadiumReaderSession(
         locatorCollectionJob = null
         scrollProgressJob?.cancel()
         scrollProgressJob = null
+        styleJob?.cancel()
+        styleJob = null
         hostedFragmentManager = null
         hostedFragmentTag = null
         scope.cancel()

@@ -70,6 +70,9 @@ interface BookRepository {
     /** Persists a successfully parsed TOC, including an empty TOC, for future opens. */
     suspend fun cacheTableOfContents(id: BookId, items: List<ReaderTocItem>)
 
+    /** Persists the reader's validated TOC and resource weights after an open/cache repair. */
+    suspend fun cachePublicationMetadata(id: BookId, cache: ReaderPublicationCache)
+
     /**
      * The in-memory TOC for [id] if it's already been loaded this session, else null. Synchronous so
      * callers can render instantly without a loading flash; fall back to [tableOfContents] on null.

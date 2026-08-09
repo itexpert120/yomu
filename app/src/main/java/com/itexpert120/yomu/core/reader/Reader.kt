@@ -12,7 +12,15 @@ import kotlinx.serialization.Serializable
 data class ReaderPublicationCache(
     val toc: List<ReaderTocItem> = emptyList(),
     val resourceWeights: Map<String, Int> = emptyMap(),
-)
+) {
+    /** Validates and orders cached weights against the opened publication's reading order. */
+    fun validatedWeights(readingOrderKeys: List<String>): List<Int>? {
+        if (readingOrderKeys.any { resourceWeights[it]?.let { weight -> weight > 0 } != true }) {
+            return null
+        }
+        return readingOrderKeys.map { resourceWeights.getValue(it) }
+    }
+}
 
 /** Request used to open a publication without exposing Readium types across the reader boundary. */
 data class ReaderOpenRequest(
@@ -112,26 +120,8 @@ interface ReaderSession {
     val tableOfContents: List<ReaderTocItem>
     val currentLocator: StateFlow<ReaderLocator?>
 
-    /**
-     * True once the navigator has rendered its first content (the WebView's first page has been laid
-     * out). Starts false. Gate the loading UI on this rather than on session creation, so "Opening…"
-     * stays up until the page is actually painted instead of flashing a blank/half-rendered view.
-     */
+    /** Atomic first-frame state; the UI reveals content only from [ReaderRenderState.Ready]. */
     val renderState: StateFlow<ReaderRenderState>
-
-    /**
-     * True once the current resource's layout CSS — including the immersive chapter-start top padding —
-     * has actually been applied, so the page can be shown without that padding popping in a few frames
-     * after it appears. Flips back to false at the start of a chapter change and true again once the
-     * new resource has been styled. Gate a per-chapter content cover on this so a chapter never paints
-     * in its unstyled (padding-less) state.
-     */
-
-    /**
-     * Direction of the in-progress chapter change: true when moving forward (next chapter), false when
-     * moving back (previous chapter). Set before [styled] flips, so the UI can play a directional
-     * fade-slide as the new chapter is revealed.
-     */
 
     /** Emits when the user taps the centre of the page (used to open the controls sheet). */
     val centerTaps: SharedFlow<Unit>

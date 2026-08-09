@@ -4,14 +4,14 @@ Open Reader is a native Android EPUB reader built with Kotlin and Jetpack Compos
 
 ## Current Project State
 
-Open Reader is now a **working EPUB reader**, not a static prototype. A single `:app` module contains the custom design system plus a real, persisted library and a Readium-backed reader.
+Open Reader is now a **working EPUB reader**, not a static prototype. The `:app` module contains the custom design system plus a real, persisted library and a Readium-backed reader; `:benchmark` contains macrobenchmark harnesses and generated EPUB fixtures.
 
 Current technical baseline:
 
 - Android application module: `:app`, namespace `com.itexpert120.yomu`, Jetpack Compose UI
 - Toolchain: AGP 9.2.1, Kotlin 2.4.0, Java 17 (+ core-library desugaring), Compose BOM 2026.06.00, KSP; compileSdk 37 / minSdk 24 / targetSdk 36
 - DI: **Hilt** (`@HiltAndroidApp`, `@HiltViewModel`, modules in `app/di/`)
-- Persistence: **Room v9** (`books`, `chapter_reads`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`; additive migrations 1→9) and **DataStore**
+- Persistence: **Room v12** (`books`, `chapter_reads`, `reader_settings`, `book_toc` + resource weights, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`; additive migrations 1→12) and **DataStore**
 - Navigation: **Navigation Compose** with type-safe `@Serializable` routes, seamless horizontal
   screen transitions, and ordinary back callbacks for local transient states
 - Reader engine: **Readium 3.3.0** behind a Yomu `ReaderEngine` boundary (only `data/reader/readium` imports Readium); `EpubNavigatorFragment` hosted in Compose
@@ -20,7 +20,7 @@ Current technical baseline:
 - Features: mature library and book details; reader with contents, bookmarks, highlights, full-text search, dictionary/TTS, advanced typography, custom themes/fonts, and immersive chrome; settings, about, and reading statistics with history
 - DevGallery component harness (`app/devgallery`); edge-to-edge with theme-aware system bar icons; real app launcher icon
 
-**Not yet built:** OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and performance profiling. See the [Roadmap](roadmap.md) for status per phase.
+**Not yet built:** OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and baseline-profile/startup profiling. Reader-open tracing, macrobenchmark scaffolding, and the on-demand open-path optimization are implemented; see the [Roadmap](roadmap.md) for status per phase.
 
 ## Planning Documents
 
