@@ -9,11 +9,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -66,7 +66,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,6 +95,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -108,6 +108,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
+import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -120,9 +122,19 @@ import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
 import java.io.File
 
+private data class BookDetailsScrollSample(
+    val itemIndex: Int,
+    val itemOffset: Int,
+    val inProgress: Boolean,
+)
+
+private val BookDetailsFabTransformOrigin = TransformOrigin(1f, 1f)
+private val ReadFabScrollThreshold = 32.dp
+
 @Composable
 fun BookDetailsScreen(
     book: BookDetailsUi?,
+    bookLoaded: Boolean,
     toc: TocUiState,
     onBack: () -> Unit,
     onRead: () -> Unit,
@@ -154,24 +166,52 @@ fun BookDetailsScreen(
     var readButtonCollapsed by remember { mutableStateOf(false) }
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
+    val readFabScrollThresholdPx = with(density) { ReadFabScrollThreshold.roundToPx() }
     val topBarHeight = if (topBarHeightPx > 0) {
         with(density) { topBarHeightPx.toDp() }
     } else {
         64.dp
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(readFabScrollThresholdPx) {
         readButtonCollapsed = false
         val positions = snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            BookDetailsScrollSample(
+                itemIndex = listState.firstVisibleItemIndex,
+                itemOffset = listState.firstVisibleItemScrollOffset,
+                inProgress = listState.isScrollInProgress,
+            )
         }
-        var previous: Pair<Int, Int>? = null
+        var previous: BookDetailsScrollSample? = null
+        var accumulatedDelta = 0
         positions.collect { current ->
+            if (!current.inProgress) {
+                previous = current
+                accumulatedDelta = 0
+                return@collect
+            }
+
             previous?.let { before ->
-                if (current != before) {
-                    readButtonCollapsed = current.first > before.first ||
-                        current.first == before.first &&
-                        current.second > before.second
+                val delta = when {
+                    current.itemIndex > before.itemIndex -> readFabScrollThresholdPx
+                    current.itemIndex < before.itemIndex -> -readFabScrollThresholdPx
+                    else -> current.itemOffset - before.itemOffset
+                }
+                val directionChanged =
+                    (accumulatedDelta > 0 && delta < 0) ||
+                        (accumulatedDelta < 0 && delta > 0)
+                if (directionChanged) accumulatedDelta = 0
+                accumulatedDelta += delta
+                when {
+                    accumulatedDelta >= readFabScrollThresholdPx -> {
+                        readButtonCollapsed = true
+                        accumulatedDelta = 0
+                    }
+
+                    accumulatedDelta <= -readFabScrollThresholdPx -> {
+                        readButtonCollapsed = false
+                        accumulatedDelta = 0
+                    }
                 }
             }
             previous = current
@@ -219,50 +259,63 @@ fun BookDetailsScreen(
                         onToggleChapterBookmark = onToggleChapterBookmark,
                     )
                 } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth(),
-                        contentPadding = PaddingValues(bottom = navBottom + 28.dp),
-                        verticalArrangement = Arrangement.Top,
-                    ) {
-                        if (book == null) {
-                            item { Spacer(Modifier.height(topBarHeight + 4.dp)) }
+                    Box(Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = navBottom + 28.dp),
+                            verticalArrangement = Arrangement.Top,
+                        ) {
+                            if (book == null) {
+                                item { Spacer(Modifier.height(topBarHeight + 4.dp)) }
+                                if (bookLoaded) {
+                                    item {
+                                        Text(
+                                            text = "This book is no longer in your library.",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                        )
+                                    }
+                                }
+                                return@LazyColumn
+                            }
+
                             item {
-                                Text(
-                                    text = "This book is no longer in your library.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                BookHeader(
+                                    book = book,
+                                    topInset = topBarHeight,
+                                    onCoverClick = {
+                                        if (book.coverImagePath != null) showCover = true
+                                    },
                                 )
                             }
-                            return@LazyColumn
-                        }
 
-                        item {
-                            BookHeader(
-                                book = book,
-                                topInset = topBarHeight,
-                                onCoverClick = {
-                                    if (book.coverImagePath != null) showCover = true
-                                },
+                            tocSection(
+                                toc = toc,
+                                onTocSortChange = onTocSortChange,
+                                onOpenChapter = onOpenChapter,
+                                onSetChapterRead = onSetChapterRead,
+                                onEnterSelection = onEnterChapterSelection,
+                                onToggleSelection = onToggleChapterSelection,
+                                onToggleBookmark = onToggleChapterBookmark,
                             )
+
+                            // Trailing room for the floating Read button / selection toolbar without
+                            // shifting the rows above when selection toggles.
+                            item { Spacer(Modifier.height(96.dp)) }
                         }
-
-                        tocSection(
-                            toc = toc,
-                            onTocSortChange = onTocSortChange,
-                            onOpenChapter = onOpenChapter,
-                            onSetChapterRead = onSetChapterRead,
-                            onEnterSelection = onEnterChapterSelection,
-                            onToggleSelection = onToggleChapterSelection,
-                            onToggleBookmark = onToggleChapterBookmark,
+                        YomuVerticalScrollIndicator(
+                            state = listState,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .padding(
+                                    top = topBarHeight + 8.dp,
+                                    end = 4.dp,
+                                    bottom = navBottom + 96.dp,
+                                ),
                         )
-
-                        // Trailing room for the floating Read button / selection toolbar without
-                        // shifting the rows above when selection toggles.
-                        item { Spacer(Modifier.height(96.dp)) }
                     }
                 }
 
@@ -294,8 +347,8 @@ fun BookDetailsScreen(
             if (book != null) {
                 AnimatedVisibility(
                     visible = !toc.selectionMode,
-                    enter = yomuPopupEnter(),
-                    exit = yomuPopupExit(),
+                    enter = yomuPopupEnter(BookDetailsFabTransformOrigin),
+                    exit = yomuPopupExit(BookDetailsFabTransformOrigin),
                     modifier = Modifier.align(Alignment.BottomEnd),
                 ) {
                     FloatingReadButton(
@@ -497,48 +550,77 @@ private fun TwoPaneDetails(
     onToggleChapterBookmark: (Int) -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        Row(modifier = Modifier.fillMaxSize()) {
             // Left pane: book identity + actions + description, independently scrollable.
-            Column(
+            Box(
                 modifier = Modifier
                     .width(420.dp)
-                    .fillMaxHeight()
-                    .verticalScroll(detailsScrollState)
-                    .padding(top = 4.dp, bottom = navBottom + 28.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .fillMaxHeight(),
             ) {
-                BookHeader(
-                    book = book,
-                    topInset = topInset,
-                    onCoverClick = onCoverClick,
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(detailsScrollState)
+                        .padding(top = 4.dp, bottom = navBottom + 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    BookHeader(
+                        book = book,
+                        topInset = topInset,
+                        onCoverClick = onCoverClick,
+                    )
+                }
+                YomuVerticalScrollIndicator(
+                    state = detailsScrollState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .padding(
+                            top = topInset + 8.dp,
+                            end = 4.dp,
+                            bottom = navBottom + 28.dp,
+                        ),
                 )
             }
 
             // Right pane: the contents list (virtualized).
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                contentPadding = PaddingValues(
-                    top = topInset + 4.dp,
-                    bottom = navBottom + 28.dp,
-                ),
-                verticalArrangement = Arrangement.Top,
             ) {
-                tocSection(
-                    toc = toc,
-                    onTocSortChange = onTocSortChange,
-                    onOpenChapter = onOpenChapter,
-                    onSetChapterRead = onSetChapterRead,
-                    onEnterSelection = onEnterChapterSelection,
-                    onToggleSelection = onToggleChapterSelection,
-                    onToggleBookmark = onToggleChapterBookmark,
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        top = topInset + 4.dp,
+                        bottom = navBottom + 28.dp,
+                    ),
+                    verticalArrangement = Arrangement.Top,
+                ) {
+                    tocSection(
+                        toc = toc,
+                        onTocSortChange = onTocSortChange,
+                        onOpenChapter = onOpenChapter,
+                        onSetChapterRead = onSetChapterRead,
+                        onEnterSelection = onEnterChapterSelection,
+                        onToggleSelection = onToggleChapterSelection,
+                        onToggleBookmark = onToggleChapterBookmark,
+                    )
+                    // Trailing room for the floating Read button / selection toolbar.
+                    item { Spacer(Modifier.height(96.dp)) }
+                }
+                YomuVerticalScrollIndicator(
+                    state = listState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .padding(
+                            top = topInset + 8.dp,
+                            end = 4.dp,
+                            bottom = navBottom + 96.dp,
+                        ),
                 )
-                // Trailing room for the floating Read button / selection toolbar.
-                item { Spacer(Modifier.height(96.dp)) }
             }
         }
     }
@@ -844,19 +926,14 @@ private fun FloatingReadButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ExtendedFloatingActionButton(
+    val label = if (reading) "Resume" else "Read"
+    YomuExtendedFloatingActionButton(
         expanded = !collapsed,
         onClick = onClick,
         modifier = modifier,
-        icon = {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = null,
-            )
-        },
-        text = {
-            Text(text = if (reading) "Resume" else "Read")
-        },
+        icon = Icons.Rounded.PlayArrow,
+        label = label,
+        contentDescription = label,
     )
 }
 

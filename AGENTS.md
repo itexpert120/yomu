@@ -71,11 +71,11 @@ Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`
 
 ### Design system is the foundation — use Material 3 Expressive through the compatibility layer
 `core/designsystem` owns the Material 3 Expressive theme boundary and temporary Yomu compatibility wrappers:
-- `YomuDesignTheme { ... }` wraps native `MaterialTheme`, dynamic/system-aware colour schemes, Material typography, conventional Material shapes, and the existing Yomu CompositionLocals.
+- `YomuDesignTheme { ... }` wraps native `MaterialTheme`, fixed Material 3 light/dark colour schemes with opt-in Android 12+ dynamic colours for both modes, Material typography, conventional Material shapes, and the existing Yomu CompositionLocals.
 - Access compatibility tokens inside composables via `YomuTheme.colors`, `YomuTheme.type`, `YomuTheme.space`, and `YomuTheme.radius`; migrate call sites incrementally rather than inventing a second token system.
 - Token data classes remain `YomuColors`, `YomuType`, `YomuSpacing`, and `YomuRadius` (all `@Immutable`). Theme variants remain `YomuThemeMode.{Light, Dark, Oled}`.
 - Prefer native Material components through the Yomu wrappers (`Button`, chips, tabs, switches, sliders, text fields, cards, top app bars, dialogs, FABs, lists, and sheets). Keep custom Canvas/gesture code only where Material has no equivalent or the EPUB page requires reader-specific behaviour (for example the HSV picker and engine-driven reading canvas).
-- Preserve native touch targets, semantics, ripples, reduced-motion support, dynamic colour, and adaptive compact/medium/expanded layouts. Tablet layouts should add context or side-by-side navigation rather than stretching phone UI.
+- Preserve native touch targets, semantics, ripples, reduced-motion support, accessible Material colour roles, and adaptive compact/medium/expanded layouts. Tablet layouts should add context or side-by-side navigation rather than stretching phone UI.
 - The design system package must not depend on `feature/*`.
 
 ### Theme ↔ system bars

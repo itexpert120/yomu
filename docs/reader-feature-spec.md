@@ -15,7 +15,7 @@ The reader is partly built. EPUB content renders through Readium's `EpubNavigato
 | Optional footer | Done | Toggleable clock + custom horizontal battery indicator + reading %; each element individually toggleable. Optional edge-shadow fade behind the bars. |
 | Center-tap to open controls | Done | Center tap toggles the compact bottom navigation bar; its Browse, Search, and Display actions open the existing sheets. Edge taps fall through to Readium's default swipe navigation. **No custom navigation tap zones** (an earlier L-zone design was removed). |
 | Controls sheet (Controls / Display tabs) | Done | Bottom sheet with in-sheet tab bar, cross-fade + animated height. |
-| Progress scrubber | Done | Whole-book progress slider (drag to seek) with prev/next **chapter** arrows in the Controls sheet. |
+| Chapter selector | Done | Discrete TOC-chapter slider that jumps to each chapter's start, with prev/next **chapter** arrows in the Controls sheet. |
 | Theme presets + custom colours | Partial | Presets: Light / Dark (default, soft `#16181D`, non-OLED) / Sepia / Black / Custom. Custom exposes background + text colour pickers. The longer preset/background-pattern lists below are pending. |
 | Brightness | Done | "Use system brightness" toggle or a manual slider (live preview while dragging, commit on release) applied via window `screenBrightness`. |
 | Fonts | Partial | Scroll/paged toggle; font-family chips that preview each typeface (Lora default, Karla, Rubik, Cardo, Nunito, Merriweather; bundled TTFs registered with Readium); font-size slider. Per-role serif/sans/mono assignment and custom-font import are pending. |
@@ -190,24 +190,22 @@ Brightness controls:
 - Quick vertical rail. Planned.
 - Night minimum brightness mode. Planned.
 
-## Progress Control
+## Chapter Control
 
-Current state: the scrubber is the whole-book progress slider in the Controls sheet's Controls tab, flanked by previous/next **chapter** arrows.
+Current state: the slider in the Controls sheet's Controls tab selects resolvable TOC chapters and jumps to the selected chapter's stored start locator. It is flanked by previous/next **chapter** arrows.
 
-Progress controls:
+Chapter controls:
 
-- Progress slider (in the controls sheet). ✓
-- Percentage label. ✓
+- Discrete chapter slider (in the controls sheet). ✓
+- Chapter number, count, and title preview. ✓
 - Prev/next chapter arrows. ✓
 - Chapter label (shown in the top bar). ✓
 - Remaining time/pages estimate. Planned.
-- Preview tooltip. Planned.
 
 Actions:
 
-- Drag to seek. ✓
-- Tap progress bar to seek. ✓
-- Cancel seek / preview-before-commit. Planned.
+- Drag or tap to select a chapter. ✓
+- Jump to the selected chapter's start on release. ✓
 
 ## Font Settings
 

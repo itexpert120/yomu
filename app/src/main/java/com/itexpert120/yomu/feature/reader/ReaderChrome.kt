@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -101,6 +102,7 @@ internal fun ReaderTopBar(
         TopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(48.dp)
                 .onSizeChanged { onContentHeight(it.height) },
             title = {
                 Text(
@@ -227,7 +229,7 @@ internal fun ReaderFooter(
 @Composable
 internal fun BoxScope.ReaderChapterControlsBar(
     visible: Boolean,
-    bottomInset: Dp,
+    bottomPadding: Dp,
     background: Color,
     content: Color,
     border: Color,
@@ -242,7 +244,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .padding(bottom = bottomInset),
+            .padding(bottom = bottomPadding),
     ) {
         ReaderActionBar(
             background = background,

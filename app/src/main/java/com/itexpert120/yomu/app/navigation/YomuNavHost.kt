@@ -6,6 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -17,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
+import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
 import com.itexpert120.yomu.core.designsystem.yomuScreenExit
@@ -55,6 +59,14 @@ fun YomuNavHost(
     // Screen changes use one layered horizontal handoff. The direction follows the route pair,
     // while back reverses the same motion from the opposite side.
     val motionEnabled = yomuAnimationsEnabled()
+    val layoutDirection = LocalLayoutDirection.current
+    val screenTravelDistancePx = with(LocalDensity.current) {
+        YomuMotion.ScreenTransitionDistance.roundToPx()
+    }
+    fun physicalDirection(forward: Boolean): Boolean = when (layoutDirection) {
+        LayoutDirection.Ltr -> forward
+        LayoutDirection.Rtl -> !forward
+    }
     val navContent: @Composable (Modifier) -> Unit = { hostModifier ->
         NavHost(
             navController = navController,
@@ -65,7 +77,10 @@ fun YomuNavHost(
                 val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
                 when {
                     sameEntry || !motionEnabled -> EnterTransition.None
-                    else -> yomuScreenEnter(forward = forward)
+                    else -> yomuScreenEnter(
+                        travelDistancePx = screenTravelDistancePx,
+                        forward = physicalDirection(forward),
+                    )
                 }
             },
             exitTransition = {
@@ -73,21 +88,30 @@ fun YomuNavHost(
                 val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
                 when {
                     sameEntry || !motionEnabled -> ExitTransition.None
-                    else -> yomuScreenExit(forward = forward)
+                    else -> yomuScreenExit(
+                        travelDistancePx = screenTravelDistancePx,
+                        forward = physicalDirection(forward),
+                    )
                 }
             },
             popEnterTransition = {
                 val sameEntry = initialState.id == targetState.id
                 when {
                     sameEntry || !motionEnabled -> EnterTransition.None
-                    else -> yomuScreenEnter(forward = false)
+                    else -> yomuScreenEnter(
+                        travelDistancePx = screenTravelDistancePx,
+                        forward = physicalDirection(false),
+                    )
                 }
             },
             popExitTransition = {
                 val sameEntry = initialState.id == targetState.id
                 when {
                     sameEntry || !motionEnabled -> ExitTransition.None
-                    else -> yomuScreenExit(forward = false)
+                    else -> yomuScreenExit(
+                        travelDistancePx = screenTravelDistancePx,
+                        forward = physicalDirection(false),
+                    )
                 }
             },
         ) {
@@ -167,6 +191,10 @@ private fun NavDestination.topLevelIndex(): Int? = when {
 }
 
 private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination) {
+    // Keep one coordinated shared-axis handoff in flight. Stacking destinations from rapid rail
+    // or bar taps interrupts the easing curve and produces a visible position jump.
+    if (currentBackStackEntry?.lifecycle?.currentState != Lifecycle.State.RESUMED) return
+
     when (destination) {
         YomuTopLevelDestination.Library -> navigate(Library) {
             popUpTo<Library> { saveState = true }

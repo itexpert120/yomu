@@ -62,6 +62,7 @@ internal fun ReaderBrowseSheet(
         onDismiss = onDismiss,
         scrollable = false,
         wideAsSideSheet = true,
+        horizontalContentPadding = 0.dp,
         minHeight = if (tab == BrowseTab.Bookmarks || tab == BrowseTab.Highlights) {
             360.dp
         } else {
@@ -78,7 +79,9 @@ internal fun ReaderBrowseSheet(
                 options = tabs.map { it.label },
                 selectedIndex = tabs.indexOf(current),
                 onSelected = { onSelectTab(tabs[it]) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
             )
             AnimatedContent(
                 targetState = current,
@@ -215,6 +218,6 @@ private fun BrowseEmpty(text: String) {
         text = text,
         color = YomuTheme.colors.textMuted,
         style = YomuTheme.type.caption,
-        modifier = Modifier.padding(vertical = 12.dp),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
     )
 }

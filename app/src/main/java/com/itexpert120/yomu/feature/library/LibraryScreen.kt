@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.feature.library
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -72,6 +76,15 @@ private enum class LibraryContentMode {
     List,
 }
 
+private data class LibraryScrollSample(
+    val itemIndex: Int,
+    val itemOffset: Int,
+    val inProgress: Boolean,
+)
+
+private val ResumeFabTransformOrigin = TransformOrigin(1f, 1f)
+private val ResumeFabScrollThreshold = 32.dp
+
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
@@ -80,7 +93,8 @@ fun LibraryScreen(
     onSortModeChange: (SortMode) -> Unit,
     onGroupModeChange: (GroupMode) -> Unit,
     onViewModeChange: (LibraryViewMode) -> Unit,
-    onGridColumnsChange: (Int) -> Unit,
+    onPortraitGridColumnsChange: (Int) -> Unit,
+    onLandscapeGridColumnsChange: (Int) -> Unit,
     onOpenReader: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
     onImport: () -> Unit,
@@ -98,30 +112,74 @@ fun LibraryScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val activeColumns = if (isLandscape) state.landscapeGridColumns else state.portraitGridColumns
     val elevated = when (state.viewMode) {
-        LibraryViewMode.Grid -> gridState.canScrollBackward
+        LibraryViewMode.ComfortableGrid,
+        LibraryViewMode.CompactGrid,
+        LibraryViewMode.CoverOnlyGrid,
+        -> gridState.canScrollBackward
         LibraryViewMode.List -> listState.canScrollBackward
     }
     var resumeCollapsed by remember { mutableStateOf(false) }
+    val resumeFabScrollThresholdPx = with(LocalDensity.current) {
+        ResumeFabScrollThreshold.roundToPx()
+    }
 
-    LaunchedEffect(state.viewMode) {
+    // Require deliberate travel before reversing the FAB; raw per-frame direction changes make
+    // small finger corrections repeatedly restart the label animation.
+    LaunchedEffect(state.viewMode, resumeFabScrollThresholdPx) {
         resumeCollapsed = false
         val positions = when (state.viewMode) {
-            LibraryViewMode.Grid -> snapshotFlow {
-                gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+            LibraryViewMode.ComfortableGrid,
+            LibraryViewMode.CompactGrid,
+            LibraryViewMode.CoverOnlyGrid,
+            -> snapshotFlow {
+                LibraryScrollSample(
+                    itemIndex = gridState.firstVisibleItemIndex,
+                    itemOffset = gridState.firstVisibleItemScrollOffset,
+                    inProgress = gridState.isScrollInProgress,
+                )
             }
 
             LibraryViewMode.List -> snapshotFlow {
-                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                LibraryScrollSample(
+                    itemIndex = listState.firstVisibleItemIndex,
+                    itemOffset = listState.firstVisibleItemScrollOffset,
+                    inProgress = listState.isScrollInProgress,
+                )
             }
         }
-        var previous: Pair<Int, Int>? = null
+        var previous: LibraryScrollSample? = null
+        var accumulatedDelta = 0
         positions.collect { current ->
+            if (!current.inProgress) {
+                previous = current
+                accumulatedDelta = 0
+                return@collect
+            }
+
             previous?.let { before ->
-                if (current != before) {
-                    resumeCollapsed = current.first > before.first ||
-                        current.first == before.first &&
-                        current.second > before.second
+                val delta = when {
+                    current.itemIndex > before.itemIndex -> resumeFabScrollThresholdPx
+                    current.itemIndex < before.itemIndex -> -resumeFabScrollThresholdPx
+                    else -> current.itemOffset - before.itemOffset
+                }
+                val directionChanged =
+                    (accumulatedDelta > 0 && delta < 0) ||
+                        (accumulatedDelta < 0 && delta > 0)
+                if (directionChanged) accumulatedDelta = 0
+                accumulatedDelta += delta
+                when {
+                    accumulatedDelta >= resumeFabScrollThresholdPx -> {
+                        resumeCollapsed = true
+                        accumulatedDelta = 0
+                    }
+
+                    accumulatedDelta <= -resumeFabScrollThresholdPx -> {
+                        resumeCollapsed = false
+                        accumulatedDelta = 0
+                    }
                 }
             }
             previous = current
@@ -150,7 +208,7 @@ fun LibraryScreen(
         state.isLoading -> LibraryContentMode.Loading
         state.totalCount == 0 -> LibraryContentMode.Empty
         state.searchActive && state.selectableCount == 0 -> LibraryContentMode.EmptySearch
-        state.viewMode == LibraryViewMode.Grid -> LibraryContentMode.Grid
+        state.viewMode != LibraryViewMode.List -> LibraryContentMode.Grid
         else -> LibraryContentMode.List
     }
 
@@ -158,7 +216,8 @@ fun LibraryScreen(
         when (mode) {
             LibraryContentMode.Grid -> LibraryGrid(
                 state = gridState,
-                columns = state.gridColumns,
+                viewMode = state.viewMode,
+                columns = activeColumns,
                 groups = state.groups,
                 selectedIds = state.selectedIds,
                 onBookClick = onCardClick,
@@ -235,11 +294,13 @@ fun LibraryScreen(
                 sortMode = state.sortMode,
                 groupMode = state.groupMode,
                 viewMode = state.viewMode,
-                columns = state.gridColumns,
+                portraitColumns = state.portraitGridColumns,
+                landscapeColumns = state.landscapeGridColumns,
                 onSortModeChange = onSortModeChange,
                 onGroupModeChange = onGroupModeChange,
                 onViewModeChange = onViewModeChange,
-                onColumnsChange = onGridColumnsChange,
+                onPortraitColumnsChange = onPortraitGridColumnsChange,
+                onLandscapeColumnsChange = onLandscapeGridColumnsChange,
                 onDismiss = { showOptionsSheet = false },
             )
 
@@ -259,8 +320,8 @@ fun LibraryScreen(
             val continueReading = state.continueReading
             AnimatedVisibility(
                 visible = continueReading != null && !state.selectionMode,
-                enter = yomuPopupEnter(),
-                exit = yomuPopupExit(),
+                enter = yomuPopupEnter(ResumeFabTransformOrigin),
+                exit = yomuPopupExit(ResumeFabTransformOrigin),
                 modifier = Modifier.align(Alignment.BottomEnd),
             ) {
                 continueReading?.let { book ->

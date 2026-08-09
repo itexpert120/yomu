@@ -286,6 +286,8 @@ fun YomuBottomSheet(
     wideAsSideSheet: Boolean = false,
     // Optional lower bound for focused sheets such as in-book search.
     minHeight: Dp = 0.dp,
+    // Override the standard 20–24 dp horizontal gutter for full-width list surfaces.
+    horizontalContentPadding: Dp? = null,
     // Some controls contain their own visual hierarchy and do not need a fading scroll edge.
     showScrollEdgeShadow: Boolean = true,
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
@@ -360,7 +362,10 @@ fun YomuBottomSheet(
                                 Modifier
                             },
                         )
-                        .padding(24.dp),
+                        .padding(
+                            horizontal = horizontalContentPadding ?: 24.dp,
+                            vertical = 24.dp,
+                        ),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     content(onDismiss)
@@ -433,7 +438,7 @@ fun YomuBottomSheet(
                         Modifier.heightIn(min = minHeight.coerceAtMost(maxHeight))
                     },
                 )
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = horizontalContentPadding ?: 20.dp)
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),

@@ -24,8 +24,8 @@ import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.ThemePreference
 
 /**
- * Root composable: resolves the concrete theme mode (combining the saved preference, the OLED
- * toggle, and the system dark setting) and hosts navigation. Reports the resolved mode up to the
+ * Root composable: resolves the concrete theme mode (combining the saved preference, dark-theme
+ * options, and the system dark setting) and hosts navigation. Reports the resolved mode up to the
  * Activity so it can keep the system bar icons legible.
  */
 @Composable
@@ -61,7 +61,10 @@ fun YomuApp(
         }
     }
 
-    YomuDesignTheme(themeMode = resolved) {
+    YomuDesignTheme(
+        themeMode = resolved,
+        dynamicColors = appearance.dynamicColors,
+    ) {
         // Opaque app-coloured backing so the seamless screen transition never reveals the window
         // background (which would torch during navigation in dark mode).
         Box(

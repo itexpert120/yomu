@@ -82,7 +82,7 @@ fun ReaderScreen(
     onRetryOpen: () -> Unit,
     onOpenSheet: () -> Unit,
     onCloseSheet: () -> Unit,
-    onSeek: (Double) -> Unit,
+    onSelectChapter: (String) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
@@ -374,11 +374,6 @@ fun ReaderScreen(
         label = "readerBottomInset",
     )
 
-    val controlBarBottomInset by animateDpAsState(
-        targetValue = baseBottomInset,
-        label = "readerControlBarBottomInset",
-    )
-
     val background = Color(state.settings.backgroundArgb)
     val onBackground = Color(state.settings.textArgb)
     val readerBorder = Color(state.settings.colorPalette.borderArgb)
@@ -476,9 +471,8 @@ fun ReaderScreen(
                 if (!state.loading) {
                     if (state.settings.showFooter) {
                         // Keep the footer composed even while hidden so its measured height is always known —
-                        // the bottom controls bar reserves that height to sit above it. An unmounted footer
-                        // (immersive mode) reports height 0 on the first reveal and the controls overlap it.
-                        // Animate alpha + a slide off its own (bottom) edge instead of mounting/unmounting.
+                        // the controls bar can anchor above it on the first immersive reveal, and the EPUB
+                        // page can reserve it in non-immersive mode. Animate alpha + a slide off its own edge.
                         val footerAlpha by animateFloatAsState(
                             targetValue = if (chromeShown) 1f else 0f,
                             label = "readerFooterAlpha",
@@ -515,10 +509,11 @@ fun ReaderScreen(
                         )
                     }
 
-                    // Bottom navigation bar, toggled by a centre tap.
+                    // Bottom navigation bar, toggled by a centre tap. Keep it above the passive footer
+                    // so both chrome surfaces remain visible when immersive controls are revealed.
                     ReaderChapterControlsBar(
                         visible = state.chapterControlsVisible,
-                        bottomInset = controlBarBottomInset,
+                        bottomPadding = footerHeight,
                         background = background,
                         content = onBackground,
                         border = readerBorder,
@@ -531,7 +526,7 @@ fun ReaderScreen(
                         visible = state.sheetVisible,
                         state = sheetState,
                         onDismiss = onCloseSheet,
-                        onSeek = onSeek,
+                        onSelectChapter = onSelectChapter,
                         onNextChapter = onNextChapter,
                         onPreviousChapter = onPreviousChapter,
                         onUpdateSettings = onUpdateSettings,

@@ -19,6 +19,7 @@ import javax.inject.Inject
 data class AppAppearance(
     val themePreference: ThemePreference = ThemePreference.System,
     val oledDark: Boolean = false,
+    val dynamicColors: Boolean = false,
     val accentSelection: AccentSelection = AccentSelection.Default,
     val isLoaded: Boolean = false,
 )
@@ -34,9 +35,16 @@ class AppViewModel @Inject constructor(
     val appearance: StateFlow<AppAppearance> = combine(
         settings.themePreference,
         settings.oledDark,
+        settings.dynamicColors,
         settings.accentSelection,
-    ) { themePreference, oledDark, accentSelection ->
-        AppAppearance(themePreference, oledDark, accentSelection, isLoaded = true)
+    ) { themePreference, oledDark, dynamicColors, accentSelection ->
+        AppAppearance(
+            themePreference = themePreference,
+            oledDark = oledDark,
+            dynamicColors = dynamicColors,
+            accentSelection = accentSelection,
+            isLoaded = true,
+        )
     }.catch {
         // Never strand the Android splash if preferences cannot be read; use safe defaults.
         emit(AppAppearance(isLoaded = true))
@@ -55,6 +63,10 @@ class AppViewModel @Inject constructor(
 
     fun onSetOledDark(enabled: Boolean) = viewModelScope.launch {
         settings.setOledDark(enabled)
+    }
+
+    fun onSetDynamicColors(enabled: Boolean) = viewModelScope.launch {
+        settings.setDynamicColors(enabled)
     }
 
     fun onSelectAccent(accent: AccentColor) = viewModelScope.launch {

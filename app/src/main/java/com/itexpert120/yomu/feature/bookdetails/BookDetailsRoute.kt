@@ -26,7 +26,7 @@ fun BookDetailsRoute(
     onOpenChapter: (String) -> Unit,
 ) {
     val viewModel: BookDetailsViewModel = hiltViewModel()
-    val book by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsState()
     val toc by viewModel.toc.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -39,7 +39,8 @@ fun BookDetailsRoute(
 
     Box {
         BookDetailsScreen(
-            book = book,
+            book = state.book,
+            bookLoaded = !state.loading,
             toc = toc,
             onBack = onBack,
             onRead = onRead,

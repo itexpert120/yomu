@@ -102,7 +102,7 @@ internal fun HighlightRow(
                 indication = null,
                 onClick = onClick,
             )
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(vertical = 8.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

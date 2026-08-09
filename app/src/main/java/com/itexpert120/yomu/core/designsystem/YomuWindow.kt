@@ -1,5 +1,15 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -41,3 +51,46 @@ enum class YomuWidthClass {
  * stretch edge-to-edge on very wide tablets/desktops. Content is centered within this bound.
  */
 val YomuContentMaxWidth: Dp = 1040.dp
+
+/** Minimum available content width at which a side-by-side layout remains comfortable. */
+val YomuTwoPaneMinWidth: Dp = 720.dp
+
+/** Leading pane width used by the Mihon-inspired two-pane layouts. */
+val YomuTwoPaneMaxLeadingWidth: Dp = 450.dp
+
+fun Dp.supportsYomuTwoPane(): Boolean = this >= YomuTwoPaneMinWidth
+
+/**
+ * A shared adaptive two-pane primitive. The leading pane grows to half the available width and
+ * stops at 450dp; the trailing pane consumes the remainder. Each slot owns its own scroll state,
+ * which keeps long metadata and long lists independent on tablets.
+ */
+@Composable
+fun YomuTwoPane(
+    modifier: Modifier = Modifier,
+    startModifier: Modifier = Modifier,
+    endModifier: Modifier = Modifier,
+    startContent: @Composable BoxScope.() -> Unit,
+    endContent: @Composable BoxScope.() -> Unit,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val startWidth = yomuLeadingPaneWidth(maxWidth)
+        Row(Modifier.fillMaxSize()) {
+            Box(
+                modifier = startModifier
+                    .width(startWidth)
+                    .fillMaxHeight(),
+                content = startContent,
+            )
+            Box(
+                modifier = endModifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                content = endContent,
+            )
+        }
+    }
+}
+
+fun yomuLeadingPaneWidth(availableWidth: Dp): Dp =
+    (availableWidth / 2).coerceAtMost(YomuTwoPaneMaxLeadingWidth)

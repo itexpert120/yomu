@@ -30,6 +30,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -73,7 +74,7 @@ internal fun ReaderControlsSheet(
     visible: Boolean,
     state: ReaderUiState,
     onDismiss: () -> Unit,
-    onSeek: (Double) -> Unit,
+    onSelectChapter: (String) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
@@ -116,7 +117,7 @@ internal fun ReaderControlsSheet(
                     when (current) {
                         SheetTab.Controls -> ControlsTab(
                             state = state,
-                            onSeek = onSeek,
+                            onSelectChapter = onSelectChapter,
                             onNextChapter = onNextChapter,
                             onPreviousChapter = onPreviousChapter,
                             onUpdateSettings = onUpdateSettings,
@@ -143,7 +144,7 @@ internal fun ReaderControlsSheet(
 @Composable
 private fun ControlsTab(
     state: ReaderUiState,
-    onSeek: (Double) -> Unit,
+    onSelectChapter: (String) -> Unit,
     onNextChapter: () -> Unit,
     onPreviousChapter: () -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
@@ -153,6 +154,26 @@ private fun ControlsTab(
     onCommitDim: (Float) -> Unit,
 ) {
     val s = state.settings
+    val chapters = remember(state.toc) { state.toc.filter { it.locatorJson != null } }
+    val exactChapterIndex = chapters.indexOfFirst { it.id == state.currentHref }
+    val currentChapterIndex = if (exactChapterIndex >= 0) {
+        exactChapterIndex
+    } else {
+        chapters.indexOfFirst { it.resourceHref == state.currentHref }.coerceAtLeast(0)
+    }
+    var previewChapterIndex by remember(chapters, currentChapterIndex) {
+        mutableIntStateOf(currentChapterIndex)
+    }
+    fun chapterIndex(fraction: Float): Int = if (chapters.size <= 1) {
+        0
+    } else {
+        (fraction.coerceIn(0f, 1f) * chapters.lastIndex).roundToInt()
+    }
+    val chapterFraction = if (chapters.size <= 1) {
+        0f
+    } else {
+        currentChapterIndex.toFloat() / chapters.lastIndex
+    }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -164,16 +185,28 @@ private fun ControlsTab(
                 onPreviousChapter,
             )
             ReaderSlider(
-                fraction = state.totalProgression.toFloat(),
-                onSeek = { onSeek(it.toDouble()) },
+                fraction = chapterFraction,
+                onSeek = { fraction ->
+                    val index = chapterIndex(fraction)
+                    previewChapterIndex = index
+                    chapters.getOrNull(index)?.locatorJson?.let(onSelectChapter)
+                },
                 modifier = Modifier.weight(1f),
+                onDrag = { previewChapterIndex = chapterIndex(it) },
+                enabled = chapters.size > 1,
+                snapPoints = chapters.size,
+                contentDescription = "Chapter selector",
             )
             RoundIcon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next chapter", onNextChapter)
         }
         Text(
-            text = "${((state.totalProgression) * 100).roundToInt()}% through the book",
+            text = chapters.getOrNull(previewChapterIndex)?.let { chapter ->
+                "Chapter ${previewChapterIndex + 1} of ${chapters.size} · ${chapter.title}"
+            } ?: "No chapters available",
             color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.mono,
+            style = YomuTheme.type.caption,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
 
         // Brightness + extra dim are contextual to the current reading session, so they stay here.
@@ -491,6 +524,7 @@ internal fun TocSheetRow(item: ReaderTocItem, current: Boolean, onClick: () -> U
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (current) YomuTheme.colors.accentSoft else Color.Transparent)
             .clickable(
@@ -630,16 +664,24 @@ internal fun ReaderSlider(
     modifier: Modifier = Modifier,
     onDrag: ((Float) -> Unit)? = null,
     markerFraction: Float? = null,
+    enabled: Boolean = true,
+    snapPoints: Int = 0,
     contentDescription: String = "Slider",
 ) {
     var pending by remember(fraction) { mutableStateOf(fraction.coerceIn(0f, 1f)) }
     Slider(
         value = pending,
         onValueChange = {
-            pending = it.coerceIn(0f, 1f)
+            val raw = it.coerceIn(0f, 1f)
+            pending = if (snapPoints > 1) {
+                (raw * (snapPoints - 1)).roundToInt().toFloat() / (snapPoints - 1)
+            } else {
+                raw
+            }
             onDrag?.invoke(pending)
         },
         onValueChangeFinished = { onSeek(pending) },
+        enabled = enabled,
         modifier = modifier.semantics {
             this.contentDescription = contentDescription
         },

@@ -14,17 +14,19 @@ enum class GroupMode(val label: String) {
 }
 
 enum class LibraryViewMode(val label: String) {
-    Grid("Grid"),
+    ComfortableGrid("Comfortable grid"),
+    CompactGrid("Compact grid"),
+    CoverOnlyGrid("Cover only"),
     List("List"),
 }
 
 data class LibraryPreferences(
     val sortMode: SortMode = SortMode.Recent,
     val groupMode: GroupMode = GroupMode.None,
-    val viewMode: LibraryViewMode = LibraryViewMode.Grid,
-    // 0 = Automatic: columns adapt to screen width (good on phone and tablet). A positive value
-    // forces that exact column count regardless of width.
-    val gridColumns: Int = AUTO_COLUMNS,
+    val viewMode: LibraryViewMode = LibraryViewMode.ComfortableGrid,
+    // 0 = Automatic: columns adapt to the active window. A positive value forces that exact count.
+    val portraitGridColumns: Int = AUTO_COLUMNS,
+    val landscapeGridColumns: Int = AUTO_COLUMNS,
     val coverCrop: Boolean = true,
 ) {
     companion object {

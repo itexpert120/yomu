@@ -52,6 +52,12 @@ data class BookDetailsUi(
     val resumeLocatorJson: String? = null,
 )
 
+/** Distinguishes the initial Room lookup from a completed lookup whose book is genuinely absent. */
+data class BookDetailsState(
+    val loading: Boolean = true,
+    val book: BookDetailsUi? = null,
+)
+
 /** TOC ordering, expressed in the book's own rendering order rather than alphabetically. */
 enum class TocSortMode(val label: String) {
     Ascending("Ascending"),
@@ -102,12 +108,16 @@ class BookDetailsViewModel @Inject constructor(
     // "bookId" is the property name from the type-safe BookDetails route.
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
 
-    val state: StateFlow<BookDetailsUi?> =
+    val state: StateFlow<BookDetailsState> =
         combine(
             repository.observeBook(BookId(bookId)),
             statsRepository.bookReadingSeconds(BookId(bookId)),
-        ) { book, readingSeconds -> book?.toUi(readingSeconds) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        ) { book, readingSeconds ->
+            BookDetailsState(
+                loading = false,
+                book = book?.toUi(readingSeconds),
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BookDetailsState())
 
     // One-shot user messages (e.g. gallery-save result), surfaced as a transient notice.
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -142,7 +152,7 @@ class BookDetailsViewModel @Inject constructor(
         selectionFlow,
         readingAndBookmarksFlow,
         state,
-    ) { config, items, selection, reading, currentBook ->
+    ) { config, items, selection, reading, currentState ->
         val (loading, sort) = config
         val (selected, inSelection) = selection
         val (read, progress) = reading.first
@@ -163,8 +173,8 @@ class BookDetailsViewModel @Inject constructor(
                     uid = uid,
                     chapterId = it.id,
                     title = it.title,
-                    locatorJson = if (currentBook?.currentChapterId == it.id) {
-                        currentBook.resumeLocatorJson ?: it.locatorJson
+                    locatorJson = if (currentState.book?.currentChapterId == it.id) {
+                        currentState.book.resumeLocatorJson ?: it.locatorJson
                     } else {
                         it.locatorJson
                     },
@@ -272,7 +282,7 @@ class BookDetailsViewModel @Inject constructor(
     // endregion
 
     fun saveCoverToGallery() {
-        val book = state.value ?: return
+        val book = state.value.book ?: return
         val path = book.coverImagePath ?: return
         viewModelScope.launch {
             val name =

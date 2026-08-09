@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
@@ -22,6 +20,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
 
 @Composable
 internal fun ConfirmRemoveDialog(
@@ -100,16 +99,13 @@ internal fun FloatingResumeButton(
 ) {
     val navBottom =
         WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-    ExtendedFloatingActionButton(
+    YomuExtendedFloatingActionButton(
         expanded = !collapsed,
         onClick = onResume,
-        modifier = modifier.padding(end = 16.dp, bottom = navBottom + 16.dp),
-        icon = {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = "Resume ${book.title}",
-            )
-        },
-        text = { Text("Resume") },
+        modifier = modifier
+            .padding(end = 16.dp, bottom = navBottom + 16.dp),
+        icon = Icons.Rounded.PlayArrow,
+        label = "Resume",
+        contentDescription = "Resume ${book.title}",
     )
 }

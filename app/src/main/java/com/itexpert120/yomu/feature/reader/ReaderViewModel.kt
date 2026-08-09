@@ -356,8 +356,8 @@ class ReaderViewModel @Inject constructor(
 
     fun onCloseSheet() = _state.update { it.copy(sheetVisible = false) }
 
-    fun onSeek(totalProgression: Double) {
-        _session.value?.goToProgression(totalProgression)
+    fun onSelectChapter(locatorJson: String) {
+        _session.value?.goToLocator(locatorJson)
     }
 
     fun onNextChapter() {

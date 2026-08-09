@@ -1,31 +1,31 @@
 package com.itexpert120.yomu.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
+import com.itexpert120.yomu.core.designsystem.YomuChip
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
-import com.itexpert120.yomu.core.designsystem.YomuSingleChoiceSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuPressable
@@ -40,8 +40,11 @@ fun SettingsScreen(
     selectedTheme: ThemePreference,
     oledDark: Boolean,
     oledEnabled: Boolean,
+    dynamicColors: Boolean,
+    dynamicColorsAvailable: Boolean,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
+    onToggleDynamicColors: (Boolean) -> Unit,
     readerSettings: ReaderSettings,
     customThemes: List<CustomReaderTheme>,
     customFonts: List<CustomFontRef>,
@@ -86,8 +89,11 @@ fun SettingsScreen(
                             selectedTheme = selectedTheme,
                             oledDark = oledDark,
                             oledEnabled = oledEnabled,
+                            dynamicColors = dynamicColors,
+                            dynamicColorsAvailable = dynamicColorsAvailable,
                             onSelectTheme = onSelectTheme,
                             onToggleOled = onToggleOled,
+                            onToggleDynamicColors = onToggleDynamicColors,
                         )
                         AboutGroup(onOpenAbout = onOpenAbout)
                         VersionFooter()
@@ -104,8 +110,11 @@ fun SettingsScreen(
                         selectedTheme = selectedTheme,
                         oledDark = oledDark,
                         oledEnabled = oledEnabled,
+                        dynamicColors = dynamicColors,
+                        dynamicColorsAvailable = dynamicColorsAvailable,
                         onSelectTheme = onSelectTheme,
                         onToggleOled = onToggleOled,
+                        onToggleDynamicColors = onToggleDynamicColors,
                     )
                     readerControls()
                     AboutGroup(onOpenAbout = onOpenAbout)
@@ -121,8 +130,11 @@ private fun AppearanceGroup(
     selectedTheme: ThemePreference,
     oledDark: Boolean,
     oledEnabled: Boolean,
+    dynamicColors: Boolean,
+    dynamicColorsAvailable: Boolean,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
+    onToggleDynamicColors: (Boolean) -> Unit,
 ) {
     YomuSettingGroup(
         title = "Appearance",
@@ -133,15 +145,76 @@ private fun AppearanceGroup(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelLarge,
         )
-        YomuSingleChoiceSegmentedControl(
-            options = ThemePreference.entries.map { it.label },
-            selectedIndex = ThemePreference.entries.indexOf(selectedTheme),
-            onSelected = { onSelectTheme(ThemePreference.entries[it]) },
+        ThemeChoiceRow(
+            selectedTheme = selectedTheme,
+            onSelectTheme = onSelectTheme,
+        )
+        DynamicColorsSettingRow(
+            checked = dynamicColors && dynamicColorsAvailable,
+            available = dynamicColorsAvailable,
+            onCheckedChange = onToggleDynamicColors,
         )
         OledSettingRow(
             checked = oledDark && oledEnabled,
             enabled = oledEnabled,
             onCheckedChange = onToggleOled,
+        )
+    }
+}
+
+@Composable
+private fun ThemeChoiceRow(
+    selectedTheme: ThemePreference,
+    onSelectTheme: (ThemePreference) -> Unit,
+) {
+    val themes = ThemePreference.entries
+    val selectedIndex = themes.indexOf(selectedTheme).coerceAtLeast(0)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(selectedIndex) {
+        val layoutInfo = listState.layoutInfo
+        val selectedItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
+        val fullyVisible = selectedItem != null &&
+            selectedItem.offset >= layoutInfo.viewportStartOffset &&
+            selectedItem.offset + selectedItem.size <= layoutInfo.viewportEndOffset
+        if (!fullyVisible) listState.animateScrollToItem(selectedIndex)
+    }
+
+    LazyRow(
+        state = listState,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(themes, key = { it.name }) { theme ->
+            YomuChip(
+                text = theme.label,
+                selected = theme == selectedTheme,
+                onClick = { onSelectTheme(theme) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DynamicColorsSettingRow(
+    checked: Boolean,
+    available: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    YomuSettingRow(
+        title = "Dynamic colors",
+        subtitle = if (available) {
+            "Use wallpaper colors for light and dark app themes"
+        } else {
+            "Requires Android 12 or newer"
+        },
+        enabled = available,
+    ) {
+        YomuTogglePill(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = available,
         )
     }
 }
@@ -160,9 +233,6 @@ private fun OledSettingRow(
             "Choose Dark or use a dark system theme to enable"
         },
         enabled = enabled,
-        leadingContent = {
-            SettingsLeadingIcon(icon = Icons.Rounded.DarkMode, enabled = enabled)
-        },
     ) {
         YomuTogglePill(
             checked = checked,
@@ -182,7 +252,6 @@ private fun AboutGroup(onOpenAbout: () -> Unit) {
             title = "About Open Reader",
             subtitle = "Privacy, terms, acknowledgements, and version",
             modifier = Modifier.yomuPressable(onClick = onOpenAbout),
-            leadingContent = { SettingsLeadingIcon(icon = Icons.Rounded.Info) },
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
@@ -205,33 +274,4 @@ private fun VersionFooter() {
             .padding(horizontal = 4.dp, vertical = 2.dp),
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
-}
-
-@Composable
-private fun SettingsLeadingIcon(
-    icon: ImageVector,
-    enabled: Boolean = true,
-) {
-    Surface(
-        modifier = Modifier.size(40.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = if (enabled) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                },
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
 }

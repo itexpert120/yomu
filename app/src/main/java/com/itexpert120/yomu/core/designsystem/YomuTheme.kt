@@ -122,6 +122,8 @@ private val MaterialShapes = Shapes(
 )
 
 private val MaterialTypography = Typography()
+private val StaticLightColorScheme = lightColorScheme()
+private val StaticDarkColorScheme = darkColorScheme()
 
 val LocalYomuColors = staticCompositionLocalOf { FallbackYomuColors }
 val LocalYomuType = staticCompositionLocalOf { yomuType(MaterialTypography) }
@@ -147,31 +149,32 @@ object YomuTheme {
 fun YomuDesignTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeMode: YomuThemeMode? = null,
-    dynamicColor: Boolean = true,
+    dynamicColors: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val mode = themeMode ?: if (darkTheme) YomuThemeMode.Dark else YomuThemeMode.Light
-    val isDark = mode != YomuThemeMode.Light
-    val systemScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isDark -> {
-            dynamicDarkColorScheme(context)
-        }
-
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+    val scheme = when {
+        dynamicColors &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            mode == YomuThemeMode.Light -> {
             dynamicLightColorScheme(context)
         }
 
-        isDark -> darkColorScheme()
-        else -> lightColorScheme()
+        dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            dynamicDarkColorScheme(context)
+        }
+
+        mode == YomuThemeMode.Light -> StaticLightColorScheme
+        else -> StaticDarkColorScheme
     }
     val baseScheme = if (mode == YomuThemeMode.Oled) {
-        systemScheme.copy(
+        scheme.copy(
             background = Color.Black,
             surface = Color.Black,
         )
     } else {
-        systemScheme
+        scheme
     }
     val colorScheme = baseScheme
 

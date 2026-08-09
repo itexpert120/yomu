@@ -18,7 +18,7 @@ fun ReaderRoute(onBack: () -> Unit) {
         onRetryOpen = viewModel::onRetryOpen,
         onOpenSheet = viewModel::onOpenSheet,
         onCloseSheet = viewModel::onCloseSheet,
-        onSeek = viewModel::onSeek,
+        onSelectChapter = viewModel::onSelectChapter,
         onNextChapter = viewModel::onNextChapter,
         onPreviousChapter = viewModel::onPreviousChapter,
         onUpdateSettings = viewModel::onUpdateSettings,

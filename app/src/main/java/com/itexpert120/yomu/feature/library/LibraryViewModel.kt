@@ -156,7 +156,8 @@ class LibraryViewModel @Inject constructor(
     fun onSortModeChange(mode: SortMode) = persist { libraryPrefs.setSortMode(mode) }
     fun onGroupModeChange(mode: GroupMode) = persist { libraryPrefs.setGroupMode(mode) }
     fun onViewModeChange(mode: LibraryViewMode) = persist { libraryPrefs.setViewMode(mode) }
-    fun onGridColumnsChange(columns: Int) = persist { libraryPrefs.setGridColumns(columns) }
+    fun onPortraitGridColumnsChange(columns: Int) = persist { libraryPrefs.setPortraitGridColumns(columns) }
+    fun onLandscapeGridColumnsChange(columns: Int) = persist { libraryPrefs.setLandscapeGridColumns(columns) }
     fun onCoverCropChange(crop: Boolean) = persist { libraryPrefs.setCoverCrop(crop) }
 
     private fun persist(block: suspend () -> Unit) {
@@ -189,7 +190,8 @@ class LibraryViewModel @Inject constructor(
             sortMode = prefs.sortMode,
             groupMode = prefs.groupMode,
             viewMode = prefs.viewMode,
-            gridColumns = prefs.gridColumns,
+            portraitGridColumns = prefs.portraitGridColumns,
+            landscapeGridColumns = prefs.landscapeGridColumns,
             coverCrop = prefs.coverCrop,
             searchActive = search.active,
             searchQuery = search.query,

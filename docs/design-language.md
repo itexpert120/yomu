@@ -1,6 +1,6 @@
 # Design Language
 
-Open Reader should feel like a native Android app while keeping a reader-first identity. The v2 UI follows Material 3 Expressive principles — dynamic/system-aware colour, clear Material roles, adaptive layouts, accessible native interactions, purposeful motion, and expressive typography/shapes — rather than inventing a second visual language.
+Open Reader should feel like a native Android app while keeping a reader-first identity. The v2 UI follows Material 3 Expressive principles — a fixed app-owned palette by default, optional dynamic colours for light and dark modes, clear Material roles, adaptive layouts, accessible native interactions, purposeful motion, and expressive typography/shapes — rather than inventing a second visual language.
 
 ## Implementation status (current)
 
@@ -15,7 +15,7 @@ What exists in `core/designsystem`:
 - An `app/devgallery` harness validates primitives in isolation.
 - There is now a real app launcher icon (`ic_yomu_mark` / adaptive icon).
 
-The initial migration deliberately uses native Material product surfaces. Reader pages and reader-specific colour themes remain custom where EPUB comfort requires it, while chrome and supporting surfaces use Material semantics, touch targets, ripples, dynamic colour, and adaptive sheet patterns.
+The initial migration deliberately uses native Material product surfaces. Reader pages and reader-specific colour themes remain custom where EPUB comfort requires it, while chrome and supporting surfaces use Material semantics, touch targets, ripples, fixed Material 3 colour roles by default, optional Android 12+ dynamic colours for both light and dark modes, and adaptive sheet patterns.
 
 Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
 
@@ -49,7 +49,7 @@ Do not copy these products. Use them as proof that native Android can feel custo
 Use these as the baseline for every redesign:
 
 - Prefer native Material components and semantics for app chrome, controls, dialogs, lists, cards, sheets, and navigation.
-- Use Material colour roles and dynamic/system-aware colour from the device/system theme; custom accent controls are not exposed in the app.
+- Use the app-owned static Material 3 light/dark colour schemes by default. Dynamic wallpaper colours are an explicit Android 12+ opt-in that applies to both modes; custom accent controls are not exposed.
 - Use the Material typography hierarchy, readable line lengths, clear emphasis, and expressive type only where it improves the reading task.
 - Use a consistent conventional shape scale; expressive shapes should communicate hierarchy, not decorate every surface.
 - Use native touch targets, focus/selection semantics, ripples, reduced-motion support, and accessible contrast.
