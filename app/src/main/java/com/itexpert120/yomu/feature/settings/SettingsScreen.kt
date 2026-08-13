@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,12 +21,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,8 +33,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
@@ -50,7 +48,6 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
-import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -275,27 +272,16 @@ private fun SettingsPaneRow(
 ) {
     val icon = when (pane) {
         SettingsPane.Appearance -> Icons.Rounded.Palette
-        SettingsPane.Reading -> Icons.Rounded.MenuBook
+        SettingsPane.Reading -> Icons.AutoMirrored.Rounded.MenuBook
         SettingsPane.About -> Icons.Rounded.Info
     }
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .yomuPressable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        color = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.45f)
-        },
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    YomuSettingRow(
+        title = pane.title,
+        subtitle = pane.subtitle,
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier.clip(MaterialTheme.shapes.large),
+        leadingContent = {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
@@ -305,21 +291,14 @@ private fun SettingsPaneRow(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
-            Column(Modifier.weight(1f)) {
-                Text(text = pane.title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = pane.subtitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        },
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -471,7 +450,7 @@ private fun AboutGroup(onOpenAbout: () -> Unit) {
         YomuSettingRow(
             title = "About Open Reader",
             subtitle = "Privacy, terms, acknowledgements, and version",
-            modifier = Modifier.yomuPressable(onClick = onOpenAbout),
+            onClick = onOpenAbout,
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,

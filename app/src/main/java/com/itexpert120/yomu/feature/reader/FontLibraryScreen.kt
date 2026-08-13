@@ -32,7 +32,6 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTextField
-import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.CURATED_GOOGLE_FONTS
 import com.itexpert120.yomu.core.model.CuratedFont
 
@@ -179,10 +178,9 @@ private fun FontLibraryRow(
     YomuSettingRow(
         title = family,
         subtitle = subtitle,
-        modifier = Modifier
-            // The whole row installs when the font isn't present yet; once installed, only the
-            // trailing remove button is interactive.
-            .then(if (canInstall) Modifier.yomuPressable(onClick = onInstall) else Modifier),
+        // The whole row installs when the font isn't present yet; once installed, only the
+        // trailing remove button is interactive.
+        onClick = onInstall.takeIf { canInstall },
         leadingContent = {
             Surface(
                 modifier = Modifier.size(40.dp),

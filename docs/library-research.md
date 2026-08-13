@@ -150,17 +150,18 @@ Guidance:
 - Keep business logic in ViewModels/domain/data, not composables.
 - Build adaptive layouts for phone, tablet, foldable, landscape, and multi-window.
 
-### Material 3
+### Material 3 Expressive
 
 Use case:
 
-- Material may remain as a dependency for base utilities or temporary internal controls.
+- Material 3 Expressive is the app-wide interaction and theming foundation.
+- Yomu wrappers own product-level colors, spacing, shapes, adaptive behavior, and repeated semantics.
+- Native Material components remain underneath the wrappers so touch targets, focus, accessibility, ripple, and system behavior stay platform-consistent.
 
 Constraint:
 
-- Do not expose default Material visual language in product-critical UI.
-- Avoid default `Scaffold`, `TopAppBar`, Material-shaped cards, default sliders, default switches, and standard Material bottom sheets for final app surfaces.
-- If a Material component is used, it must be visually wrapped or replaced before design freeze.
+- Do not introduce a second feature-level token system.
+- Keep custom drawing and gesture code limited to reader-specific surfaces, HSV color picking, image manipulation, and other cases with no suitable Material component.
 
 ## Persistence
 

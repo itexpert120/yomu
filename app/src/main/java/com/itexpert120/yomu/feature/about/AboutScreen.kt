@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -216,7 +216,7 @@ private fun AboutFacts() {
             modifier = Modifier.weight(1f),
         )
         AboutFact(
-            icon = Icons.Rounded.MenuBook,
+            icon = Icons.AutoMirrored.Rounded.MenuBook,
             title = "EPUB focused",
             modifier = Modifier.weight(1f),
         )

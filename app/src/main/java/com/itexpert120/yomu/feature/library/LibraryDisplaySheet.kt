@@ -4,6 +4,7 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.model.GroupMode
@@ -79,6 +81,7 @@ internal fun LibraryOptionsSheet(
                 selected = viewMode,
                 label = { it.label },
                 onSelected = onViewModeChange,
+                showSelectionIcon = false,
             )
             GridColumnsControl(
                 title = "Portrait columns",
@@ -189,6 +192,7 @@ private fun <T> ArrangementChoiceGroup(
     selected: T,
     label: (T) -> String,
     onSelected: (T) -> Unit,
+    showSelectionIcon: Boolean = true,
 ) {
     Column(
         modifier = modifier,
@@ -210,10 +214,17 @@ private fun <T> ArrangementChoiceGroup(
                         count = options.size,
                     ),
                     modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    icon = {
+                        if (showSelectionIcon) {
+                            SegmentedButtonDefaults.Icon(active = option == selected)
+                        }
+                    },
                 ) {
                     Text(
                         text = label(option),
-                        maxLines = 2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }

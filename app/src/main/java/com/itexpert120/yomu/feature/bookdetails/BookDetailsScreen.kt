@@ -16,7 +16,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,7 +40,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -111,6 +109,7 @@ import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
+import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
@@ -1296,21 +1295,21 @@ private fun ChapterSelectionToolbar(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SelectionToolbarAction(
+                YomuLabeledIconAction(
                     icon = Icons.Rounded.CheckCircle,
                     label = "Read",
                     onClick = onMarkRead,
                     enabled = hasSelection,
                     modifier = Modifier.weight(1f),
                 )
-                SelectionToolbarAction(
+                YomuLabeledIconAction(
                     icon = Icons.Rounded.RemoveDone,
                     label = "Unread",
                     onClick = onMarkUnread,
                     enabled = hasSelection,
                     modifier = Modifier.weight(1f),
                 )
-                SelectionToolbarAction(
+                YomuLabeledIconAction(
                     icon = Icons.AutoMirrored.Rounded.PlaylistAddCheck,
                     label = "To here",
                     onClick = onMarkPrevious,
@@ -1320,53 +1319,6 @@ private fun ChapterSelectionToolbar(
             }
         },
     )
-}
-
-@Composable
-private fun SelectionToolbarAction(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) {
-    val contentColor = if (enabled) {
-        tint
-    } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    }
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(
-                enabled = enabled,
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        Text(
-            text = label,
-            color = contentColor,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
 }
 
 @Composable

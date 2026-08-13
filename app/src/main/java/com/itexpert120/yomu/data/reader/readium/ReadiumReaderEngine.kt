@@ -766,10 +766,16 @@ private class ReadiumReaderSession(
         val previousHref = lastLocator?.href?.toString()
         val hrefStr = locator.href.toString()
         val resourceChanged = previousHref != null && previousHref != hrefStr
-        if (resourceChanged) {
+        val transitionAlreadyStarted = _renderState.value is ReaderRenderState.Transitioning
+        if (
+            resourceChanged &&
+            !transitionAlreadyStarted &&
+            currentSettings.layout == ReaderLayout.Scroll
+        ) {
             // Links and navigator-driven chapter changes do not always pass through one of Yomu's
-            // explicit navigation helpers. Start a new generation here so a late page-loaded
-            // callback from the old resource cannot reveal the new transition.
+            // explicit navigation helpers. Scroll mode still needs its layout cover for those
+            // moves. In paged mode this locator arrives after Readium has already displayed the
+            // adjacent spine item; covering it here would make the new chapter appear twice.
             val order = publication.readingOrder
             val previousIndex = order.indexOfFirst { it.url().toString() == previousHref }
             val currentIndex = order.indexOfFirst { it.url().toString() == hrefStr }
@@ -865,6 +871,10 @@ private class ReadiumReaderSession(
     }
     override fun applySettings(settings: ReaderSettings) {
         if (settings == currentSettings) return
+        val previous = currentSettings
+        val publicationPresentationChanged = previous.publicationPresentationDiffersFrom(settings)
+        val criticalStylingChanged =
+            publicationPresentationChanged || previous.immersiveChrome != settings.immersiveChrome
         currentSettings = settings
         if (settings.layout != ReaderLayout.Scroll) {
             scrollProgressJob?.cancel()
@@ -872,11 +882,29 @@ private class ReadiumReaderSession(
         }
         val nav = navigator
         if (nav != null) {
-            beginChapterTransition()
-            nav.submitPreferences(settings.toPreferences())
-            scheduleCriticalStyling()
+            when {
+                criticalStylingChanged -> {
+                    beginChapterTransition()
+                    if (publicationPresentationChanged) {
+                        nav.submitPreferences(settings.toPreferences())
+                    }
+                    scheduleCriticalStyling()
+                }
+
+                previous.showScrollbar != settings.showScrollbar -> applyScrollbars(settings)
+            }
         }
     }
+
+    private fun ReaderSettings.publicationPresentationDiffersFrom(other: ReaderSettings): Boolean = layout != other.layout ||
+        colorPalette != other.colorPalette ||
+        font != other.font ||
+        customFont != other.customFont ||
+        fontScale != other.fontScale ||
+        lineHeight != other.lineHeight ||
+        pageMargins != other.pageMargins ||
+        paragraphSpacing != other.paragraphSpacing ||
+        textAlign != other.textAlign
 
     override fun refreshImmersiveLayout() {
         clearImmersiveScrollTopPadding()

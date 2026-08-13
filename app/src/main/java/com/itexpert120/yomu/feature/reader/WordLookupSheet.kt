@@ -1,8 +1,6 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -17,7 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
@@ -46,6 +44,7 @@ import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.data.dictionary.DictionaryEntry
 import com.itexpert120.yomu.data.dictionary.DictionaryPronunciation
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
@@ -99,7 +98,7 @@ internal fun WordLookupSheet(
                 )
                 // No audio clips in this API — speak the word with the device voice instead.
                 CircleIconButton(
-                    icon = Icons.Rounded.VolumeUp,
+                    icon = Icons.AutoMirrored.Rounded.VolumeUp,
                     description = "Pronounce",
                     tint = YomuTheme.colors.accent,
                     onClick = { onPronounce(state.word) },
@@ -415,10 +414,9 @@ private fun SourceLink(url: String, license: String?) {
                 text = host,
                 color = YomuTheme.colors.accent,
                 style = YomuTheme.type.body,
-                modifier = Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
+                modifier = Modifier.yomuPressable(
                     onClick = { runCatching { handler.openUri(safeUrl) } },
+                    pressedScale = 1f,
                 ),
             )
         } else {

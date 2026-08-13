@@ -4,8 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +54,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
@@ -337,11 +336,10 @@ internal fun AutoSlider(
                 style = YomuTheme.type.mono,
                 modifier = Modifier
                     .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
+                    .yomuPressable(
                         enabled = !auto,
                         onClick = { onChange(null) },
+                        pressedScale = 1f,
                     )
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             )
@@ -465,11 +463,7 @@ private fun SavedThemeRow(theme: CustomReaderTheme, onApply: () -> Unit, onDelet
             .fillMaxWidth()
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(YomuTheme.colors.surface)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onApply,
-            )
+            .yomuPressable(onClick = onApply, pressedScale = 1f)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -500,13 +494,9 @@ private fun SavedThemeRow(theme: CustomReaderTheme, onApply: () -> Unit, onDelet
         )
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDelete,
-                ),
+                .yomuPressable(onClick = onDelete, pressedScale = 1f),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -527,11 +517,7 @@ internal fun TocSheetRow(item: ReaderTocItem, current: Boolean, onClick: () -> U
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(YomuTheme.radius.md))
             .background(if (current) YomuTheme.colors.accentSoft else Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .yomuPressable(onClick = onClick, pressedScale = 1f)
             // Indent by TOC depth.
             .padding(start = (12 + item.depth * 14).dp, top = 11.dp, bottom = 11.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -562,11 +548,7 @@ internal fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) 
                 color = if (selected) YomuTheme.colors.accent else YomuTheme.colors.border,
                 shape = RoundedCornerShape(YomuTheme.radius.pill),
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .yomuPressable(onClick = onClick, pressedScale = 1f)
             .padding(horizontal = 16.dp, vertical = 9.dp),
     ) {
         Text(
@@ -592,11 +574,7 @@ internal fun CustomFontChip(font: CustomFontRef, selected: Boolean, onClick: () 
                 color = if (selected) YomuTheme.colors.accent else YomuTheme.colors.border,
                 shape = RoundedCornerShape(YomuTheme.radius.pill),
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .yomuPressable(onClick = onClick, pressedScale = 1f)
             .padding(horizontal = 16.dp, vertical = 9.dp),
     ) {
         Text(
@@ -620,11 +598,7 @@ internal fun AddFontChip(onClick: () -> Unit) {
                 color = YomuTheme.colors.border,
                 shape = RoundedCornerShape(YomuTheme.radius.pill),
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .yomuPressable(onClick = onClick, pressedScale = 1f)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     ) {
         Icon(

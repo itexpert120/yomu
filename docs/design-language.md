@@ -4,13 +4,13 @@ Open Reader should feel like a native Android app while keeping a reader-first i
 
 ## Implementation status (current)
 
-The v2 Material 3 migration baseline is in place across the shared design system, library, book details, reader chrome, settings, statistics, and supporting screens. The visual system is intentionally still a compatibility bridge so the remaining redesign can be guided screen-by-screen without destabilising reader/data behaviour.
+The Material 3 Expressive foundation is now active across the shared design system, library, book details, reader chrome, settings, statistics, and supporting screens. `YomuDesignTheme` owns the resolved light, dark, dynamic, and OLED schemes; Yomu locals remain a compatibility bridge while feature call sites converge on shared components.
 
 What exists in `core/designsystem`:
 
-- `YomuDesignTheme { }` now owns a native `MaterialTheme` with dynamic light/dark colour schemes, Material typography, a conventional Material shape scale, and Yomu CompositionLocals as a temporary compatibility bridge (`YomuTheme.colors/type/space/radius`).
+- `YomuDesignTheme { }` now owns `MaterialExpressiveTheme` with explicit light/dark/OLED colour schemes, optional Android 12+ dynamic colours, expressive Material motion, tuned Material typography/shapes, and Yomu CompositionLocals as a temporary compatibility bridge (`YomuTheme.colors/type/space/radius`).
 - Token data classes `YomuColors`, `YomuType`, `YomuSpacing`, `YomuRadius` (all `@Immutable`). Theme variants live in `YomuThemeMode { Light, Dark, Oled }`. (Note: the actual token sets differ in naming/coverage from the aspirational `YomuColor.*` / `YomuType.*` lists further down this doc — treat those lists as direction, the code as source of truth.)
-- Shared primitives retain their Yomu names for call-site compatibility, but now delegate to native Material components where equivalents exist: `Button`, `FilterChip`, `PrimaryTabRow`, `Switch`, `Slider`, `OutlinedTextField`, `Card`, `TopAppBar`, `AlertDialog`, `ExtendedFloatingActionButton`, `ListItem`, and `ModalBottomSheet`. The HSV picker remains custom because Material has no equivalent.
+- Shared primitives retain their Yomu names for call-site compatibility, but now delegate to native Material components where equivalents exist: `Button`, `FilterChip`, `PrimaryTabRow`, `Switch`, `Slider`, `OutlinedTextField`, `Card`, `TopAppBar`, `AlertDialog`, `ExtendedFloatingActionButton`, `ListItem`, `NavigationBar`, `NavigationRail`, and `ModalBottomSheet`. Shared labeled actions and settings rows add consistent semantics and touch targets. The HSV picker, EPUB canvas, and cover gestures remain custom because Material has no equivalent.
 - `MainActivity` owns the window insets controller and flips status/nav-bar icon appearance on theme change.
 - An `app/devgallery` harness validates primitives in isolation.
 - There is now a real app launcher icon (`ic_yomu_mark` / adaptive icon).
@@ -19,7 +19,7 @@ The initial migration deliberately uses native Material product surfaces. Reader
 
 Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
 
-Still pending design work: bookmarks, highlights, in-book search, and advanced typography. Many of the aspirational primitive names listed below (e.g. `ReaderSurface`, `GlassPanel`, `SidePanel`, `HighlightMenu`, `AppearanceStudioPanel`, the full theme-preset families, and the named motion tokens) are not yet built — keep them as planned targets, not current API.
+Remaining design work is refinement rather than foundational migration: screen-by-screen visual tuning, broader screenshot coverage, and further extraction of repeated feature-level cards. Bookmarks, highlights, in-book search, advanced typography, and the reader chrome are implemented.
 
 ## Visual Direction
 

@@ -41,14 +41,14 @@ fun YomuBookCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(YomuTheme.space.sm)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(BookCoverAspectRatio)
                     .clip(MaterialTheme.shapes.large)
                     .background(Brush.verticalGradient(coverColors))
-                    .padding(14.dp),
+                    .padding(YomuTheme.space.sm),
             ) {
                 Box(
                     modifier = Modifier
@@ -61,24 +61,24 @@ fun YomuBookCard(
                     Text(
                         text = title,
                         color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = YomuTheme.type.section,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(YomuTheme.space.xxs))
                     Text(
                         text = author,
                         color = Color.White.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = YomuTheme.type.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(YomuTheme.space.sm))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
@@ -89,7 +89,7 @@ fun YomuBookCard(
                 Text(
                     text = "${(progress * 100).toInt()}%",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = YomuTheme.type.caption,
                 )
             }
         }
@@ -124,13 +124,13 @@ fun YomuSettingGroup(
                 Text(
                     text = title,
                     color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = YomuTheme.type.section,
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = YomuTheme.type.caption,
                     )
                 }
             }

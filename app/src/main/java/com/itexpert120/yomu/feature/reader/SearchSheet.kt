@@ -1,7 +1,5 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +15,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 
 @Composable
@@ -151,11 +149,7 @@ internal fun SearchResultRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .yomuPressable(onClick = onClick, pressedScale = 1f)
             .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {

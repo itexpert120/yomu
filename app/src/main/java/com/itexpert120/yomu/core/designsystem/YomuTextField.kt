@@ -9,8 +9,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 
 /** Labeled Material 3 text field used by editors and forms. */
 @Composable
@@ -28,9 +26,7 @@ fun YomuTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = label },
+        modifier = modifier.fillMaxWidth(),
         label = { Text(label) },
         placeholder = placeholder.takeIf { it.isNotEmpty() }?.let { text ->
             { Text(text) }

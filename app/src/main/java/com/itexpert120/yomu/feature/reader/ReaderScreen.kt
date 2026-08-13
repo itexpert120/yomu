@@ -359,6 +359,7 @@ fun ReaderScreen(
     // stays shown while loading or when immersive is off (title/Back/footer visible).
     val immersive = state.settings.immersiveChrome
     val pageReady = state.renderState is ReaderRenderState.Ready
+    val readerSurfacesAvailable = state.renderState !is ReaderRenderState.Opening
     val chromeShown = !pageReady || !immersive || state.chapterControlsVisible
     val topInset by animateDpAsState(
         targetValue = when {
@@ -465,8 +466,10 @@ fun ReaderScreen(
                     )
                 }
 
-                // Footer, overlays and all sheets only appear once the first stable page has painted.
-                if (pageReady) {
+                // Do not create reader surfaces during the initial open. Once created, keep them
+                // composed through navigator reflows so an open sheet is not dismissed and rebuilt
+                // every time an in-reader display preference changes.
+                if (readerSurfacesAvailable) {
                     if (state.settings.showFooter) {
                         // Keep the footer composed even while hidden so its measured height is always known —
                         // the controls bar can anchor above it on the first immersive reveal, and the EPUB

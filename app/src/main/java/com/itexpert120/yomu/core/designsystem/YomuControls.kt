@@ -49,7 +49,7 @@ fun YomuButton(
     emphasis: YomuButtonEmphasis = YomuButtonEmphasis.Primary,
 ) {
     val label: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
-        Text(text = text, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        Text(text = text, maxLines = 1, style = YomuTheme.type.control)
     }
     when (emphasis) {
         YomuButtonEmphasis.Primary -> Button(
@@ -87,7 +87,13 @@ fun YomuChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(text = text, maxLines = 1) },
+        label = {
+            Text(
+                text = text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
         border = FilterChipDefaults.filterChipBorder(
@@ -120,7 +126,13 @@ fun YomuSegmentedControl(
                 modifier = Modifier.semantics {
                     this.selected = index == selected
                 },
-                text = { Text(text = option, maxLines = 1) },
+                text = {
+                    Text(
+                        text = option,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
             )
         }
     }
@@ -149,7 +161,11 @@ fun YomuSingleChoiceSegmentedControl(
                 ),
                 modifier = Modifier.weight(1f),
             ) {
-                Text(text = option, maxLines = 1)
+                Text(
+                    text = option,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -168,13 +184,13 @@ fun YomuRangeRow(
             Text(
                 text = label,
                 color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyLarge,
+                style = YomuTheme.type.body,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 text = valueLabel,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium,
+                style = YomuTheme.type.caption,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -251,7 +267,7 @@ fun YomuColorSwatch(
         Text(
             text = name,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium,
+            style = YomuTheme.type.caption,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

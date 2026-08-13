@@ -29,7 +29,7 @@ Use the Gradle wrapper. On this Windows/PowerShell environment use `./gradlew` (
 
 There is no separate "run tests" vs "lint" toolchain beyond Gradle. All external dependency versions live in `gradle/libs.versions.toml` (version catalog) — add dependencies there, referenced as `libs.*`, never inline in `build.gradle.kts`.
 
-Toolchain: AGP 9.2.1, Kotlin 2.4.0, Compose BOM 2026.06.00, **Java 17** (+ core-library desugaring), KSP. `compileSdk 37 / minSdk 24 / targetSdk 36`. DI is Hilt (with `hilt { enableAggregatingTask = false }` — a workaround for Kotlin 2.4.0 metadata vs Hilt's javac aggregator); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment.
+Toolchain: AGP 9.3.1, Kotlin 2.4.0, Compose Material 3 Expressive alpha BOM 2026.07.01, **Java 17** (+ core-library desugaring), KSP. `compileSdk 37 / minSdk 24 / targetSdk 37`. DI is Hilt (with `hilt { enableAggregatingTask = false }` — a workaround for Kotlin 2.4.0 metadata vs Hilt's javac aggregator); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment.
 
 ## Architecture
 
@@ -71,7 +71,7 @@ Type-safe nav destinations: `Home` (the top-level shell), `Library`, `BookDetail
 
 ### Design system is the foundation — use Material 3 Expressive through the compatibility layer
 `core/designsystem` owns the Material 3 Expressive theme boundary and temporary Yomu compatibility wrappers:
-- `YomuDesignTheme { ... }` wraps native `MaterialTheme`, fixed Material 3 light/dark colour schemes with opt-in Android 12+ dynamic colours for both modes, Material typography, conventional Material shapes, and the existing Yomu CompositionLocals.
+- `YomuDesignTheme { ... }` owns `MaterialExpressiveTheme`, explicit light/dark/OLED colour schemes with opt-in Android 12+ dynamic colours for light/dark modes, Material typography/shapes/motion, and the existing Yomu CompositionLocals.
 - Access compatibility tokens inside composables via `YomuTheme.colors`, `YomuTheme.type`, `YomuTheme.space`, and `YomuTheme.radius`; migrate call sites incrementally rather than inventing a second token system.
 - Token data classes remain `YomuColors`, `YomuType`, `YomuSpacing`, and `YomuRadius` (all `@Immutable`). Theme variants remain `YomuThemeMode.{Light, Dark, Oled}`.
 - Prefer native Material components through the Yomu wrappers (`Button`, chips, tabs, switches, sliders, text fields, cards, top app bars, dialogs, FABs, lists, and sheets). Keep custom Canvas/gesture code only where Material has no equivalent or the EPUB page requires reader-specific behaviour (for example the HSV picker and engine-driven reading canvas).

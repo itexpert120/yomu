@@ -2,12 +2,6 @@ package com.itexpert120.yomu.core.designsystem
 
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -78,19 +72,8 @@ fun YomuDropdownMenu(
         ) {
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                ) + fadeIn(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                ),
-                exit = shrinkVertically(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                ) + fadeOut(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                ),
+                enter = yomuPopupEnter(),
+                exit = yomuPopupExit(),
             ) {
                 Box(modifier = modifier) {
                     content()

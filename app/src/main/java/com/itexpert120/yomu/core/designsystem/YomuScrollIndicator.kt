@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollIndicatorState
@@ -25,6 +26,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.channels.Channel
 import kotlin.math.roundToInt
@@ -127,7 +131,11 @@ private fun VerticalScrollIndicator(
             isScrollInProgress -> 0.88f
             else -> 0.52f
         },
-        animationSpec = tween(durationMillis = if (isScrollInProgress) 90 else 220),
+        animationSpec = if (yomuAnimationsEnabled()) {
+            tween(durationMillis = if (isScrollInProgress) 90 else 220)
+        } else {
+            snap()
+        },
         label = "verticalScrollIndicatorAlpha",
     )
     val currentMetrics = rememberUpdatedState(metrics)
@@ -145,6 +153,16 @@ private fun VerticalScrollIndicator(
     Box(
         modifier = modifier
             .width(ScrollIndicatorDragWidth)
+            .semantics {
+                if (metrics.scrollable) {
+                    val range = (metrics.contentSize - metrics.viewportSize).coerceAtLeast(1)
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        current = (metrics.scrollOffset.toFloat() / range).coerceIn(0f, 1f),
+                        range = 0f..1f,
+                        steps = 0,
+                    )
+                }
+            }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)

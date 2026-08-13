@@ -12,16 +12,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.itexpert120.yomu.core.designsystem.YomuNavigationBar
+import com.itexpert120.yomu.core.designsystem.YomuNavigationBarItem
+import com.itexpert120.yomu.core.designsystem.YomuNavigationRail
+import com.itexpert120.yomu.core.designsystem.YomuNavigationRailItem
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 
 internal enum class YomuTopLevelDestination(
@@ -45,25 +42,17 @@ internal fun YomuTopLevelNavigation(
         val wide = YomuWidthClass.fromWidth(maxWidth).isWide
         if (wide) {
             Row(Modifier.fillMaxSize()) {
-                NavigationRail(
-                    modifier = Modifier.fillMaxHeight(),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
+                YomuNavigationRail(modifier = Modifier.fillMaxHeight()) {
                     Column(
                         modifier = Modifier.fillMaxHeight(),
                         verticalArrangement = Arrangement.Center,
                     ) {
                         YomuTopLevelDestination.entries.forEach { destination ->
-                            NavigationRailItem(
+                            YomuNavigationRailItem(
                                 selected = selected == destination,
                                 onClick = { onSelected(destination) },
-                                icon = {
-                                    Icon(
-                                        imageVector = destination.icon,
-                                        contentDescription = destination.label,
-                                    )
-                                },
-                                label = { Text(destination.label) },
+                                icon = destination.icon,
+                                label = destination.label,
                             )
                         }
                     }
@@ -83,20 +72,13 @@ internal fun YomuTopLevelNavigation(
                 ) {
                     content(Modifier.fillMaxSize())
                 }
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
+                YomuNavigationBar {
                     YomuTopLevelDestination.entries.forEach { destination ->
-                        NavigationBarItem(
+                        YomuNavigationBarItem(
                             selected = selected == destination,
                             onClick = { onSelected(destination) },
-                            icon = {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = destination.label,
-                                )
-                            },
-                            label = { Text(destination.label) },
+                            icon = destination.icon,
+                            label = destination.label,
                         )
                     }
                 }

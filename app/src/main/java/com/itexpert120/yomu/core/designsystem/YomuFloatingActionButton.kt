@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 
 /** Extended FAB with stable container padding so expanding text never snaps the icon sideways. */
 @Composable
@@ -73,7 +72,7 @@ fun YomuExtendedFloatingActionButton(
         modifier = modifier.semantics { this.contentDescription = contentDescription },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = YomuTheme.space.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(imageVector = icon, contentDescription = null)
@@ -86,7 +85,7 @@ fun YomuExtendedFloatingActionButton(
                     modifier = Modifier.clearAndSetSemantics {},
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(YomuTheme.space.sm))
                     Text(label)
                 }
             }

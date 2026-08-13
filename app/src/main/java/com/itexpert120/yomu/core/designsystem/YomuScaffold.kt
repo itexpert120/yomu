@@ -6,6 +6,8 @@
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -48,6 +50,7 @@ fun YomuScreenHeader(
 ) {
     val elevation by animateDpAsState(
         targetValue = if (elevated) 3.dp else 0.dp,
+        animationSpec = if (yomuAnimationsEnabled()) tween() else snap(),
         label = "screenHeaderElevation",
     )
     TopAppBar(
@@ -63,7 +66,7 @@ fun YomuScreenHeader(
                     Text(
                         text = subtitle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = YomuTheme.type.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -138,8 +141,8 @@ fun YomuScreenScaffold(
                     modifier = Modifier
                         .widthIn(max = YomuContentMaxWidth)
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 4.dp, bottom = navBottom + 28.dp),
+                        .padding(horizontal = YomuTheme.space.md)
+                        .padding(top = YomuTheme.space.xxs, bottom = navBottom + YomuTheme.space.lg),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     content = content,
                 )

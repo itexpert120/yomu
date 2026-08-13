@@ -7,7 +7,6 @@ import android.os.BatteryManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -39,7 +38,6 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -55,13 +53,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -291,66 +288,30 @@ private fun ReaderActionBar(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ReaderToolbarAction(
+                YomuLabeledIconAction(
                     icon = Icons.Rounded.Toc,
                     label = "Browse",
                     onClick = onBrowse,
-                    tint = content,
+                    contentColor = content,
                     modifier = Modifier.weight(1f),
                 )
-                ReaderToolbarAction(
+                YomuLabeledIconAction(
                     icon = Icons.Rounded.Search,
                     label = "Search",
                     onClick = onSearch,
-                    tint = content,
+                    contentColor = content,
                     modifier = Modifier.weight(1f),
                 )
-                ReaderToolbarAction(
+                YomuLabeledIconAction(
                     icon = Icons.Rounded.Tune,
                     label = "Display",
                     onClick = onDisplay,
-                    tint = content,
+                    contentColor = content,
                     modifier = Modifier.weight(1f),
                 )
             }
         },
     )
-}
-
-@Composable
-private fun ReaderToolbarAction(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        Text(
-            text = label,
-            color = tint,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-        )
-    }
 }
 
 /** Wall-clock string, refreshed every 20s so the minute flip is prompt. */

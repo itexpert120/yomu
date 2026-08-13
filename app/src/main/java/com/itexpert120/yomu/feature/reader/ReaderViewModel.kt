@@ -137,6 +137,7 @@ class ReaderViewModel @Inject constructor(
     private var searchGeneration = 0L
     private var progressSaveJob: Job? = null
     private var pendingProgress: ReadingProgressSnapshot? = null
+    private var settingsWriteJob: Job? = null
 
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
     private val locatorOverride: String? = savedStateHandle["locator"]
@@ -455,7 +456,15 @@ class ReaderViewModel @Inject constructor(
 
     /** Reader edits write this book's per-book override; global defaults live in Settings. */
     fun onUpdateSettings(settings: ReaderSettings) {
-        viewModelScope.launch { settingsRepository.setForBook(BookId(bookId), settings) }
+        if (settings == _state.value.settings) return
+        // Apply live settings before Room echoes them back through effective(). This keeps controls
+        // responsive while persistence remains the durable source of truth.
+        _state.update { it.copy(settings = settings) }
+        _session.value?.applySettings(settings)
+        settingsWriteJob?.cancel()
+        settingsWriteJob = viewModelScope.launch {
+            settingsRepository.setForBook(BookId(bookId), settings)
+        }
     }
 
     /** Drops this book's override so it follows the global Reading Defaults again. */

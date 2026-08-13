@@ -2,7 +2,6 @@ package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 
 /** Edit popup for an existing highlight: recolour (optional) or delete it. */
@@ -66,11 +66,7 @@ internal fun HighlightEditSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDelete,
-                    )
+                    .yomuPressable(onClick = onDelete, pressedScale = 1f)
                     .padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
@@ -97,11 +93,7 @@ internal fun HighlightRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .yomuPressable(onClick = onClick, pressedScale = 1f)
             .padding(vertical = 8.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -122,13 +114,9 @@ internal fun HighlightRow(
         )
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDelete,
-                ),
+                .yomuPressable(onClick = onDelete, pressedScale = 1f),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

@@ -4,7 +4,9 @@ package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
@@ -106,10 +108,12 @@ fun Modifier.yomuScrollEdgeShadow(
 ): Modifier = composed {
     val topAlpha by animateFloatAsState(
         targetValue = if (top) 1f else 0f,
+        animationSpec = if (yomuAnimationsEnabled()) tween() else snap(),
         label = "yomuScrollEdgeTop",
     )
     val bottomAlpha by animateFloatAsState(
         targetValue = if (bottom) 1f else 0f,
+        animationSpec = if (yomuAnimationsEnabled()) tween() else snap(),
         label = "yomuScrollEdgeBottom",
     )
     drawWithContent {

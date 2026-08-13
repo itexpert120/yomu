@@ -47,6 +47,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -67,7 +68,10 @@ internal fun CoverViewerDialog(
         WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     Dialog(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
         // Let the dialog draw edge-to-edge (behind the status/nav bars) and tint those bars
         // transparent so the black backdrop bleeds under them instead of leaving padding.
@@ -81,7 +85,20 @@ internal fun CoverViewerDialog(
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isStatusBarContrastEnforced = false
+                window.isNavigationBarContrastEnforced = false
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val attributes = window.attributes
+                attributes.layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                window.attributes = attributes
+            }
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = false
+                isAppearanceLightNavigationBars = false
+            }
         }
         Box(
             modifier = Modifier
@@ -156,11 +173,7 @@ private fun CircleAction(icon: ImageVector, description: String, onClick: () -> 
             .size(40.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.16f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
+            .yomuPressable(onClick = onClick, pressedScale = 1f),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
