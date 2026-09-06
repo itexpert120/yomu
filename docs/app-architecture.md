@@ -520,6 +520,10 @@ Fakes:
 
 ## Architecture Risks
 
+Reading duration uses a monotonic elapsed clock; wall time is captured only for the session's
+calendar attribution. Pause/resume and close preserve foreground/readiness exclusions even
+if the system clock is adjusted during reading.
+
 Reading statistics retain at most 10,000 recent session rows. Room v15 stores independent
 per-book lifetime seconds, session counts and longest sessions, updated transactionally with
 the day rollup and history. Migration backfills only retained sessions: previously pruned

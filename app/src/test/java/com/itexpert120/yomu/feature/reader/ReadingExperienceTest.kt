@@ -419,6 +419,37 @@ class ReadingExperienceTest {
         )
     }
 
+    @Test fun wallClockChangesDoNotChangeElapsedReadingTime() = runBlocking {
+        var wall = 10_000L
+        var elapsed = 0L
+        val recorded = mutableListOf<RecordedSession>()
+        val session = FakeReaderSession()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            scope = this,
+            nowMillis = { wall },
+            elapsedMillis = { elapsed },
+            recordReadingSession = { book, start, seconds -> recorded += RecordedSession(book, start, seconds) },
+        )
+        experience.start()
+        awaitCondition { experience.state.value.navigator === session }
+        experience.dispatch(ReadingExperienceAction.Resume)
+        session.renderState.value = ReaderRenderState.Ready("chapter.xhtml")
+        awaitCondition { experience.state.value.renderState is ReaderRenderState.Ready }
+        wall += 3_600_000L
+        elapsed += 5_000L
+        experience.dispatch(ReadingExperienceAction.Pause)
+        awaitCondition { recorded.size == 1 }
+        elapsed += 50_000L
+        val resumedAt = wall
+        experience.dispatch(ReadingExperienceAction.Resume)
+        wall -= 7_200_000L
+        elapsed += 3_000L
+        experience.close()
+        awaitCondition { recorded.size == 2 }
+        assertEquals(listOf(RecordedSession(BOOK_ID, 10_000L, 5L), RecordedSession(BOOK_ID, resumedAt, 3L)), recorded)
+    }
+
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),
@@ -430,6 +461,7 @@ class ReadingExperienceTest {
         resetSettings: suspend () -> Unit = {},
         lookupWord: suspend (String) -> DictionaryResult = { DictionaryResult.NotFound },
         nowMillis: () -> Long = { 0L },
+        elapsedMillis: () -> Long = nowMillis,
         progressSaveIntervalMillis: Long = 0L,
         readyTimeoutMillis: Long = 60_000L,
         recordReadingSession: suspend (BookId, Long, Long) -> Unit = { _, _, _ -> },
@@ -448,6 +480,7 @@ class ReadingExperienceTest {
         finalWriteScope = scope,
         recordReadingSession = recordReadingSession,
         nowMillis = nowMillis,
+        elapsedMillis = elapsedMillis,
         progressSaveIntervalMillis = progressSaveIntervalMillis,
         readyTimeoutMillis = readyTimeoutMillis,
     )

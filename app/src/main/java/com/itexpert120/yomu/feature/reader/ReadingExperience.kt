@@ -181,6 +181,7 @@ internal class ReadingExperience(
     private val finalWriteScope: CoroutineScope,
     private val recordReadingSession: suspend (BookId, Long, Long) -> Unit,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val progressSaveIntervalMillis: Long = PROGRESS_SAVE_INTERVAL_MS,
     private val readyTimeoutMillis: Long = READY_TIMEOUT_MS,
 ) {
@@ -197,6 +198,7 @@ internal class ReadingExperience(
     private var closed = false
     private var foreground = false
     private var readingStartedAt: Long? = null
+    private var readingStartedElapsed: Long = 0L
     private var openGeneration = 0L
     private var searchGeneration = 0L
     private var openJob: Job? = null
@@ -399,6 +401,7 @@ internal class ReadingExperience(
                             }
                             if (foreground && readingStartedAt == null) {
                                 readingStartedAt = nowMillis()
+                                readingStartedElapsed = elapsedMillis()
                             }
                         }
                         _state.update {
@@ -640,6 +643,7 @@ internal class ReadingExperience(
             active.onForegroundResumed()
             if (_state.value.renderState is ReaderRenderState.Ready && readingStartedAt == null) {
                 readingStartedAt = nowMillis()
+                readingStartedElapsed = elapsedMillis()
             }
         }
     }
@@ -745,7 +749,7 @@ internal class ReadingExperience(
     private fun bankReadingSession() {
         val start = readingStartedAt ?: return
         readingStartedAt = null
-        val seconds = (nowMillis() - start) / 1_000L
+        val seconds = (elapsedMillis() - readingStartedElapsed) / 1_000L
         if (seconds in 1..MAX_SESSION_SECONDS) {
             finalWriteScope.launch {
                 runCatching { recordReadingSession(bookId, start, seconds) }
