@@ -288,6 +288,9 @@ Readium adapter maps (built where noted):
 
 ## Reader Fragment Interop
 
+Reader window ownership snapshots brightness, cutout, bar appearance/behavior, and contrast before
+applying reading effects. Exit removes the resume/focus/insets listeners before restoring that snapshot.
+
 New bookmarks retain the logical chapter anchor, including a TOC fragment when present, rather than
 only the rendered resource. The current-position indicator and durable toggle share one matching
 policy; unknown progression uses exact locator equality. Legacy resource anchors remain readable.

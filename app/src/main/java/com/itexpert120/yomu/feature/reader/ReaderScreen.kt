@@ -130,8 +130,9 @@ fun ReaderScreen(
 
     // Keep the display awake while reading, per the user's setting; released when leaving the reader.
     DisposableEffect(reading.settings.keepScreenOn) {
+        val previous = view.keepScreenOn
         view.keepScreenOn = reading.settings.keepScreenOn
-        onDispose { view.keepScreenOn = false }
+        onDispose { view.keepScreenOn = previous }
     }
 
     // Count foreground reading time toward statistics: accumulate between resume and pause.
@@ -152,73 +153,17 @@ fun ReaderScreen(
             onReadingPaused()
         }
     }
-    // Keep the system bars transparent with no enforced scrim, so the reader chrome defines their
-    // look. The top bar is always present, so the status area never sits over content.
-    DisposableEffect(Unit) {
-        val window = view.context.findActivity()?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        val prevStatus = window?.statusBarColor
-        val prevNav = window?.navigationBarColor
-        val prevSystemUi = window?.decorView?.systemUiVisibility
-        // Capture the app's bar-icon appearance so leaving the reader restores legible icons for the
-        // app theme (the reader flips these to match the reading page).
-        val prevLightStatus = controller?.isAppearanceLightStatusBars
-        val prevLightNav = controller?.isAppearanceLightNavigationBars
-        val prevStatusContrast = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window?.isStatusBarContrastEnforced
-        } else {
-            null
-        }
-        val prevNavContrast = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window?.isNavigationBarContrastEnforced
-        } else {
-            null
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window?.isStatusBarContrastEnforced = false
-            window?.isNavigationBarContrastEnforced = false
-        }
-        val prevCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window?.attributes?.layoutInDisplayCutoutMode
-        } else {
-            null
-        }
-        onDispose {
-            window?.let {
-                prevStatus?.let { c -> it.statusBarColor = c }
-                prevNav?.let { c -> it.navigationBarColor = c }
-                prevSystemUi?.let { flags -> it.decorView.systemUiVisibility = flags }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    prevStatusContrast?.let { enforced ->
-                        it.isStatusBarContrastEnforced = enforced
-                    }
-                    prevNavContrast?.let { enforced ->
-                        it.isNavigationBarContrastEnforced = enforced
-                    }
-                }
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                prevCutoutMode?.let { mode ->
-                    window?.let { w ->
-                        val lp = w.attributes
-                        lp.layoutInDisplayCutoutMode = mode
-                        w.attributes = lp
-                    }
-                }
-            }
-            controller?.let { c ->
-                prevLightStatus?.let { c.isAppearanceLightStatusBars = it }
-                prevLightNav?.let { c.isAppearanceLightNavigationBars = it }
-                c.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
-    }
     // Hide both system bars for full-screen reading. Android re-shows the bars whenever the window
     // loses and regains focus (returning from background, multi-window, etc.), so this must be
     // re-applied on every ON_RESUME — not just once. A one-shot effect here is why content used to
     // reappear below the status bar after the app came back from the background.
-    DisposableEffect(Unit) {
+    DisposableEffect(view) {
         val window = view.context.findActivity()?.window
+        val restoreWindow = window?.let { captureReaderWindow(it, view) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window?.isStatusBarContrastEnforced = false
+            window?.isNavigationBarContrastEnforced = false
+        }
         fun hideSystemBars() {
             window ?: return
             val controller = WindowCompat.getInsetsController(window, view)
@@ -267,6 +212,7 @@ fun ReaderScreen(
             lifecycle?.removeObserver(observer)
             view.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
             decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
+            restoreWindow?.invoke()
         }
     }
     // Colour the system bars to the reading background so the status area matches the page on every
