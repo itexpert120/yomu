@@ -53,7 +53,6 @@ import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.model.ReadingSessionItem
@@ -127,21 +126,12 @@ private fun TabletStatsLayout(
                             title = "At a glance",
                             supporting = "A quick view of your reading.",
                         )
-                        TabletMetricGrid(
-                            metrics = listOf(
-                                DetailMetric(formatDays(stats.currentStreakDays), "Current streak"),
-                                DetailMetric(formatReadingTime(stats.totalReadingSeconds), "Total read"),
-                                DetailMetric(stats.booksInLibrary.toString(), "Library items"),
-                                DetailMetric(stats.booksFinished.toString(), "Completed books"),
-                                DetailMetric(formatReadingTime(stats.secondsLast7Days), "Last 7 days"),
-                                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days"),
-                            ),
-                        )
+                        AtAGlanceCard(stats)
                         SectionHeader(
                             title = "Reading details",
                             supporting = "The small signals behind your routine.",
                         )
-                        TabletMetricGrid(
+                        ReadingMetricGrid(
                             metrics = listOf(
                                 DetailMetric(stats.chaptersRead.toString(), "Chapters read"),
                                 DetailMetric(stats.sessionCount.toString(), "Reading sessions"),
@@ -181,30 +171,26 @@ private fun TabletStatsLayout(
 }
 
 @Composable
-private fun TabletMetricGrid(metrics: List<DetailMetric>) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        metrics.chunked(3).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                row.forEach { metric ->
-                    TabletMetricCard(metric, Modifier.weight(1f))
+private fun ReadingMetricGrid(metrics: List<DetailMetric>) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+        val columns = (maxWidth.value / (160f * fontScale)).toInt().coerceIn(1, 3)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            metrics.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { metric -> ReadingMetricCard(metric, Modifier.weight(1f)) }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
 }
 
 @Composable
-private fun TabletMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
+private fun ReadingMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.heightIn(min = 88.dp),
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 1.dp,
     ) {
@@ -215,17 +201,13 @@ private fun TabletMetricCard(metric: DetailMetric, modifier: Modifier = Modifier
             Text(
                 text = metric.value,
                 color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = metric.label,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
     }
@@ -303,97 +285,27 @@ private fun StatusText(text: String) {
 
 @Composable
 private fun AtAGlanceCard(stats: ReadingStats) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         ) {
-            AtAGlanceMetric(
-                value = formatDays(stats.currentStreakDays),
-                label = "Current streak",
-                modifier = Modifier.weight(1f),
-                accent = MaterialTheme.colorScheme.primary,
-            )
-            AtAGlanceMetric(
-                value = formatReadingTime(stats.totalReadingSeconds),
-                label = "Total read",
-                modifier = Modifier.weight(1f),
-                accent = MaterialTheme.colorScheme.tertiary,
-            )
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Total reading time", style = MaterialTheme.typography.labelLarge)
+                Text(formatReadingTime(stats.totalReadingSeconds), style = MaterialTheme.typography.displayMedium)
+                Text("Across your reading sessions", style = MaterialTheme.typography.bodyMedium)
+            }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AtAGlanceMetric(
-                value = stats.booksInLibrary.toString(),
-                label = "Library items",
-                modifier = Modifier.weight(1f),
-                accent = MaterialTheme.colorScheme.primary,
-            )
-            AtAGlanceMetric(
-                value = stats.booksFinished.toString(),
-                label = "Completed books",
-                modifier = Modifier.weight(1f),
-                accent = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AtAGlanceMetric(
-                value = formatReadingTime(stats.secondsLast7Days),
-                label = "Last 7 days",
-                modifier = Modifier.weight(1f),
-                accent = MaterialTheme.colorScheme.primary,
-            )
-            AtAGlanceMetric(
-                value = formatReadingTime(stats.secondsLast30Days),
-                label = "Last 30 days",
-                modifier = Modifier.weight(1f),
-                accent = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun AtAGlanceMetric(
-    value: String,
-    label: String,
-    modifier: Modifier = Modifier,
-    accent: androidx.compose.ui.graphics.Color,
-) {
-    Column(
-        modifier = modifier
-            .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .width(32.dp)
-                .height(4.dp)
-                .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .background(accent),
-        )
-        Text(
-            text = value,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium,
+        ReadingMetricGrid(
+            listOf(
+                DetailMetric(formatDays(stats.currentStreakDays), "Current streak"),
+                DetailMetric(stats.booksInLibrary.toString(), "Library items"),
+                DetailMetric(stats.booksFinished.toString(), "Completed books"),
+                DetailMetric(formatReadingTime(stats.secondsLast7Days), "Last 7 days"),
+                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days"),
+            ),
         )
     }
 }
@@ -484,49 +396,7 @@ private fun DetailsGrid(stats: ReadingStats) {
         DetailMetric(stats.booksStarted.toString(), "Books started"),
         DetailMetric(formatCount(stats.estimatedWordsRead), "Estimated words"),
     )
-    metrics.chunked(2).forEach { row ->
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            row.forEach { metric ->
-                DetailMetricCard(metric = metric, modifier = Modifier.weight(1f))
-            }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun DetailMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.heightIn(min = 112.dp),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = metric.value,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = metric.label,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    ReadingMetricGrid(metrics)
 }
 
 @Composable
