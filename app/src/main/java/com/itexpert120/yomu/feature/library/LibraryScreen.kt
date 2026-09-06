@@ -118,7 +118,6 @@ fun LibraryScreen(
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val featuredBook = state.continueReading.takeUnless { state.searchActive || state.selectionMode }
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val activeColumns = if (isLandscape) state.landscapeGridColumns else state.portraitGridColumns
     val elevated = when (state.viewMode) {
@@ -229,8 +228,6 @@ fun LibraryScreen(
                 selectedIds = state.selectedIds,
                 onBookClick = onCardClick,
                 onBookLongPress = onCardLongPress,
-                featuredBook = featuredBook,
-                onResume = onOpenReader,
             )
 
             LibraryContentMode.List -> LibraryList(
@@ -239,8 +236,6 @@ fun LibraryScreen(
                 selectedIds = state.selectedIds,
                 onBookClick = onCardClick,
                 onBookLongPress = onCardLongPress,
-                featuredBook = featuredBook,
-                onResume = onOpenReader,
             )
 
             else -> Unit
@@ -331,10 +326,7 @@ fun LibraryScreen(
 
             val continueReading = state.continueReading
             AnimatedVisibility(
-                visible = continueReading != null &&
-                    !state.selectionMode &&
-                    !state.searchActive &&
-                    (if (state.viewMode == LibraryViewMode.List) listState.firstVisibleItemIndex > 0 else gridState.firstVisibleItemIndex > 0),
+                visible = continueReading != null && !state.selectionMode,
                 enter = yomuPopupEnter(ResumeFabTransformOrigin),
                 exit = yomuPopupExit(ResumeFabTransformOrigin),
                 modifier = Modifier.align(Alignment.BottomEnd),
@@ -526,8 +518,6 @@ private fun LibraryGrid(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    featuredBook: LibraryBook?,
-    onResume: (String) -> Unit,
 ) {
     // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
     // wide tablet/desktop; on a phone this is a no-op (screen < max width).
@@ -555,11 +545,6 @@ private fun LibraryGrid(
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (featuredBook != null) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    ContinueReading(book = featuredBook, onResume = { onResume(featuredBook.id) })
-                }
-            }
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -604,8 +589,6 @@ private fun LibraryList(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
-    featuredBook: LibraryBook?,
-    onResume: (String) -> Unit,
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
     // column centered on screen. Phones are unaffected (screen < max width).
@@ -619,11 +602,6 @@ private fun LibraryList(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (featuredBook != null) {
-                item {
-                    ContinueReading(book = featuredBook, onResume = { onResume(featuredBook.id) })
-                }
-            }
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item { GroupSectionHeader(title = group.label) }

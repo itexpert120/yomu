@@ -19,7 +19,7 @@ The initial migration deliberately uses native Material product surfaces. Reader
 
 Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
 
-Expressive refinement now starts with Library: a collapsing heading, labeled search/import actions, and a tonal Continue Reading feature with a prominent Resume button. Shared buttons use Material's expressive press shapes and size-aware typography/padding; the theme explicitly selects expressive motion. The floating Resume action appears after the feature scrolls away. Existing collection modes remain available. Rendered device validation remains separate from compilation.
+Expressive refinement now starts with Library: a collapsing heading and labeled search/import actions. Shared buttons use Material's expressive press shapes and size-aware typography/padding; the theme explicitly selects expressive motion. Resume remains a floating action button with its scroll-responsive label; there is no large Continue Reading card. Existing collection modes remain available. Rendered device validation remains separate from compilation.
 
 Settings adds visual light/dark/system choices, closely grouped tonal appearance rows and tablet navigation, and a discoverable Wallpaper colors option. Shared mutually exclusive settings use connected Material toggle shapes with radio semantics and wrapping labels. Existing appearance defaults, stored preferences, and OLED behavior are preserved.
 
