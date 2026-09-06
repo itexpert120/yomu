@@ -62,6 +62,8 @@ data class ReadingExperienceState(
     val chapterTitle: String? = null,
     val coverImagePath: String? = null,
     val settings: ReaderSettings = ReaderSettings(),
+    val settingsPending: Boolean = false,
+    val settingsError: String? = null,
     val tableOfContents: List<ReaderTocItem> = emptyList(),
     val tocLoading: Boolean = true,
     val locator: ReaderLocator? = null,
@@ -108,6 +110,7 @@ internal sealed interface ReadingExperienceAction {
     data object Resume : ReadingExperienceAction
     data object Pause : ReadingExperienceAction
     data object ResetSettings : ReadingExperienceAction
+    data object RetrySettings : ReadingExperienceAction
     data object SubmitSearch : ReadingExperienceAction
     data object ClearSearch : ReadingExperienceAction
     data object RetryLookup : ReadingExperienceAction
@@ -204,7 +207,10 @@ internal class ReadingExperience(
     private var openJob: Job? = null
     private var sessionJob: Job? = null
     private var searchJob: Job? = null
-    private var settingsWriteJob: Job? = null
+    private val settingsEditor = ReaderSettingsEditor(scope, persistSettings) {
+        resetSettings()
+        settings.first()
+    }
     private var progressSaveJob: Job? = null
     private var pendingProgress: ReadingProgressSnapshot? = null
     private var lastLocator: ReaderLocator? = null
@@ -226,7 +232,13 @@ internal class ReadingExperience(
             }
         }
         scope.launch {
-            settings.collect { applySettings(it, persist = false) }
+            settings.collect(settingsEditor::observe)
+        }
+        scope.launch {
+            settingsEditor.state.collect { edit ->
+                _state.update { it.copy(settings = edit.settings, settingsPending = edit.pending, settingsError = edit.error) }
+                session?.applySettings(edit.settings)
+            }
         }
         scope.launch {
             highlights.observeForBook(bookId).collect { list ->
@@ -248,7 +260,8 @@ internal class ReadingExperience(
             ReadingExperienceAction.RetryOpen -> retry()
             ReadingExperienceAction.Resume -> resume()
             ReadingExperienceAction.Pause -> pause()
-            ReadingExperienceAction.ResetSettings -> scope.launch { runCatching { resetSettings() } }
+            ReadingExperienceAction.ResetSettings -> settingsEditor.reset()
+            ReadingExperienceAction.RetrySettings -> settingsEditor.retry()
             ReadingExperienceAction.SubmitSearch -> submitSearch()
             ReadingExperienceAction.ClearSearch -> clearSearch()
             ReadingExperienceAction.RetryLookup -> retryLookup()
@@ -463,12 +476,10 @@ internal class ReadingExperience(
 
     private fun applySettings(settings: ReaderSettings, persist: Boolean) {
         if (closed || settings == _state.value.settings && persist) return
-        _state.update { it.copy(settings = settings) }
-        session?.applySettings(settings)
-        if (persist) {
-            settingsWriteJob?.cancel()
-            settingsWriteJob = scope.launch { runCatching { persistSettings(settings) } }
-        }
+        if (persist) settingsEditor.edit(settings) else settingsEditor.observe(settings)
+        val edit = settingsEditor.state.value
+        _state.update { it.copy(settings = edit.settings, settingsPending = edit.pending, settingsError = edit.error) }
+        session?.applySettings(edit.settings)
     }
 
     private fun navigate(target: ReaderNavigation) {

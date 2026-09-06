@@ -31,6 +31,7 @@ import com.itexpert120.yomu.core.model.ReaderSettings
 fun ReaderDefaultsRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit) {
     val viewModel: ReaderDefaultsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
+    SaveFailureNotice(state.settingsError, viewModel::onRetrySettings)
     YomuScreenScaffold(
         title = "Reading defaults",
         subtitle = "Every new book starts here",

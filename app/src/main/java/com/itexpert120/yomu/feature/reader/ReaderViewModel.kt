@@ -110,6 +110,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     fun onResetBookSettings() = dispatch(ReadingExperienceAction.ResetSettings)
+    fun onRetrySettings() = dispatch(ReadingExperienceAction.RetrySettings)
 
     fun onOpenCustomTheme() = _state.update { it.copy(customSheetVisible = true, sheetVisible = false) }
 

@@ -450,6 +450,38 @@ class ReadingExperienceTest {
         assertEquals(listOf(RecordedSession(BOOK_ID, 10_000L, 5L), RecordedSession(BOOK_ID, resumedAt, 3L)), recorded)
     }
 
+    @Test fun failedSettingsSaveKeepsNewestIntentUntilRetryAcknowledgesIt() = runBlocking {
+        val source = MutableStateFlow(ReaderSettings())
+        val changed = source.value.copy(fontScale = 1.5f)
+        var fail = true
+        val session = FakeReaderSession()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            scope = this,
+            settings = source,
+            persistSettings = {
+                check(!fail)
+                source.value = it
+            },
+        )
+        try {
+            experience.start()
+            awaitCondition { experience.state.value.navigator === session }
+            experience.dispatch(ReadingExperienceAction.ApplySettings(changed))
+            awaitCondition { experience.state.value.settingsError != null }
+            source.value = ReaderSettings().copy(fontScale = 0.9f)
+            yield()
+            assertEquals(changed, experience.state.value.settings)
+            fail = false
+            experience.dispatch(ReadingExperienceAction.RetrySettings)
+            awaitCondition { !experience.state.value.settingsPending }
+            assertEquals(changed, source.value)
+            assertEquals(null, experience.state.value.settingsError)
+        } finally {
+            experience.close()
+        }
+    }
+
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),

@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
 data class ReaderDefaultsUiState(
+    val settingsError: String? = null,
+    val settingsPending: Boolean = false,
     val settings: ReaderSettings = ReaderSettings(),
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val customSheetVisible: Boolean = false,
@@ -33,15 +36,22 @@ class ReaderDefaultsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val customSheetVisible = MutableStateFlow(false)
+    private val editor = ReaderSettingsEditor(viewModelScope, settingsRepository::setGlobal) { settingsRepository.global.first() }
+
+    init {
+        viewModelScope.launch { settingsRepository.global.collect(editor::observe) }
+    }
 
     val state: StateFlow<ReaderDefaultsUiState> = combine(
-        settingsRepository.global,
+        editor.state,
         settingsRepository.customThemes,
         customSheetVisible,
         fonts.installed,
     ) { settings, themes, sheet, installed ->
         ReaderDefaultsUiState(
-            settings = settings,
+            settings = settings.settings,
+            settingsError = settings.error,
+            settingsPending = settings.pending,
             customThemes = themes,
             customSheetVisible = sheet,
             installedFonts = installed,
@@ -49,8 +59,10 @@ class ReaderDefaultsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderDefaultsUiState())
 
     fun onUpdate(settings: ReaderSettings) {
-        viewModelScope.launch { settingsRepository.setGlobal(settings) }
+        editor.edit(settings)
     }
+
+    fun onRetrySettings() = editor.retry()
 
     fun onOpenCustomTheme() {
         customSheetVisible.value = true

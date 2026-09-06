@@ -520,6 +520,11 @@ Fakes:
 
 ## Architecture Risks
 
+Reader and global-default editing use a reader-specific ordered snapshot writer. The newest
+pending intent remains effective over older persistence echoes; save/reset failures retain
+that intent and expose a non-blocking Retry notice. Reset and edits share the same ordering,
+without changing full per-book override semantics.
+
 Cover export owns each MediaStore URI until copying and publication succeed. Failure or
 cancellation attempts deletion; failed deletions remain queued in-process for the next export.
 This cleanup queue does not promise recovery after process death.
