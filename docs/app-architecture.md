@@ -288,6 +288,10 @@ Readium adapter maps (built where noted):
 
 ## Reader Fragment Interop
 
+New bookmarks retain the logical chapter anchor, including a TOC fragment when present, rather than
+only the rendered resource. The current-position indicator and durable toggle share one matching
+policy; unknown progression uses exact locator equality. Legacy resource anchors remain readable.
+
 Readium visual navigators are fragments. Compose reader screens should host the fragment behind a controlled boundary.
 
 Structure (built):

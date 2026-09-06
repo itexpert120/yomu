@@ -8,6 +8,7 @@ package com.itexpert120.yomu.core.reader
 data class ReaderBookmark(
     val id: String,
     val locatorJson: String,
+    // Logical chapter anchor for new bookmarks; older records can contain only a resource href.
     val href: String?,
     val chapterTitle: String?,
     val progression: Double?,

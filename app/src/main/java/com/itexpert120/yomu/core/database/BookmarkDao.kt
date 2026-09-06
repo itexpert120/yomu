@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.itexpert120.yomu.core.reader.BookmarkIdentity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -23,19 +24,24 @@ interface BookmarkDao {
     @Query("DELETE FROM bookmarks WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    // Current-page identity: same resource and within a 1% progression window. `href IS :href` so a
-    // null href compares correctly in SQLite (a plain `=` never matches NULL).
-    @Query(
-        "SELECT * FROM bookmarks WHERE bookId = :bookId AND href IS :href AND " +
-            "((:progression >= 0 AND progression >= 0 AND ABS(progression - :progression) < 0.01) " +
-            "OR (:progression < 0 AND progression < 0 AND locatorJson = :locatorJson)) LIMIT 1",
-    )
+    @Query("SELECT * FROM bookmarks WHERE bookId = :bookId ORDER BY createdAt, id")
+    suspend fun positionsForBook(bookId: String): List<BookmarkEntity>
+
     suspend fun findAt(
         bookId: String,
         href: String?,
         progression: Double,
         locatorJson: String,
-    ): BookmarkEntity?
+    ): BookmarkEntity? = positionsForBook(bookId).firstOrNull {
+        BookmarkIdentity.samePosition(
+            href,
+            locatorJson,
+            progression.takeIf { value -> value >= 0 },
+            it.href,
+            it.locatorJson,
+            it.progression.takeIf { value -> value >= 0 },
+        )
+    }
 
     @Transaction
     suspend fun toggle(bookmark: BookmarkEntity): Boolean {

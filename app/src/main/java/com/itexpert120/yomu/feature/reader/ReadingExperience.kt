@@ -3,6 +3,7 @@ package com.itexpert120.yomu.feature.reader
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.reader.BookmarkIdentity
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
@@ -44,7 +45,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
-import kotlin.math.abs
 
 data class WordLookupUiState(
     val word: String,
@@ -87,18 +87,16 @@ data class ReadingExperienceState(
         get() {
             val current = locator ?: return false
             return bookmarks.any { bookmark ->
-                bookmark.href == current.href &&
-                    if (current.totalProgression != null && bookmark.progression != null) {
-                        abs(bookmark.progression - current.totalProgression) < BOOKMARK_WINDOW
-                    } else {
-                        bookmark.locatorJson == current.locatorJson
-                    }
+                BookmarkIdentity.samePosition(
+                    bookmark.href,
+                    bookmark.locatorJson,
+                    bookmark.progression,
+                    current.chapterId ?: current.href,
+                    current.locatorJson,
+                    current.totalProgression,
+                )
             }
         }
-
-    private companion object {
-        const val BOOKMARK_WINDOW = 0.01
-    }
 }
 
 internal sealed interface ReadingExperienceEvent {
@@ -596,7 +594,7 @@ internal class ReadingExperience(
                 bookmarks.toggle(
                     bookId,
                     locator.locatorJson,
-                    locator.href,
+                    locator.chapterId ?: locator.href,
                     locator.chapterTitle ?: _state.value.chapterTitle,
                     locator.totalProgression,
                 )

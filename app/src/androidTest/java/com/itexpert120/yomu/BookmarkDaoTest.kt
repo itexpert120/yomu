@@ -33,6 +33,18 @@ class BookmarkDaoTest {
     }
 
     @Test
+    fun mixedKnownAndUnknownPositionToggleMatchesIndicator() = runBlocking {
+        val dao = database.bookmarkDao()
+        val bookmark = BookmarkEntity("one", "book", "same", "c#a", "A", -1.0, 1L)
+        assertTrue(dao.toggle(bookmark))
+        assertFalse(dao.toggle(bookmark.copy(id = "two", progression = 0.4)))
+        assertTrue(dao.observeForBook("book").first().isEmpty())
+        assertTrue(dao.toggle(bookmark.copy(progression = 0.4)))
+        assertTrue(dao.toggle(bookmark.copy(id = "two", href = "c#b", progression = 0.401)))
+        assertEquals(2, dao.observeForBook("book").first().size)
+    }
+
+    @Test
     fun toggleIsAtomicAndUnknownProgressUsesExactLocator() = runBlocking {
         val dao = database.bookmarkDao()
         val bookmark = BookmarkEntity(
