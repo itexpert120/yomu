@@ -31,6 +31,8 @@ Book details uses a tonal identity surface, stronger book-title typography, a 12
 
 Statistics emphasizes lifetime total reading time in a tertiary container, using the existing aggregate value. Supporting metrics share an adaptive grid whose columns respond to available width and font scale; values wrap rather than truncate. Tablet overview/history panes and all existing metric definitions are retained.
 
+Reading chrome uses Material expressive tonal actions for Browse, Search, and Display. Their colors derive from the reading palette, while Theme and Reader chrome preferences reuse grouped settings rows. The EPUB page, saved themes, and reading ownership remain unchanged.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.

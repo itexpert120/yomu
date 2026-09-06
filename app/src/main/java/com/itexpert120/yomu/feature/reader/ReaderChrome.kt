@@ -35,7 +35,6 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -266,25 +265,15 @@ private fun ReaderActionBar(
     onSearch: () -> Unit,
     onDisplay: () -> Unit,
 ) {
-    BottomAppBar(
-        modifier = Modifier.drawWithContent {
-            drawContent()
-            val strokeWidth = 1.dp.toPx()
-            drawLine(
-                color = border,
-                start = androidx.compose.ui.geometry.Offset(0f, strokeWidth / 2f),
-                end = androidx.compose.ui.geometry.Offset(size.width, strokeWidth / 2f),
-                strokeWidth = strokeWidth,
-            )
-        },
-        containerColor = background.copy(alpha = 0.98f),
+    androidx.compose.material3.Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = background,
         contentColor = content,
-        tonalElevation = 0.dp,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        windowInsets = WindowInsets(0),
-        actions = {
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
+    ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -293,6 +282,7 @@ private fun ReaderActionBar(
                     label = "Browse",
                     onClick = onBrowse,
                     contentColor = content,
+                    containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
                     modifier = Modifier.weight(1f),
                 )
                 YomuLabeledIconAction(
@@ -300,6 +290,7 @@ private fun ReaderActionBar(
                     label = "Search",
                     onClick = onSearch,
                     contentColor = content,
+                    containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
                     modifier = Modifier.weight(1f),
                 )
                 YomuLabeledIconAction(
@@ -307,11 +298,11 @@ private fun ReaderActionBar(
                     label = "Display",
                     onClick = onDisplay,
                     contentColor = content,
+                    containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
                     modifier = Modifier.weight(1f),
                 )
             }
-        },
-    )
+    }
 }
 
 /** Wall-clock string, refreshed every 20s so the minute flip is prompt. */

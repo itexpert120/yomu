@@ -36,7 +36,27 @@ fun YomuLabeledIconAction(
     enabled: Boolean = true,
     selected: Boolean = false,
     contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+    containerColor: androidx.compose.ui.graphics.Color? = null,
 ) {
+    if (containerColor != null) {
+        androidx.compose.material3.FilledTonalButton(
+            onClick = onClick,
+            enabled = enabled,
+            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                containerColor = containerColor,
+                contentColor = contentColor,
+            ),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+            modifier = modifier.semantics { this.selected = selected },
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(icon, contentDescription = null)
+                Text(label, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        return
+    }
     val resolvedColor = if (enabled) {
         contentColor
     } else {
