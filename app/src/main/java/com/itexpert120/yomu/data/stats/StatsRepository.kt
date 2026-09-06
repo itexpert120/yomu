@@ -8,6 +8,7 @@ import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
+import com.itexpert120.yomu.core.model.isBookCompleted
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -102,8 +103,8 @@ class StatsRepository @Inject constructor(
             currentStreakDays = day.currentStreak,
             longestStreakDays = day.longestStreak,
             booksInLibrary = books.size,
-            booksStarted = books.count { it.lastOpenedAt > 0L },
-            booksFinished = books.count { it.progress >= 0.999f },
+            booksStarted = books.count { it.startedAt > 0L || it.lastOpenedAt > 0L },
+            booksFinished = books.count { isBookCompleted(it.progress) },
             chaptersRead = chaptersRead,
             estimatedWordsRead = (day.totalSeconds / 60.0 * WORDS_PER_MINUTE).toLong(),
             estimatedReadingSpeedWpm = if (day.totalSeconds > 0L) WORDS_PER_MINUTE else 0,

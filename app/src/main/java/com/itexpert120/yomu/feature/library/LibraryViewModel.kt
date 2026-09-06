@@ -92,12 +92,28 @@ class LibraryViewModel @Inject constructor(
 
     fun onMarkSelectedRead() {
         val ids = selection.value.ids.map { BookId(it) }
-        viewModelScope.launch { ids.forEach { repository.markRead(it) } }
+        viewModelScope.launch {
+            try {
+                repository.markRead(ids)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                showImportNotice(ImportState(notice = "Couldn't mark selected books read. Please retry."))
+            }
+        }
     }
 
     fun onMarkSelectedUnread() {
         val ids = selection.value.ids.map { BookId(it) }
-        viewModelScope.launch { ids.forEach { repository.markUnread(it) } }
+        viewModelScope.launch {
+            try {
+                repository.markUnread(ids)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                showImportNotice(ImportState(notice = "Couldn't mark selected books unread. Please retry."))
+            }
+        }
     }
 
     // The continue-reading hero isn't a selectable grid item, so it's excluded here to keep

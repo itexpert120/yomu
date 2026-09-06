@@ -6,6 +6,8 @@ value class BookId(val value: String)
 
 enum class ReadingState { Unread, Reading, Finished }
 
+fun isBookCompleted(progress: Float): Boolean = progress >= 1f
+
 /**
  * Domain model for a book in the library. Kept free of Compose/Android types so it backs a Room
  * entity directly. [coverImagePath] points at an extracted cover file when available; otherwise
@@ -37,7 +39,7 @@ data class Book(
 ) {
     val readingState: ReadingState
         get() = when {
-            progress >= 1f -> ReadingState.Finished
+            isBookCompleted(progress) -> ReadingState.Finished
             progress > 0f -> ReadingState.Reading
             else -> ReadingState.Unread
         }

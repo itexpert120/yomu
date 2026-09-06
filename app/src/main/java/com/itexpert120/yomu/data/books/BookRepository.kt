@@ -33,6 +33,12 @@ interface BookRepository {
     fun observeBook(id: BookId): Flow<Book?>
     suspend fun markRead(id: BookId)
     suspend fun markUnread(id: BookId)
+    suspend fun markRead(ids: List<BookId>) {
+        ids.forEach { markRead(it) }
+    }
+    suspend fun markUnread(ids: List<BookId>) {
+        ids.forEach { markUnread(it) }
+    }
     suspend fun remove(ids: List<BookId>)
     suspend fun updateMetadata(
         id: BookId,

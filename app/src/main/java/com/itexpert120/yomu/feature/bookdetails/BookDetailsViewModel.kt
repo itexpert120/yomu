@@ -295,15 +295,12 @@ class BookDetailsViewModel @Inject constructor(
     fun markRead() {
         viewModelScope.launch {
             repository.markRead(BookId(bookId))
-            // Marking the whole book read should reflect across every chapter in the TOC.
-            repository.setChaptersRead(BookId(bookId), allChapterHrefs(), read = true)
         }
     }
 
     fun markUnread() {
         viewModelScope.launch {
             repository.markUnread(BookId(bookId))
-            repository.setChaptersRead(BookId(bookId), allChapterHrefs(), read = false)
         }
     }
 

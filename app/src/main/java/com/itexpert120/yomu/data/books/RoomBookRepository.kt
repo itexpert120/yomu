@@ -57,13 +57,32 @@ class RoomBookRepository @Inject constructor(
 
     override fun observeBook(id: BookId): Flow<Book?> = dao.observeBook(id.value).map { it?.toBook() }
 
-    override suspend fun markRead(id: BookId) = dao.markRead(id.value, System.currentTimeMillis())
+    override suspend fun markRead(id: BookId) = markRead(listOf(id))
 
-    override suspend fun markUnread(id: BookId) {
+    override suspend fun markRead(ids: List<BookId>) {
+        val chapters = ids.distinct().associateWith { id ->
+            val toc = publicationCacheMemory[id.value]?.toc ?: readCachedTableOfContents(id.value)
+                ?: checkNotNull(readerEngine.tableOfContents(checkNotNull(dao.getBook(id.value)).storagePath)) {
+                    "Couldn't load book chapters"
+                }
+            toc.filter { it.locatorJson != null }.map { it.id }.distinct()
+        }
         database.withTransaction {
-            dao.markUnread(id.value)
-            dao.deleteAllReadChapters(listOf(id.value))
-            dao.deleteAllChapterProgress(listOf(id.value))
+            chapters.forEach { (id, chapterIds) ->
+                check(dao.getBook(id.value) != null) { "Book no longer exists" }
+                dao.markRead(id.value, System.currentTimeMillis())
+                setChaptersRead(id, chapterIds, true)
+            }
+        }
+    }
+
+    override suspend fun markUnread(id: BookId) = markUnread(listOf(id))
+
+    override suspend fun markUnread(ids: List<BookId>) {
+        database.withTransaction {
+            ids.forEach { dao.markUnread(it.value) }
+            dao.deleteAllReadChapters(ids.map { it.value })
+            dao.deleteAllChapterProgress(ids.map { it.value })
         }
     }
 

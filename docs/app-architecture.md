@@ -435,6 +435,9 @@ AppearancePanel event
 
 ## Error Handling
 
+Whole-book read/unread actions own their chapter effects in a Room transaction, including bulk
+actions. Completion is shared by book presentation and statistics and requires actual 100% progress.
+
 Book editing serializes cover ownership and commits through one draft workflow. Save is unavailable
 before metadata loads; a failed write retains the draft, and cleanup never deletes a committed cover.
 
