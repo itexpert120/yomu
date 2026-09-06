@@ -25,6 +25,8 @@ Settings adds visual light/dark/system choices, closely grouped tonal appearance
 
 Statistics, Settings, and About share Library's large padded, collapsing Material heading. Theme choices and Reader chrome use the same grouped tonal list treatment as Appearance, including native radio/switch semantics. Wallpaper colors has no leading icon. About facts and policy sections also use tonal list surfaces.
 
+Library search is a persistent rounded field with live results, an inline clear action, and a result count. Import stays in the top bar, and keyboard search dismisses the keyboard without discarding the query. Back retains the existing search-exit behavior.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.

@@ -390,6 +390,7 @@ private fun LibraryTopBarTransition(
                 elevated = elevated,
                 scrollBehavior = scrollBehavior,
                 showImport = state.totalCount > 0,
+                resultCount = state.selectableCount,
             )
         }
         AnimatedVisibility(
