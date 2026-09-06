@@ -14,6 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BookTocEntity::class,
         ReadingDayEntity::class,
         ReadingSessionEntity::class,
+        ReadingTotalEntity::class,
         HighlightEntity::class,
         BookmarkEntity::class,
         LegacySyncMetadataEntity::class,
@@ -28,7 +29,20 @@ abstract class YomuDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
-        const val VERSION = 14
+        const val VERSION = 15
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS reading_totals (bookId TEXT NOT NULL PRIMARY KEY, " +
+                        "seconds INTEGER NOT NULL, sessionCount INTEGER NOT NULL, longestSeconds INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "INSERT INTO reading_totals SELECT bookId, SUM(seconds), COUNT(*), MAX(seconds) " +
+                        "FROM reading_sessions GROUP BY bookId",
+                )
+            }
+        }
 
         /** v2 adds chapter read-state tracking; books are preserved. */
         val MIGRATION_1_2 = object : Migration(1, 2) {

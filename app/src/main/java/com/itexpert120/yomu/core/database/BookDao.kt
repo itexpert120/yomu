@@ -201,12 +201,20 @@ interface BookDao {
     @Insert
     suspend fun insertReadingSession(entity: ReadingSessionEntity)
 
+    @Query("SELECT * FROM reading_totals WHERE bookId = :bookId")
+    suspend fun getReadingTotal(bookId: String): ReadingTotalEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReadingTotal(entity: ReadingTotalEntity)
+
     @Query("SELECT * FROM reading_sessions ORDER BY startedAt DESC LIMIT :limit")
     fun observeRecentSessions(limit: Int): Flow<List<ReadingSessionEntity>>
 
     @Query(
-        "SELECT COUNT(*) AS count, COALESCE(AVG(seconds), 0) AS averageSeconds, " +
-            "COALESCE(MAX(seconds), 0) AS longestSeconds FROM reading_sessions",
+        "SELECT COALESCE(SUM(sessionCount), 0) AS count, " +
+            "COALESCE(SUM(seconds) / NULLIF(SUM(sessionCount), 0), 0) AS averageSeconds, " +
+            "COALESCE(MAX(longestSeconds), 0) AS longestSeconds, " +
+            "COALESCE(SUM(seconds), 0) AS seconds FROM reading_totals",
     )
     fun observeSessionAggregate(): Flow<SessionAggregate>
 
@@ -217,7 +225,7 @@ interface BookDao {
     suspend fun pruneReadingSessions(limit: Int)
 
     /** Total seconds spent reading a single book, summed across its sessions (0 if none). */
-    @Query("SELECT COALESCE(SUM(seconds), 0) FROM reading_sessions WHERE bookId = :bookId")
+    @Query("SELECT COALESCE(SUM(seconds), 0) FROM reading_totals WHERE bookId = :bookId")
     fun observeBookReadingSeconds(bookId: String): Flow<Long>
 
     @Query("DELETE FROM reading_sessions WHERE bookId IN (:bookIds)")
@@ -240,4 +248,5 @@ data class SessionAggregate(
     val count: Int,
     val averageSeconds: Long,
     val longestSeconds: Long,
+    val seconds: Long,
 )

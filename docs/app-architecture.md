@@ -520,6 +520,12 @@ Fakes:
 
 ## Architecture Risks
 
+Reading statistics retain at most 10,000 recent session rows. Room v15 stores independent
+per-book lifetime seconds, session counts and longest sessions, updated transactionally with
+the day rollup and history. Migration backfills only retained sessions: previously pruned
+per-book/session detail cannot be reconstructed. The Statistics screen discloses this gap
+when preserved daily time exceeds recoverable session totals; daily lifetime time is unchanged.
+
 - Readium fragment lifecycle may complicate pure Compose screens.
 - Advanced layout controls may exceed what Readium preferences expose.
 - True pages are unstable for reflowable EPUB; product copy must use pages carefully.

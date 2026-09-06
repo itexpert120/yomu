@@ -103,6 +103,7 @@ private fun TabletStatsLayout(
     YomuAppSurface {
         Column(Modifier.fillMaxSize()) {
             YomuScreenHeader(title = "Statistics", onBack = onBack)
+            HistoricalDetailNotice(stats)
             YomuTwoPane(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -230,6 +231,7 @@ private fun ColumnScope.StatsContent(
     stats: ReadingStats,
     history: List<ReadingSessionItem>,
 ) {
+    HistoricalDetailNotice(stats)
     SectionHeader(
         title = "At a glance",
         supporting = "A quick view of your reading.",
@@ -246,6 +248,17 @@ private fun ColumnScope.StatsContent(
         if (history.isNotEmpty()) {
             History(history)
         }
+    }
+}
+
+@Composable
+private fun HistoricalDetailNotice(stats: ReadingStats) {
+    if (stats.historicalSessionDetailIncomplete) {
+        Text(
+            "Older session details were previously removed. Session and per-book figures include only recoverable history; total reading time is preserved.",
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 

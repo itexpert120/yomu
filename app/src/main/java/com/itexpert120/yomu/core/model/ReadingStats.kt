@@ -51,6 +51,7 @@ data class HeatmapDay(
 
 /** Aggregate reading statistics surfaced on the Stats screen. */
 data class ReadingStats(
+    val historicalSessionDetailIncomplete: Boolean = false,
     val totalReadingSeconds: Long = 0L,
     val currentStreakDays: Int = 0,
     val longestStreakDays: Int = 0,

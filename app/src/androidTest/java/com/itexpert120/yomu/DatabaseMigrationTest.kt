@@ -38,6 +38,7 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_11_12,
             YomuDatabase.MIGRATION_12_13,
             YomuDatabase.MIGRATION_13_14,
+            YomuDatabase.MIGRATION_14_15,
         ).close()
     }
 
@@ -103,6 +104,7 @@ class DatabaseMigrationTest {
             YomuDatabase.VERSION,
             true,
             YomuDatabase.MIGRATION_13_14,
+            YomuDatabase.MIGRATION_14_15,
         ).use { database ->
             database.query("SELECT `title` FROM `books` WHERE `id` = 'book-id'").use {
                 check(it.moveToFirst())
@@ -111,6 +113,26 @@ class DatabaseMigrationTest {
             database.query("SELECT `value` FROM `sync_metadata` WHERE `key` = 'device'").use {
                 check(it.moveToFirst())
                 check(it.getString(0) == "preserved")
+            }
+        }
+    }
+
+    @Test fun lifetimeTotalsBackfillOnlyRecoverableHistory() {
+        helper.createDatabase("migration-totals", 14).apply {
+            execSQL("INSERT INTO reading_sessions (bookId, startedAt, seconds) VALUES ('old', 1, 60), ('old', 2, 120)")
+            execSQL("INSERT INTO reading_days (date, seconds) VALUES ('2026-01-01', 900)")
+            close()
+        }
+        helper.runMigrationsAndValidate("migration-totals", 15, true, YomuDatabase.MIGRATION_14_15).use { db ->
+            db.query("SELECT seconds, sessionCount, longestSeconds FROM reading_totals WHERE bookId = 'old'").use {
+                check(it.moveToFirst())
+                check(it.getLong(0) == 180L)
+                check(it.getInt(1) == 2)
+                check(it.getLong(2) == 120L)
+            }
+            db.query("SELECT seconds FROM reading_days").use {
+                check(it.moveToFirst())
+                check(it.getLong(0) == 900L)
             }
         }
     }

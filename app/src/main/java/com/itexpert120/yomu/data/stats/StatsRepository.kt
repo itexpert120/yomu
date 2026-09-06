@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.ReadingDayEntity
 import com.itexpert120.yomu.core.database.ReadingSessionEntity
+import com.itexpert120.yomu.core.database.ReadingTotalEntity
 import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingSessionItem
@@ -54,6 +55,15 @@ class StatsRepository @Inject constructor(
                 .toString()
             val current = dao.getReadingDaySeconds(date) ?: 0L
             dao.upsertReadingDay(ReadingDayEntity(date, current + seconds))
+            val lifetime = dao.getReadingTotal(bookId.value)
+            dao.upsertReadingTotal(
+                ReadingTotalEntity(
+                    bookId.value,
+                    (lifetime?.seconds ?: 0L) + seconds,
+                    (lifetime?.sessionCount ?: 0) + 1,
+                    maxOf(lifetime?.longestSeconds ?: 0L, seconds),
+                ),
+            )
             dao.pruneReadingSessions(MAX_RETAINED_SESSIONS)
         }
     }
@@ -88,6 +98,7 @@ class StatsRepository @Inject constructor(
                 count = aggregate.count,
                 averageSeconds = aggregate.averageSeconds,
                 longestSeconds = aggregate.longestSeconds,
+                seconds = aggregate.seconds,
             )
         }
         .distinctUntilChanged()
@@ -111,6 +122,7 @@ class StatsRepository @Inject constructor(
             sessionCount = session.count,
             averageSessionSeconds = session.averageSeconds,
             longestSessionSeconds = session.longestSeconds,
+            historicalSessionDetailIncomplete = session.seconds < day.totalSeconds,
             daysRead = day.daysRead,
             averageSecondsPerActiveDay =
             if (day.daysRead > 0) day.totalSeconds / day.daysRead else 0L,
@@ -180,6 +192,7 @@ class StatsRepository @Inject constructor(
         val count: Int,
         val averageSeconds: Long,
         val longestSeconds: Long,
+        val seconds: Long,
     )
 
     private companion object {
