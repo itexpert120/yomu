@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -224,13 +226,16 @@ internal fun ReaderFooter(
 internal fun BoxScope.ReaderChapterControlsBar(
     visible: Boolean,
     bottomPadding: Dp,
+    footerVisible: Boolean,
     background: Color,
     content: Color,
-    border: Color,
     onBrowse: () -> Unit,
     onSearch: () -> Unit,
     onDisplay: () -> Unit,
 ) {
+    val floating = !footerVisible
+    val floatingBottomInset = WindowInsets.navigationBars.union(WindowInsets.displayCutout)
+        .asPaddingValues().calculateBottomPadding()
     AnimatedVisibility(
         visible = visible,
         enter = yomuChromeEnter(),
@@ -238,12 +243,13 @@ internal fun BoxScope.ReaderChapterControlsBar(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .padding(bottom = bottomPadding),
+            .padding(horizontal = if (floating) 12.dp else 0.dp)
+            .padding(bottom = if (floating) floatingBottomInset + 12.dp else bottomPadding),
     ) {
         ReaderActionBar(
             background = background,
             content = content,
-            border = border,
+            floating = floating,
             onBrowse = onBrowse,
             onSearch = onSearch,
             onDisplay = onDisplay,
@@ -258,7 +264,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
 private fun ReaderActionBar(
     background: Color,
     content: Color,
-    border: Color,
+    floating: Boolean,
     onBrowse: () -> Unit,
     onSearch: () -> Unit,
     onDisplay: () -> Unit,
@@ -267,8 +273,12 @@ private fun ReaderActionBar(
         modifier = Modifier.fillMaxWidth(),
         color = background,
         contentColor = content,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, border),
+        shape = RoundedCornerShape(
+            topStart = 28.dp,
+            topEnd = 28.dp,
+            bottomStart = if (floating) 28.dp else 0.dp,
+            bottomEnd = if (floating) 28.dp else 0.dp,
+        ),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),

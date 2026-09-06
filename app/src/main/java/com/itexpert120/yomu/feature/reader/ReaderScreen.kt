@@ -340,7 +340,6 @@ fun ReaderScreen(
 
     val background = Color(reading.settings.backgroundArgb)
     val onBackground = Color(reading.settings.textArgb)
-    val readerBorder = Color(reading.settings.colorPalette.borderArgb)
 
     val reveal = remember { Animatable(1f) }
     LaunchedEffect(reading.renderState) {
@@ -477,9 +476,9 @@ fun ReaderScreen(
                     ReaderChapterControlsBar(
                         visible = state.chapterControlsVisible,
                         bottomPadding = footerHeight,
+                        footerVisible = reading.settings.showFooter,
                         background = background,
                         content = onBackground,
-                        border = readerBorder,
                         onBrowse = onOpenBrowse,
                         onSearch = onOpenSearch,
                         onDisplay = onOpenSheet,
