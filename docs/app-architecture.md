@@ -421,6 +421,10 @@ AppearancePanel event
 
 ## Error Handling
 
+Book deletion stages reversible filenames before committing removal. Database startup reconciles
+staged EPUBs/covers against committed book paths, restoring surviving books and finishing committed
+deletions. Failed staging clears temporary TOC tombstones; failed restores retain their staged copies.
+
 Reader errors:
 
 - File missing.

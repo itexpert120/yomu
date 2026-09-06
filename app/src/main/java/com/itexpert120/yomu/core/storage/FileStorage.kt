@@ -26,11 +26,10 @@ class FileStorage @Inject constructor(
     private val fontsDir: File = File(context.filesDir, "fonts").apply { mkdirs() }
 
     init {
-        // A process death can interrupt an import or the final unlink after a transactional book
-        // deletion. These names are never live library files, so clear them on the next launch.
+        // Deletion residue is reconciled against committed rows when the database opens.
         sequenceOf(epubsDir, coversDir).forEach { directory ->
             directory.listFiles()
-                ?.filter { it.name.endsWith(".partial") || it.name.endsWith(".deleting") }
+                ?.filter { it.name.endsWith(".partial") }
                 ?.forEach { runCatching { it.delete() } }
         }
     }

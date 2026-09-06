@@ -3,6 +3,7 @@ package com.itexpert120.yomu.app.di
 import android.content.Context
 import androidx.room.Room
 import com.itexpert120.yomu.core.database.BookDao
+import com.itexpert120.yomu.core.database.BookDeletionRecovery
 import com.itexpert120.yomu.core.database.BookmarkDao
 import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.YomuDatabase
@@ -35,6 +36,7 @@ object DatabaseModule {
             YomuDatabase.MIGRATION_12_13,
             YomuDatabase.MIGRATION_13_14,
         )
+        .addCallback(BookDeletionRecovery(context.filesDir))
         .build()
 
     @Provides

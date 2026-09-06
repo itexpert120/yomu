@@ -14,13 +14,17 @@ import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderPublicationCacheCodec
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.core.storage.BookDeletionFiles
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Collections
 import java.util.LinkedHashMap
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,6 +51,7 @@ class RoomBookRepository @Inject constructor(
         },
     )
     private val deletedBookIds = ConcurrentHashMap.newKeySet<String>()
+    private val deletionMutex = Mutex()
 
     override fun observeBooks(): Flow<List<Book>> = dao.observeBooks().map { list -> list.map { it.toBook() } }
 
@@ -62,21 +67,26 @@ class RoomBookRepository @Inject constructor(
         }
     }
 
-    override suspend fun remove(ids: List<BookId>) {
+    override suspend fun remove(ids: List<BookId>): Unit = deletionMutex.withLock {
+        withContext(Dispatchers.IO) { removeBooks(ids) }
+    }
+
+    private suspend fun removeBooks(ids: List<BookId>) {
         val keys = ids.map { it.value }
         if (keys.isEmpty()) return
         val entities = dao.getBooks(keys)
         deletedBookIds.addAll(keys)
         keys.forEach { publicationCacheMemory.remove(it) }
-        val staged = stageForDeletion(
-            entities.flatMap { entity ->
-                buildList {
-                    add(File(entity.storagePath))
-                    entity.coverImagePath?.let { add(File(it)) }
-                }
-            },
-        )
+        var staged = emptyList<Pair<File, File>>()
         try {
+            staged = BookDeletionFiles.stage(
+                entities.flatMap { entity ->
+                    buildList {
+                        add(File(entity.storagePath))
+                        entity.coverImagePath?.let { add(File(it)) }
+                    }
+                },
+            )
             database.withTransaction {
                 highlightDao.deleteForBooks(keys)
                 bookmarkDao.deleteForBooks(keys)
@@ -87,14 +97,12 @@ class RoomBookRepository @Inject constructor(
                 dao.deleteByIds(keys)
             }
         } catch (failure: Throwable) {
-            staged.asReversed().forEach { (original, trash) ->
-                if (trash.exists()) trash.renameTo(original)
-            }
+            BookDeletionFiles.restore(staged)
             deletedBookIds.removeAll(keys.toSet())
             throw failure
         }
         // The database is already committed, so an unlink failure must not turn a successful
-        // deletion into a misleading UI failure. FileStorage clears any .deleting residue on launch.
+        // deletion into a misleading UI failure. Database startup reconciles retained residue.
         staged.forEach { (_, trash) -> runCatching { trash.delete() } }
     }
 
@@ -297,21 +305,6 @@ class RoomBookRepository @Inject constructor(
                     dao.setChapterProgress(id.value, it, 0f, now, manuallyRead = false)
                 }
             }
-        }
-    }
-
-    private fun stageForDeletion(files: List<File>): List<Pair<File, File>> {
-        val staged = mutableListOf<Pair<File, File>>()
-        try {
-            files.distinctBy { it.absolutePath }.filter { it.exists() }.forEach { original ->
-                val trash = File(original.parentFile, ".${original.name}.${UUID.randomUUID()}.deleting")
-                check(original.renameTo(trash)) { "Couldn't stage ${original.name} for deletion" }
-                staged += original to trash
-            }
-            return staged
-        } catch (failure: Throwable) {
-            staged.asReversed().forEach { (original, trash) -> trash.renameTo(original) }
-            throw failure
         }
     }
 
