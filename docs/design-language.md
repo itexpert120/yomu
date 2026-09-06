@@ -21,6 +21,8 @@ Reader/library design surfaces in place: a working EPUB reader with themes (incl
 
 Expressive refinement now starts with Library: a collapsing heading, labeled search/import actions, and a tonal Continue Reading feature with a prominent Resume button. Shared buttons use Material's expressive press shapes and size-aware typography/padding; the theme explicitly selects expressive motion. The floating Resume action appears after the feature scrolls away. Existing collection modes remain available. Rendered device validation remains separate from compilation.
 
+Settings adds visual light/dark/system choices, closely grouped tonal appearance rows and tablet navigation, and a discoverable Wallpaper colors option. Shared mutually exclusive settings use connected Material toggle shapes with radio semantics and wrapping labels. Existing appearance defaults, stored preferences, and OLED behavior are preserved.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.

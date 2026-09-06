@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -23,13 +25,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,24 +160,27 @@ fun YomuSingleChoiceSegmentedControl(
 ) {
     if (options.isEmpty()) return
     val selected = selectedIndex.coerceIn(0, options.lastIndex)
-    SingleChoiceSegmentedButtonRow(
-        modifier = modifier.fillMaxWidth(),
+    Row(
+        modifier = modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
     ) {
         options.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = index == selected,
-                onClick = { onSelected(index) },
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = options.size,
-                ),
-                modifier = Modifier.weight(1f),
+            ToggleButton(
+                checked = index == selected,
+                onCheckedChange = { onSelected(index) },
+                shapes = when {
+                    options.size == 1 -> ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight)
+                    index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    index == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+                modifier = Modifier.weight(1f).semantics {
+                    role = Role.RadioButton
+                    this.selected = index == selected
+                },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 12.dp),
             ) {
-                Text(
-                    text = option,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text(text = option, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
     }

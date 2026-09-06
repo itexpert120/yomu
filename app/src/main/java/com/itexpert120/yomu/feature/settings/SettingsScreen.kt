@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,22 +26,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
-import com.itexpert120.yomu.core.designsystem.YomuChip
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
+import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
@@ -279,8 +275,12 @@ private fun SettingsPaneRow(
         title = pane.title,
         subtitle = pane.subtitle,
         selected = selected,
+        position = when (pane) {
+            SettingsPane.Appearance -> YomuSettingPosition.First
+            SettingsPane.Reading -> YomuSettingPosition.Middle
+            SettingsPane.About -> YomuSettingPosition.Last
+        },
         onClick = onClick,
-        modifier = Modifier.clip(MaterialTheme.shapes.large),
         leadingContent = {
             Icon(
                 imageVector = icon,
@@ -348,48 +348,16 @@ private fun AppearanceGroup(
             selectedTheme = selectedTheme,
             onSelectTheme = onSelectTheme,
         )
-        DynamicColorsSettingRow(
-            checked = dynamicColors && dynamicColorsAvailable,
-            available = dynamicColorsAvailable,
-            onCheckedChange = onToggleDynamicColors,
-        )
-        OledSettingRow(
-            checked = oledDark && oledEnabled,
-            enabled = oledEnabled,
-            onCheckedChange = onToggleOled,
-        )
-    }
-}
-
-@Composable
-private fun ThemeChoiceRow(
-    selectedTheme: ThemePreference,
-    onSelectTheme: (ThemePreference) -> Unit,
-) {
-    val themes = ThemePreference.entries
-    val selectedIndex = themes.indexOf(selectedTheme).coerceAtLeast(0)
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(selectedIndex) {
-        val layoutInfo = listState.layoutInfo
-        val selectedItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
-        val fullyVisible = selectedItem != null &&
-            selectedItem.offset >= layoutInfo.viewportStartOffset &&
-            selectedItem.offset + selectedItem.size <= layoutInfo.viewportEndOffset
-        if (!fullyVisible) listState.animateScrollToItem(selectedIndex)
-    }
-
-    LazyRow(
-        state = listState,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 1.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(themes, key = { it.name }) { theme ->
-            YomuChip(
-                text = theme.label,
-                selected = theme == selectedTheme,
-                onClick = { onSelectTheme(theme) },
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            DynamicColorsSettingRow(
+                checked = dynamicColors && dynamicColorsAvailable,
+                available = dynamicColorsAvailable,
+                onCheckedChange = onToggleDynamicColors,
+            )
+            OledSettingRow(
+                checked = oledDark && oledEnabled,
+                enabled = oledEnabled,
+                onCheckedChange = onToggleOled,
             )
         }
     }
@@ -402,7 +370,9 @@ private fun DynamicColorsSettingRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     YomuSettingRow(
-        title = "Dynamic colors",
+        title = "Wallpaper colors",
+        position = YomuSettingPosition.First,
+        leadingContent = { Icon(Icons.Rounded.Palette, contentDescription = null) },
         subtitle = if (available) {
             "Use wallpaper colors for light and dark app themes"
         } else {
@@ -426,6 +396,7 @@ private fun OledSettingRow(
 ) {
     YomuSettingRow(
         title = "OLED black",
+        position = YomuSettingPosition.Last,
         subtitle = if (enabled) {
             "Use true black surfaces in dark mode"
         } else {
