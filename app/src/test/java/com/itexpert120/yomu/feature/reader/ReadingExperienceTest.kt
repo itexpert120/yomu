@@ -206,6 +206,34 @@ class ReadingExperienceTest {
     }
 
     @Test
+    fun editingRunningSearchEndsBusyStateAndRejectsOldResults() = runBlocking {
+        val session = FakeReaderSession()
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        session.searchWait = release
+        session.searchResults = listOf(ReaderSearchResult("old", "", "A", "", null))
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            scope = this,
+        )
+        try {
+            experience.start()
+            awaitCondition { experience.state.value.navigator === session }
+            experience.dispatch(ReadingExperienceAction.ChangeSearchQuery("A"))
+            experience.dispatch(ReadingExperienceAction.SubmitSearch)
+            awaitCondition { experience.state.value.searchInProgress }
+            experience.dispatch(ReadingExperienceAction.ChangeSearchQuery("B"))
+            assertFalse(experience.state.value.searchInProgress)
+            release.complete(Unit)
+            kotlinx.coroutines.yield()
+            assertEquals("B", experience.state.value.searchQuery)
+            assertTrue(experience.state.value.searchResults.isEmpty())
+            assertTrue(session.searchDecorations.isEmpty())
+        } finally {
+            experience.close()
+        }
+    }
+
+    @Test
     fun lookupHistoryAndPronunciationStayBookScoped() = runBlocking {
         val lookedUp = mutableListOf<String>()
         val session = FakeReaderSession()
@@ -491,6 +519,7 @@ class ReadingExperienceTest {
         var searchResults = emptyList<ReaderSearchResult>()
         var searchDecorations = emptyList<ReaderSearchResult>()
         var searchFailure = false
+        var searchWait: kotlinx.coroutines.CompletableDeferred<Unit>? = null
         var nextChapterCalls = 0
         var previousChapterCalls = 0
         var clearSearchCalls = 0
@@ -530,6 +559,7 @@ class ReadingExperienceTest {
 
         override suspend fun search(query: String): List<ReaderSearchResult> {
             searchQueries += query
+            searchWait?.await()
             if (searchFailure) error("search failed")
             return searchResults
         }

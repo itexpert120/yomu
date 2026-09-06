@@ -435,6 +435,9 @@ AppearancePanel event
 
 ## Error Handling
 
+Editing a search query invalidates its pending work, results, and decorations immediately. Failed
+Readium search pages surface as search errors rather than a successful empty/partial result.
+
 Rendering readiness is published only by the ordered styling/content/pre-draw gate. Transition timeout
 is a retryable rendering failure; it never bypasses styling to emit Ready. Recovery uses the same gate.
 

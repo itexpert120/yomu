@@ -695,7 +695,7 @@ private class ReadiumReaderSession(
             val out = ArrayList<ReaderSearchResult>()
             try {
                 while (out.size < MAX_SEARCH_RESULTS) {
-                    val page = iterator.next().getOrNull() ?: break
+                    val page = iterator.next().getOrElse { error("Publication search failed: $it") } ?: break
                     for (loc in page.locators) {
                         out += ReaderSearchResult(
                             locatorJson = loc.toJSON().toString(),

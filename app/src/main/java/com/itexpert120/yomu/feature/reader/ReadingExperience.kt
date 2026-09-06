@@ -258,7 +258,7 @@ internal class ReadingExperience(
             ReadingExperienceAction.CloseEditingHighlight -> _state.update { it.copy(editingHighlight = null) }
             is ReadingExperienceAction.ApplySettings -> applySettings(action.settings, persist = true)
             is ReadingExperienceAction.Navigate -> navigate(action.target)
-            is ReadingExperienceAction.ChangeSearchQuery -> _state.update { it.copy(searchQuery = action.query) }
+            is ReadingExperienceAction.ChangeSearchQuery -> changeSearchQuery(action.query)
             is ReadingExperienceAction.LookUpWord -> lookUp(action.text, action.resetHistory)
             is ReadingExperienceAction.Pronounce -> speak(action.text)
             is ReadingExperienceAction.DeleteBookmark -> deleteBookmark(action.id)
@@ -475,6 +475,12 @@ internal class ReadingExperience(
             ReaderNavigation.PreviousChapter -> active.previousChapter()
             is ReaderNavigation.Locator -> active.goToLocator(target.locatorJson)
         }
+    }
+
+    private fun changeSearchQuery(query: String) {
+        if (query == _state.value.searchQuery) return
+        if (_state.value.searchPerformed || _state.value.searchInProgress) clearSearch()
+        _state.update { it.copy(searchQuery = query) }
     }
 
     private fun submitSearch() {
