@@ -303,8 +303,11 @@ class ReadingExperienceTest {
 
             highlights.failNextAdd = true
             session.highlightRequestEvents.emit(ReaderHighlightDraft("{failed}", "first"))
+            awaitCondition { experience.state.value.annotationError != null }
+            experience.dispatch(ReadingExperienceAction.RetryAnnotations)
+            awaitCondition { highlights.addedTexts == listOf("first") }
             session.highlightRequestEvents.emit(ReaderHighlightDraft("{saved}", "second"))
-            awaitCondition { highlights.addedTexts == listOf("second") }
+            awaitCondition { highlights.addedTexts == listOf("first", "second") }
 
             session.currentLocator.value = locator()
             awaitCondition { experience.state.value.locator != null }
@@ -482,6 +485,59 @@ class ReadingExperienceTest {
         }
     }
 
+    @Test fun annotationRetriesReconcileUncertainAddsAndRetainFailedEditorChanges() = runBlocking {
+        val highlights = FakeHighlightRepository()
+        val bookmarks = FakeBookmarkRepository()
+        val session = FakeReaderSession()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            highlights = highlights,
+            bookmarks = bookmarks,
+            scope = this,
+        )
+        suspend fun retryFailure() {
+            awaitCondition { experience.state.value.annotationError != null }
+            experience.dispatch(ReadingExperienceAction.RetryAnnotations)
+            awaitCondition { !experience.state.value.annotationsPending }
+        }
+        try {
+            experience.start()
+            awaitCondition { session.highlightRequestEvents.subscriptionCount.value > 0 }
+            highlights.failAddAcknowledgement = true
+            session.highlightRequestEvents.emit(ReaderHighlightDraft("{uncertain}", "once"))
+            retryFailure()
+            assertEquals(listOf("once"), highlights.addedTexts)
+            val id = highlights.items.value.single().id
+            session.highlightTapEvents.emit(id)
+            awaitCondition { experience.state.value.editingHighlight != null }
+            highlights.failNextMutation = true
+            val oldColor = experience.state.value.editingHighlight!!.colorArgb
+            experience.dispatch(ReadingExperienceAction.SetEditingHighlightColor(42))
+            awaitCondition { experience.state.value.annotationError != null }
+            assertEquals(oldColor, experience.state.value.editingHighlight!!.colorArgb)
+            experience.dispatch(ReadingExperienceAction.RetryAnnotations)
+            awaitCondition { experience.state.value.editingHighlight?.colorArgb == 42 }
+            highlights.failNextMutation = true
+            experience.dispatch(ReadingExperienceAction.DeleteEditingHighlight)
+            retryFailure()
+            assertTrue(highlights.items.value.isEmpty())
+            session.currentLocator.value = locator()
+            awaitCondition { experience.state.value.locator != null }
+            bookmarks.failToggleAcknowledgement = true
+            experience.dispatch(ReadingExperienceAction.ToggleBookmark)
+            retryFailure()
+            assertEquals(1, bookmarks.toggleCount)
+            awaitCondition { experience.state.value.currentPageBookmarked }
+            bookmarks.failNextDelete = true
+            experience.dispatch(ReadingExperienceAction.DeleteBookmark("bookmark-1"))
+            retryFailure()
+            awaitCondition { !experience.state.value.currentPageBookmarked }
+            assertSame(session, experience.state.value.navigator)
+        } finally {
+            experience.close()
+        }
+    }
+
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),
@@ -647,6 +703,14 @@ class ReadingExperienceTest {
     }
 
     private class FakeHighlightRepository : HighlightRepository {
+        var failAddAcknowledgement = false
+        var failNextMutation = false
+        private fun checkMutation() {
+            if (failNextMutation) {
+                failNextMutation = false
+                error("write failed")
+            }
+        }
         val items = MutableStateFlow<List<ReaderHighlight>>(emptyList())
         val addedTexts = mutableListOf<String>()
         val updatedColors = mutableListOf<Pair<String, Int>>()
@@ -672,10 +736,17 @@ class ReadingExperienceTest {
                 text = text,
                 colorArgb = colorArgb,
                 createdAt = addedTexts.size.toLong(),
-            ).also { items.value = listOf(it) + items.value }
+            ).also {
+                items.value = listOf(it) + items.value
+                if (failAddAcknowledgement) {
+                    failAddAcknowledgement = false
+                    error("acknowledgement lost")
+                }
+            }
         }
 
         override suspend fun updateColor(id: String, colorArgb: Int) {
+            checkMutation()
             updatedColors += id to colorArgb
             items.value = items.value.map {
                 if (it.id == id) it.copy(colorArgb = colorArgb) else it
@@ -683,12 +754,15 @@ class ReadingExperienceTest {
         }
 
         override suspend fun delete(id: String) {
+            checkMutation()
             deletedIds += id
             items.value = items.value.filterNot { it.id == id }
         }
     }
 
     private class FakeBookmarkRepository : BookmarkRepository {
+        var failToggleAcknowledgement = false
+        var failNextDelete = false
         private val items = MutableStateFlow<List<ReaderBookmark>>(emptyList())
         val deletedIds = mutableListOf<String>()
         var toggleCount = 0
@@ -713,10 +787,18 @@ class ReadingExperienceTest {
                     createdAt = 1L,
                 ),
             )
+            if (failToggleAcknowledgement) {
+                failToggleAcknowledgement = false
+                error("acknowledgement lost")
+            }
             return true
         }
 
         override suspend fun delete(id: String) {
+            if (failNextDelete) {
+                failNextDelete = false
+                error("delete failed")
+            }
             deletedIds += id
             items.value = items.value.filterNot { it.id == id }
         }

@@ -122,8 +122,13 @@ fun ReaderScreen(
     onReadingResumed: () -> Unit,
     onReadingPaused: () -> Unit,
     onRetrySettings: () -> Unit = {},
+    onRetryAnnotations: () -> Unit = {},
 ) {
-    SaveFailureNotice(state.experience.settingsError, onRetrySettings)
+    if (state.experience.settingsError != null) {
+        SaveFailureNotice(state.experience.settingsError, onRetrySettings)
+    } else {
+        SaveFailureNotice(state.experience.annotationError, onRetryAnnotations)
+    }
     val view = LocalView.current
     val reading = state.experience
     val navigator: ReaderNavigator? = reading.navigator

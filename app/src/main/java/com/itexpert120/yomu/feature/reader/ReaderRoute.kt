@@ -22,6 +22,7 @@ fun ReaderRoute(onBack: () -> Unit) {
         onUpdateSettings = viewModel::onUpdateSettings,
         onResetSettings = viewModel::onResetBookSettings,
         onRetrySettings = viewModel::onRetrySettings,
+        onRetryAnnotations = viewModel::onRetryAnnotations,
         onOpenCustomTheme = viewModel::onOpenCustomTheme,
         onCloseCustomTheme = viewModel::onCloseCustomTheme,
         onApplyCustomTheme = viewModel::onApplyCustomTheme,

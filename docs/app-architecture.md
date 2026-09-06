@@ -520,6 +520,11 @@ Fakes:
 
 ## Architecture Risks
 
+Annotation writes are ordered within the reading experience and failed operations retain a
+Retry notice without closing the reader. Highlight editors acknowledge color/deletion only
+after persistence. Retries re-read durable highlight/position identity before adding, and
+bookmark retries preserve the original desired presence instead of blindly toggling again.
+
 Reader and global-default editing use a reader-specific ordered snapshot writer. The newest
 pending intent remains effective over older persistence echoes; save/reset failures retain
 that intent and expose a non-blocking Retry notice. Reset and edits share the same ordering,

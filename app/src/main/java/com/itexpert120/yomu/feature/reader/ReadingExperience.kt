@@ -64,6 +64,8 @@ data class ReadingExperienceState(
     val settings: ReaderSettings = ReaderSettings(),
     val settingsPending: Boolean = false,
     val settingsError: String? = null,
+    val annotationError: String? = null,
+    val annotationsPending: Boolean = false,
     val tableOfContents: List<ReaderTocItem> = emptyList(),
     val tocLoading: Boolean = true,
     val locator: ReaderLocator? = null,
@@ -111,6 +113,7 @@ internal sealed interface ReadingExperienceAction {
     data object Pause : ReadingExperienceAction
     data object ResetSettings : ReadingExperienceAction
     data object RetrySettings : ReadingExperienceAction
+    data object RetryAnnotations : ReadingExperienceAction
     data object SubmitSearch : ReadingExperienceAction
     data object ClearSearch : ReadingExperienceAction
     data object RetryLookup : ReadingExperienceAction
@@ -220,6 +223,9 @@ internal class ReadingExperience(
     private var session: ReaderSession? = null
     private val lookupStack = ArrayDeque<String>()
     private val lookupCache = mutableMapOf<String, DictionaryResult>()
+    private data class AnnotationWrite(val message: String, val persist: suspend () -> Unit)
+    private val annotationWrites = ArrayDeque<AnnotationWrite>()
+    private var annotationJob: Job? = null
 
     fun start() {
         if (started || closed) return
@@ -262,6 +268,7 @@ internal class ReadingExperience(
             ReadingExperienceAction.Pause -> pause()
             ReadingExperienceAction.ResetSettings -> settingsEditor.reset()
             ReadingExperienceAction.RetrySettings -> settingsEditor.retry()
+            ReadingExperienceAction.RetryAnnotations -> retryAnnotations()
             ReadingExperienceAction.SubmitSearch -> submitSearch()
             ReadingExperienceAction.ClearSearch -> clearSearch()
             ReadingExperienceAction.RetryLookup -> retryLookup()
@@ -452,13 +459,18 @@ internal class ReadingExperience(
                 }
                 launch {
                     opened.highlightRequests.collect { draft ->
-                        runCatching {
-                            highlights.add(
-                                bookId,
-                                draft.locatorJson,
-                                draft.text,
-                                DEFAULT_HIGHLIGHT_ARGB,
-                            )
+                        mutateAnnotation("Highlight wasn't saved.") {
+                            val existing = highlights.observeForBook(bookId).first().any {
+                                it.locatorJson == draft.locatorJson && it.text == draft.text
+                            }
+                            if (!existing) {
+                                highlights.add(
+                                    bookId,
+                                    draft.locatorJson,
+                                    draft.text,
+                                    DEFAULT_HIGHLIGHT_ARGB,
+                                )
+                            }
                         }
                     }
                 }
@@ -614,37 +626,81 @@ internal class ReadingExperience(
 
     private fun toggleBookmark() {
         val locator = _state.value.locator ?: return
-        scope.launch {
-            runCatching {
+        val desired = !_state.value.currentPageBookmarked
+        val chapterTitle = locator.chapterTitle ?: _state.value.chapterTitle
+        mutateAnnotation("Bookmark change wasn't saved.") {
+            val existing = bookmarks.observeForBook(bookId).first().filter {
+                BookmarkIdentity.samePosition(
+                    it.href,
+                    it.locatorJson,
+                    it.progression,
+                    locator.chapterId ?: locator.href,
+                    locator.locatorJson,
+                    locator.totalProgression,
+                )
+            }
+            if (desired && existing.isEmpty()) {
                 bookmarks.toggle(
                     bookId,
                     locator.locatorJson,
                     locator.chapterId ?: locator.href,
-                    locator.chapterTitle ?: _state.value.chapterTitle,
+                    chapterTitle,
                     locator.totalProgression,
                 )
+            } else if (!desired) {
+                existing.forEach { bookmarks.delete(it.id) }
             }
         }
     }
 
     private fun deleteBookmark(id: String) {
-        scope.launch { runCatching { bookmarks.delete(id) } }
+        mutateAnnotation("Bookmark wasn't deleted.") { bookmarks.delete(id) }
     }
 
     private fun deleteEditingHighlight() {
         val target = _state.value.editingHighlight ?: return
-        _state.update { it.copy(editingHighlight = null) }
         deleteHighlight(target.id)
     }
 
     private fun deleteHighlight(id: String) {
-        scope.launch { runCatching { highlights.delete(id) } }
+        mutateAnnotation("Highlight wasn't deleted.") {
+            highlights.delete(id)
+            _state.update { if (it.editingHighlight?.id == id) it.copy(editingHighlight = null) else it }
+        }
     }
 
     private fun setEditingHighlightColor(colorArgb: Int) {
         val target = _state.value.editingHighlight ?: return
-        _state.update { it.copy(editingHighlight = target.copy(colorArgb = colorArgb)) }
-        scope.launch { runCatching { highlights.updateColor(target.id, colorArgb) } }
+        mutateAnnotation("Highlight color wasn't saved.") {
+            highlights.updateColor(target.id, colorArgb)
+            _state.update { if (it.editingHighlight?.id == target.id) it.copy(editingHighlight = target.copy(colorArgb = colorArgb)) else it }
+        }
+    }
+
+    private fun mutateAnnotation(message: String, persist: suspend () -> Unit) {
+        annotationWrites.addLast(AnnotationWrite(message, persist))
+        _state.update { it.copy(annotationsPending = true) }
+        retryAnnotations()
+    }
+
+    private fun retryAnnotations() {
+        if (annotationJob?.isActive == true) return
+        _state.update { it.copy(annotationError = null) }
+        annotationJob = scope.launch {
+            while (annotationWrites.isNotEmpty()) {
+                val next = annotationWrites.first()
+                try {
+                    next.persist()
+                    annotationWrites.removeFirst()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    _state.update { it.copy(annotationError = "${next.message} Retry to finish the change.") }
+                    return@launch
+                }
+            }
+            _state.update { it.copy(annotationsPending = false) }
+        }
     }
 
     private fun resume() {
