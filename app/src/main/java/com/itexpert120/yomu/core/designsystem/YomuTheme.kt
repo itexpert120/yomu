@@ -4,7 +4,6 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -271,7 +270,7 @@ fun YomuDesignTheme(
         colorScheme = colorScheme,
         typography = YomuTypography,
         shapes = YomuShapes,
-        motionScheme = MotionScheme.expressive(),
+        motionScheme = YomuMotion.scheme,
     ) {
         CompositionLocalProvider(
             LocalYomuColors provides yomuColors(colorScheme, mode),

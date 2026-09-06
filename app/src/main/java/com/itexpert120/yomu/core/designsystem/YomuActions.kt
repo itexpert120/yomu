@@ -2,8 +2,6 @@ package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -11,11 +9,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.WideNavigationRail
+import androidx.compose.material3.WideNavigationRailDefaults
+import androidx.compose.material3.WideNavigationRailItem
+import androidx.compose.material3.WideNavigationRailItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,9 +89,9 @@ fun YomuLabeledIconAction(
 @Composable
 fun YomuNavigationBar(
     modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    NavigationBar(
+    ShortNavigationBar(
         modifier = modifier,
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer,
         content = content,
@@ -98,19 +99,26 @@ fun YomuNavigationBar(
 }
 
 @Composable
-fun RowScope.YomuNavigationBarItem(
+fun YomuNavigationBarItem(
     selected: Boolean,
     onClick: () -> Unit,
     icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    NavigationBarItem(
+    ShortNavigationBarItem(
+        colors = ShortNavigationBarItemDefaults.colors(
+            selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
+        ),
         selected = selected,
         onClick = onClick,
         modifier = modifier,
-        icon = { Icon(icon, contentDescription = label) },
-        label = { Text(label) },
+        icon = { Icon(icon, contentDescription = null) },
+        label = {
+            Text(label, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium)
+        },
     )
 }
 
@@ -118,29 +126,38 @@ fun RowScope.YomuNavigationBarItem(
 @Composable
 fun YomuNavigationRail(
     modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    NavigationRail(
+    WideNavigationRail(
         modifier = modifier,
-        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer,
+        arrangement = Arrangement.Center,
+        colors = WideNavigationRailDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         content = content,
     )
 }
 
 @Composable
-fun ColumnScope.YomuNavigationRailItem(
+fun YomuNavigationRailItem(
     selected: Boolean,
     onClick: () -> Unit,
     icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    NavigationRailItem(
+    WideNavigationRailItem(
+        railExpanded = false,
+        colors = WideNavigationRailItemDefaults.colors(
+            selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
+        ),
         selected = selected,
         onClick = onClick,
         modifier = modifier,
-        icon = { Icon(icon, contentDescription = label) },
-        label = { Text(label) },
+        icon = { Icon(icon, contentDescription = null) },
+        label = {
+            Text(label, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium)
+        },
     )
 }
 

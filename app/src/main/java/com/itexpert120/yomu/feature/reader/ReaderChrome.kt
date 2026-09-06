@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -50,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -272,36 +270,36 @@ private fun ReaderActionBar(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, border),
     ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.Toc,
-                    label = "Browse",
-                    onClick = onBrowse,
-                    contentColor = content,
-                    containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
-                    modifier = Modifier.weight(1f),
-                )
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.Search,
-                    label = "Search",
-                    onClick = onSearch,
-                    contentColor = content,
-                    containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
-                    modifier = Modifier.weight(1f),
-                )
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.Tune,
-                    label = "Display",
-                    onClick = onDisplay,
-                    contentColor = content,
-                    containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
-                    modifier = Modifier.weight(1f),
-                )
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            YomuLabeledIconAction(
+                icon = Icons.Rounded.Toc,
+                label = "Browse",
+                onClick = onBrowse,
+                contentColor = content,
+                containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
+                modifier = Modifier.weight(1f),
+            )
+            YomuLabeledIconAction(
+                icon = Icons.Rounded.Search,
+                label = "Search",
+                onClick = onSearch,
+                contentColor = content,
+                containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
+                modifier = Modifier.weight(1f),
+            )
+            YomuLabeledIconAction(
+                icon = Icons.Rounded.Tune,
+                label = "Display",
+                onClick = onDisplay,
+                contentColor = content,
+                containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

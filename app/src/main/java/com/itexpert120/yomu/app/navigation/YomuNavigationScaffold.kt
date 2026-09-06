@@ -1,6 +1,5 @@
 package com.itexpert120.yomu.app.navigation
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -43,18 +42,13 @@ internal fun YomuTopLevelNavigation(
         if (wide) {
             Row(Modifier.fillMaxSize()) {
                 YomuNavigationRail(modifier = Modifier.fillMaxHeight()) {
-                    Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        YomuTopLevelDestination.entries.forEach { destination ->
-                            YomuNavigationRailItem(
-                                selected = selected == destination,
-                                onClick = { onSelected(destination) },
-                                icon = destination.icon,
-                                label = destination.label,
-                            )
-                        }
+                    YomuTopLevelDestination.entries.forEach { destination ->
+                        YomuNavigationRailItem(
+                            selected = selected == destination,
+                            onClick = { onSelected(destination) },
+                            icon = destination.icon,
+                            label = destination.label,
+                        )
                     }
                 }
                 content(

@@ -113,6 +113,7 @@ fun YomuNavHost(
                 else -> yomuScreenEnter(
                     travelDistancePx = screenTravelDistancePx,
                     forward = physicalDirection(false),
+                    returning = true,
                 )
             }
         },
@@ -123,6 +124,7 @@ fun YomuNavHost(
                 else -> yomuScreenExit(
                     travelDistancePx = screenTravelDistancePx,
                     forward = physicalDirection(false),
+                    returning = true,
                 )
             }
         },
@@ -230,6 +232,7 @@ private fun TopLevelNavigationShell(
                     else -> yomuScreenEnter(
                         travelDistancePx = screenTravelDistancePx,
                         forward = physicalDirection(false),
+                        returning = true,
                     )
                 }
             },
@@ -240,6 +243,7 @@ private fun TopLevelNavigationShell(
                     else -> yomuScreenExit(
                         travelDistancePx = screenTravelDistancePx,
                         forward = physicalDirection(false),
+                        returning = true,
                     )
                 }
             },
