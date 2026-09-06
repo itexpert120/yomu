@@ -43,6 +43,8 @@ The reader title bar uses native-height Material layout, compact title-medium ch
 
 Home uses Material ShortNavigationBar and WideNavigationRail with primary-container selection indicators, stronger selected labels, and native navigation-item motion. Screen navigation retains the original short shared-axis X transition and fade-through timing in both directions, including the return from About. Tab/content swaps retain their original restrained spring. Material components use the expressive motion scheme, with reduced-motion handling preserved.
 
+Shared screen headers and Home navigation reserve system-bar insets regardless of bar visibility, including cutout clearance. Returning from the immersive reader therefore keeps the incoming Home layout stationary while Android restores the status and navigation bars.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.

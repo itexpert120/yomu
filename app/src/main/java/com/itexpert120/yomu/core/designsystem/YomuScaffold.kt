@@ -10,11 +10,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +39,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
+/** Keep app chrome stationary while the outgoing reader still hides the system bars. */
+@Composable
+internal fun yomuStableSystemBarInsets(): WindowInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
+
 /** Material 3 top app bar compatibility wrapper for detail and settings screens. */
 @Composable
 fun YomuScreenHeader(
@@ -45,6 +54,7 @@ fun YomuScreenHeader(
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     LargeTopAppBar(
+        windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         scrollBehavior = scrollBehavior,
         modifier = modifier.zIndex(1f),
         title = {

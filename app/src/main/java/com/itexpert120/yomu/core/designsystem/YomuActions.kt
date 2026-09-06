@@ -2,7 +2,9 @@ package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
@@ -92,6 +94,7 @@ fun YomuNavigationBar(
     content: @Composable () -> Unit,
 ) {
     ShortNavigationBar(
+        windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
         modifier = modifier,
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer,
         content = content,
@@ -129,6 +132,7 @@ fun YomuNavigationRail(
     content: @Composable () -> Unit,
 ) {
     WideNavigationRail(
+        windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Vertical + WindowInsetsSides.Start),
         modifier = modifier,
         arrangement = Arrangement.Center,
         colors = WideNavigationRailDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
