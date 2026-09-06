@@ -287,12 +287,9 @@ fun ReaderScreen(
     val density = LocalDensity.current
     var topBarPx by remember { mutableIntStateOf(0) }
     var footerPx by remember { mutableIntStateOf(0) }
-    // In non-immersive mode Readium receives system-bar insets and reserves the status strip inside
-    // the WebView. Yomu only reserves the visible controls row, avoiding a double top gap.
+    // Reserve the complete measured bar. AndroidView adjusts dispatched window insets for its
+    // position, so subtracting the status inset here would leave content underneath the title bar.
     val fullTop = with(density) { topBarPx.toDp() }
-    val statusTop = WindowInsets.statusBarsIgnoringVisibility
-        .asPaddingValues()
-        .calculateTopPadding()
     val pagedSafeTop = WindowInsets.displayCutout
         .union(WindowInsets.statusBarsIgnoringVisibility)
         .asPaddingValues()
@@ -300,7 +297,7 @@ fun ReaderScreen(
     val pagedSafeBottom = WindowInsets.navigationBarsIgnoringVisibility
         .asPaddingValues()
         .calculateBottomPadding()
-    val baseTopInset = (fullTop - statusTop).coerceAtLeast(0.dp)
+    val baseTopInset = fullTop
     val footerHeight = if (reading.settings.showFooter) with(density) { footerPx.toDp() } else 0.dp
     val scrollEndPadding =
         if (reading.settings.layout == ReaderLayout.Scroll && reading.settings.showFooter) {
@@ -321,14 +318,11 @@ fun ReaderScreen(
     val pageReady = reading.renderState is ReaderRenderState.Ready
     val readerSurfacesAvailable = reading.renderState !is ReaderRenderState.Opening
     val chromeShown = !pageReady || !immersive || state.chapterControlsVisible
-    val topInset by animateDpAsState(
-        targetValue = when {
-            immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeTop
-            immersive -> 0.dp
-            else -> baseTopInset
-        },
-        label = "readerTopInset",
-    )
+    val topInset = when {
+        immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeTop
+        immersive -> 0.dp
+        else -> baseTopInset
+    }
     val bottomInset by animateDpAsState(
         targetValue = when {
             immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeBottom

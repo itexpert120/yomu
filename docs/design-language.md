@@ -31,7 +31,7 @@ Library search is a persistent rounded field with live results, an inline clear 
 
 Book details uses a tonal identity surface, stronger book-title typography, a 128dp compact cover and the existing 176dp tablet cover. Large text stacks the identity to retain readable width. Read/Resume stays a FAB, and chapter navigation remains a virtualized, unkeyed list.
 
-Book Details header actions use expressive tonal icon buttons. Edit stays visible; Book options contains Reading timeline and the existing confirmed removal action. The description has a rounded tonal panel, progress labels wrap when needed, and Contents has a stronger heading with a tonal sort control.
+Book Details header actions use expressive tonal icon buttons. Edit stays visible; Book options contains Reading timeline and the existing confirmed removal action. The description uses one content inset without a nested card; its text height animates so Show more/less follows the expansion. Progress labels wrap when needed, and Contents has a stronger heading with a tonal sort control.
 
 Statistics emphasizes lifetime total reading time in a tertiary container, using the existing aggregate value. Supporting metrics share an adaptive grid whose columns respond to available width and font scale; values wrap rather than truncate. Tablet overview/history panes and all existing metric definitions are retained.
 
@@ -39,7 +39,7 @@ Reading chrome uses Material expressive tonal actions for Browse, Search, and Di
 
 The bottom controls have no border and join the visible footer as one reading-colored surface. With the footer disabled, the controls float with 12dp side/bottom spacing, additional visible system-bar/cutout clearance, and rounded bottom corners. An opaque reading-colored backing covers the spacing so EPUB text cannot show below the controls.
 
-The reader title bar uses native-height Material layout, stronger chapter typography, and expressive tonal back/bookmark controls. The bookmark's checked state uses the reading palette's inverse pair. Its measured height includes the solid status/cutout area so the existing non-immersive page inset accounts for the full bar.
+The reader title bar uses native-height Material layout, compact title-medium chapter typography, and expressive tonal back/bookmark controls. The bookmark's checked state uses the reading palette's inverse pair. Non-immersive page padding follows its complete measured height, including the solid status/cutout area, immediately on phones, tablets, and font-size changes. AndroidView adjusts system insets for that position; immersive chrome still overlays the page without reflowing it.
 
 Home uses Material ShortNavigationBar and WideNavigationRail with primary-container selection indicators, stronger selected labels, and native navigation-item motion. Screen navigation retains the original short shared-axis X transition and fade-through timing in both directions, including the return from About. Tab/content swaps retain their original restrained spring. Material components use the expressive motion scheme, with reduced-motion handling preserved.
 

@@ -107,7 +107,7 @@ internal fun ReaderTopBar(
                 Text(
                     text = chapter.ifBlank { "Reading" },
                     color = content,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

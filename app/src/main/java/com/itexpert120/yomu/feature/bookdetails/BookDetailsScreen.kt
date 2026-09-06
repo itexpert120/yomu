@@ -116,9 +116,11 @@ import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
 import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
+import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
@@ -755,10 +757,7 @@ private fun BookHeader(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(MaterialTheme.shapes.extraLarge)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .padding(20.dp),
+                    .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -925,11 +924,17 @@ private fun ExpandableBookDescription(description: String) {
     var expandable by remember(description) { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.animateContentSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = description,
+            modifier = Modifier.animateContentSize(
+                animationSpec = tween(
+                    durationMillis = if (yomuAnimationsEnabled()) 320 else 0,
+                    easing = YomuMotion.Emphasized,
+                ),
+                alignment = Alignment.TopStart,
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyLarge,
             maxLines = if (expanded) Int.MAX_VALUE else 5,
