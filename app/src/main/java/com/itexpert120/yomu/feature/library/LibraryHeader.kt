@@ -42,7 +42,6 @@ internal fun LibraryTopBar(
     onSearchQueryChange: (String) -> Unit,
     onImport: () -> Unit,
     onOptionsSheetToggle: () -> Unit,
-    elevated: Boolean,
     scrollBehavior: TopAppBarScrollBehavior,
     showImport: Boolean,
     resultCount: Int,
@@ -68,7 +67,7 @@ internal fun LibraryTopBar(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = if (elevated) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.background,
+                containerColor = MaterialTheme.colorScheme.background,
                 scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
             ),
         )

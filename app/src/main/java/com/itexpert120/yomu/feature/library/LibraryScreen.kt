@@ -120,13 +120,6 @@ fun LibraryScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val activeColumns = if (isLandscape) state.landscapeGridColumns else state.portraitGridColumns
-    val elevated = when (state.viewMode) {
-        LibraryViewMode.ComfortableGrid,
-        LibraryViewMode.CompactGrid,
-        LibraryViewMode.CoverOnlyGrid,
-        -> gridState.canScrollBackward
-        LibraryViewMode.List -> listState.canScrollBackward
-    }
     var resumeCollapsed by remember { mutableStateOf(false) }
     val resumeFabScrollThresholdPx = with(LocalDensity.current) {
         ResumeFabScrollThreshold.roundToPx()
@@ -247,7 +240,6 @@ fun LibraryScreen(
             Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
                 LibraryTopBarTransition(
                     state = state,
-                    elevated = elevated,
                     onSearchToggle = onSearchToggle,
                     onSearchQueryChange = onSearchQueryChange,
                     onImport = onImport,
@@ -364,7 +356,6 @@ fun LibraryScreen(
 @Composable
 private fun LibraryTopBarTransition(
     state: LibraryUiState,
-    elevated: Boolean,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onImport: () -> Unit,
@@ -387,7 +378,6 @@ private fun LibraryTopBarTransition(
                 onSearchQueryChange = onSearchQueryChange,
                 onImport = onImport,
                 onOptionsSheetToggle = onOptionsSheetToggle,
-                elevated = elevated,
                 scrollBehavior = scrollBehavior,
                 showImport = state.totalCount > 0,
                 resultCount = state.selectableCount,

@@ -25,6 +25,8 @@ Settings adds visual light/dark/system choices, closely grouped tonal appearance
 
 Statistics, Settings, and About share Library's large padded, collapsing Material heading. Theme choices and Reader chrome use the same grouped tonal list treatment as Appearance, including native radio/switch semantics. Wallpaper colors has no leading icon. About facts and policy sections also use tonal list surfaces.
 
+Padded top bars keep fixed expanded/background and collapsed/surface-container color endpoints. Material interpolates between them from the bar's collapsed fraction; separate content-scroll flags and delayed elevation animations must not override the expanded color.
+
 Library search is a persistent rounded field with live results, an inline clear action, and a result count. Import stays in the top bar, and keyboard search dismisses the keyboard without discarding the query. Back retains the existing search-exit behavior.
 
 Book details uses a tonal identity surface, stronger book-title typography, a 128dp compact cover and the existing 176dp tablet cover. Large text stacks the identity to retain readable width. Read/Resume stays a FAB, and chapter navigation remains a virtualized, unkeyed list.
