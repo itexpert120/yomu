@@ -48,6 +48,7 @@ fun YomuSettingRow(
     onClick: (() -> Unit)? = null,
     leadingContent: (@Composable () -> Unit)? = null,
     position: YomuSettingPosition? = null,
+    role: Role = Role.Button,
     trailing: @Composable () -> Unit,
 ) {
     ListItem(
@@ -62,7 +63,7 @@ fun YomuSettingRow(
                     } else {
                         YomuTheme.colors.textSecondary
                     },
-                    style = YomuTheme.type.caption,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         },
@@ -96,7 +97,7 @@ fun YomuSettingRow(
                     Modifier.yomuPressable(
                         onClick = onClick,
                         enabled = enabled,
-                        role = Role.Button,
+                        role = role,
                     )
                 } else {
                     Modifier
@@ -126,6 +127,7 @@ fun YomuSettingList(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
         content = content,
     )
 }

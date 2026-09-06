@@ -25,15 +25,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -46,6 +48,7 @@ fun YomuScreenHeader(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     elevated: Boolean = false,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     val elevation by animateDpAsState(
@@ -53,7 +56,8 @@ fun YomuScreenHeader(
         animationSpec = if (yomuAnimationsEnabled()) tween() else snap(),
         label = "screenHeaderElevation",
     )
-    TopAppBar(
+    LargeTopAppBar(
+        scrollBehavior = scrollBehavior,
         modifier = modifier.zIndex(1f),
         title = {
             Column {
@@ -110,14 +114,16 @@ fun YomuScreenScaffold(
         .asPaddingValues()
         .calculateBottomPadding()
     val scrollState = rememberScrollState()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val elevated by remember { derivedStateOf { scrollState.value > 0 } }
     YomuAppSurface(modifier = modifier) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
             YomuScreenHeader(
                 title = title,
                 onBack = onBack,
                 subtitle = subtitle,
                 elevated = elevated,
+                scrollBehavior = scrollBehavior,
                 trailing = trailing,
             )
             Column(

@@ -27,6 +27,9 @@ import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
+import com.itexpert120.yomu.core.designsystem.YomuSettingList
+import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
+import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 
 @Composable
@@ -201,70 +204,29 @@ private fun AboutHero() {
 
 @Composable
 private fun AboutFacts() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        AboutFact(
-            icon = Icons.Rounded.WifiOff,
-            title = "Offline first",
-            modifier = Modifier.weight(1f),
-        )
-        AboutFact(
-            icon = Icons.Rounded.Lock,
-            title = "Private by default",
-            modifier = Modifier.weight(1f),
-        )
-        AboutFact(
-            icon = Icons.AutoMirrored.Rounded.MenuBook,
-            title = "EPUB focused",
-            modifier = Modifier.weight(1f),
-        )
+    YomuSettingList {
+        AboutFact(Icons.Rounded.WifiOff, "Offline first", YomuSettingPosition.First)
+        AboutFact(Icons.Rounded.Lock, "Private by default", YomuSettingPosition.Middle)
+        AboutFact(Icons.AutoMirrored.Rounded.MenuBook, "EPUB focused", YomuSettingPosition.Last)
     }
 }
 
 @Composable
-private fun AboutFact(
-    icon: ImageVector,
-    title: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
+private fun AboutFact(icon: ImageVector, title: String, position: YomuSettingPosition) {
+    YomuSettingRow(
+        title = title,
+        position = position,
+        leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        trailing = {},
+    )
 }
 
 @Composable
 private fun PolicyBlock(title: String, body: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = title,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            text = body,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
+    YomuSettingRow(
+        title = title,
+        subtitle = body,
+        position = YomuSettingPosition.Single,
+        trailing = {},
+    )
 }

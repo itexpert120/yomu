@@ -23,6 +23,8 @@ Expressive refinement now starts with Library: a collapsing heading and labeled 
 
 Settings adds visual light/dark/system choices, closely grouped tonal appearance rows and tablet navigation, and a discoverable Wallpaper colors option. Shared mutually exclusive settings use connected Material toggle shapes with radio semantics and wrapping labels. Existing appearance defaults, stored preferences, and OLED behavior are preserved.
 
+Statistics, Settings, and About share Library's large padded, collapsing Material heading. Theme choices and Reader chrome use the same grouped tonal list treatment as Appearance, including native radio/switch semantics. Wallpaper colors has no leading icon. About facts and policy sections also use tonal list surfaces.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.

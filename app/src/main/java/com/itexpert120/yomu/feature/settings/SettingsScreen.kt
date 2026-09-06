@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.itexpert120.yomu.feature.settings
 
@@ -25,12 +25,14 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
@@ -196,9 +198,10 @@ private fun TabletSettingsLayout(
     val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues()
         .calculateBottomPadding()
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     YomuAppSurface {
-        Column(Modifier.fillMaxSize()) {
-            YomuScreenHeader(title = "Settings", onBack = onBack)
+        Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+            YomuScreenHeader(title = "Settings", onBack = onBack, scrollBehavior = scrollBehavior)
             YomuTwoPane(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -372,7 +375,6 @@ private fun DynamicColorsSettingRow(
     YomuSettingRow(
         title = "Wallpaper colors",
         position = YomuSettingPosition.First,
-        leadingContent = { Icon(Icons.Rounded.Palette, contentDescription = null) },
         subtitle = if (available) {
             "Use wallpaper colors for light and dark app themes"
         } else {
@@ -420,6 +422,7 @@ private fun AboutGroup(onOpenAbout: () -> Unit) {
     ) {
         YomuSettingRow(
             title = "About Open Reader",
+            position = YomuSettingPosition.Single,
             subtitle = "Privacy, terms, acknowledgements, and version",
             onClick = onOpenAbout,
         ) {
