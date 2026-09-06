@@ -67,7 +67,7 @@ data class LibraryUiState(
     val selectedIds: Set<String> = emptySet(),
 )
 
-// region Pure query logic (unit-tested in LibraryQueryTest)
+// region Pure query logic
 
 fun List<Book>.matching(query: String): List<Book> {
     if (query.isBlank()) return this

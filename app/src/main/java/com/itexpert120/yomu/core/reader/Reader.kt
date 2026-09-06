@@ -74,8 +74,9 @@ data class ReaderLocator(
 )
 
 /**
- * A single, flattened table-of-contents entry. [id] is a stable per-book key (the entry's href)
- * used to persist read-state. [depth] is the nesting level in the source TOC (0 = top level) so the
+ * A flattened TOC entry. [id] identifies a logical section, including its fragment when present;
+ * [resourceHref] identifies the containing resource and can be shared by several sections.
+ * Read-state uses [id]. [depth] is the nesting level in the source TOC (0 = top level) so the
  * UI can indent without holding the tree. [locatorJson] is the position to open the reader at, or
  * null when the entry has no resolvable target.
  */

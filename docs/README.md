@@ -1,6 +1,6 @@
 # Open Reader Planning Docs
 
-Open Reader is a native Android EPUB reader built with Kotlin and Jetpack Compose, but it should not look like a default Material Android app. These docs define the product, design language, architecture, build patterns, reader model, data model, and implementation phases. They began as a pre-build plan; several sections describe a destination that is now substantially built — each doc carries an "Implementation status (current)" note where it has diverged from the plan.
+Open Reader is a native Android EPUB reader built with Kotlin, Jetpack Compose, and Material 3 Expressive, with reader-specific comfort surfaces. These docs distinguish implemented behavior from future product, architecture, and performance targets; consult each document's current-status section before using its planning sections.
 
 ## Current Project State
 
@@ -9,9 +9,9 @@ Open Reader is now a **working EPUB reader**, not a static prototype. The `:app`
 Current technical baseline:
 
 - Android application module: `:app`, namespace `com.itexpert120.yomu`, Jetpack Compose UI
-- Toolchain: AGP 9.3.1, Kotlin 2.4.0, Java 17 (+ core-library desugaring), Compose Material 3 Expressive alpha BOM 2026.07.01, KSP; compileSdk 37 / minSdk 24 / targetSdk 37
+- Toolchain: Java 17 with core-library desugaring, Kotlin, Compose Material 3 Expressive, and KSP. Use `gradle/libs.versions.toml` and `app/build.gradle.kts` for current versions and SDK levels.
 - DI: **Hilt** (`@HiltAndroidApp`, `@HiltViewModel`, modules in `app/di/`)
-- Persistence: **Room v14** (`books`, `chapter_reads`, `reader_settings`, `book_toc` + resource weights, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`, plus compatibility-only v13 sync tables; additive migrations 1→14) and **DataStore**
+- Persistence: **Room v16**, including independent lifetime reading totals and session-write receipts, plus compatibility-only v13 sync tables; additive migrations 1→16 and **DataStore**. See [Data Model](data-model.md).
 - Navigation: **Navigation Compose** with type-safe `@Serializable` routes, seamless horizontal
   screen transitions, and ordinary back callbacks for local transient states
 - Reader engine: **Readium 3.3.0** behind a Yomu `ReaderEngine` boundary (only `data/reader/readium` imports Readium); `EpubNavigatorFragment` hosted in Compose
@@ -20,12 +20,12 @@ Current technical baseline:
 - Features: mature library and book details; reader with contents, bookmarks, highlights, full-text search, dictionary/TTS, advanced typography, custom themes/fonts, and immersive chrome; settings, about, and reading statistics with history
 - DevGallery component harness (`app/devgallery`); edge-to-edge with theme-aware system bar icons; real app launcher icon
 
-**Not yet built:** OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and baseline-profile/startup profiling. Reader-open tracing, macrobenchmark scaffolding, and the on-demand open-path optimization are implemented; see the [Roadmap](roadmap.md) for status per phase.
+**Not yet built:** OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and baseline profiles. Reader-open tracing and fixture-backed launch benchmarks are implemented; reference-hardware performance targets remain unmeasured. See [Reader Benchmarks](reader-benchmarks.md) and the [Roadmap](roadmap.md).
 
 ## Planning Documents
 
 - [Library Research](library-research.md): EPUB, Android, UI, storage, persistence, image, search, and testing library decisions.
-- [Design Language](design-language.md): visual direction, tokens, custom primitives, motion, responsive behavior, and anti-Material rules.
+- [Design Language](design-language.md): Material 3 Expressive direction, compatibility tokens, reader-specific surfaces, motion, and adaptive behavior.
 - [App Architecture](app-architecture.md): layers, package/module boundaries, UI state flow, reader engine boundary, and feature ownership.
 - [Android Build Patterns](android-build-patterns.md): Gradle/module conventions, dependency governance, Compose conventions, DI, testing, and performance setup.
 - [Reader Feature Spec](reader-feature-spec.md): reader UI, reading modes, settings panels, TOC, highlights, bookmarks, progress, themes, and quick actions.
@@ -39,7 +39,7 @@ The app should feel like a polished custom-native reading product:
 - Clean and minimalist.
 - Strongly reader-first.
 - Tablet optimized from the start.
-- Custom visual system, not Material-shaped UI.
+- Native Material 3 Expressive UI with reader-specific comfort surfaces.
 - Smooth, restrained animations.
 - Fast library browsing inspired by media apps.
 - Deep typography and theme controls for serious readers.
@@ -49,7 +49,7 @@ The app should feel like a polished custom-native reading product:
 - Do not build a custom EPUB renderer from scratch — Readium is validated and in use.
 - Do not implement every advanced setting before the reading surface is stable.
 - Do not over-modularize the Gradle project; the single `:app` module is intentional for now.
-- Do not let Material components define the visible product identity.
+- Preserve EPUB comfort while using native Material interactions for app chrome.
 
 ## Next Engineering Goal
 

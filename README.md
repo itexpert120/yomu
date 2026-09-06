@@ -1,6 +1,6 @@
 # Open Reader
 
-A native Android **EPUB reader** built with Kotlin and Jetpack Compose, deliberately designed **not** to look like a default Material app — polished, reader-first, and tablet-minded, with a custom design system.
+A native Android **EPUB reader** built with Kotlin and Jetpack Compose — polished, reader-first, and tablet-minded, using Material 3 Expressive through an app-owned design system.
 
 ## Status
 
@@ -14,11 +14,11 @@ Open Reader is a working reader, not a prototype. It has a real persisted librar
 - **Statistics** — streamlined overview and entry metrics with retained recent-reading history.
 - **Settings / About**, a custom design system, and a component **DevGallery**.
 
-**Not yet** — OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, and performance profiling. See [`docs/roadmap.md`](docs/roadmap.md).
+**Not yet** — OPDS catalogs, non-EPUB formats, cross-device sync, Room FTS metadata search, baseline profiles, and reference-hardware performance acceptance. Fixture-backed reader benchmarks are implemented; see [`docs/reader-benchmarks.md`](docs/reader-benchmarks.md) and [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Tech
 
-AGP 9.2.1 · Kotlin 2.4.0 · Java 17 (core-library desugaring) · Compose BOM 2026.06.00 · `compileSdk 37 / minSdk 24 / targetSdk 36`. Single `:app` module. **Hilt** DI · **Room** · **DataStore** · **Navigation Compose** (type-safe routes) · **Coil 3** · **Readium 3.3.0**. All versions live in `gradle/libs.versions.toml`.
+Java 17 with core-library desugaring; Kotlin, Compose Material 3 Expressive, Hilt, Room, DataStore, Navigation Compose, Coil, and Readium. The application lives in `:app`, with a separate `:benchmark` test module. Pinned dependency versions live in `gradle/libs.versions.toml`; SDK levels and variants live in `app/build.gradle.kts`.
 
 ## Build
 
@@ -34,4 +34,4 @@ Use the Gradle wrapper (`./gradlew` on Bash, `.\gradlew.bat` on PowerShell):
 
 ## Structure & docs
 
-The `:app` module is layered `core/` → `data/`/`domain/` → `feature/`, with the EPUB engine confined to `data/reader/readium`. See [`docs/`](docs/README.md) for the product, design language, architecture, data model, reader spec, and roadmap — each carries an "Implementation status (current)" note. Contributor guidance lives in [`CLAUDE.md`](CLAUDE.md).
+The `:app` module is layered `core/` → `data/`/`domain/` → `feature/`, with the EPUB engine confined to `data/reader/readium`. See [`docs/`](docs/README.md) for product, design, architecture, and roadmap guidance. Contributor guidance lives in [`AGENTS.md`](AGENTS.md).

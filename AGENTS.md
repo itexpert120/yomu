@@ -29,7 +29,7 @@ Use the Gradle wrapper. On this Windows/PowerShell environment use `./gradlew` (
 
 There is no separate "run tests" vs "lint" toolchain beyond Gradle. All external dependency versions live in `gradle/libs.versions.toml` (version catalog) — add dependencies there, referenced as `libs.*`, never inline in `build.gradle.kts`.
 
-Toolchain: AGP 9.3.1, Kotlin 2.4.0, Compose Material 3 Expressive alpha BOM 2026.07.01, **Java 17** (+ core-library desugaring), KSP. `compileSdk 37 / minSdk 24 / targetSdk 37`. DI is Hilt (with `hilt { enableAggregatingTask = false }` — a workaround for Kotlin 2.4.0 metadata vs Hilt's javac aggregator); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment.
+Toolchain versions are authoritative in `gradle/libs.versions.toml`; SDK levels and variants are in `app/build.gradle.kts`. Use **Java 17** with core-library desugaring. DI is Hilt (`enableAggregatingTask = false` works around the javac aggregator's Kotlin metadata limit); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment. For fixture-backed launch checks and the distinction between emulator evidence and performance acceptance, read `docs/reader-benchmarks.md`.
 
 ## Architecture
 
@@ -47,9 +47,10 @@ com.itexpert120.yomu
 │   │                            #   picker, responsive YomuWidthClass)
 │   ├── model/                   # Book, ReaderSettings, LibraryPreferences, AccentColor, ThemePreference,
 │   │                            #   CustomReaderTheme, ReadingStats, …
-│   ├── database/                # Room: YomuDatabase (v14) + BookEntity, ChapterReadEntity,
+│   ├── database/                # Room: YomuDatabase (v16) + BookEntity, ChapterReadEntity,
 │   │                            #   ChapterProgressEntity, ReaderSettingsEntity, BookTocEntity, ReadingDayEntity,
-│   │                            #   ReadingSessionEntity, HighlightEntity, BookmarkEntity,
+│   │                            #   ReadingSessionEntity, ReadingTotalEntity, ReadingWriteReceipt,
+│   │                            #   HighlightEntity, BookmarkEntity,
 │   │                            #   compatibility-only legacy sync entities,
 │   │                            #   BookDao, HighlightDao, BookmarkDao, migrations
 │   ├── datastore/ · storage/    # DataStore prefs ; FileStorage (app-private epubs/covers)
@@ -62,7 +63,8 @@ com.itexpert120.yomu
 │   ├── settings/                # AppSettingsRepository, LibraryPrefsRepository, ReaderSettingsRepository
 │   ├── highlights/              # HighlightRepository + RoomHighlightRepository
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
-│   ├── stats/                   # StatsRepository (reading-time sessions + aggregate metrics)
+│   ├── fonts/                   # FontRepository + recoverable FontInstallationStore
+│   ├── stats/                   # StatsRepository, ReadingCalendar, application-owned ReadingWriteQueue
 │   └── dictionary/              # DictionaryRepository (Free Dictionary API)
 ├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; also
 │                                #   extracts metadata, cover, and TOC in one Readium pass)
@@ -85,7 +87,11 @@ Type-safe nav destinations: `Home` (the top-level shell), `Library`, `BookDetail
 ### Reader engine boundary
 The EPUB engine is Readium, but Readium types must **not** leak. All reader access goes through Yomu-owned interfaces in `core/reader` (`ReaderEngine`, `ReaderSession`, `ReaderNavigator`, `ReaderOpenRequest`, `ReaderOpenResult`, `ReaderPublicationCache`, `ReaderRenderState`, `ReaderLocator`, `ReaderTocItem`, `ReaderHighlight`, `ReaderBookmark`, `ReaderSearchResult`); only `data/reader/readium/*` imports Readium directly — `ReadiumReaderEngine` (reading), `ReadiumMetadataExtractor` (import-time metadata/cover), and `ReadiumFragmentRestore` (the config-change/process-death navigator-restoration guard; see commit 07ac465). `ReaderSession` is implementation-only outside `feature/reader/ReadingExperience`; Compose receives its restricted `ReaderNavigator` facet through state. `ReadingExperience` owns book-scoped opening/retry/readiness, navigation, settings, locator/progress, search, lookup/TTS, annotations, and foreground reading-time attribution through one state stream plus `ReadingExperienceAction`; `ReaderViewModel` adapts that state and owns only Compose chrome plus app-global font/theme lists. `ReaderSettings` → `EpubPreferences` mapping (scroll/paged, fontSize, theme, bg/text colour, fontFamily, lineHeight/margins/paragraph-spacing, `publisherStyles = false`) lives in the engine. Reader settings resolve as a **global default (DataStore) ⊕ per-book override (Room `reader_settings`)**, written per-book-on-edit — the global default is edited on the `ReaderDefaults` screen. Six reading fonts are bundled in `app/src/main/assets/fonts/`; only the active bundled upright face is preloaded. See `docs/app-architecture.md` and `docs/reader-feature-spec.md`.
 
-Reader chrome: a sleek always-or-immersive top bar (chapter title in the system UI font + bookmark toggle), an optional footer (battery w/ charging, clock, chapter-weighted progress %, optional chapter remaining as visual pages in paged mode or percentage in scroll mode), a slim bottom controls bar, and a single tabbed **Browse sheet** (`ReaderBrowseSheet`, `BrowseTab` = Contents/Bookmarks/Highlights/Search) plus a **More** overflow sheet — these replaced the four standalone sheets (their `*Row` helpers are reused). Settings new since bookmarks/search: `keepScreenOn`, `immersiveChrome`, `footerShow*` (incl. `footerShowPagesLeft`), surfaced via the shared `ReaderChromeToggles` (rendered in BOTH the in-reader Controls sheet and global Reading Defaults so they can't drift). Immersive mode is true edge-to-edge: while the reader is open the window uses `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` and each EPUB page gets `viewport-fit=cover` injected (Android WebViews letterbox below the cutout otherwise; `env(safe-area-inset-*)` is 0 there). Scroll mode has a rubberband chapter-overscroll gesture (SVG arrow injected via `createElementNS`). All appearing/disappearing surfaces across the app use the shared **`core/designsystem/YomuMotion`** vocabulary — `yomuChromeEnter/Exit` (fade+scale+slide), `yomuPopupEnter/Exit`, `yomuContentSwap` (directional tab swap), `yomuChromeBlur` (API-31+ blur driven by the enter/exit transition).
+Reader chrome has a chapter-title/bookmark top bar, optional battery/clock/progress footer, and bottom controls. **Browse** has exactly Contents, Bookmarks, and Highlights tabs; **Search** is a separate sheet, alongside the More overflow sheet. `ReaderChromeToggles` supplies the shared keep-screen-on, immersive, and footer options to both in-reader controls and global defaults.
+
+Immersive reading uses `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` plus injected `viewport-fit=cover`; Android WebViews otherwise letterbox below the cutout. Scroll mode retains the reader-specific rubberband chapter gesture. Use `core/designsystem/YomuMotion` for chrome, popup, content-swap, and API-31+ blur transitions.
+
+For changes to persistence or lifecycle ownership, read the reliability section of `docs/app-architecture.md`: final reading writes survive reader closure in an application-scoped retry queue, but pending writes are not process-death durable. Keep the existing reading-experience/reading-session meanings from `CONTEXT.md`.
 
 ## Conventions
 
@@ -99,12 +105,12 @@ Reader chrome: a sleek always-or-immersive top bar (chapter title in the system 
 
 ## Related projects (local siblings — reference material, not dependencies)
 
-Two other repos live next to Yomu on this machine. Neither is built or imported by Yomu, but both are high-value references — especially for Yomu's genuinely-missing features (bookmarks, in-book search). Mine them for **feature logic**, but re-implement behind Yomu's `core/reader` boundary and custom design system rather than copying verbatim.
+Two other repos live next to Yomu on this machine. Neither is built or imported by Yomu. Use their bookmark, search, and other feature implementations as references while preserving Yomu's `core/reader` boundary and design system; bookmarks and in-book search are already built here.
 
 ### `C:\Users\itexp\kotlin-toolkit\test-app` — the Readium reference app (the engine Yomu sits on)
 The official **Readium Kotlin Toolkit** monorepo and its demo app (`org.readium.r2.testapp`, versioned in lockstep at **3.3.0** — the exact Readium version Yomu targets). It is the canonical, un-abstracted reference for the library under Yomu's reader. Style is the *opposite* of Yomu: classic **Views/Fragments/RecyclerView + Material**, hand-rolled DI (no Hilt), and Readium types used directly everywhere. Exercises the whole toolkit (EPUB / PDF via PDFium / audiobook via ExoPlayer+media3 / image-DiViNa / OPDS / LCP DRM / TTS / search / bookmarks / highlights / TOC / preferences).
 
-Best copy-from source for **Yomu's two missing features**:
+References for maintaining Yomu's bookmark and search features:
 - **Bookmarks** — Room entity stores the Readium `Locator` as JSON (`locations` + `text`); spine index via `publication.readingOrder.indexOfFirstWithHref(href)`; idempotency via a unique index + `OnConflictStrategy.IGNORE`; `BookmarksFragment` lists then returns a `Locator` → `navigator.go(locator)`.
 - **In-book search** — `publication.search(query)` → `SearchIterator`, paged lazily with an AndroidX Paging 3 `SearchPagingSource`; hits rendered live in-text as `Decoration.Style.Underline` via `DecorableNavigator.applyDecorations(list, group)`.
 - **Highlights** (Yomu's are built, but this is the textbook version) — text-selection `ActionMode` → `SelectableNavigator.currentSelection()` → Room `Highlight` → `Decoration` (group `"highlights"`); `Decoration.extras` round-trips the DB id so `onDecorationActivated` can look the row back up for tap-to-edit.
