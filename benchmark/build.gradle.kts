@@ -13,6 +13,7 @@ android {
     }
 
     targetProjectPath = ":app"
+    experimentalProperties["android.experimental.self-instrumenting"] = true
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -20,13 +21,16 @@ android {
     }
 
     buildTypes {
-        create("release") {
+        create("benchmark") {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
         }
     }
 }
 
 dependencies {
+    implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.benchmark.macro)
     implementation(libs.androidx.test.runner)
     implementation(libs.androidx.test.rules)

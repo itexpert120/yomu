@@ -51,6 +51,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.ViewCompat
@@ -131,6 +134,7 @@ fun ReaderScreen(
     }
     val view = LocalView.current
     val reading = state.experience
+    val readyMarker = (reading.renderState as? ReaderRenderState.Ready)?.takeUnless { reading.loading }
     val navigator: ReaderNavigator? = reading.navigator
     var brightnessPreview by remember { mutableStateOf<Float?>(null) }
     var dimPreview by remember { mutableStateOf<Float?>(null) }
@@ -357,6 +361,8 @@ fun ReaderScreen(
 
     Box(
         modifier = Modifier
+            .semantics { testTagsAsResourceId = true }
+            .then(if (readyMarker != null) Modifier.testTag("reader-ready:${readyMarker.href}") else Modifier)
             .fillMaxSize()
             .background(background),
     ) {

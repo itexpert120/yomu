@@ -24,6 +24,7 @@ object GeneratedEpubFixtures {
             val mime = "application/epub+zip".toByteArray()
             zip.putNextEntry(
                 ZipEntry("mimetype").apply {
+                    time = 315_532_800_000L
                     method = ZipEntry.STORED
                     size = mime.size.toLong()
                     crc = CRC32().apply { update(mime) }.value
@@ -47,7 +48,7 @@ object GeneratedEpubFixtures {
     }
 
     private fun add(zip: ZipOutputStream, path: String, content: String) {
-        zip.putNextEntry(ZipEntry(path))
+        zip.putNextEntry(ZipEntry(path).apply { time = 315_532_800_000L })
         zip.write(content.toByteArray())
         zip.closeEntry()
     }

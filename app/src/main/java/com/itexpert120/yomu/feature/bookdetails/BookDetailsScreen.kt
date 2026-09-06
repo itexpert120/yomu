@@ -98,7 +98,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -973,7 +976,7 @@ private fun FloatingReadButton(
     YomuExtendedFloatingActionButton(
         expanded = !collapsed,
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.semantics { testTagsAsResourceId = true }.testTag("book-details-read"),
         icon = Icons.Rounded.PlayArrow,
         label = label,
         contentDescription = label,
