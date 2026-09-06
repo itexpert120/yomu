@@ -35,7 +35,9 @@ Statistics emphasizes lifetime total reading time in a tertiary container, using
 
 Reading chrome uses Material expressive tonal actions for Browse, Search, and Display. Their colors derive from the reading palette, while Theme and Reader chrome preferences reuse grouped settings rows. The EPUB page, saved themes, and reading ownership remain unchanged.
 
-The bottom controls have no border and join the visible footer as one reading-colored surface. With the footer disabled, the controls float with 12dp side/bottom spacing, additional visible system-bar/cutout clearance, and rounded bottom corners.
+The bottom controls have no border and join the visible footer as one reading-colored surface. With the footer disabled, the controls float with 12dp side/bottom spacing, additional visible system-bar/cutout clearance, and rounded bottom corners. An opaque reading-colored backing covers the spacing so EPUB text cannot show below the controls.
+
+The reader title bar uses native-height Material layout, stronger chapter typography, and expressive tonal back/bookmark controls. The bookmark's checked state uses the reading palette's inverse pair. Its measured height includes the solid status/cutout area so the existing non-immersive page inset accounts for the full bar.
 
 Home uses Material ShortNavigationBar and WideNavigationRail with primary-container selection indicators, stronger selected labels, and native navigation-item motion. Screen navigation retains the original short shared-axis X transition and fade-through timing in both directions, including the return from About. Tab/content swaps retain their original restrained spring. Material components use the expressive motion scheme, with reduced-motion handling preserved.
 

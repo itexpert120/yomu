@@ -36,8 +36,11 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -84,7 +87,8 @@ internal fun ReaderTopBar(
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    val actionColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f)
+    Column(modifier = modifier.fillMaxWidth().onSizeChanged { onContentHeight(it.height) }) {
         // The navigator draws edge-to-edge. Keep the cutout/status backdrop solid, then use the
         // platform top app bar for native touch targets, semantics, and expressive motion defaults.
         Box(
@@ -98,28 +102,43 @@ internal fun ReaderTopBar(
         TopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(26.dp)
-                .onSizeChanged { onContentHeight(it.height) },
+                .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)),
             title = {
                 Text(
                     text = chapter.ifBlank { "Reading" },
                     color = content,
-                    style = YomuTheme.type.body,
-                    maxLines = 1,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                FilledTonalIconButton(
+                    onClick = onBack,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = actionColor,
+                        contentColor = content,
+                    ),
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                         contentDescription = "Back",
-                        tint = content,
                     )
                 }
             },
             actions = {
-                IconButton(onClick = onToggleBookmark) {
+                FilledTonalIconToggleButton(
+                    checked = isBookmarked,
+                    onCheckedChange = { onToggleBookmark() },
+                    shapes = IconButtonDefaults.toggleableShapes(),
+                    colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+                        containerColor = actionColor,
+                        contentColor = content,
+                        checkedContainerColor = content,
+                        checkedContentColor = background,
+                    ),
+                ) {
                     Icon(
                         imageVector = if (isBookmarked) {
                             Icons.Rounded.Bookmark
@@ -131,7 +150,6 @@ internal fun ReaderTopBar(
                         } else {
                             "Add bookmark"
                         },
-                        tint = content,
                     )
                 }
             },
@@ -243,17 +261,24 @@ internal fun BoxScope.ReaderChapterControlsBar(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .padding(horizontal = if (floating) 12.dp else 0.dp)
-            .padding(bottom = if (floating) floatingBottomInset + 12.dp else bottomPadding),
+            .padding(bottom = if (floating) 0.dp else bottomPadding),
     ) {
-        ReaderActionBar(
-            background = background,
-            content = content,
-            floating = floating,
-            onBrowse = onBrowse,
-            onSearch = onSearch,
-            onDisplay = onDisplay,
-        )
+        // Paint the spacing too: immersive EPUB content must not peek below the floating controls.
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .background(background)
+                .padding(horizontal = if (floating) 12.dp else 0.dp)
+                .padding(bottom = if (floating) floatingBottomInset + 12.dp else 0.dp),
+        ) {
+            ReaderActionBar(
+                background = background,
+                content = content,
+                floating = floating,
+                onBrowse = onBrowse,
+                onSearch = onSearch,
+                onDisplay = onDisplay,
+            )
+        }
     }
 }
 
@@ -271,7 +296,7 @@ private fun ReaderActionBar(
 ) {
     androidx.compose.material3.Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = background,
+        color = if (floating) androidx.compose.ui.graphics.lerp(background, content, 0.04f) else background,
         contentColor = content,
         shape = RoundedCornerShape(
             topStart = 28.dp,
