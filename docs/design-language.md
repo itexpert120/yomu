@@ -33,7 +33,7 @@ Statistics emphasizes lifetime total reading time in a tertiary container, using
 
 Reading chrome uses Material expressive tonal actions for Browse, Search, and Display. Their colors derive from the reading palette, while Theme and Reader chrome preferences reuse grouped settings rows. The EPUB page, saved themes, and reading ownership remain unchanged.
 
-Home uses Material ShortNavigationBar and WideNavigationRail with primary-container selection indicators, stronger selected labels, and native navigation-item motion. Back transitions reveal the returning screen immediately and travel a quarter of the available width, making the return from About perceptible rather than masking most movement behind a fade. This return adjustment has not been verified on-device; testing was stopped at the user's request. Shared content changes and Material components use the same expressive motion scheme, with reduced-motion handling preserved.
+Home uses Material ShortNavigationBar and WideNavigationRail with primary-container selection indicators, stronger selected labels, and native navigation-item motion. Screen navigation retains the original short shared-axis X transition and fade-through timing in both directions, including the return from About. Tab/content swaps retain their original restrained spring. Material components use the expressive motion scheme, with reduced-motion handling preserved.
 
 ## Visual Direction
 

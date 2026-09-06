@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
  * transitions) blends between states the same way instead of each animating ad hoc.
  *
  * Grammar: springs for spatial motion (scale/slide) so it feels physical and tweens for fades.
- * App interactions use Material's expressive spatial physics; EPUB page motion stays engine-owned.
+ * Spatial springs are near-critical (no visible bounce) to match the reader's calm tone.
  */
 object YomuMotion {
     val scheme = MotionScheme.expressive()
@@ -151,20 +151,18 @@ fun yomuFadeThroughExit(): ExitTransition = if (!yomuAnimationsEnabled()) {
  * A Material shared-axis X handoff tuned for Yomu. Both surfaces travel the same short, fixed
  * distance, while a 35% fade-through removes the outgoing surface before revealing the incoming
  * one. By the time the incoming surface is visible, the emphasized spatial curve has brought its
- * boundary to the viewport edge. Returns use immediate fades and a wider travel distance so the
- * restored screen is visible during movement, including when returning from About.
+ * boundary to the viewport edge, avoiding a hard vertical seam or translucent content overlap.
  */
 fun yomuScreenEnter(
     travelDistancePx: Int,
     forward: Boolean = true,
-    returning: Boolean = false,
 ): EnterTransition = if (!yomuAnimationsEnabled()) {
     EnterTransition.None
 } else {
     fadeIn(
         animationSpec = tween(
-            durationMillis = if (returning) YomuMotion.ScreenTransitionDurationMillis else YomuMotion.ScreenTransitionFadeInMillis,
-            delayMillis = if (returning) 0 else YomuMotion.ScreenTransitionFadeOutMillis,
+            durationMillis = YomuMotion.ScreenTransitionFadeInMillis,
+            delayMillis = YomuMotion.ScreenTransitionFadeOutMillis,
             easing = YomuMotion.EmphasizedDecel,
         ),
     ) + slideInHorizontally(
@@ -173,7 +171,7 @@ fun yomuScreenEnter(
             easing = YomuMotion.Emphasized,
         ),
         initialOffsetX = { width ->
-            val travel = (if (returning) maxOf(travelDistancePx, width / 4) else travelDistancePx).coerceAtMost(width).coerceAtLeast(1)
+            val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
             if (forward) travel else -travel
         },
     )
@@ -182,13 +180,12 @@ fun yomuScreenEnter(
 fun yomuScreenExit(
     travelDistancePx: Int,
     forward: Boolean = true,
-    returning: Boolean = false,
 ): ExitTransition = if (!yomuAnimationsEnabled()) {
     ExitTransition.None
 } else {
     fadeOut(
         animationSpec = tween(
-            durationMillis = if (returning) YomuMotion.ScreenTransitionDurationMillis else YomuMotion.ScreenTransitionFadeOutMillis,
+            durationMillis = YomuMotion.ScreenTransitionFadeOutMillis,
             easing = YomuMotion.EmphasizedAccel,
         ),
     ) +
@@ -198,7 +195,7 @@ fun yomuScreenExit(
                 easing = YomuMotion.Emphasized,
             ),
             targetOffsetX = { width ->
-                val travel = (if (returning) maxOf(travelDistancePx, width / 4) else travelDistancePx).coerceAtMost(width).coerceAtLeast(1)
+                val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
                 if (forward) -travel else travel
             },
         )
@@ -219,7 +216,7 @@ fun <S> AnimatedContentTransitionScope<S>.yomuContentSwap(forward: Boolean = tru
     } else {
         AnimatedContentTransitionScope.SlideDirection.Right
     }
-    val slide = YomuMotion.scheme.defaultSpatialSpec<IntOffset>()
+    val slide = spring<IntOffset>(dampingRatio = 0.9f, stiffness = 320f)
     return (
         fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
             slideIntoContainer(direction, animationSpec = slide)
