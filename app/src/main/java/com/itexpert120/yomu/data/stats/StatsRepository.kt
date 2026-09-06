@@ -29,10 +29,13 @@ import javax.inject.Singleton
  * trend + streaks + heatmap derive from the per-day rollup.
  */
 @Singleton
-class StatsRepository @Inject constructor(
+class StatsRepository internal constructor(
     private val dao: BookDao,
     private val database: YomuDatabase,
+    dates: Flow<LocalDate>,
 ) {
+    @Inject constructor(dao: BookDao, database: YomuDatabase, calendar: ReadingCalendar) : this(dao, database, calendar.dates)
+
     /** Total time spent reading a single book (seconds), as a live flow. */
     fun bookReadingSeconds(bookId: BookId): Flow<Long> = dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
 
@@ -70,24 +73,23 @@ class StatsRepository @Inject constructor(
 
     // Day-derived figures recompute only when reading-day data actually changes (not on every book
     // or chapter edit), avoiding repeated date parsing + streak scans during active reading.
-    private val dayStats: Flow<DayStats> = dao.observeReadingDays()
-        .map { days ->
-            val active = days
-                .filter { it.seconds > 0L }
-                .mapNotNull { day ->
-                    runCatching { LocalDate.parse(day.date) }.getOrNull()?.let { it to day.seconds }
-                }
-            val activeDates = active.map { it.first }.toSortedSet()
-            val total = days.sumOf { it.seconds }
-            DayStats(
-                totalSeconds = total,
-                currentStreak = currentStreak(activeDates),
-                longestStreak = longestStreak(activeDates),
-                daysRead = activeDates.size,
-                secondsLast7Days = total(active, 7),
-                secondsLast30Days = total(active, 30),
-            )
-        }
+    private val dayStats: Flow<DayStats> = combine(dao.observeReadingDays(), dates) { days, today ->
+        val active = days
+            .filter { it.seconds > 0L }
+            .mapNotNull { day ->
+                runCatching { LocalDate.parse(day.date) }.getOrNull()?.let { it to day.seconds }
+            }
+        val activeDates = active.map { it.first }.toSortedSet()
+        val total = days.sumOf { it.seconds }
+        DayStats(
+            totalSeconds = total,
+            currentStreak = currentStreak(activeDates, today),
+            longestStreak = longestStreak(activeDates),
+            daysRead = activeDates.size,
+            secondsLast7Days = total(active, 7, today),
+            secondsLast30Days = total(active, 30, today),
+        )
+    }
         .distinctUntilChanged()
 
     // Session-derived aggregates: count / average / longest. Independent of the day rollup so they
@@ -148,15 +150,14 @@ class StatsRepository @Inject constructor(
         }
     }
 
-    private fun total(active: List<Pair<LocalDate, Long>>, windowDays: Int): Long {
-        val cutoff = LocalDate.now().minusDays((windowDays - 1).toLong())
-        return active.filter { !it.first.isBefore(cutoff) }.sumOf { it.second }
+    private fun total(active: List<Pair<LocalDate, Long>>, windowDays: Int, today: LocalDate): Long {
+        val cutoff = today.minusDays((windowDays - 1).toLong())
+        return active.filter { !it.first.isBefore(cutoff) && !it.first.isAfter(today) }.sumOf { it.second }
     }
 
     /** Consecutive days with reading ending today (a day's grace if today hasn't been read yet). */
-    private fun currentStreak(dates: Set<LocalDate>): Int {
+    private fun currentStreak(dates: Set<LocalDate>, today: LocalDate): Int {
         if (dates.isEmpty()) return 0
-        val today = LocalDate.now()
         var day = if (today in dates) today else today.minusDays(1)
         if (day !in dates) return 0
         var streak = 0

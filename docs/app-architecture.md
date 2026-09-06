@@ -520,6 +520,10 @@ Fakes:
 
 ## Architecture Risks
 
+Date-relative statistics combine persisted days with a live local-date input. Midnight and
+system date/timezone changes refresh streaks and rolling windows without database writes;
+sessions remain attributed entirely to their start day.
+
 Reading duration uses a monotonic elapsed clock; wall time is captured only for the session's
 calendar attribution. Pause/resume and close preserve foreground/readiness exclusions even
 if the system clock is adjusted during reading.
