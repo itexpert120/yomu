@@ -432,6 +432,9 @@ AppearancePanel event
 
 ## Error Handling
 
+Rendering readiness is published only by the ordered styling/content/pre-draw gate. Transition timeout
+is a retryable rendering failure; it never bypasses styling to emit Ready. Recovery uses the same gate.
+
 Book deletion stages reversible filenames before committing removal. Database startup reconciles
 staged EPUBs/covers against committed book paths, restoring surviving books and finishing committed
 deletions. Failed staging clears temporary TOC tombstones; failed restores retain their staged copies.

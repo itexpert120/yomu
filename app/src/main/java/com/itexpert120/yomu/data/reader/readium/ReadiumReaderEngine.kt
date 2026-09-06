@@ -34,6 +34,7 @@ import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
+import com.itexpert120.yomu.core.reader.ReaderRenderGate
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
@@ -229,8 +230,9 @@ private class ReadiumReaderSession(
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
     // The page remains covered until its target resource and all layout-affecting styling are ready.
-    private val _renderState = MutableStateFlow<ReaderRenderState>(ReaderRenderState.Opening)
-    override val renderState: StateFlow<ReaderRenderState> = _renderState.asStateFlow()
+    private val renderGate = ReaderRenderGate()
+    private val _renderState = renderGate.state
+    override val renderState: StateFlow<ReaderRenderState> = renderGate.state
     private var revealWatchdog: Job? = null
 
     // Cached @font-face CSS (base64 data URLs) for the active custom font, keyed by its family+paths so
@@ -269,7 +271,7 @@ private class ReadiumReaderSession(
     private var scrollProgressJob: Job? = null
     private var restorationJob: Job? = null
     private var styleJob: Job? = null
-    private var renderGeneration = 0L
+    private val renderGeneration: Long get() = renderGate.generation
     private var restorationGeneration = 0L
     private var hostedFragmentManager: FragmentManager? = null
     private var hostedFragmentTag: String? = null
@@ -387,21 +389,27 @@ private class ReadiumReaderSession(
         styleJob?.cancel()
         val generation = renderGeneration
         val expectedHref = lastLocator?.href?.toString()
+        val expectedNavigator = navigator ?: return
         styleJob = scope.launch {
             ReaderOpenTrace.mark("reader.critical-bootstrap-start")
             applyScrollbars(currentSettings)
             // All layout-affecting mutations go through one idempotent bootstrap. This prevents
             // locator, settings, and page-loaded callbacks from racing one another on first paint.
-            if (!evalWithRetry(criticalBootstrapJs())) return@launch
-            clearImmersiveScrollTopPadding()
-            val nav = navigator ?: return@launch
-            if (generation != renderGeneration || expectedHref != lastLocator?.href?.toString()) return@launch
-            if (!awaitRenderableContent(nav)) return@launch
-            if (!awaitNextPreDraw(nav)) return@launch
-            if (generation != renderGeneration || expectedHref != lastLocator?.href?.toString()) return@launch
+            val ready = renderGate.reveal(
+                generation,
+                expectedHref,
+                isCurrent = { navigator === expectedNavigator && expectedHref == lastLocator?.href?.toString() },
+                style = {
+                    val styled = evalWithRetry(criticalBootstrapJs())
+                    if (styled) clearImmersiveScrollTopPadding()
+                    styled
+                },
+                content = { awaitRenderableContent(expectedNavigator) },
+                preDraw = { awaitNextPreDraw(expectedNavigator) },
+            )
+            if (!ready) return@launch
             revealWatchdog?.cancel()
             ReaderOpenTrace.mark("reader.pre-draw")
-            _renderState.value = ReaderRenderState.Ready(lastLocator?.href?.toString())
             ReaderOpenTrace.mark("reader.final-reveal")
             // Gesture work is deliberately after the first stable frame.
             injectOverscroll()
@@ -1030,17 +1038,13 @@ private class ReadiumReaderSession(
 
     // Cover the page during a chapter change so it is revealed only once the new resource is re-styled.
     private fun beginChapterTransition(forward: Boolean = true) {
-        renderGeneration++
+        renderGate.transition(forward)
         styleJob?.cancel()
-        _renderState.value = ReaderRenderState.Transitioning(forward)
         revealWatchdog?.cancel()
         val generation = renderGeneration
         revealWatchdog = scope.launch {
             delay(STYLE_REVEAL_TIMEOUT_MS)
-            val nav = navigator
-            if (generation == renderGeneration && nav != null && awaitRenderableContent(nav)) {
-                _renderState.value = ReaderRenderState.Ready(lastLocator?.href?.toString())
-            }
+            renderGate.fail(generation)
         }
     }
 
@@ -1379,9 +1383,8 @@ private class ReadiumReaderSession(
     }
 
     private fun clearChapterTransitionCover() {
-        revealWatchdog?.cancel()
-        revealWatchdog = null
-        _renderState.value = ReaderRenderState.Ready(lastLocator?.href?.toString())
+        beginChapterTransition()
+        scheduleCriticalStyling()
     }
 
     override fun close() {

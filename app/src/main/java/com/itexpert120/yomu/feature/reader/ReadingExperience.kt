@@ -374,6 +374,11 @@ internal class ReadingExperience(
 
                 launch {
                     opened.renderState.collect { renderState ->
+                        if (renderState is ReaderRenderState.Failed) {
+                            endTrace()
+                            failActiveSession(opened)
+                            return@collect
+                        }
                         if (renderState is ReaderRenderState.Ready) {
                             ReaderOpenTrace.mark("reader.ready")
                             endTrace()

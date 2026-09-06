@@ -39,6 +39,7 @@ data class ReaderOpenResult(
 /** Atomic presentation state for the navigator. */
 sealed interface ReaderRenderState {
     data object Opening : ReaderRenderState
+    data object Failed : ReaderRenderState
 
     data class Transitioning(val forward: Boolean) : ReaderRenderState
 
