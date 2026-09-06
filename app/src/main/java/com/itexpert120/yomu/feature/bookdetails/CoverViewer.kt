@@ -189,34 +189,42 @@ private fun CircleAction(icon: ImageVector, description: String, onClick: () -> 
  * Copies [source] into the device's shared Pictures collection via MediaStore. Works without a
  * runtime permission on API 29+; older versions may fail (caught) if storage permission is absent.
  */
+private val galleryExports = CoverExport()
+
 internal suspend fun saveImageToGallery(
     context: Context,
     source: File,
     displayName: String,
 ): Boolean = withContext(Dispatchers.IO) {
-    runCatching {
-        val resolver = context.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Open Reader")
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
-        }
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        } else {
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        }
-        val uri = resolver.insert(collection, values) ?: return@runCatching false
-        resolver.openOutputStream(uri)?.use { out -> source.inputStream().use { it.copyTo(out) } }
-            ?: return@runCatching false
+    val resolver = context.contentResolver
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Images.Media.IS_PENDING, 0)
-            resolver.update(uri, values, null, null)
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Open Reader")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
         }
-        true
-    }.getOrDefault(false)
+    }
+    val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    } else {
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    }
+    galleryExports.export(
+        create = { resolver.insert(collection, values)?.toString() },
+        copy = { destination ->
+            checkNotNull(resolver.openOutputStream(android.net.Uri.parse(destination))).use { out ->
+                source.inputStream().use { it.copyTo(out) }
+            }
+        },
+        publish = { destination ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val published = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
+                resolver.update(android.net.Uri.parse(destination), published, null, null) > 0
+            } else {
+                true
+            }
+        },
+        delete = { destination -> resolver.delete(android.net.Uri.parse(destination), null, null) > 0 },
+    )
 }

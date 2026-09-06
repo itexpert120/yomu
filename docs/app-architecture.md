@@ -520,6 +520,10 @@ Fakes:
 
 ## Architecture Risks
 
+Cover export owns each MediaStore URI until copying and publication succeed. Failure or
+cancellation attempts deletion; failed deletions remain queued in-process for the next export.
+This cleanup queue does not promise recovery after process death.
+
 Date-relative statistics combine persisted days with a live local-date input. Midnight and
 system date/timezone changes refresh streaks and rolling windows without database writes;
 sessions remain attributed entirely to their start day.
