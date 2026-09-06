@@ -46,7 +46,7 @@ class FileStorage @Inject constructor(
     /** Deletes a stored font file by absolute path (best-effort; ignores files outside the fonts dir). */
     suspend fun deleteFont(path: String) = withContext(Dispatchers.IO) {
         val file = File(path)
-        if (file.parentFile == fontsDir) runCatching { file.delete() }
+        if (file.parentFile == fontsDir && file.exists()) check(file.delete()) { "Couldn't remove font" }
         Unit
     }
 

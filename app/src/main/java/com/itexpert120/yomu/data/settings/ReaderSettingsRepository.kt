@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.ReaderSettingsEntity
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import kotlinx.coroutines.flow.Flow
@@ -68,19 +69,21 @@ class ReaderSettingsRepository @Inject constructor(
     }
 
     /** Clears a removed custom font from both the global default and every per-book override. */
-    suspend fun clearCustomFontReferences(family: String) {
+    suspend fun clearCustomFontReferences(family: String) = replaceCustomFontReferences(family, null)
+
+    suspend fun replaceCustomFontReferences(family: String, replacement: CustomFontRef?) {
         dataStore.edit { prefs ->
             val raw = prefs[KeyGlobal] ?: return@edit
             val current = decodeOrNull(raw) ?: return@edit
             if (current.customFont?.family == family) {
-                prefs[KeyGlobal] = json.encodeToString(current.copy(customFont = null))
+                prefs[KeyGlobal] = json.encodeToString(current.copy(customFont = replacement))
             }
         }
         dao.getAllReaderSettings().forEach { row ->
             val current = decodeOrNull(row.json) ?: return@forEach
             if (current.customFont?.family == family) {
                 dao.upsertReaderSettings(
-                    ReaderSettingsEntity(row.bookId, json.encodeToString(current.copy(customFont = null))),
+                    ReaderSettingsEntity(row.bookId, json.encodeToString(current.copy(customFont = replacement))),
                 )
             }
         }

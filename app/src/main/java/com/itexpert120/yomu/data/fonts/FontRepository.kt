@@ -3,23 +3,25 @@ package com.itexpert120.yomu.data.fonts
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
+import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.CuratedFont
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.storage.FileStorage
+import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,9 +39,15 @@ class FontRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dataStore: DataStore<Preferences>,
     private val fileStorage: FileStorage,
+    settings: ReaderSettingsRepository,
+    @ApplicationScope scope: CoroutineScope,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
-    private val serializer = ListSerializer(CustomFontRef.serializer())
+    private val installation = FontInstallationStore(dataStore, settings::replaceCustomFontReferences, fileStorage::deleteFont)
+
+    init {
+        // A failed repair keeps its retirement journal and is retried by the next operation.
+        scope.launch { runCatching { installation.recover() } }
+    }
 
     @Volatile
     private var catalogCache: List<CuratedFont>? = null
@@ -70,9 +78,7 @@ class FontRepository @Inject constructor(
     }
 
     /** Custom fonts the user has installed, newest last. */
-    val installed: Flow<List<CustomFontRef>> = dataStore.data.map { prefs ->
-        prefs[KeyInstalled]?.let { decode(it) } ?: emptyList()
-    }
+    val installed: Flow<List<CustomFontRef>> = installation.installed
 
     /**
      * Downloads [family] from Google Fonts and registers it. Idempotent: re-installing replaces the
@@ -87,44 +93,27 @@ class FontRepository @Inject constructor(
             val regularUrl = faces[FontStyle.NORMAL]
                 ?: faces.values.firstOrNull()
                 ?: error("No usable font face for \"$family\"")
-            val slug = family.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+            val slug = UUID.randomUUID().toString()
             regularPath = fileStorage.saveFont("$slug-regular.woff2", httpGetBytes(regularUrl))
             italicPath = faces[FontStyle.ITALIC]?.let { url ->
                 runCatching { fileStorage.saveFont("$slug-italic.woff2", httpGetBytes(url)) }.getOrNull()
             }
             val ref = CustomFontRef(family = family, regularPath = requireNotNull(regularPath), italicPath = italicPath)
-            val replaced = putInstalled(ref)
-            if (replaced?.regularPath != ref.regularPath) replaced?.regularPath?.let { fileStorage.deleteFont(it) }
-            if (replaced?.italicPath != ref.italicPath) replaced?.italicPath?.let { fileStorage.deleteFont(it) }
+            installation.publish(ref)
             ref
-        }.onFailure {
-            regularPath?.let { path -> fileStorage.deleteFont(path) }
-            italicPath?.let { path -> fileStorage.deleteFont(path) }
+        }.onFailure { failure ->
+            withContext(NonCancellable) {
+                listOfNotNull(regularPath, italicPath).forEach { path ->
+                    // If publication committed but reference repair failed, these files are live.
+                    if (!installation.owns(path)) fileStorage.deleteFont(path)
+                }
+            }
+            if (failure is CancellationException) throw failure
         }
     }
 
     /** Removes an installed custom font and deletes its files. */
-    suspend fun remove(family: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[KeyInstalled]?.let { decode(it) } ?: emptyList()
-            current.firstOrNull { it.family == family }?.let {
-                fileStorage.deleteFont(it.regularPath)
-                it.italicPath?.let { p -> fileStorage.deleteFont(p) }
-            }
-            prefs[KeyInstalled] = json.encodeToString(serializer, current.filterNot { it.family == family })
-        }
-    }
-
-    private suspend fun putInstalled(ref: CustomFontRef): CustomFontRef? {
-        var replaced: CustomFontRef? = null
-        dataStore.edit { prefs ->
-            val current = prefs[KeyInstalled]?.let { decode(it) } ?: emptyList()
-            replaced = current.firstOrNull { it.family == ref.family }
-            prefs[KeyInstalled] =
-                json.encodeToString(serializer, current.filterNot { it.family == ref.family } + ref)
-        }
-        return replaced
-    }
+    suspend fun remove(family: String) = installation.remove(family)
 
     private fun fetchCss(family: String): String {
         val encoded = URLEncoder.encode(family, "UTF-8")
@@ -193,8 +182,6 @@ class FontRepository @Inject constructor(
         return result
     }
 
-    private fun decode(raw: String): List<CustomFontRef> = runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
-
     private fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
         val output = ByteArrayOutputStream(minOf(DEFAULT_BUFFER_SIZE, maxBytes))
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -222,7 +209,5 @@ class FontRepository @Inject constructor(
         val STYLE_ITALIC = Regex("font-style:\\s*italic")
         val UNICODE_RANGE = Regex("unicode-range:\\s*([^;]*)")
         val SRC_URL = Regex("src:\\s*url\\((https://[^)]+)\\)")
-
-        val KeyInstalled = stringPreferencesKey("installed_custom_fonts")
     }
 }

@@ -353,6 +353,10 @@ Rules:
 
 ## Settings Resolution
 
+Font replacement publishes uniquely named files and journals retirement of the old face in DataStore.
+The font module repairs global/per-book references before unlinking retired files, replaying pending
+retirements on startup or the next operation. Removal uses the same recoverable retirement path.
+
 Current implementation (`data/settings/ReaderSettingsRepository`): a two-layer merge — a global default `ReaderSettings` in DataStore, plus an optional per-book override stored as a JSON blob in Room (`reader_settings` table). When a book has an override it **fully supersedes** the global default (`per-book ?: global`), set on-edit; there is no field-by-field merge or unsupported-setting reasoning yet.
 
 The fuller layering below is still the target. Reader settings should eventually layer:

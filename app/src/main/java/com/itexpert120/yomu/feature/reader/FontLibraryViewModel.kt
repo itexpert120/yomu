@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.CuratedFont
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.data.fonts.FontRepository
-import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,7 +30,6 @@ data class FontLibraryUiState(
 @HiltViewModel
 class FontLibraryViewModel @Inject constructor(
     private val fonts: FontRepository,
-    private val settingsRepository: ReaderSettingsRepository,
 ) : ViewModel() {
 
     private val downloadingFonts = MutableStateFlow<Set<String>>(emptySet())
@@ -66,8 +64,14 @@ class FontLibraryViewModel @Inject constructor(
     /** Removes an installed custom font; if it was the selected default, reverts to the bundled font. */
     fun onRemoveFont(family: String) {
         viewModelScope.launch {
-            fonts.remove(family)
-            settingsRepository.clearCustomFontReferences(family)
+            try {
+                fonts.remove(family)
+                error.value = null
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                error.value = "Couldn't finish removing $family. Retry removal to repair it."
+            }
         }
     }
 }
