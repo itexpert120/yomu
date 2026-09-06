@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.SelectAll
@@ -64,9 +65,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -430,6 +435,7 @@ private fun BookDetailsTopBar(
     onDeselectAllChapters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showActions by remember { mutableStateOf(false) }
     val opaqueContainerColor = MaterialTheme.colorScheme.surfaceContainer
     val containerColor by animateColorAsState(
         targetValue = opaqueContainerColor.copy(alpha = if (scrolled) 1f else 0f),
@@ -466,12 +472,7 @@ private fun BookDetailsTopBar(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                        )
-                    }
+                    HeaderIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
                 },
                 actions = {
                     if (bookAvailable) {
@@ -480,19 +481,29 @@ private fun BookDetailsTopBar(
                             contentDescription = "Edit book",
                             onClick = onEdit,
                         )
-                        HeaderIconButton(
-                            icon = Icons.Rounded.DeleteOutline,
-                            contentDescription = "Remove book",
-                            onClick = onRemove,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    if (hasTimeline) {
-                        HeaderIconButton(
-                            icon = Icons.Rounded.History,
-                            contentDescription = "Reading timeline",
-                            onClick = onTimeline,
-                        )
+                        Box {
+                            HeaderIconButton(Icons.Rounded.MoreVert, "Book options", { showActions = true })
+                            DropdownMenu(expanded = showActions, onDismissRequest = { showActions = false }) {
+                                if (hasTimeline) {
+                                    DropdownMenuItem(
+                                        text = { Text("Reading timeline") },
+                                        leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) },
+                                        onClick = {
+                                            showActions = false
+                                            onTimeline()
+                                        },
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Remove book", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showActions = false
+                                        onRemove()
+                                    },
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -524,7 +535,14 @@ private fun HeaderIconButton(
     onClick: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
-    IconButton(onClick = onClick) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = tint,
+        ),
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
@@ -710,9 +728,9 @@ private fun BookHeader(
                             .padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Row(
+                        androidx.compose.foundation.layout.FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
@@ -737,13 +755,16 @@ private fun BookHeader(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = "About",
                     color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                 )
                 ExpandableBookDescription(description = description)
             }
@@ -1021,7 +1042,7 @@ private fun ContentsHeader(toc: TocUiState, onTocSortChange: (TocSortMode) -> Un
                     "Contents"
                 },
                 color = MaterialTheme.colorScheme.onBackground,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
             )
             if (!toc.loading && toc.items.isNotEmpty()) {
                 Text(
@@ -1037,7 +1058,10 @@ private fun ContentsHeader(toc: TocUiState, onTocSortChange: (TocSortMode) -> Un
             } else {
                 TocSortMode.Ascending
             }
-            IconButton(onClick = { onTocSortChange(nextSort) }) {
+            FilledTonalIconButton(
+                onClick = { onTocSortChange(nextSort) },
+                shapes = IconButtonDefaults.shapes(),
+            ) {
                 Icon(
                     imageVector = if (toc.sort == TocSortMode.Ascending) {
                         Icons.Rounded.KeyboardArrowDown

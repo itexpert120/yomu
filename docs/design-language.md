@@ -31,6 +31,8 @@ Library search is a persistent rounded field with live results, an inline clear 
 
 Book details uses a tonal identity surface, stronger book-title typography, a 128dp compact cover and the existing 176dp tablet cover. Large text stacks the identity to retain readable width. Read/Resume stays a FAB, and chapter navigation remains a virtualized, unkeyed list.
 
+Book Details header actions use expressive tonal icon buttons. Edit stays visible; Book options contains Reading timeline and the existing confirmed removal action. The description has a rounded tonal panel, progress labels wrap when needed, and Contents has a stronger heading with a tonal sort control.
+
 Statistics emphasizes lifetime total reading time in a tertiary container, using the existing aggregate value. Supporting metrics share an adaptive grid whose columns respond to available width and font scale; values wrap rather than truncate. Tablet overview/history panes and all existing metric definitions are retained.
 
 Reading chrome uses Material expressive tonal actions for Browse, Search, and Display. Their colors derive from the reading palette, while Theme and Reader chrome preferences reuse grouped settings rows. The EPUB page, saved themes, and reading ownership remain unchanged.
