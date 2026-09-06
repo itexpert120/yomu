@@ -5,6 +5,7 @@ import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.ReadingDayEntity
 import com.itexpert120.yomu.core.database.ReadingSessionEntity
 import com.itexpert120.yomu.core.database.ReadingTotalEntity
+import com.itexpert120.yomu.core.database.ReadingWriteReceipt
 import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReadingSessionItem
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,9 +42,10 @@ class StatsRepository internal constructor(
     fun bookReadingSeconds(bookId: BookId): Flow<Long> = dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
 
     /** Logs a finished reading session and folds its time into the day it started. */
-    suspend fun recordSession(bookId: BookId, startedAtMillis: Long, seconds: Long) {
+    suspend fun recordSession(bookId: BookId, startedAtMillis: Long, seconds: Long, operationId: String = UUID.randomUUID().toString()) {
         if (seconds <= 0L) return
         database.withTransaction {
+            if (dao.insertReadingWriteReceipt(ReadingWriteReceipt(operationId)) == -1L) return@withTransaction
             dao.insertReadingSession(
                 ReadingSessionEntity(
                     bookId = bookId.value,

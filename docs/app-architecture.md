@@ -520,6 +520,14 @@ Fakes:
 
 ## Architecture Risks
 
+Periodic and final reading writes transfer to one application-scoped ordered queue. Each
+write receives up to three automatic attempts; failures retain the original operation and
+show an app-shell Retry notice after the reader closes. Progress snapshots are not reordered
+or coalesced across chapter-completion events. Room v16 records session operation-ID receipts
+in the same transaction as history and totals, making uncertain acknowledgements idempotent.
+Pending operations live only in memory: process death before a successful write can still
+lose them. Receipts retain only IDs, independently of the bounded recent-history payload.
+
 Annotation writes are ordered within the reading experience and failed operations retain a
 Retry notice without closing the reader. Highlight editors acknowledge color/deletion only
 after persistence. Retries re-read durable highlight/position identity before adding, and

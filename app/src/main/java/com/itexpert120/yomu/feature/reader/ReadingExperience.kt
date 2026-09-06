@@ -23,6 +23,7 @@ import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
+import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import com.itexpert120.yomu.data.stats.StatsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
 import javax.inject.Inject
 
 data class WordLookupUiState(
@@ -148,6 +150,7 @@ class ReadingExperienceFactory @Inject constructor(
     private val highlights: HighlightRepository,
     private val bookmarks: BookmarkRepository,
     private val stats: StatsRepository,
+    private val readingWrites: ReadingWriteQueue,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
     internal fun create(
@@ -168,6 +171,7 @@ class ReadingExperienceFactory @Inject constructor(
         ownerScope = ownerScope,
         finalWriteScope = applicationScope,
         recordReadingSession = stats::recordSession,
+        readingWrites = readingWrites,
     )
 }
 
@@ -185,7 +189,8 @@ internal class ReadingExperience(
     private val bookmarks: BookmarkRepository,
     ownerScope: CoroutineScope,
     private val finalWriteScope: CoroutineScope,
-    private val recordReadingSession: suspend (BookId, Long, Long) -> Unit,
+    private val recordReadingSession: suspend (BookId, Long, Long, String) -> Unit,
+    private val readingWrites: ReadingWriteQueue = ReadingWriteQueue(finalWriteScope),
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val progressSaveIntervalMillis: Long = PROGRESS_SAVE_INTERVAL_MS,
@@ -794,23 +799,16 @@ internal class ReadingExperience(
         }
     }
 
-    private suspend fun persistPendingProgress() {
+    private fun persistPendingProgress() {
         val pending = pendingProgress ?: return
-        runCatching {
-            books.saveProgress(bookId, pending)
-        }.onSuccess {
-            if (pendingProgress == pending) pendingProgress = null
-        }
+        readingWrites.enqueue { books.saveProgress(bookId, pending) }
+        pendingProgress = null
     }
 
     private fun flushPendingProgress() {
         progressSaveJob?.cancel()
         progressSaveJob = null
-        val pending = pendingProgress ?: return
-        pendingProgress = null
-        finalWriteScope.launch {
-            runCatching { books.saveProgress(bookId, pending) }
-        }
+        persistPendingProgress()
     }
 
     private fun bankReadingSession() {
@@ -818,9 +816,8 @@ internal class ReadingExperience(
         readingStartedAt = null
         val seconds = (elapsedMillis() - readingStartedElapsed) / 1_000L
         if (seconds in 1..MAX_SESSION_SECONDS) {
-            finalWriteScope.launch {
-                runCatching { recordReadingSession(bookId, start, seconds) }
-            }
+            val operationId = UUID.randomUUID().toString()
+            readingWrites.enqueue { recordReadingSession(bookId, start, seconds, operationId) }
         }
     }
 

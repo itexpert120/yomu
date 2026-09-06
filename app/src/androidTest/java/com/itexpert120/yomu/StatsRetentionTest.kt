@@ -15,6 +15,21 @@ import org.junit.Test
 import java.time.LocalDate
 
 class StatsRetentionTest {
+    @Test fun duplicateAcknowledgementsDoNotCountSessionsTwice() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), YomuDatabase::class.java).build()
+        try {
+            val repository = StatsRepository(database.bookDao(), database, MutableStateFlow(LocalDate.now()))
+            repeat(2) { repository.recordSession(BookId("book"), 1L, 60L, "same-operation") }
+            assertEquals(60L, repository.bookReadingSeconds(BookId("book")).first())
+            val stats = repository.stats.first()
+            assertEquals(1, stats.sessionCount)
+            assertEquals(60L, stats.totalReadingSeconds)
+            assertEquals(1, repository.recentSessions.first().size)
+        } finally {
+            database.close()
+        }
+    }
+
     @Test fun lifetimeStatisticsSurviveRecentHistoryRetention() = runBlocking {
         val database = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), YomuDatabase::class.java).build()
         try {

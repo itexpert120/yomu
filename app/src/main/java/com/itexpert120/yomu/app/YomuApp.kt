@@ -7,8 +7,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,6 +43,7 @@ fun YomuApp(
     val oledDark = appearance.oledDark
     val systemDark = isSystemInDarkTheme()
     val externalError by externalOpenViewModel.error.collectAsState()
+    val readingWriteError by appViewModel.readingWriteError.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val dark = when (preference) {
@@ -84,6 +88,12 @@ fun YomuApp(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
             )
+            readingWriteError?.let { message ->
+                Snackbar(
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                    action = { TextButton(onClick = appViewModel::onRetryReadingWrites) { Text("Retry") } },
+                ) { Text(message) }
+            }
         }
     }
 }

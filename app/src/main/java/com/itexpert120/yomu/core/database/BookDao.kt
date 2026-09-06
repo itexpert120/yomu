@@ -201,6 +201,9 @@ interface BookDao {
     @Insert
     suspend fun insertReadingSession(entity: ReadingSessionEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertReadingWriteReceipt(receipt: ReadingWriteReceipt): Long
+
     @Query("SELECT * FROM reading_totals WHERE bookId = :bookId")
     suspend fun getReadingTotal(bookId: String): ReadingTotalEntity?
 

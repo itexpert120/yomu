@@ -15,6 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingDayEntity::class,
         ReadingSessionEntity::class,
         ReadingTotalEntity::class,
+        ReadingWriteReceipt::class,
         HighlightEntity::class,
         BookmarkEntity::class,
         LegacySyncMetadataEntity::class,
@@ -29,7 +30,13 @@ abstract class YomuDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
-        const val VERSION = 15
+        const val VERSION = 16
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS reading_write_receipts (id TEXT NOT NULL PRIMARY KEY)")
+            }
+        }
 
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {

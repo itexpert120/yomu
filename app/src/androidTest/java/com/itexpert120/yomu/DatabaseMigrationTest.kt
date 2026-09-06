@@ -39,6 +39,7 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_12_13,
             YomuDatabase.MIGRATION_13_14,
             YomuDatabase.MIGRATION_14_15,
+            YomuDatabase.MIGRATION_15_16,
         ).close()
     }
 
@@ -105,6 +106,7 @@ class DatabaseMigrationTest {
             true,
             YomuDatabase.MIGRATION_13_14,
             YomuDatabase.MIGRATION_14_15,
+            YomuDatabase.MIGRATION_15_16,
         ).use { database ->
             database.query("SELECT `title` FROM `books` WHERE `id` = 'book-id'").use {
                 check(it.moveToFirst())

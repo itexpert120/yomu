@@ -6,6 +6,7 @@ import com.itexpert120.yomu.core.model.AccentColor
 import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ThemePreference
 import com.itexpert120.yomu.data.settings.AppSettingsRepository
+import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +32,10 @@ data class AppAppearance(
 @HiltViewModel
 class AppViewModel @Inject constructor(
     private val settings: AppSettingsRepository,
+    private val readingWrites: ReadingWriteQueue,
 ) : ViewModel() {
+    val readingWriteError = readingWrites.error
+    fun onRetryReadingWrites() = readingWrites.retry()
     val appearance: StateFlow<AppAppearance> = combine(
         settings.themePreference,
         settings.oledDark,

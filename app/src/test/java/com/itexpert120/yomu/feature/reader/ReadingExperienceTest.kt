@@ -24,6 +24,7 @@ import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.books.ReadingTarget
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.highlights.HighlightRepository
+import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -538,6 +539,45 @@ class ReadingExperienceTest {
         }
     }
 
+    @Test fun closedExperienceRetainsFinalWritesAndRetriesTheSameSessionIdentity() = runBlocking {
+        val writes = ReadingWriteQueue(this, 0L)
+        val books = FakeBookRepository().apply { failWrites = true }
+        val session = FakeReaderSession()
+        var now = 0L
+        val ids = mutableListOf<String>()
+        val durableSessions = mutableSetOf<String>()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            books = books,
+            scope = this,
+            writes = writes,
+            nowMillis = { now },
+            progressSaveIntervalMillis = Long.MAX_VALUE,
+            recordWithId = { _, _, _, id ->
+                ids += id
+                if (durableSessions.add(id)) error("acknowledgement lost after commit")
+            },
+        )
+        experience.start()
+        awaitCondition { experience.state.value.navigator === session }
+        experience.dispatch(ReadingExperienceAction.Resume)
+        session.currentLocator.value = locator()
+        session.renderState.value = ReaderRenderState.Ready("chapter.xhtml")
+        awaitCondition { experience.state.value.renderState is ReaderRenderState.Ready && experience.state.value.locator != null }
+        now = 5_000L
+        experience.close()
+        awaitCondition { writes.error.value != null }
+        assertEquals(null, experience.state.value.navigator)
+        assertTrue(books.savedProgress.isEmpty())
+        books.failWrites = false
+        writes.retry()
+        awaitCondition { books.savedProgress.isNotEmpty() }
+        assertEquals(1, durableSessions.size)
+        assertEquals(2, ids.size)
+        assertEquals(ids[0], ids[1])
+        assertEquals(null, writes.error.value)
+    }
+
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),
@@ -553,6 +593,8 @@ class ReadingExperienceTest {
         progressSaveIntervalMillis: Long = 0L,
         readyTimeoutMillis: Long = 60_000L,
         recordReadingSession: suspend (BookId, Long, Long) -> Unit = { _, _, _ -> },
+        recordWithId: suspend (BookId, Long, Long, String) -> Unit = { book, start, seconds, _ -> recordReadingSession(book, start, seconds) },
+        writes: ReadingWriteQueue = ReadingWriteQueue(scope, 0L),
     ) = ReadingExperience(
         bookId = BOOK_ID,
         initialLocatorJson = null,
@@ -566,7 +608,8 @@ class ReadingExperienceTest {
         bookmarks = bookmarks,
         ownerScope = scope,
         finalWriteScope = scope,
-        recordReadingSession = recordReadingSession,
+        recordReadingSession = recordWithId,
+        readingWrites = writes,
         nowMillis = nowMillis,
         elapsedMillis = elapsedMillis,
         progressSaveIntervalMillis = progressSaveIntervalMillis,
@@ -805,6 +848,7 @@ class ReadingExperienceTest {
     }
 
     private class FakeBookRepository : BookRepository {
+        var failWrites = false
         private val book = MutableStateFlow<Book?>(null)
         val savedProgress = mutableListOf<ReadingProgressSnapshot>()
         var cachedPublication: ReaderPublicationCache? = null
@@ -841,6 +885,7 @@ class ReadingExperienceTest {
         )
 
         override suspend fun saveProgress(id: BookId, snapshot: ReadingProgressSnapshot) {
+            check(!failWrites) { "progress failed" }
             assertEquals(BOOK_ID, id)
             savedProgress += snapshot
         }
