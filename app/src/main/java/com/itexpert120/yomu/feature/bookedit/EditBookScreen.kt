@@ -51,6 +51,7 @@ fun EditBookScreen(
                 )
                 YomuButton(
                     text = "Change cover",
+                    enabled = state.editable,
                     onClick = onChangeCover,
                     emphasis = YomuButtonEmphasis.Secondary,
                 )
@@ -81,10 +82,12 @@ fun EditBookScreen(
 
         YomuButton(
             text = "Save",
+            enabled = state.editable,
             onClick = onSave,
             modifier = Modifier.fillMaxWidth(),
             emphasis = YomuButtonEmphasis.Primary,
         )
+        state.error?.let { Text(it, color = YomuTheme.colors.danger) }
     }
 }
 

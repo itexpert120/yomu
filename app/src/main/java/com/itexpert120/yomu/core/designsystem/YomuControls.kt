@@ -47,12 +47,14 @@ fun YomuButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     emphasis: YomuButtonEmphasis = YomuButtonEmphasis.Primary,
+    enabled: Boolean = true,
 ) {
     val label: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         Text(text = text, maxLines = 1, style = YomuTheme.type.control)
     }
     when (emphasis) {
         YomuButtonEmphasis.Primary -> Button(
+            enabled = enabled,
             onClick = onClick,
             modifier = modifier,
             shape = MaterialTheme.shapes.large,
@@ -60,6 +62,7 @@ fun YomuButton(
         )
 
         YomuButtonEmphasis.Secondary -> FilledTonalButton(
+            enabled = enabled,
             onClick = onClick,
             modifier = modifier,
             shape = MaterialTheme.shapes.large,
@@ -67,6 +70,7 @@ fun YomuButton(
         )
 
         YomuButtonEmphasis.Ghost -> TextButton(
+            enabled = enabled,
             onClick = onClick,
             modifier = modifier,
             shape = MaterialTheme.shapes.large,

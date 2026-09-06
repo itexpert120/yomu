@@ -435,6 +435,9 @@ AppearancePanel event
 
 ## Error Handling
 
+Book editing serializes cover ownership and commits through one draft workflow. Save is unavailable
+before metadata loads; a failed write retains the draft, and cleanup never deletes a committed cover.
+
 Editing a search query invalidates its pending work, results, and decorations immediately. Failed
 Readium search pages surface as search errors rather than a successful empty/partial result.
 
