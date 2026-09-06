@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -48,16 +49,19 @@ fun YomuButton(
     modifier: Modifier = Modifier,
     emphasis: YomuButtonEmphasis = YomuButtonEmphasis.Primary,
     enabled: Boolean = true,
+    prominent: Boolean = false,
 ) {
+    val buttonHeight = if (prominent) ButtonDefaults.MediumContainerHeight else ButtonDefaults.MinHeight
     val label: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
-        Text(text = text, maxLines = 1, style = YomuTheme.type.control)
+        Text(text = text, style = ButtonDefaults.textStyleFor(buttonHeight))
     }
     when (emphasis) {
         YomuButtonEmphasis.Primary -> Button(
             enabled = enabled,
             onClick = onClick,
             modifier = modifier,
-            shape = MaterialTheme.shapes.large,
+            shapes = ButtonDefaults.shapesFor(buttonHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(buttonHeight),
             content = label,
         )
 
@@ -65,7 +69,8 @@ fun YomuButton(
             enabled = enabled,
             onClick = onClick,
             modifier = modifier,
-            shape = MaterialTheme.shapes.large,
+            shapes = ButtonDefaults.shapesFor(buttonHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(buttonHeight),
             content = label,
         )
 
@@ -73,7 +78,8 @@ fun YomuButton(
             enabled = enabled,
             onClick = onClick,
             modifier = modifier,
-            shape = MaterialTheme.shapes.large,
+            shapes = ButtonDefaults.shapesFor(buttonHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(buttonHeight),
             content = label,
         )
     }

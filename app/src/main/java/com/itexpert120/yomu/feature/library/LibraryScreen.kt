@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.itexpert120.yomu.feature.library
 
 import android.content.res.Configuration
@@ -33,6 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -112,6 +117,8 @@ fun LibraryScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val featuredBook = state.continueReading.takeUnless { state.searchActive || state.selectionMode }
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val activeColumns = if (isLandscape) state.landscapeGridColumns else state.portraitGridColumns
     val elevated = when (state.viewMode) {
@@ -222,6 +229,8 @@ fun LibraryScreen(
                 selectedIds = state.selectedIds,
                 onBookClick = onCardClick,
                 onBookLongPress = onCardLongPress,
+                featuredBook = featuredBook,
+                onResume = onOpenReader,
             )
 
             LibraryContentMode.List -> LibraryList(
@@ -230,6 +239,8 @@ fun LibraryScreen(
                 selectedIds = state.selectedIds,
                 onBookClick = onCardClick,
                 onBookLongPress = onCardLongPress,
+                featuredBook = featuredBook,
+                onResume = onOpenReader,
             )
 
             else -> Unit
@@ -238,7 +249,7 @@ fun LibraryScreen(
 
     YomuAppSurface {
         Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
                 LibraryTopBarTransition(
                     state = state,
                     elevated = elevated,
@@ -249,6 +260,7 @@ fun LibraryScreen(
                     onExitSelection = onExitSelection,
                     onSelectAll = onSelectAll,
                     onDeselectAll = onDeselectAll,
+                    scrollBehavior = scrollBehavior,
                 )
                 Box(
                     Modifier
@@ -319,7 +331,10 @@ fun LibraryScreen(
 
             val continueReading = state.continueReading
             AnimatedVisibility(
-                visible = continueReading != null && !state.selectionMode,
+                visible = continueReading != null &&
+                    !state.selectionMode &&
+                    !state.searchActive &&
+                    (if (state.viewMode == LibraryViewMode.List) listState.firstVisibleItemIndex > 0 else gridState.firstVisibleItemIndex > 0),
                 enter = yomuPopupEnter(ResumeFabTransformOrigin),
                 exit = yomuPopupExit(ResumeFabTransformOrigin),
                 modifier = Modifier.align(Alignment.BottomEnd),
@@ -365,6 +380,7 @@ private fun LibraryTopBarTransition(
     onExitSelection: () -> Unit,
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior,
 ) {
     Box {
         AnimatedVisibility(
@@ -380,6 +396,8 @@ private fun LibraryTopBarTransition(
                 onImport = onImport,
                 onOptionsSheetToggle = onOptionsSheetToggle,
                 elevated = elevated,
+                scrollBehavior = scrollBehavior,
+                showImport = state.totalCount > 0,
             )
         }
         AnimatedVisibility(
@@ -508,6 +526,8 @@ private fun LibraryGrid(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
+    featuredBook: LibraryBook?,
+    onResume: (String) -> Unit,
 ) {
     // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
     // wide tablet/desktop; on a phone this is a no-op (screen < max width).
@@ -535,6 +555,11 @@ private fun LibraryGrid(
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (featuredBook != null) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ContinueReading(book = featuredBook, onResume = { onResume(featuredBook.id) })
+                }
+            }
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -579,6 +604,8 @@ private fun LibraryList(
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
+    featuredBook: LibraryBook?,
+    onResume: (String) -> Unit,
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
     // column centered on screen. Phones are unaffected (screen < max width).
@@ -592,6 +619,11 @@ private fun LibraryList(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (featuredBook != null) {
+                item {
+                    ContinueReading(book = featuredBook, onResume = { onResume(featuredBook.id) })
+                }
+            }
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
                     item { GroupSectionHeader(title = group.label) }

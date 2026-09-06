@@ -8,18 +8,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -27,10 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 
-/** A small Material top bar with search and arrangement kept in the action area. */
+/** Collapsing library heading with discoverable collection actions. */
 @Composable
 internal fun LibraryTopBar(
     searchActive: Boolean,
@@ -40,24 +42,23 @@ internal fun LibraryTopBar(
     onImport: () -> Unit,
     onOptionsSheetToggle: () -> Unit,
     elevated: Boolean,
+    scrollBehavior: TopAppBarScrollBehavior,
+    showImport: Boolean,
 ) {
     // Keep the library content anchored while the search field changes the toolbar's measured
     // height. Without this, the bar fades smoothly but the grid jumps to its new top edge.
     Column(Modifier.animateContentSize()) {
-        TopAppBar(
+        LargeTopAppBar(
             title = { Text("Library") },
+            scrollBehavior = scrollBehavior,
             actions = {
-                IconButton(onClick = onImport) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "Import EPUB",
-                    )
-                }
-                IconButton(onClick = onSearchToggle) {
-                    Icon(
-                        imageVector = if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search,
-                        contentDescription = if (searchActive) "Close search" else "Search library",
-                    )
+                if (searchActive || !showImport) {
+                    IconButton(onClick = onSearchToggle) {
+                        Icon(
+                            imageVector = if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search,
+                            contentDescription = if (searchActive) "Close search" else "Search library",
+                        )
+                    }
                 }
                 IconButton(onClick = onOptionsSheetToggle) {
                     Icon(
@@ -76,6 +77,19 @@ internal fun LibraryTopBar(
             ),
         )
 
+        if (!searchActive && showImport) {
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            ) {
+                YomuButton(
+                    text = "Search library",
+                    onClick = onSearchToggle,
+                    emphasis = YomuButtonEmphasis.Secondary,
+                )
+                YomuButton(text = "Import book", onClick = onImport)
+            }
+        }
         AnimatedVisibility(
             visible = searchActive,
             enter = yomuChromeEnter(fromBottom = false),

@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -125,7 +126,7 @@ private val BaseTypography = Typography()
 private val YomuTypography = Typography(
     displayLarge = BaseTypography.displayLarge.copy(fontWeight = FontWeight.SemiBold),
     displayMedium = BaseTypography.displayMedium.copy(fontWeight = FontWeight.SemiBold),
-    displaySmall = BaseTypography.displaySmall.copy(fontWeight = FontWeight.SemiBold),
+    displaySmall = BaseTypography.displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
     headlineLarge = BaseTypography.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
     headlineMedium = BaseTypography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
     headlineSmall = BaseTypography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -270,6 +271,7 @@ fun YomuDesignTheme(
         colorScheme = colorScheme,
         typography = YomuTypography,
         shapes = YomuShapes,
+        motionScheme = MotionScheme.expressive(),
     ) {
         CompositionLocalProvider(
             LocalYomuColors provides yomuColors(colorScheme, mode),

@@ -19,7 +19,7 @@ The initial migration deliberately uses native Material product surfaces. Reader
 
 Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
 
-Remaining design work is refinement rather than foundational migration: screen-by-screen visual tuning, broader screenshot coverage, and further extraction of repeated feature-level cards. Bookmarks, highlights, in-book search, advanced typography, and the reader chrome are implemented.
+Expressive refinement now starts with Library: a collapsing heading, labeled search/import actions, and a tonal Continue Reading feature with a prominent Resume button. Shared buttons use Material's expressive press shapes and size-aware typography/padding; the theme explicitly selects expressive motion. The floating Resume action appears after the feature scrolls away. Existing collection modes remain available. Rendered device validation remains separate from compilation.
 
 ## Visual Direction
 
@@ -51,7 +51,7 @@ Use these as the baseline for every redesign:
 - Prefer native Material components and semantics for app chrome, controls, dialogs, lists, cards, sheets, and navigation.
 - Use the app-owned static Material 3 light/dark colour schemes by default. Dynamic wallpaper colours are an explicit Android 12+ opt-in that applies to both modes; custom accent controls are not exposed.
 - Use the Material typography hierarchy, readable line lengths, clear emphasis, and expressive type only where it improves the reading task.
-- Use a consistent conventional shape scale; expressive shapes should communicate hierarchy, not decorate every surface.
+- Use role-specific shapes: generous featured containers, connected choices, and expressive pressed/selected controls. Preserve compact book covers and use shape changes to communicate interaction and hierarchy.
 - Use native touch targets, focus/selection semantics, ripples, reduced-motion support, and accessible contrast.
 - Make compact, medium, and expanded layouts intentional. Tablets should gain side-by-side context and navigation rather than merely stretching phone content.
 - Keep the EPUB reading canvas and saved reader themes distinct from app chrome when custom page colours/fonts are required for reading comfort.
