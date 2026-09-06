@@ -391,6 +391,9 @@ This matters because some settings are not valid for fixed-layout books, some ar
 
 ## Data Flow Examples
 
+External-open navigation remains in saved pending state until a resumed navigation entry accepts it.
+Activity recreation does not reprocess the original launch intent; later incoming intents remain valid.
+
 Opening a book (built through the book-scoped `ReadingExperience` module):
 
 ```text

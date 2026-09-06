@@ -53,7 +53,7 @@ class MainActivity : FragmentActivity() {
         removeRestoredReadiumNavigatorFragments(supportFragmentManager)
         enableYomuEdgeToEdge()
         // Cold start from an external "Open with"/share.
-        handleExternalIntent(intent)
+        if (savedInstanceState == null) handleExternalIntent(intent)
         setContent {
             YomuApp(
                 appViewModel = appViewModel,

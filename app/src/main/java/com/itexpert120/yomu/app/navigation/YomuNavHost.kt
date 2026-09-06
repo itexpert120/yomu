@@ -4,6 +4,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -34,6 +35,7 @@ import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
 import com.itexpert120.yomu.feature.stats.StatsRoute
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun YomuNavHost(
@@ -54,9 +56,15 @@ fun YomuNavHost(
 
     // An EPUB opened from outside the app (file manager / share) is imported off-screen, then we
     // jump straight into the reader for the resolved book (an existing entry on a duplicate).
-    LaunchedEffect(Unit) {
-        externalOpenViewModel.openBook.collect { bookId ->
+    val pendingBooks by externalOpenViewModel.pendingBooks.collectAsState()
+    val navigationEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(pendingBooks, navigationEntry) {
+        val bookId = pendingBooks.firstOrNull() ?: return@LaunchedEffect
+        val entry = navigationEntry ?: return@LaunchedEffect
+        entry.lifecycle.currentStateFlow.first { it == Lifecycle.State.RESUMED }
+        if (navController.currentBackStackEntry === entry) {
             navigateToReader(Reader(bookId), "external")
+            externalOpenViewModel.acknowledgeOpen(bookId)
         }
     }
 
