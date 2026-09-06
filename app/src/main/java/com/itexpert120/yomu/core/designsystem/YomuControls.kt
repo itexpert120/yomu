@@ -51,9 +51,8 @@ fun YomuButton(
     modifier: Modifier = Modifier,
     emphasis: YomuButtonEmphasis = YomuButtonEmphasis.Primary,
     enabled: Boolean = true,
-    prominent: Boolean = false,
 ) {
-    val buttonHeight = if (prominent) ButtonDefaults.MediumContainerHeight else ButtonDefaults.MinHeight
+    val buttonHeight = ButtonDefaults.MinHeight
     val label: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         Text(text = text, style = ButtonDefaults.textStyleFor(buttonHeight))
     }

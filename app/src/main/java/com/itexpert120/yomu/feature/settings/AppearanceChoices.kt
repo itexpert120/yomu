@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,12 +33,26 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuStaticColorScheme
 import com.itexpert120.yomu.core.model.ThemePreference
 
 @Composable
 internal fun ThemeChoiceRow(selectedTheme: ThemePreference, onSelectTheme: (ThemePreference) -> Unit) {
+    val listState = rememberLazyListState()
+    val selectedIndex = ThemePreference.entries.indexOf(selectedTheme)
+    LaunchedEffect(selectedIndex) {
+        val layout = listState.layoutInfo
+        val selectedItem = layout.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
+        val fullyVisible = selectedItem != null &&
+            selectedItem.offset >= layout.viewportStartOffset &&
+            selectedItem.offset + selectedItem.size <= layout.viewportEndOffset
+        if (!fullyVisible) {
+            if (yomuAnimationsEnabled()) listState.animateScrollToItem(selectedIndex) else listState.scrollToItem(selectedIndex)
+        }
+    }
     LazyRow(
+        state = listState,
         modifier = Modifier.fillMaxWidth().selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

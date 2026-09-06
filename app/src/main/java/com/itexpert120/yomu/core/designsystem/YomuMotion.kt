@@ -151,7 +151,8 @@ fun yomuFadeThroughExit(): ExitTransition = if (!yomuAnimationsEnabled()) {
  * A Material shared-axis X handoff tuned for Yomu. Both surfaces travel the same short, fixed
  * distance, while a 35% fade-through removes the outgoing surface before revealing the incoming
  * one. By the time the incoming surface is visible, the emphasized spatial curve has brought its
- * boundary to the viewport edge, avoiding a hard vertical seam or translucent content overlap.
+ * boundary to the viewport edge. Returns use immediate fades and a wider travel distance so the
+ * restored screen is visible during movement, including when returning from About.
  */
 fun yomuScreenEnter(
     travelDistancePx: Int,
