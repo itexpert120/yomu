@@ -430,9 +430,10 @@ private class ReadiumReaderSession(
                 // the engine-level guard the InputListener.onDrag swallow couldn't provide. Paged
                 // mode is untouched — the flag only gates scroll-mode swipes.
                 disablePageTurnsWhileScrolling = true
-                // Avoid a native inset pass on the first immersive layout; the host still consumes
-                // insets so a later live preference change can be applied safely.
-                shouldApplyInsetsPadding = !currentSettings.immersiveChrome
+                // Compose already reserves the top bar/cutout (or the immersive safe area).
+                // Readium reads the decor view's cutout directly, bypassing AndroidView's adjusted
+                // insets, so enabling this would reserve the same space again inside the page.
+                shouldApplyInsetsPadding = false
 
                 // Readium caps the text column at an "optimal line length" and centres it, which
                 // leaves huge side margins on a wide tablet. Raise the cap far past any screen so the
