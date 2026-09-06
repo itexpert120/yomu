@@ -87,8 +87,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
@@ -645,7 +643,7 @@ private fun BookHeader(
     book: BookDetailsUi,
     onCoverClick: () -> Unit,
     topInset: Dp = 0.dp,
-    coverWidth: Dp = 108.dp,
+    coverWidth: Dp = 128.dp,
     stackIdentity: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -656,39 +654,16 @@ private fun BookHeader(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clipToBounds(),
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
         ) {
-            if (book.coverImagePath != null) {
-                AsyncImage(
-                    model = File(book.coverImagePath),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .blur(18.dp)
-                        .alpha(0.28f),
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.background,
-                                ),
-                            ),
-                        ),
-                )
-            }
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = topInset + 16.dp, bottom = 12.dp),
+                    .padding(top = topInset + 24.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                if (stackIdentity) {
+                if (stackIdentity || LocalDensity.current.fontScale > 1.3f) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -788,8 +763,7 @@ private fun BookIdentityDetails(
         Text(
             text = book.title,
             color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.headlineSmall,
-            maxLines = 3,
+            style = MaterialTheme.typography.headlineMedium,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
@@ -824,14 +798,14 @@ private fun ReadingStatus(
                 MaterialTheme.colorScheme.onPrimaryContainer
     }
     Surface(
-        shape = MaterialTheme.shapes.small,
+        shape = androidx.compose.foundation.shape.CircleShape,
         color = containerColor,
         contentColor = contentColor,
     ) {
-        Row(
+        androidx.compose.foundation.layout.FlowRow(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Icon(
                 imageVector = when (state) {

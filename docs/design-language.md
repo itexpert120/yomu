@@ -27,6 +27,8 @@ Statistics, Settings, and About share Library's large padded, collapsing Materia
 
 Library search is a persistent rounded field with live results, an inline clear action, and a result count. Import stays in the top bar, and keyboard search dismisses the keyboard without discarding the query. Back retains the existing search-exit behavior.
 
+Book details uses a tonal identity surface, stronger book-title typography, a 128dp compact cover and the existing 176dp tablet cover. Large text stacks the identity to retain readable width. Read/Resume stays a FAB, and chapter navigation remains a virtualized, unkeyed list.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.
