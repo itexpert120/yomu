@@ -17,23 +17,23 @@ import androidx.core.view.doOnAttach
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentContainerView
-import com.itexpert120.yomu.core.reader.ReaderSession
+import com.itexpert120.yomu.core.reader.ReaderNavigator
 
 /**
  * Hosts the engine's navigator fragment inside Compose: a [FragmentContainerView] is created and
- * the fragment added via the session's (Readium) [androidx.fragment.app.FragmentFactory] and class
+ * the fragment added via the navigator's [androidx.fragment.app.FragmentFactory] and class
  * name — the engine type never appears here. Yomu chrome is drawn over this by [ReaderScreen].
  */
 @Composable
 fun ReaderNavigatorHost(
-    session: ReaderSession,
+    navigator: ReaderNavigator,
     backgroundArgb: Long,
     immersive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current.findFragmentActivity()
     val fragmentManager = activity.supportFragmentManager
-    val tag = remember(session) { "reader-navigator" }
+    val tag = remember(navigator) { "reader-navigator" }
     // Stable across configuration changes so a restored fragment can find its container view.
     val containerId = rememberSaveable { View.generateViewId() }
 
@@ -47,11 +47,11 @@ fun ReaderNavigatorHost(
                 doOnAttach {
                     // After a config change a placeholder navigator may have been restored (via the
                     // activity's restore factory). Remove whatever is there and add a fresh fragment
-                    // bound to the real session factory, so the reader rebuilds correctly.
+                    // bound to the real navigator factory, so the reader rebuilds correctly.
                     @Suppress("UNCHECKED_CAST")
                     val fragmentClass =
-                        Class.forName(session.fragmentClassName) as Class<out Fragment>
-                    fragmentManager.fragmentFactory = session.fragmentFactory
+                        Class.forName(navigator.fragmentClassName) as Class<out Fragment>
+                    fragmentManager.fragmentFactory = navigator.fragmentFactory
                     val transaction = fragmentManager.beginTransaction()
                         .setReorderingAllowed(true)
                     fragmentManager.findFragmentByTag(tag)?.let(transaction::remove)
@@ -60,7 +60,7 @@ fun ReaderNavigatorHost(
                         // Let Compose render the shell and cover before Readium constructs its
                         // WebView. Hosting is still one ordered transaction, but no longer blocks
                         // the first frame with commitNow/remove+add work.
-                        .runOnCommit { session.onFragmentHosted(fragmentManager, tag) }
+                        .runOnCommit { navigator.onFragmentHosted(fragmentManager, tag) }
                         .commitAllowingStateLoss()
                 }
             }
@@ -71,7 +71,7 @@ fun ReaderNavigatorHost(
         },
     )
 
-    DisposableEffect(session) {
+    DisposableEffect(navigator) {
         onDispose {
             fragmentManager.findFragmentByTag(tag)?.let { fragment ->
                 fragmentManager.beginTransaction().remove(fragment).commitAllowingStateLoss()

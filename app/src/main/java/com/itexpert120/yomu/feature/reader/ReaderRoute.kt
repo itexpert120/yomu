@@ -9,11 +9,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 fun ReaderRoute(onBack: () -> Unit) {
     val viewModel: ReaderViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
-    val session by viewModel.session.collectAsState()
 
     ReaderScreen(
         state = state,
-        session = session,
         onBack = onBack,
         onRetryOpen = viewModel::onRetryOpen,
         onOpenSheet = viewModel::onOpenSheet,

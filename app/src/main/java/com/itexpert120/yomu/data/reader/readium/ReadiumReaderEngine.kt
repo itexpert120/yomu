@@ -470,7 +470,7 @@ private class ReadiumReaderSession(
                             if (!text.isNullOrBlank()) {
                                 when (id) {
                                     MENU_COPY -> copySelection(text)
-                                    MENU_SPEAK -> speakSelection(text)
+                                    MENU_SPEAK -> speak(text)
                                     MENU_SHARE -> shareSelection(text)
                                     MENU_LOOK_UP -> _lookUpRequests.tryEmit(text)
                                     MENU_SEARCH_WEB -> searchWeb(text)
@@ -1429,10 +1429,10 @@ private class ReadiumReaderSession(
         return actual == null || expected == null || kotlin.math.abs(actual - expected) < 0.01
     }
 
-    private fun speakSelection(text: String) {
+    override fun speak(text: String) {
         val existing = tts
         if (existing != null) {
-            existing.speak(text, TextToSpeech.QUEUE_FLUSH, null, "yomu-selection")
+            existing.speak(text, TextToSpeech.QUEUE_FLUSH, null, "yomu-reader")
             return
         }
         // First use: TTS init is async, so remember the text and speak once the engine is ready.
@@ -1440,7 +1440,7 @@ private class ReadiumReaderSession(
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 pendingSpeak?.let {
-                    tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "yomu-selection")
+                    tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "yomu-reader")
                 }
             }
             pendingSpeak = null

@@ -110,12 +110,19 @@ interface ReaderEngine {
     suspend fun tableOfContents(filePath: String): List<ReaderTocItem>?
 }
 
+/** Restricted navigator surface exposed to Compose for fragment hosting only. */
+interface ReaderNavigator {
+    val fragmentFactory: FragmentFactory
+    val fragmentClassName: String
+
+    fun onFragmentHosted(fragmentManager: FragmentManager, tag: String)
+}
+
 /**
- * A live reading session. Exposes the navigator as an androidx [FragmentFactory] + class name so
- * the Compose host can place it in a container without referencing engine types. The session
- * observes the navigator once hosted ([onFragmentHosted]).
+ * A live reading session. The book-scoped reading workflow owns this interface; Compose receives
+ * only its [ReaderNavigator] facet.
  */
-interface ReaderSession {
+interface ReaderSession : ReaderNavigator {
     val title: String
     val tableOfContents: List<ReaderTocItem>
     val currentLocator: StateFlow<ReaderLocator?>
@@ -146,11 +153,6 @@ interface ReaderSession {
 
     /** Emits the id of an on-page highlight the user tapped, so the UI can edit/delete it. */
     val highlightTaps: SharedFlow<String>
-
-    val fragmentFactory: FragmentFactory
-    val fragmentClassName: String
-
-    fun onFragmentHosted(fragmentManager: FragmentManager, tag: String)
 
     /** Applies reading preferences (layout/theme/font/size). Safe to call before/after hosting. */
     fun applySettings(settings: ReaderSettings)
@@ -198,6 +200,9 @@ interface ReaderSession {
 
     /** Clears the on-page search underlines. */
     fun clearSearch()
+
+    /** Speaks reader-owned text, reusing the session's lazily initialized TTS engine. */
+    fun speak(text: String)
 
     fun close()
 }

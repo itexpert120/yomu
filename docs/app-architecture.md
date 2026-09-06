@@ -6,7 +6,7 @@ Open Reader uses native Android architecture and Material 3 Expressive as its UI
 
 The core of this architecture is now built, not just planned. Inside the single `:app` module:
 
-- Built: Hilt DI, Room (schema v12, exported schemas, migration coverage), Preferences DataStore, adaptive type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary. A `:benchmark` macrobenchmark module generates normal and 1,500-chapter stress EPUB fixtures.
+- Built: Hilt DI, Room (schema v14, exported schemas, migration coverage), Preferences DataStore, adaptive type-safe Navigation Compose, Coil 3 image loading, and the Readium 3.x EPUB engine behind a Yomu-owned `ReaderEngine` boundary. A `:benchmark` macrobenchmark module generates normal and 1,500-chapter stress EPUB fixtures.
 - Built features: `library`, `bookdetails`, `bookedit`, `reader`, `settings`, `stats`, `about`.
 - Built layers: `core/{model, database, datastore, reader, storage, designsystem}`, `data/{books, reader/readium, settings}`, and `domain/imports`.
 - Settings resolution is implemented as a two-layer merge (global default in DataStore, optional per-book override in Room) rather than the full multi-layer resolver described below.
@@ -19,7 +19,7 @@ The package and Gradle-module layouts further down still describe the eventual d
 - UI toolkit: Jetpack Compose for app UI, panels, library, settings, and reader chrome. (Built.)
 - EPUB engine: Readium Kotlin Toolkit (3.x) behind a Yomu-owned interface. (Built — `core/reader` interfaces, `data/reader/readium` adapter.)
 - Visual reader host: Compose screen containing a Readium navigator fragment where required. (Built — `feature/reader/ReaderNavigatorHost`.)
-- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v12, Preferences DataStore.)
+- Persistence: Room for structured app data, DataStore for app preferences/settings profiles where appropriate. (Built — `core/database` Room v14, Preferences DataStore.)
 - State: Kotlin coroutines, Flow, StateFlow, and immutable UI state. (Built.)
 - DI: Hilt. (Built — `YomuApplication`, `MainActivity`, and the `app/di` modules.)
 - Navigation: nested type-safe Navigation Compose hosts. `Home` owns Library, Statistics, Settings, and their adaptive Material `NavigationBar`/`NavigationRail`; the root host transitions that whole frame to focused details/editor/reader destinations. (Built — `app/navigation`.)
@@ -72,7 +72,7 @@ com.itexpert120.yomu
 |       `-- YomuGalleryScreen.kt
 |-- core
 |   |-- model                    # Book/BookId, ReadingState, LibraryPreferences, ReaderSettings, AccentColor, ThemePreference
-|   |-- database                 # YomuDatabase (v12), logical chapter progress, TOC + resource weights, stats, highlight and bookmark entities/DAOs
+|   |-- database                 # YomuDatabase (v14), logical chapter progress, TOC + resource weights, stats, highlight and bookmark entities/DAOs
 |   |-- datastore                # YomuPreferences
 |   |-- reader                   # ReaderEngine + open/cache/render contracts (no Readium types)
 |   |-- storage                  # FileStorage
@@ -295,16 +295,17 @@ Structure (built):
 - `ReaderRoute`: Compose route and ViewModel binding.
 - `ReaderScreen`: Compose layout, chrome (`ReaderChrome`), and the controls sheet (`ReaderSheet`).
 - `ReaderNavigatorHost`: interop container that hosts the Readium `EpubNavigatorFragment` (one ordered asynchronous remove/add transaction with `runOnCommit`, and consumes window insets for edge-to-edge).
-- `ReaderViewModel`: owns session state, locator persistence, and settings submission.
+- `ReadingExperience`: book-scoped workflow module for opening/retry/readiness, navigation, settings, locator/progress, search, lookup/TTS, annotations, and foreground reading-time attribution. Its external interface is state, events, and `ReadingExperienceAction`.
+- `ReaderViewModel`: adapts `ReadingExperienceState` without translating book state and owns only Compose chrome plus app-global font/theme lists.
 
-The adapter between events and navigator APIs lives inside `ReadiumReaderEngine`'s session (driven by `ReaderViewModel`) rather than a separate `ReadiumReaderController`. `MainActivity` extends `FragmentActivity` (with an AppCompat DayNight theme) so the navigator fragment can be hosted.
+The adapter between engine events and navigator operations lives inside `ReadiumReaderEngine`'s session, driven only by `ReadingExperience`. The raw session stays inside that module; Compose hosts its restricted `ReaderNavigator` facet. `MainActivity` extends `FragmentActivity` (with an AppCompat DayNight theme) so the navigator fragment can be hosted.
 
 Rules:
 
 - The Readium fragment displays only publication content.
 - Yomu Compose UI owns all chrome and controls.
 - Fragment setup/recovery logic stays isolated.
-- The ViewModel owns session state, locator persistence, and settings submission.
+- `ReadingExperience` owns book workflows and persistence invariants; the ViewModel keeps visual surface state and its existing callback interface.
 
 ## UI State Pattern
 
@@ -379,18 +380,19 @@ This matters because some settings are not valid for fixed-layout books, some ar
 
 ## Data Flow Examples
 
-Opening a book (built; the dedicated `OpenReaderSessionUseCase` is not extracted — `ReaderViewModel` calls the repository and engine directly):
+Opening a book (built through the book-scoped `ReadingExperience` module):
 
 ```text
 ReaderRoute(bookId)
--> ReaderViewModel resolves the Room target + effective settings concurrently
+-> ReaderViewModel creates one ReadingExperience for the navigation entry
+-> ReadingExperience resolves the Room target + effective settings concurrently
 -> ReaderEngine.open(ReaderOpenRequest(cache = persisted TOC/weights))
 -> Readium opens publication; cached TOC/weights validate in parallel, missing pieces rebuild
--> ReaderViewModel emits ReaderRenderState.Opening
+-> ReadingExperience emits ReaderRenderState.Opening
 -> ReaderNavigatorHost displays content
 -> one critical bootstrap + next WebView pre-draw emits Ready
--> currentLocator StateFlow updates Room progress after Ready
--> validated cache is persisted asynchronously after the first visible page
+-> ReadingExperience persists currentLocator progress only after Ready
+-> ReadingExperience persists the validated cache asynchronously after the first visible page
 ```
 
 Importing a book (built — note metadata only; no separate authors/series/file tables yet):
@@ -411,10 +413,10 @@ Changing theme:
 
 ```text
 AppearancePanel event
--> ReaderViewModel updates session override
--> ResolveReaderSettingsUseCase recomputes resolved settings
+-> ReaderViewModel applies the setting immediately through ReadingExperience
 -> ReaderEngine submits mapped preferences
--> App optionally persists override
+-> ReadingExperience persists the per-book override
+-> effective settings Flow echoes the durable value through ReadingExperience
 ```
 
 ## Error Handling

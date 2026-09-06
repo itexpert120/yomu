@@ -1,485 +1,123 @@
 package com.itexpert120.yomu.feature.reader
 
-import android.content.Context
-import android.speech.tts.TextToSpeech
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
-import com.itexpert120.yomu.core.reader.ReaderBookmark
-import com.itexpert120.yomu.core.reader.ReaderEngine
-import com.itexpert120.yomu.core.reader.ReaderHighlight
-import com.itexpert120.yomu.core.reader.ReaderLocator
-import com.itexpert120.yomu.core.reader.ReaderOpenRequest
-import com.itexpert120.yomu.core.reader.ReaderOpenTrace
-import com.itexpert120.yomu.core.reader.ReaderRenderState
-import com.itexpert120.yomu.core.reader.ReaderSearchResult
-import com.itexpert120.yomu.core.reader.ReaderSession
-import com.itexpert120.yomu.core.reader.ReaderTocItem
-import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
-import com.itexpert120.yomu.data.books.BookRepository
-import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
-import com.itexpert120.yomu.data.dictionary.DictionaryRepository
-import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.fonts.FontRepository
-import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
-import com.itexpert120.yomu.data.stats.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
 data class ReaderUiState(
-    val loading: Boolean = true,
-    /** Atomic navigator presentation state; the cover and reveal are derived from this value. */
-    val renderState: ReaderRenderState = ReaderRenderState.Opening,
-    val failed: Boolean = false,
-    val title: String = "",
-    val chapterTitle: String? = null,
-    val progressPercent: Int? = null,
-    val totalProgression: Double = 0.0,
-    // Pages left in the current chapter (null = unknown / not indexed yet).
-    val chapterPagesLeft: Int? = null,
-    val coverImagePath: String? = null,
-    val settings: ReaderSettings = ReaderSettings(),
-    // The bottom navigation bar, toggled by a center tap. The top bar stays static.
+    val experience: ReadingExperienceState = ReadingExperienceState(),
     val chapterControlsVisible: Boolean = false,
     val sheetVisible: Boolean = false,
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val installedFonts: List<CustomFontRef> = emptyList(),
     val customSheetVisible: Boolean = false,
-    // Chapter-boundary state, for the next/previous-chapter buttons.
-    val chapterProgression: Double = 0.0,
-    val hasPreviousChapter: Boolean = false,
-    val hasNextChapter: Boolean = false,
-    // In-reader table of contents.
-    val toc: List<ReaderTocItem> = emptyList(),
-    val tocLoading: Boolean = true,
-    val currentHref: String? = null,
-    // The consolidated Browse sheet (Contents/Bookmarks/Highlights); null = closed.
     val browseTab: BrowseTab? = null,
-    // Search has its own taller sheet so results do not compete with navigation tabs.
     val searchSheetVisible: Boolean = false,
-    // Word lookup: the active lookup sheet (null = closed). Triggered from the native "Look up"
-    // text-selection menu item.
-    val lookup: WordLookupUiState? = null,
-    // Footnote popup content (HTML), or null when closed. Shown when a footnote ref is tapped.
-    val footnoteHtml: String? = null,
-    // All of this book's highlights (newest first), for the list sheet.
-    val highlights: List<ReaderHighlight> = emptyList(),
-    // An existing highlight the user tapped, shown in an edit/delete popup, or null.
-    val editingHighlight: ReaderHighlight? = null,
-    // Reading-position bookmarks for this book, and whether the current page is bookmarked.
-    val bookmarks: List<ReaderBookmark> = emptyList(),
-    val currentPageBookmarked: Boolean = false,
-    // In-book search: query text, results, progress/started flags.
-    val searchQuery: String = "",
-    val searchResults: List<ReaderSearchResult> = emptyList(),
-    val searchInProgress: Boolean = false,
-    val searchError: String? = null,
-    // True once a search has been run, so the UI can show "No results" vs. nothing yet.
-    val searchPerformed: Boolean = false,
-)
-
-/** State of the word-definition popup. [canGoBack] is true when a deeper word has been looked up
- *  from within the sheet, so the UI can offer a back step through the lookup history. */
-data class WordLookupUiState(
-    val word: String,
-    val loading: Boolean = true,
-    val result: DictionaryResult? = null,
-    val canGoBack: Boolean = false,
 )
 
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    @ApplicationContext private val context: Context,
-    private val engine: ReaderEngine,
-    private val repository: BookRepository,
+    experienceFactory: ReadingExperienceFactory,
     private val settingsRepository: ReaderSettingsRepository,
-    private val dictionary: DictionaryRepository,
-    private val stats: StatsRepository,
-    private val highlights: HighlightRepository,
-    private val bookmarks: BookmarkRepository,
-    private val fonts: FontRepository,
-    @ApplicationScope private val applicationScope: CoroutineScope,
+    fonts: FontRepository,
 ) : ViewModel() {
-
-    // Wall-clock start of the current foreground reading stretch, or null when paused/closed.
-    private var readingStart: Long? = null
-
-    // Latest reading position, captured for bookmark add/toggle (saved & restored via the locator).
-    private var lastLocator: ReaderLocator? = null
-
-    // The in-flight search coroutine, cancelled when a new query starts or search closes.
-    private var searchJob: Job? = null
-    private var searchGeneration = 0L
-    private var progressSaveJob: Job? = null
-    private var pendingProgress: ReadingProgressSnapshot? = null
-    private var settingsWriteJob: Job? = null
-
-    private val bookId: String = requireNotNull(savedStateHandle["bookId"])
-    private val locatorOverride: String? = savedStateHandle["locator"]
-
-    // Logical TOC section currently being read. A section can span multiple resource hrefs.
-    private var currentHref: String? = null
-
-    // Resource href -> chapter title, so the top bar can show the current chapter name even when
-    // the engine locator carries no title. Retains the last known title to avoid blanking out.
-    private var tocTitles: Map<String, String> = emptyMap()
-    private var lastChapterTitle: String? = null
-
-    private val _session = MutableStateFlow<ReaderSession?>(null)
-    val session: StateFlow<ReaderSession?> = _session.asStateFlow()
+    private val bookId = BookId(requireNotNull(savedStateHandle["bookId"]))
+    private val readingExperience = experienceFactory.create(
+        bookId = bookId,
+        initialLocatorJson = savedStateHandle["locator"],
+        ownerScope = viewModelScope,
+    )
 
     private val _state = MutableStateFlow(ReaderUiState())
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
 
     init {
-        // App-global installed custom fonts, so the in-reader font picker can offer them.
         viewModelScope.launch {
             fonts.installed.collect { list -> _state.update { it.copy(installedFonts = list) } }
         }
-        // App-global saved custom themes, independent of the reading session.
         viewModelScope.launch {
             settingsRepository.customThemes.collect { themes ->
                 _state.update { it.copy(customThemes = themes) }
             }
         }
-        openReader()
-    }
-
-    private fun openReader() {
-        val traceCookie = ReaderOpenTrace.beginAsync("reader.open")
         viewModelScope.launch {
-            var traceEnded = false
-            fun endOpenTrace() {
-                if (!traceEnded) {
-                    traceEnded = true
-                    ReaderOpenTrace.endAsync("reader.open", traceCookie)
-                }
-            }
-            try {
-                // These are independent Room/DataStore reads. Starting them together removes a
-                // full round-trip from the tap-to-publication path.
-                val (target, initialSettings) = coroutineScope {
-                    val targetDeferred = async { repository.readingTarget(BookId(bookId)) }
-                    val settingsDeferred = async { settingsRepository.effective(BookId(bookId)).first() }
-                    targetDeferred.await() to settingsDeferred.await()
-                }
-                ReaderOpenTrace.mark("reader.target-settings-resolved")
-                _state.update { it.copy(settings = initialSettings) }
-                // Prime the chapter-title lookup from the in-memory TOC cache (present if this book was
-                // opened earlier this session) so the top bar shows the correct chapter title on the very
-                // first frame instead of updating a moment after the reader opens.
-                repository.cachedTableOfContents(BookId(bookId))?.let { cached ->
-                    val map = LinkedHashMap<String, String>()
-                    cached.forEach { map.putIfAbsent(it.id, it.title) }
-                    tocTitles = map
-                }
-                val openedResult = target?.let {
-                    ReaderOpenTrace.mark("reader.publication-open-start")
-                    engine.open(
-                        ReaderOpenRequest(
-                            filePath = it.storagePath,
-                            initialLocatorJson = locatorOverride ?: it.locatorJson,
-                            initialSettings = initialSettings,
-                            publicationCache = it.publicationCache,
-                        ),
-                    )
-                }
-                if (openedResult == null) {
-                    endOpenTrace()
-                    _state.update { it.copy(loading = false, failed = true) }
-                    return@launch
-                }
-                val opened = openedResult.session
-                ReaderOpenTrace.mark("reader.session-created")
-                _session.value = opened
-                if (readingStart != null) opened.onForegroundResumed()
-                _state.update {
-                    it.copy(
-                        title = opened.title,
-                        loading = true,
-                        failed = false,
-                        renderState = ReaderRenderState.Opening,
-                    )
-                }
-                var reachedReady = false
-                var cachePersisted = false
-                // The render state is atomic: the UI never observes a styled flag from one
-                // resource together with a locator from another resource.
-                launch {
-                    opened.renderState.collect { renderState ->
-                        if (renderState is ReaderRenderState.Ready) {
-                            ReaderOpenTrace.mark("reader.ready")
-                            endOpenTrace()
-                            reachedReady = true
-                            if (!cachePersisted) {
-                                cachePersisted = true
-                                // Cache repair is deliberately off the critical render path.
-                                launch {
-                                    repository.cachePublicationMetadata(
-                                        BookId(bookId),
-                                        openedResult.publicationCache,
-                                    )
-                                }
-                            }
-                            lastLocator?.let { locator ->
-                                locator.bookProgress?.let { progression ->
-                                    scheduleProgressSave(locator.toProgressSnapshot(progression))
-                                }
-                            }
-                            if (readingStart != null) readingStart = System.currentTimeMillis()
-                        }
-                        _state.update {
-                            it.copy(
-                                renderState = renderState,
-                                loading = renderState is ReaderRenderState.Opening,
-                            )
-                        }
-                    }
-                }
-                // Do not reveal a timer-expired blank navigator. The retry state is the only visible
-                // outcome when no renderable content reached Ready.
-                launch {
-                    val ready = withTimeoutOrNull(8_000) {
-                        opened.renderState.first { it is ReaderRenderState.Ready }
-                    }
-                    if (ready == null && !reachedReady && _session.value === opened) {
-                        endOpenTrace()
-                        opened.close()
-                        _session.value = null
-                        _state.update { it.copy(loading = false, failed = true) }
-                    }
-                }
-                // The live publication already contains Readium's parsed navigation tree. Use it
-                // directly instead of opening the EPUB again just to populate Browse.
-                val items = opened.tableOfContents
-                val map = LinkedHashMap<String, String>()
-                items.forEach { map.putIfAbsent(it.id, it.title) }
-                tocTitles = map
-                val resolved = currentHref?.let { map[it] }
-                if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
-                _state.update {
-                    it.copy(
-                        toc = items,
-                        tocLoading = false,
-                        chapterTitle = lastChapterTitle ?: it.chapterTitle,
-                    )
-                }
-                // Resolve effective settings (per-book override or global) and keep them applied live.
-                launch {
-                    settingsRepository.effective(BookId(bookId)).collect { settings ->
-                        _state.update { it.copy(settings = settings) }
-                        opened.applySettings(settings)
-                    }
-                }
-                launch {
-                    opened.currentLocator.collect { locator ->
-                        if (locator != null) {
-                            lastLocator = locator
-                            // The engine owns canonical, position-weighted whole-book progress. A
-                            // publication-provided totalProgression is retained only inside locator JSON.
-                            val progression = locator.bookProgress
-                            val resolved = locator.chapterTitle
-                                ?: locator.chapterId?.let { tocTitles[it] }
-                            if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
-                            _state.update {
-                                it.copy(
-                                    chapterTitle = lastChapterTitle,
-                                    totalProgression = progression ?: it.totalProgression,
-                                    progressPercent = progression?.let { p -> (p * 100).toInt() },
-                                    chapterPagesLeft = locator.chapterPagesLeft,
-                                    chapterProgression = locator.chapterProgression
-                                        ?: it.chapterProgression,
-                                    hasPreviousChapter = locator.hasPreviousChapter,
-                                    hasNextChapter = locator.hasNextChapter,
-                                    currentHref = locator.chapterId ?: locator.href,
-                                    currentPageBookmarked = isCurrentBookmarked(it.bookmarks),
-                                )
-                            }
-                            val chapterChanged = currentHref != null && locator.chapterId != currentHref
-                            if (progression != null && opened.renderState.value is ReaderRenderState.Ready) {
-                                scheduleProgressSave(
-                                    locator.toProgressSnapshot(progression),
-                                )
-                                if (chapterChanged) persistPendingProgress()
-                            }
-                            currentHref = locator.chapterId
-                        }
-                    }
-                }
-                launch {
-                    // A center tap toggles the bottom chapter-controls bar (TOC / chapter nav / scroll /
-                    // settings). The top bar stays static.
-                    opened.centerTaps.collect {
-                        _state.update { it.copy(chapterControlsVisible = !it.chapterControlsVisible) }
-                    }
-                }
-                launch {
-                    opened.lookUpRequests.collect { text -> lookUp(text) }
-                }
-                launch {
-                    opened.footnotes.collect { html -> _state.update { it.copy(footnoteHtml = html) } }
-                }
-                // A "Highlight" tap on a selection: create the highlight in the default colour and keep
-                // reading. Choosing a colour is optional — tap an existing highlight to recolour it.
-                launch {
-                    opened.highlightRequests.collect { draft ->
-                        highlights.add(
-                            BookId(bookId),
-                            draft.locatorJson,
-                            draft.text,
-                            DEFAULT_HIGHLIGHT_ARGB,
-                        )
-                    }
-                }
-                // A tap on an on-page highlight: open its edit/delete popup.
-                launch {
-                    opened.highlightTaps.collect { id ->
-                        val target = _state.value.highlights.firstOrNull { it.id == id }
-                        if (target != null) _state.update { it.copy(editingHighlight = target) }
-                    }
-                }
-                // Observe this book's highlights: keep the list state and the on-page decorations in sync.
-                launch {
-                    highlights.observeForBook(BookId(bookId)).collect { list ->
-                        _state.update { it.copy(highlights = list) }
-                        opened.applyHighlights(list)
-                    }
-                }
-                // Observe this book's bookmarks: keep the list and the current-page flag in sync.
-                launch {
-                    bookmarks.observeForBook(BookId(bookId)).collect { list ->
-                        _state.update {
-                            it.copy(bookmarks = list, currentPageBookmarked = isCurrentBookmarked(list))
-                        }
-                    }
-                }
-                launch {
-                    repository.observeBook(BookId(bookId)).collect { book ->
-                        _state.update { it.copy(coverImagePath = book?.coverImagePath) }
-                    }
-                }
-            } catch (cancelled: CancellationException) {
-                endOpenTrace()
-                throw cancelled
-            } catch (_: Throwable) {
-                endOpenTrace()
-                _session.value?.close()
-                _session.value = null
-                _state.update { it.copy(loading = false, failed = true) }
+            readingExperience.state.collect { experience ->
+                _state.update { it.copy(experience = experience) }
             }
         }
+        viewModelScope.launch {
+            readingExperience.events.collect { event ->
+                when (event) {
+                    ReadingExperienceEvent.ToggleChrome ->
+                        _state.update {
+                            it.copy(chapterControlsVisible = !it.chapterControlsVisible)
+                        }
+                }
+            }
+        }
+        readingExperience.start()
     }
 
-    private fun ReaderLocator.toProgressSnapshot(progression: Double): ReadingProgressSnapshot = ReadingProgressSnapshot(
-        locatorJson = locatorJson,
-        bookProgress = progression,
-        currentHref = href,
-        chapterId = chapterId,
-        chapterProgress = chapterProgression,
-        completedChapterId = completedChapterId,
-        completed = completed,
-    )
-
-    fun onRetryOpen() {
-        if (_session.value != null || _state.value.loading) return
-        _state.update { it.copy(loading = true, failed = false) }
-        openReader()
-    }
+    fun onRetryOpen() = dispatch(ReadingExperienceAction.RetryOpen)
 
     fun onOpenSheet() = _state.update { it.copy(sheetVisible = true, chapterControlsVisible = false) }
 
     fun onCloseSheet() = _state.update { it.copy(sheetVisible = false) }
 
-    fun onSelectChapter(locatorJson: String) {
-        _session.value?.goToLocator(locatorJson)
-    }
+    fun onSelectChapter(locatorJson: String) = navigateTo(locatorJson)
 
     fun onNextChapter() {
-        _session.value?.nextChapter()
+        dispatch(ReadingExperienceAction.Navigate(ReaderNavigation.NextChapter))
         _state.update { it.copy(chapterControlsVisible = false) }
     }
 
     fun onPreviousChapter() {
-        _session.value?.previousChapter()
+        dispatch(ReadingExperienceAction.Navigate(ReaderNavigation.PreviousChapter))
         _state.update { it.copy(chapterControlsVisible = false) }
     }
 
-    // --- Browse sheet (Contents / Bookmarks / Highlights) ---
-
-    /** Open the Browse sheet on the Contents tab (the bottom bar's "Browse" button). */
     fun onOpenBrowse() = openBrowse(BrowseTab.Contents)
 
     fun onSelectBrowseTab(tab: BrowseTab) = _state.update { it.copy(browseTab = tab) }
 
-    private fun openBrowse(tab: BrowseTab) = _state.update {
-        it.copy(
-            browseTab = tab,
-            searchSheetVisible = false,
-            sheetVisible = false,
-            chapterControlsVisible = false,
-        )
-    }
-
-    /** Close the Browse sheet. Search state belongs to its own sheet. */
     fun onCloseBrowse() = _state.update { it.copy(browseTab = null) }
 
-    /** Jump to a TOC entry and close the Browse sheet. */
     fun onJumpToLocator(locatorJson: String) {
-        _session.value?.goToLocator(locatorJson)
+        navigateTo(locatorJson)
         _state.update { it.copy(browseTab = null) }
     }
 
-    /** Reader edits write this book's per-book override; global defaults live in Settings. */
     fun onUpdateSettings(settings: ReaderSettings) {
-        if (settings == _state.value.settings) return
-        // Apply live settings before Room echoes them back through effective(). This keeps controls
-        // responsive while persistence remains the durable source of truth.
-        _state.update { it.copy(settings = settings) }
-        _session.value?.applySettings(settings)
-        settingsWriteJob?.cancel()
-        settingsWriteJob = viewModelScope.launch {
-            settingsRepository.setForBook(BookId(bookId), settings)
+        if (settings != state.value.experience.settings) {
+            dispatch(ReadingExperienceAction.ApplySettings(settings))
         }
     }
 
-    /** Drops this book's override so it follows the global Reading Defaults again. */
-    fun onResetBookSettings() {
-        viewModelScope.launch { settingsRepository.clearForBook(BookId(bookId)) }
-    }
+    fun onResetBookSettings() = dispatch(ReadingExperienceAction.ResetSettings)
 
     fun onOpenCustomTheme() = _state.update { it.copy(customSheetVisible = true, sheetVisible = false) }
 
     fun onCloseCustomTheme() = _state.update { it.copy(customSheetVisible = false) }
 
-    /** Loads a saved custom palette into the current settings (and switches to Custom). */
     fun onApplyCustomTheme(theme: CustomReaderTheme) {
         onUpdateSettings(
-            state.value.settings.copy(
+            state.value.experience.settings.copy(
                 theme = ReaderThemeMode.Custom,
                 customBackground = theme.background,
                 customText = theme.text,
@@ -487,14 +125,13 @@ class ReaderViewModel @Inject constructor(
         )
     }
 
-    /** Saves the current custom colours as a named, reusable theme. */
     fun onSaveCustomTheme(name: String) {
-        val s = state.value.settings
+        val settings = state.value.experience.settings
         val theme = CustomReaderTheme(
             id = UUID.randomUUID().toString(),
             name = name.trim().ifBlank { "Custom" },
-            background = s.backgroundArgb,
-            text = s.textArgb,
+            background = settings.backgroundArgb,
+            text = settings.textArgb,
         )
         viewModelScope.launch { settingsRepository.saveCustomTheme(theme) }
     }
@@ -503,185 +140,39 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.deleteCustomTheme(id) }
     }
 
-    // Lookup history (a back-stack of words) so tapping a word inside a definition drills in and the
-    // user can step back. Results are cached per word so back/forward is instant.
-    private val lookupStack = ArrayDeque<String>()
-    private val lookupCache = mutableMapOf<String, DictionaryResult>()
+    fun onLookUpWord(raw: String) = dispatch(ReadingExperienceAction.LookUpWord(raw))
 
-    // Text-to-speech for the dictionary "pronounce" button. The API provides only IPA text (no audio
-    // clips), so the word is spoken with the device voice. Lazily initialised; a word requested
-    // before init completes is spoken once the engine is ready.
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
-    private var pendingPronounce: String? = null
+    fun onRetryLookup() = dispatch(ReadingExperienceAction.RetryLookup)
 
-    /** Entry point from a text selection: opens a fresh lookup (resets any history). */
-    private fun lookUp(rawText: String) {
-        val word = sanitizeWord(rawText) ?: return
-        lookupStack.clear()
-        pushLookup(word)
-    }
+    fun onLookupBack() = dispatch(ReadingExperienceAction.LookupBack)
 
-    /** Look up a word tapped from within the dictionary sheet (definitions, synonyms, antonyms). */
-    fun onLookUpWord(raw: String) {
-        val word = sanitizeWord(raw) ?: return
-        if (lookupStack.lastOrNull() == word) return
-        pushLookup(word)
-    }
+    fun onPronounce(word: String) = dispatch(ReadingExperienceAction.Pronounce(word))
 
-    fun onRetryLookup() {
-        val current = _state.value.lookup ?: return
-        if (current.result !is DictionaryResult.Error || current.loading) return
-        lookupCache.remove(current.word)
-        showLookup(current.word)
-    }
+    fun onCloseLookup() = dispatch(ReadingExperienceAction.CloseLookup)
 
-    /** Step back to the previously looked-up word, or close the sheet at the bottom of the stack. */
-    fun onLookupBack() {
-        if (lookupStack.size <= 1) {
-            onCloseLookup()
-            return
-        }
-        lookupStack.removeLast()
-        showLookup(lookupStack.last())
-    }
+    fun onCloseFootnote() = dispatch(ReadingExperienceAction.CloseFootnote)
 
-    private fun pushLookup(word: String) {
-        lookupStack.addLast(word)
-        showLookup(word)
-    }
+    fun onCloseEditHighlight() = dispatch(ReadingExperienceAction.CloseEditingHighlight)
 
-    /** Render the current top-of-stack word, fetching it if not already cached. */
-    private fun showLookup(word: String) {
-        val cached = lookupCache[word]
-        _state.update {
-            it.copy(
-                lookup = WordLookupUiState(
-                    word = word,
-                    loading = cached == null,
-                    result = cached,
-                    canGoBack = lookupStack.size > 1,
-                ),
-            )
-        }
-        if (cached != null) return
-        viewModelScope.launch {
-            val result = dictionary.lookup(word)
-            lookupCache[word] = result
-            _state.update { st ->
-                val current = st.lookup ?: return@update st
-                // Ignore a stale response if the user has since looked up a different word.
-                if (current.word != word) return@update st
-                st.copy(lookup = current.copy(loading = false, result = result))
-            }
-        }
-    }
+    fun onDeleteHighlight() = dispatch(ReadingExperienceAction.DeleteEditingHighlight)
 
-    /** Speak [word] aloud with the device text-to-speech voice. */
-    fun onPronounce(word: String) {
-        val term = word.trim()
-        if (term.isEmpty()) return
-        val engine = tts
-        if (engine != null && ttsReady) {
-            engine.speak(term, TextToSpeech.QUEUE_FLUSH, null, "yomu-pronounce")
-            return
-        }
-        // First use: init is async, so remember the word and speak it once the engine is ready.
-        pendingPronounce = term
-        if (engine == null) {
-            tts = TextToSpeech(context) { status ->
-                ttsReady = status == TextToSpeech.SUCCESS
-                if (ttsReady) {
-                    tts?.language = Locale.ENGLISH
-                    pendingPronounce?.let {
-                        tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "yomu-pronounce")
-                    }
-                }
-                pendingPronounce = null
-            }
-        }
-    }
+    fun onDeleteHighlightById(id: String) = dispatch(ReadingExperienceAction.DeleteHighlight(id))
 
-    fun onCloseLookup() {
-        lookupStack.clear()
-        _state.update { it.copy(lookup = null) }
-    }
-
-    fun onCloseFootnote() = _state.update { it.copy(footnoteHtml = null) }
-
-    // --- Highlights ---
-
-    fun onOpenHighlights() = openBrowse(BrowseTab.Highlights)
-
-    fun onCloseEditHighlight() = _state.update { it.copy(editingHighlight = null) }
-
-    fun onDeleteHighlight() {
-        val target = _state.value.editingHighlight ?: return
-        _state.update { it.copy(editingHighlight = null) }
-        viewModelScope.launch { highlights.delete(target.id) }
-    }
-
-    /** Delete a specific highlight (used by the per-row delete in the list). */
-    fun onDeleteHighlightById(id: String) {
-        viewModelScope.launch { highlights.delete(id) }
-    }
-
-    /** Jump to a highlight's stored position from the list, and close the Browse sheet. */
     fun onJumpToHighlight(locatorJson: String) {
-        _session.value?.goToLocator(locatorJson)
+        navigateTo(locatorJson)
         _state.update { it.copy(browseTab = null) }
     }
 
-    /** Recolour the highlight currently open in the edit popup. Updates the page decoration too. */
-    fun onSetHighlightColor(colorArgb: Int) {
-        val target = _state.value.editingHighlight ?: return
-        _state.update { it.copy(editingHighlight = target.copy(colorArgb = colorArgb)) }
-        viewModelScope.launch { highlights.updateColor(target.id, colorArgb) }
-    }
+    fun onSetHighlightColor(colorArgb: Int) = dispatch(ReadingExperienceAction.SetEditingHighlightColor(colorArgb))
 
-    // --- Bookmarks ---
+    fun onToggleBookmark() = dispatch(ReadingExperienceAction.ToggleBookmark)
 
-    /** Whether the current reading position already has a bookmark (href + ~1% progression window). */
-    private fun isCurrentBookmarked(list: List<ReaderBookmark>): Boolean {
-        val loc = lastLocator ?: return false
-        val p = loc.totalProgression
-        return list.any { bookmark ->
-            bookmark.href == loc.href &&
-                if (p != null && bookmark.progression != null) {
-                    kotlin.math.abs(bookmark.progression - p) < 0.01
-                } else {
-                    bookmark.locatorJson == loc.locatorJson
-                }
-        }
-    }
-
-    /** Add or remove a bookmark at the current page (the always-visible top-bar toggle). */
-    fun onToggleBookmark() {
-        val loc = lastLocator ?: return
-        viewModelScope.launch {
-            bookmarks.toggle(
-                BookId(bookId),
-                loc.locatorJson,
-                loc.href,
-                loc.chapterTitle ?: lastChapterTitle,
-                loc.totalProgression,
-            )
-        }
-    }
-
-    fun onOpenBookmarks() = openBrowse(BrowseTab.Bookmarks)
-
-    /** Jump to a bookmark's stored position from the list, and close the Browse sheet. */
     fun onJumpToBookmark(locatorJson: String) {
-        _session.value?.goToLocator(locatorJson)
+        navigateTo(locatorJson)
         _state.update { it.copy(browseTab = null) }
     }
 
-    fun onDeleteBookmarkById(id: String) {
-        viewModelScope.launch { bookmarks.delete(id) }
-    }
-
-    // --- In-book search ---
+    fun onDeleteBookmarkById(id: String) = dispatch(ReadingExperienceAction.DeleteBookmark(id))
 
     fun onOpenSearch() = _state.update {
         it.copy(
@@ -693,133 +184,41 @@ class ReaderViewModel @Inject constructor(
     }
 
     fun onCloseSearch() {
-        searchJob?.cancel()
-        _session.value?.clearSearch()
-        _state.update {
-            it.copy(
-                searchSheetVisible = false,
-                searchQuery = "",
-                searchResults = emptyList(),
-                searchInProgress = false,
-                searchError = null,
-                searchPerformed = false,
-            )
-        }
-    }
-
-    fun onSearchQueryChange(query: String) = _state.update { it.copy(searchQuery = query) }
-
-    /** Run the current query against the open publication and underline the hits on the page. */
-    fun onSubmitSearch() {
-        val query = _state.value.searchQuery.trim()
-        if (query.isBlank()) return
-        searchJob?.cancel()
-        val generation = ++searchGeneration
-        searchJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    searchInProgress = true,
-                    searchError = null,
-                    searchPerformed = true,
-                    searchResults = emptyList(),
-                )
-            }
-            try {
-                val activeSession = _session.value
-                val results = activeSession?.search(query).orEmpty()
-                ensureActive()
-                if (generation != searchGeneration || _state.value.searchQuery.trim() != query) return@launch
-                _state.update { it.copy(searchInProgress = false, searchResults = results) }
-                activeSession?.applySearchDecorations(results)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Throwable) {
-                if (generation == searchGeneration) {
-                    _state.update {
-                        it.copy(searchInProgress = false, searchError = "Search couldn't be completed.")
-                    }
-                }
-            }
-        }
-    }
-
-    /** Jump to a search hit; keep the underlines so the hits stay marked while reading. */
-    fun onJumpToSearchResult(locatorJson: String) {
-        _session.value?.goToLocator(locatorJson)
+        dispatch(ReadingExperienceAction.ClearSearch)
         _state.update { it.copy(searchSheetVisible = false) }
     }
 
-    /** Start counting reading time (reader brought to the foreground). */
-    fun onReadingResumed() {
-        if (!state.value.failed) readingStart = System.currentTimeMillis()
-        _session.value?.onForegroundResumed()
+    fun onSearchQueryChange(query: String) = dispatch(ReadingExperienceAction.ChangeSearchQuery(query))
+
+    fun onSubmitSearch() = dispatch(ReadingExperienceAction.SubmitSearch)
+
+    fun onJumpToSearchResult(locatorJson: String) {
+        navigateTo(locatorJson)
+        _state.update { it.copy(searchSheetVisible = false) }
     }
 
-    /** Stop counting and bank the elapsed foreground time toward today's stats. */
-    fun onReadingPaused() {
-        val start = readingStart ?: return
-        readingStart = null
-        // Don't count time spent on a spinner / failed open.
-        if (state.value.failed || _session.value == null) return
-        val seconds = (System.currentTimeMillis() - start) / 1000L
-        // Guard against clock changes / absurd spans.
-        if (seconds in 1..MAX_SESSION_SECONDS) {
-            applicationScope.launch { stats.recordSession(BookId(bookId), start, seconds) }
-        }
-        flushPendingProgress()
+    fun onReadingResumed() = dispatch(ReadingExperienceAction.Resume)
+
+    fun onReadingPaused() = dispatch(ReadingExperienceAction.Pause)
+
+    private fun openBrowse(tab: BrowseTab) = _state.update {
+        it.copy(
+            browseTab = tab,
+            searchSheetVisible = false,
+            sheetVisible = false,
+            chapterControlsVisible = false,
+        )
     }
 
-    private fun scheduleProgressSave(snapshot: ReadingProgressSnapshot) {
-        pendingProgress = snapshot
-        if (progressSaveJob?.isActive == true) return
-        progressSaveJob = viewModelScope.launch {
-            do {
-                delay(PROGRESS_SAVE_INTERVAL_MS)
-                persistPendingProgress()
-            } while (pendingProgress != null)
-        }
+    private fun navigateTo(locatorJson: String) {
+        dispatch(ReadingExperienceAction.Navigate(ReaderNavigation.Locator(locatorJson)))
     }
 
-    private suspend fun persistPendingProgress() {
-        val pending = pendingProgress ?: return
-        runCatching {
-            repository.saveProgress(BookId(bookId), pending)
-        }.onSuccess {
-            if (pendingProgress == pending) pendingProgress = null
-        }
+    private fun dispatch(action: ReadingExperienceAction) {
+        readingExperience.dispatch(action)
     }
-
-    private fun flushPendingProgress() {
-        progressSaveJob?.cancel()
-        progressSaveJob = null
-        val pending = pendingProgress ?: return
-        pendingProgress = null
-        applicationScope.launch {
-            repository.saveProgress(BookId(bookId), pending)
-        }
-    }
-
-    /** Reduces a selection to a single, punctuation-free word the dictionary API can resolve. */
-    private fun sanitizeWord(raw: String): String? = raw.trim()
-        .split(Regex("\\s+"))
-        .firstOrNull()
-        ?.lowercase()
-        ?.filter { it.isLetter() || it == '-' || it == '\'' }
-        ?.takeIf { it.isNotBlank() }
 
     override fun onCleared() {
-        onReadingPaused()
-        flushPendingProgress()
-        runCatching { tts?.shutdown() }
-        tts = null
-        _session.value?.close()
-    }
-
-    private companion object {
-        const val MAX_SESSION_SECONDS = 24L * 60 * 60
-        const val PROGRESS_SAVE_INTERVAL_MS = 4_000L
-
-        // Single default highlight colour (a warm yellow) — highlights are no longer multi-colour.
-        const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()
+        readingExperience.close()
     }
 }

@@ -47,9 +47,10 @@ com.itexpert120.yomu
 │   │                            #   picker, responsive YomuWidthClass)
 │   ├── model/                   # Book, ReaderSettings, LibraryPreferences, AccentColor, ThemePreference,
 │   │                            #   CustomReaderTheme, ReadingStats, …
-│   ├── database/                # Room: YomuDatabase (v12) + BookEntity, ChapterReadEntity,
+│   ├── database/                # Room: YomuDatabase (v14) + BookEntity, ChapterReadEntity,
 │   │                            #   ChapterProgressEntity, ReaderSettingsEntity, BookTocEntity, ReadingDayEntity,
 │   │                            #   ReadingSessionEntity, HighlightEntity, BookmarkEntity,
+│   │                            #   compatibility-only legacy sync entities,
 │   │                            #   BookDao, HighlightDao, BookmarkDao, migrations
 │   ├── datastore/ · storage/    # DataStore prefs ; FileStorage (app-private epubs/covers)
 │   └── reader/                  # ReaderEngine/ReaderSession + open/cache/render contracts (no Readium)
@@ -82,7 +83,7 @@ Type-safe nav destinations: `Home` (the top-level shell), `Library`, `BookDetail
 `MainActivity` owns the window insets controller and flips status/nav bar icon appearance on theme-mode change so bar icons stay legible. The **reader** additionally takes over the system bars while open (`ReaderScreen`): it hides both bars for full-screen reading, colours them to the reading theme, and restores them on exit.
 
 ### Reader engine boundary
-The EPUB engine is Readium, but Readium types must **not** leak. All reader access goes through Yomu-owned interfaces in `core/reader` (`ReaderEngine`, `ReaderSession`, `ReaderOpenRequest`, `ReaderOpenResult`, `ReaderPublicationCache`, `ReaderRenderState`, `ReaderLocator`, `ReaderTocItem`, `ReaderHighlight`, `ReaderBookmark`, `ReaderSearchResult`); only `data/reader/readium/*` imports Readium directly — `ReadiumReaderEngine` (reading), `ReadiumMetadataExtractor` (import-time metadata/cover), and `ReadiumFragmentRestore` (the config-change/process-death navigator-restoration guard; see commit 07ac465). The Readium navigator is an `EpubNavigatorFragment` hosted inside Compose by `feature/reader/ReaderNavigatorHost` (one ordered asynchronous transaction, consumes window insets for edge-to-edge). `ReaderSettings` → `EpubPreferences` mapping (scroll/paged, fontSize, theme, bg/text colour, fontFamily, lineHeight/margins/paragraph-spacing, `publisherStyles = false`) and navigation live in the engine. The engine surfaces center-taps, dictionary look-up requests, footnotes, and highlight selection/taps via `SharedFlow`s, and renders highlights as Readium `Decoration`s. Reader settings resolve as a **global default (DataStore) ⊕ per-book override (Room `reader_settings`)**, written per-book-on-edit — the global default is edited on the `ReaderDefaults` screen. Six reading fonts are bundled in `app/src/main/assets/fonts/`; only the active bundled upright face is preloaded. The reader additionally owns reading-time tracking (writes `reading_sessions` via `StatsRepository`), TTS read-aloud, and extra-dim/brightness. See `docs/app-architecture.md` and `docs/reader-feature-spec.md`.
+The EPUB engine is Readium, but Readium types must **not** leak. All reader access goes through Yomu-owned interfaces in `core/reader` (`ReaderEngine`, `ReaderSession`, `ReaderNavigator`, `ReaderOpenRequest`, `ReaderOpenResult`, `ReaderPublicationCache`, `ReaderRenderState`, `ReaderLocator`, `ReaderTocItem`, `ReaderHighlight`, `ReaderBookmark`, `ReaderSearchResult`); only `data/reader/readium/*` imports Readium directly — `ReadiumReaderEngine` (reading), `ReadiumMetadataExtractor` (import-time metadata/cover), and `ReadiumFragmentRestore` (the config-change/process-death navigator-restoration guard; see commit 07ac465). `ReaderSession` is implementation-only outside `feature/reader/ReadingExperience`; Compose receives its restricted `ReaderNavigator` facet through state. `ReadingExperience` owns book-scoped opening/retry/readiness, navigation, settings, locator/progress, search, lookup/TTS, annotations, and foreground reading-time attribution through one state stream plus `ReadingExperienceAction`; `ReaderViewModel` adapts that state and owns only Compose chrome plus app-global font/theme lists. `ReaderSettings` → `EpubPreferences` mapping (scroll/paged, fontSize, theme, bg/text colour, fontFamily, lineHeight/margins/paragraph-spacing, `publisherStyles = false`) lives in the engine. Reader settings resolve as a **global default (DataStore) ⊕ per-book override (Room `reader_settings`)**, written per-book-on-edit — the global default is edited on the `ReaderDefaults` screen. Six reading fonts are bundled in `app/src/main/assets/fonts/`; only the active bundled upright face is preloaded. See `docs/app-architecture.md` and `docs/reader-feature-spec.md`.
 
 Reader chrome: a sleek always-or-immersive top bar (chapter title in the system UI font + bookmark toggle), an optional footer (battery w/ charging, clock, chapter-weighted progress %, optional chapter remaining as visual pages in paged mode or percentage in scroll mode), a slim bottom controls bar, and a single tabbed **Browse sheet** (`ReaderBrowseSheet`, `BrowseTab` = Contents/Bookmarks/Highlights/Search) plus a **More** overflow sheet — these replaced the four standalone sheets (their `*Row` helpers are reused). Settings new since bookmarks/search: `keepScreenOn`, `immersiveChrome`, `footerShow*` (incl. `footerShowPagesLeft`), surfaced via the shared `ReaderChromeToggles` (rendered in BOTH the in-reader Controls sheet and global Reading Defaults so they can't drift). Immersive mode is true edge-to-edge: while the reader is open the window uses `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` and each EPUB page gets `viewport-fit=cover` injected (Android WebViews letterbox below the cutout otherwise; `env(safe-area-inset-*)` is 0 there). Scroll mode has a rubberband chapter-overscroll gesture (SVG arrow injected via `createElementNS`). All appearing/disappearing surfaces across the app use the shared **`core/designsystem/YomuMotion`** vocabulary — `yomuChromeEnter/Exit` (fade+scale+slide), `yomuPopupEnter/Exit`, `yomuContentSwap` (directional tab swap), `yomuChromeBlur` (API-31+ blur driven by the enter/exit transition).
 
@@ -117,6 +118,20 @@ Another single-module native EPUB reader (`io.github.piyushdaiya.vaachak`, v2.0.
 - **Beyond Yomu's scope:** an **AI assistant** — Google **Gemini** (`gemini-2.5-flash`) for explain / spoiler-free character ID / chapter recap / session "recall", plus **Cloudflare Workers AI** for text→image (both BYO-key in DataStore); an **offline dictionary** — embedded `dictionary.json` (~20MB) + `inflections.json` lemma map + a from-scratch `StarDictParser` (`.ifo/.idx/.dict.dz`, 32/64-bit offsets, gzip via commons-compress); **catalog acquisition** — OPDS 1.x/2.0 (`readium-opds`) + **Gutendex** (Project Gutenberg) browse + in-app download; **accessibility fonts** (OpenDyslexic, iA Writer Duospace, accessible DfA) and a first-class **E-Ink** theme mode with a contrast slider.
 - **Architectural contrasts (why not to copy its structure):** stock **Material3** with a single global `isEink` boolean instead of a design system; **no Readium boundary** (Readium types leak into Compose UI + ViewModels); **no `NavHost`** — a monolithic `MainActivity` holds all navigation as Compose state; the data layer even depends on a `ui` class (`LibraryRepository` → `ui.reader.ReadiumManager`); a ~550-line god `ReaderViewModel`.
 - **Do not copy (security):** `app/build.gradle.kts` hardcodes the release **keystore password in plaintext** in the signing config; user AI secrets are stored unencrypted in DataStore; OPDS offers a trust-all-TLS path. Treat vaachak as a feature blueprint only.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `itexpert120/yomu` using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo uses the single-context domain-doc layout. See `docs/agents/domain.md`.
 
 ## Notes
 

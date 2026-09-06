@@ -11,7 +11,7 @@ Current technical baseline:
 - Android application module: `:app`, namespace `com.itexpert120.yomu`, Jetpack Compose UI
 - Toolchain: AGP 9.3.1, Kotlin 2.4.0, Java 17 (+ core-library desugaring), Compose Material 3 Expressive alpha BOM 2026.07.01, KSP; compileSdk 37 / minSdk 24 / targetSdk 37
 - DI: **Hilt** (`@HiltAndroidApp`, `@HiltViewModel`, modules in `app/di/`)
-- Persistence: **Room v12** (`books`, `chapter_reads`, `reader_settings`, `book_toc` + resource weights, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`; additive migrations 1→12) and **DataStore**
+- Persistence: **Room v14** (`books`, `chapter_reads`, `reader_settings`, `book_toc` + resource weights, `reading_days`, `reading_sessions`, `highlights`, `bookmarks`, plus compatibility-only v13 sync tables; additive migrations 1→14) and **DataStore**
 - Navigation: **Navigation Compose** with type-safe `@Serializable` routes, seamless horizontal
   screen transitions, and ordinary back callbacks for local transient states
 - Reader engine: **Readium 3.3.0** behind a Yomu `ReaderEngine` boundary (only `data/reader/readium` imports Readium); `EpubNavigatorFragment` hosted in Compose

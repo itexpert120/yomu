@@ -152,13 +152,16 @@ private fun ControlsTab(
     onPreviewDim: (Float) -> Unit,
     onCommitDim: (Float) -> Unit,
 ) {
-    val s = state.settings
-    val chapters = remember(state.toc) { state.toc.filter { it.locatorJson != null } }
-    val exactChapterIndex = chapters.indexOfFirst { it.id == state.currentHref }
+    val reading = state.experience
+    val s = reading.settings
+    val chapters = remember(reading.tableOfContents) {
+        reading.tableOfContents.filter { it.locatorJson != null }
+    }
+    val exactChapterIndex = chapters.indexOfFirst { it.id == reading.currentHref }
     val currentChapterIndex = if (exactChapterIndex >= 0) {
         exactChapterIndex
     } else {
-        chapters.indexOfFirst { it.resourceHref == state.currentHref }.coerceAtLeast(0)
+        chapters.indexOfFirst { it.resourceHref == reading.currentHref }.coerceAtLeast(0)
     }
     var previewChapterIndex by remember(chapters, currentChapterIndex) {
         mutableIntStateOf(currentChapterIndex)
@@ -272,7 +275,7 @@ private fun DisplayTab(
     onOpenCustomTheme: () -> Unit,
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
 ) {
-    val s = state.settings
+    val s = state.experience.settings
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             text = "Theme · this book",

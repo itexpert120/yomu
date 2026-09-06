@@ -118,6 +118,20 @@ Another single-module native EPUB reader (`io.github.piyushdaiya.vaachak`, v2.0.
 - **Architectural contrasts (why not to copy its structure):** stock **Material3** with a single global `isEink` boolean instead of a design system; **no Readium boundary** (Readium types leak into Compose UI + ViewModels); **no `NavHost`** — a monolithic `MainActivity` holds all navigation as Compose state; the data layer even depends on a `ui` class (`LibraryRepository` → `ui.reader.ReadiumManager`); a ~550-line god `ReaderViewModel`.
 - **Do not copy (security):** `app/build.gradle.kts` hardcodes the release **keystore password in plaintext** in the signing config; user AI secrets are stored unencrypted in DataStore; OPDS offers a trust-all-TLS path. Treat vaachak as a feature blueprint only.
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `itexpert120/yomu` using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo uses the single-context domain-doc layout. See `docs/agents/domain.md`.
+
 ## Notes
 
 - `index.html`, `script.js`, `styles.css` at the repo root are an exported IntelliJ inspection report — not application code; ignore them.

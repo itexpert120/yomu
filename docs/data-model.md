@@ -4,17 +4,18 @@ This document defines the first-pass data model for Yomu. It is intentionally im
 
 ## Implementation status (current)
 
-Room is live at **schema version 12** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→12 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
+Room is live at **schema version 14** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→14 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
 
 - Built tables: `books`, `chapter_reads`, `chapter_progress`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
+- Compatibility-only tables: `sync_metadata` and `sync_records` are retained so databases from an experimental version-13 sync build open without data loss; no current feature reads or writes them.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
 - Library view preferences and app settings (theme, OLED toggle, and opt-in dynamic colours) live in Preferences DataStore. The legacy accent preference remains persisted but is ignored; active app colors use fixed Material 3 light/dark schemes unless dynamic colours are enabled on Android 12+, in which case they apply to both modes.
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
 - Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
-The "As-built schema (v12)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
+The "As-built schema (v14)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
 
-## As-built schema (v12)
+## As-built schema (v14)
 
 ### `books` (BookEntity)
 
@@ -57,6 +58,8 @@ Primary key `bookId`; `json` holds the flattened Yomu TOC and nullable `resource
 - `9→10`: adds logical chapter progress, the active chapter id on books, and fragment-safe TOC cache rebuilding.
 - `10→11`: records whether chapter completion was explicitly marked by the user.
 - `11→12`: adds nullable `book_toc.resourceWeightsJson`; existing TOC JSON remains valid and is enriched lazily.
+- `12→13`: reserves a schema version previously used by development builds; active tables are unchanged.
+- `13→14`: adopts the dormant sync tables from an earlier version-13 development schema as compatibility-only storage, creating them empty when absent; no rows are removed.
 
 No destructive migrations are used for library data.
 
@@ -77,7 +80,7 @@ Use strongly typed IDs in Kotlin models even if Room stores strings/longs.
 
 ## Core Entities
 
-> Target model. The current v12 schema keeps books flat while adding focused TOC/cache, statistics, highlight, and bookmark tables. Richer `BookFile`, `Author`, `Series`, `Group`, and cross-reference entities remain planned.
+> Target model. The current v14 schema keeps books flat while adding focused TOC/cache, statistics, highlight, and bookmark tables. Richer `BookFile`, `Author`, `Series`, `Group`, and cross-reference entities remain planned.
 
 ### Book
 
@@ -476,7 +479,7 @@ Do not build full-text indexing before import and reader are stable.
 
 ## Room Migration Rules
 
-The schema is live at version 12 with explicit, additive migrations (1→12), exported schema JSON under `app/schemas`, and an instrumentation migration test. The rules below remain in force:
+The schema is live at version 14 with explicit, additive migrations (1→14), exported schema JSON under `app/schemas`, and instrumentation migration tests, including the legacy version-13 repair path. The rules below remain in force:
 
 - Add migration tests from the first schema.
 - Never use destructive migrations for user library data.

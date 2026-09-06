@@ -183,6 +183,7 @@ feature/reader
 |-- ReaderRoute.kt
 |-- ReaderScreen.kt
 |-- ReaderViewModel.kt
+|-- ReadingExperience.kt
 |-- ReaderNavigatorHost.kt
 `-- ReaderChrome.kt
 
@@ -196,7 +197,7 @@ data/reader/readium
 `ReaderNavigatorHost` responsibilities:
 
 - Host the Readium fragment.
-- Forward lifecycle-safe callbacks to controller/ViewModel.
+- Forward the lifecycle-safe host callback through `ReaderNavigator`.
 - Stay visually invisible except for publication content.
 
 Not responsible for:

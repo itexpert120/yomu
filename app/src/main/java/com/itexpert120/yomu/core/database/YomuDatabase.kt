@@ -16,8 +16,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingSessionEntity::class,
         HighlightEntity::class,
         BookmarkEntity::class,
+        LegacySyncMetadataEntity::class,
+        LegacySyncRecordEntity::class,
     ],
-    version = 12,
+    version = YomuDatabase.VERSION,
     exportSchema = true,
 )
 abstract class YomuDatabase : RoomDatabase() {
@@ -26,6 +28,8 @@ abstract class YomuDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
+        const val VERSION = 14
+
         /** v2 adds chapter read-state tracking; books are preserved. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -172,6 +176,58 @@ abstract class YomuDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `book_toc` ADD COLUMN `resourceWeightsJson` TEXT",
+                )
+            }
+        }
+
+        /**
+         * v13 reserves the schema version used by prior development builds. The durable schema is
+         * unchanged from v12, so advancing the version preserves both v12 and existing v13 data.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) = Unit
+        }
+
+        /**
+         * v14 accepts the v13 schema shipped by an earlier development build. That build added
+         * dormant sync tables, while all active library tables match the current schema. They stay
+         * in the Room schema for data compatibility but are not connected to a current feature.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `sync_metadata` (
+                        `key` TEXT NOT NULL,
+                        `value` TEXT NOT NULL,
+                        PRIMARY KEY(`key`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `sync_records` (
+                        `recordKey` TEXT NOT NULL,
+                        `bookSha256` TEXT,
+                        `kind` TEXT NOT NULL,
+                        `entityId` TEXT NOT NULL,
+                        `payloadJson` TEXT,
+                        `deleted` INTEGER NOT NULL,
+                        `physicalTime` INTEGER NOT NULL,
+                        `logicalCounter` INTEGER NOT NULL,
+                        `originDeviceId` TEXT NOT NULL,
+                        `dirty` INTEGER NOT NULL,
+                        PRIMARY KEY(`recordKey`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sync_records_bookSha256` " +
+                        "ON `sync_records` (`bookSha256`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sync_records_dirty` " +
+                        "ON `sync_records` (`dirty`)",
                 )
             }
         }
