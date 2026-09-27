@@ -8,10 +8,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -50,10 +55,11 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -144,11 +150,16 @@ internal fun LibraryTopBar(
                 null
             },
             navigationIcon = {
+                // The slot's width animates with the icon, so the title glides into place instead
+                // of snapping left once the close button has faded out.
+                val slotSpring = remember { MotionScheme.standard() }
                 AnimatedVisibility(
                     visible = selectionMode,
-                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                    enter = expandHorizontally(slotSpring.defaultSpatialSpec(), expandFrom = Alignment.Start) +
+                        fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
                         scaleIn(MaterialTheme.motionScheme.fastSpatialSpec()),
-                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                    exit = shrinkHorizontally(slotSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Start) +
+                        fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
                         scaleOut(MaterialTheme.motionScheme.fastSpatialSpec()),
                 ) {
                     TooltipIconButton(
@@ -199,58 +210,61 @@ internal fun LibraryTopBar(
             val margin = YomuWidthClass.fromWidth(
                 with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() },
             ).margin
-            // The field keeps its space while selecting (so nothing below moves) but fades and
-            // stops taking input.
-            val searchAlpha by animateFloatAsState(
-                targetValue = if (selectionMode) 0f else 1f,
-                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                label = "searchAlpha",
-            )
-            Column(
-                modifier = Modifier
-                    .graphicsLayer { alpha = searchAlpha }
-                    .padding(horizontal = margin, vertical = 8.dp)
-                    // A full-width field across a landscape tablet reads as a web form; cap it.
-                    .widthIn(max = YomuReadableMaxWidth)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            // Selection folds the search row away rather than leaving an empty band: the height
+            // animates on a non-bouncing spring so the grid glides up by just that row instead of
+            // jumping, while the title and actions above stay put.
+            val layoutSpring = remember { MotionScheme.standard() }
+            AnimatedVisibility(
+                visible = !selectionMode,
+                enter = expandVertically(layoutSpring.defaultSpatialSpec(), expandFrom = Alignment.Top) +
+                    fadeIn(layoutSpring.defaultEffectsSpec()),
+                exit = shrinkVertically(layoutSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Top) +
+                    fadeOut(layoutSpring.fastEffectsSpec()),
             ) {
-                TextField(
-                    enabled = !selectionMode,
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    modifier = Modifier.fillMaxWidth().onFocusChanged {
-                        if (it.isFocused && !searchActive) onSearchToggle()
-                    },
-                    placeholder = { Text("Search your library") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "Search library") },
-                    trailingIcon = if (searchQuery.isNotEmpty()) {
-                        {
-                            IconButton(onClick = { onSearchQueryChange("") }, shapes = IconButtonDefaults.shapes()) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = margin, vertical = 8.dp)
+                        // A full-width field across a landscape tablet reads as a web form; cap it.
+                        .widthIn(max = YomuReadableMaxWidth)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        modifier = Modifier.fillMaxWidth().onFocusChanged {
+                            if (it.isFocused && !searchActive) onSearchToggle()
+                        },
+                        placeholder = { Text("Search your library") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "Search library") },
+                        trailingIcon = if (searchQuery.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onSearchQueryChange("") }, shapes = IconButtonDefaults.shapes()) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                                }
                             }
-                        }
-                    } else {
-                        null
-                    },
-                    singleLine = true,
-                    shape = CircleShape,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = fieldColor,
-                        unfocusedContainerColor = fieldColor,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                )
-                if (searchQuery.isNotBlank()) {
-                    Text(
-                        text = "$resultCount ${if (resultCount == 1) "book" else "books"} found",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        } else {
+                            null
+                        },
+                        singleLine = true,
+                        shape = CircleShape,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = fieldColor,
+                            unfocusedContainerColor = fieldColor,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     )
+                    if (searchQuery.isNotBlank()) {
+                        Text(
+                            text = "$resultCount ${if (resultCount == 1) "book" else "books"} found",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
                 }
             }
         }
