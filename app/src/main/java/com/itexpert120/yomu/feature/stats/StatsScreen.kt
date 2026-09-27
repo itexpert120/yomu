@@ -60,10 +60,11 @@ import androidx.graphics.shapes.RoundedPolygon
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
+import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
-import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
+import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
@@ -85,7 +86,8 @@ fun StatsRoute(onBack: (() -> Unit)?) {
 @Composable
 fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth.supportsYomuTwoPane() && !state.isLoading && state.error == null) {
+        // Stats is information-dense, so per Material 3 it stays single-pane until expanded width.
+        if (YomuWidthClass.fromWidth(maxWidth).isExpanded && !state.isLoading && state.error == null) {
             TabletStatsLayout(
                 stats = state.stats,
                 history = state.history,
@@ -97,6 +99,7 @@ fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
                 title = "Statistics",
                 onBack = onBack,
                 showScrollEdgeShadow = false,
+                maxContentWidth = YomuContentMaxWidth,
             ) {
                 when {
                     state.isLoading -> LoadingState()
@@ -124,8 +127,8 @@ private fun TabletStatsLayout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                startModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                endModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                startModifier = Modifier.padding(top = 8.dp),
+                endModifier = Modifier.padding(top = 8.dp),
                 startContent = {
                     Column(
                         modifier = Modifier

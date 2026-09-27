@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -22,9 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
+import com.itexpert120.yomu.core.designsystem.YomuPaneSpacer
+import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.YomuTwoPaneMinWidth
+import com.itexpert120.yomu.core.designsystem.yomuLeadingPaneWidth
 import com.itexpert120.yomu.core.model.ReaderSettings
 
 @Composable
@@ -37,9 +43,13 @@ fun ReaderDefaultsRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit) {
         subtitle = "Every new book starts here",
         onBack = onBack,
         showScrollEdgeShadow = false,
+        maxContentWidth = YomuContentMaxWidth,
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val wide = YomuWidthClass.fromWidth(maxWidth).isWide
+            // Material 3 supporting-pane layout: a fixed preview pane beside flexible controls
+            // once there's room for both; stacked below that.
+            val wide = maxWidth >= YomuTwoPaneMinWidth
+            val previewWidth = yomuLeadingPaneWidth(maxWidth).coerceAtMost(360.dp)
             val controls: @Composable () -> Unit = {
                 ReaderPreferenceControls(
                     settings = state.settings,
@@ -55,14 +65,14 @@ fun ReaderDefaultsRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit) {
             if (wide) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(YomuPaneSpacer),
                     verticalAlignment = Alignment.Top,
                 ) {
                     ReaderDefaultsPreview(
                         settings = state.settings,
-                        modifier = Modifier.weight(0.9f),
+                        modifier = Modifier.width(previewWidth),
                     )
-                    Column(modifier = Modifier.weight(1.5f)) {
+                    Column(modifier = Modifier.weight(1f).widthIn(max = YomuReadableMaxWidth)) {
                         controls()
                     }
                 }

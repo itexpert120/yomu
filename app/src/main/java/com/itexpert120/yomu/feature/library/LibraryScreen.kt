@@ -65,8 +65,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
+import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuLoadingState
+import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -544,10 +546,14 @@ private fun LibraryGrid(
         // In Auto mode, give covers more room to breathe as the screen widens — slightly larger
         // minimum cell on tablets means fewer, larger covers rather than a dense wall of tiny ones.
         val autoMinSize = when (widthClass) {
+            YomuWidthClass.Large -> 164.dp
             YomuWidthClass.Expanded -> 150.dp
             YomuWidthClass.Medium -> 132.dp
             YomuWidthClass.Compact -> 118.dp
         }
+        // Material 3 feed layout: 24dp window margins and wider gutters from medium up.
+        val margin = widthClass.margin
+        val gutter = if (widthClass.isWide) 16.dp else 12.dp
         LazyVerticalGrid(
             state = state,
             // Auto (0): adaptive so covers stay a comfortable size — ~3 columns on a phone, more on a
@@ -558,10 +564,12 @@ private fun LibraryGrid(
                 GridCells.Fixed(columns)
             },
             modifier = Modifier
-                .fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .widthIn(max = YomuContentMaxWidth)
+                .fillMaxSize()
+                .align(Alignment.TopCenter),
+            contentPadding = PaddingValues(start = margin, end = margin, top = 16.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(if (widthClass.isWide) 24.dp else 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(gutter),
         ) {
             groups.forEach { group ->
                 if (group.label.isNotEmpty()) {
@@ -623,7 +631,7 @@ private fun LibraryList(
         LazyColumn(
             state = state,
             modifier = Modifier
-                .widthIn(max = 720.dp)
+                .widthIn(max = YomuReadableMaxWidth)
                 .fillMaxSize()
                 .align(Alignment.TopCenter),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),

@@ -87,7 +87,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,6 +104,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -181,6 +185,11 @@ fun BookDetailsScreen(
         toc.selectedCount == selectableChapterCount
     var readButtonCollapsed by remember { mutableStateOf(false) }
     var topBarHeightPx by remember { mutableIntStateOf(0) }
+    // Two-pane only: where the book's own title block and the left pane's top sit on screen, so
+    // the app bar reveals the title exactly when the in-pane title scrolls out of view.
+    var identityBottomPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    var detailsPaneTopPx by remember { mutableFloatStateOf(0f) }
+    var twoPane by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val readFabScrollThresholdPx = with(density) { ReadFabScrollThreshold.roundToPx() }
     val topBarHeight = if (topBarHeightPx > 0) {
@@ -257,7 +266,7 @@ fun BookDetailsScreen(
                 // and the contents/description into a right column so the two read side by side
                 // instead of the cover sitting alone above a long scroll. Phones stay single-pane.
                 val wideEnough = maxWidth.supportsYomuTwoPane()
-                val portraitTablet = wideEnough && maxHeight > maxWidth
+                SideEffect { twoPane = wideEnough && book != null }
 
                 if (wideEnough && book != null) {
                     TwoPaneDetails(
@@ -267,7 +276,8 @@ fun BookDetailsScreen(
                         detailsScrollState = detailsScrollState,
                         navBottom = navBottom,
                         topInset = topBarHeight,
-                        stackBookIdentity = portraitTablet,
+                        onIdentityBottom = { identityBottomPx = it },
+                        onDetailsPaneTop = { detailsPaneTopPx = it },
                         onCoverClick = { if (book.coverImagePath != null) showCover = true },
                         onTocSortChange = onTocSortChange,
                         onOpenChapter = onOpenChapter,
@@ -346,9 +356,14 @@ fun BookDetailsScreen(
                 hasTimeline = hasTimeline,
                 selectionMode = toc.selectionMode,
                 allChaptersSelected = allChaptersSelected,
-                scrolled = listState.canScrollBackward || detailsScrollState.value > 0,
-                titleVisible = listState.firstVisibleItemIndex > 0 ||
-                    detailsScrollState.value > topBarHeightPx.coerceAtLeast(1),
+                // In two panes nothing scrolls beneath the bar (panes start below it), so it stays
+                // flat; the title appears only once the pane's own title has scrolled away.
+                scrolled = !twoPane && listState.canScrollBackward,
+                titleVisible = if (twoPane) {
+                    identityBottomPx <= detailsPaneTopPx
+                } else {
+                    listState.firstVisibleItemIndex > 0
+                },
                 onBack = onBack,
                 onEdit = onEdit,
                 onRemove = requestRemove,
@@ -588,7 +603,8 @@ private fun TwoPaneDetails(
     detailsScrollState: androidx.compose.foundation.ScrollState,
     navBottom: androidx.compose.ui.unit.Dp,
     topInset: Dp,
-    stackBookIdentity: Boolean,
+    onIdentityBottom: (Float) -> Unit,
+    onDetailsPaneTop: (Float) -> Unit,
     onCoverClick: () -> Unit,
     onTocSortChange: (TocSortMode) -> Unit,
     onOpenChapter: (String) -> Unit,
@@ -597,29 +613,38 @@ private fun TwoPaneDetails(
     onToggleChapterSelection: (Int) -> Unit,
     onToggleChapterBookmark: (Int) -> Unit,
 ) {
+    // Material 3 fixed-and-flexible panes: both start below the app bar as contained surfaces, so
+    // the bar never has content scrolling beneath it and each pane scrolls independently.
     YomuTwoPane(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = topInset + 8.dp),
         startContent = {
-            // Left pane: book identity + actions + description, independently scrollable.
-            Box(
+            // Left pane: book identity + progress + description, independently scrollable.
+            BoxWithConstraints(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(),
+                    .fillMaxSize()
+                    .padding(bottom = navBottom + 16.dp)
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .onGloballyPositioned { onDetailsPaneTop(it.boundsInWindow().top) },
             ) {
+                // The cover and title sit side by side only when the fixed pane is roomy enough.
+                val stackIdentity = maxWidth < 440.dp
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(detailsScrollState)
-                        // The backdrop begins at the window edge beneath the transparent top bar.
-                        .padding(bottom = navBottom + 28.dp),
+                        .padding(bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     BookHeader(
                         book = book,
-                        topInset = topInset,
                         onCoverClick = onCoverClick,
-                        coverWidth = 176.dp,
-                        stackIdentity = stackBookIdentity,
+                        coverWidth = if (stackIdentity) 160.dp else 176.dp,
+                        stackIdentity = stackIdentity,
+                        identityModifier = Modifier.onGloballyPositioned {
+                            onIdentityBottom(it.boundsInWindow().bottom)
+                        },
                     )
                 }
                 YomuVerticalScrollIndicator(
@@ -627,53 +652,44 @@ private fun TwoPaneDetails(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .fillMaxHeight()
-                        .padding(
-                            top = topInset + 8.dp,
-                            end = 4.dp,
-                            bottom = navBottom + 28.dp,
-                        ),
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
                 )
             }
         },
         endContent = {
-            // Right pane: the contents list (virtualized).
-            Box(
+            // Right pane: the contents list (virtualized) in its own contained surface.
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(),
+                    .fillMaxSize()
+                    .padding(bottom = navBottom + 16.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        top = topInset + 4.dp,
-                        bottom = navBottom + 28.dp,
-                    ),
-                    verticalArrangement = Arrangement.Top,
-                ) {
-                    tocSection(
-                        toc = toc,
-                        onTocSortChange = onTocSortChange,
-                        onOpenChapter = onOpenChapter,
-                        onSetChapterRead = onSetChapterRead,
-                        onEnterSelection = onEnterChapterSelection,
-                        onToggleSelection = onToggleChapterSelection,
-                        onToggleBookmark = onToggleChapterBookmark,
+                Box(Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
+                        verticalArrangement = Arrangement.Top,
+                    ) {
+                        tocSection(
+                            toc = toc,
+                            onTocSortChange = onTocSortChange,
+                            onOpenChapter = onOpenChapter,
+                            onSetChapterRead = onSetChapterRead,
+                            onEnterSelection = onEnterChapterSelection,
+                            onToggleSelection = onToggleChapterSelection,
+                            onToggleBookmark = onToggleChapterBookmark,
+                        )
+                    }
+                    YomuVerticalScrollIndicator(
+                        state = listState,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .padding(top = 12.dp, end = 4.dp, bottom = 96.dp),
                     )
-                    // Trailing room for the floating Read button / selection toolbar.
-                    item { Spacer(Modifier.height(96.dp)) }
                 }
-                YomuVerticalScrollIndicator(
-                    state = listState,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .padding(
-                            top = topInset + 8.dp,
-                            end = 4.dp,
-                            bottom = navBottom + 96.dp,
-                        ),
-                )
             }
         },
     )
@@ -688,6 +704,7 @@ private fun BookHeader(
     coverWidth: Dp = 128.dp,
     stackIdentity: Boolean = false,
     modifier: Modifier = Modifier,
+    identityModifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -709,7 +726,8 @@ private fun BookHeader(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp)
+                            .then(identityModifier),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
@@ -727,7 +745,8 @@ private fun BookHeader(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp)
+                            .then(identityModifier),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.Top,
                     ) {

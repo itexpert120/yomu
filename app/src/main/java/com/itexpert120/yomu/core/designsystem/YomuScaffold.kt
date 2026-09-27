@@ -37,7 +37,10 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
@@ -112,9 +115,15 @@ fun YomuScreenScaffold(
     subtitle: String? = null,
     trailing: @Composable RowScope.() -> Unit = {},
     showScrollEdgeShadow: Boolean = true,
+    // Reading-width by default so forms and prose keep a comfortable line length on tablets;
+    // visual dashboards can pass YomuContentMaxWidth.
+    maxContentWidth: Dp = YomuReadableMaxWidth,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
+    val windowMargin = YomuWidthClass.fromWidth(
+        with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() },
+    ).margin
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     YomuAppSurface(modifier = modifier) {
         Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
@@ -146,9 +155,9 @@ fun YomuScreenScaffold(
             ) {
                 Column(
                     modifier = Modifier
-                        .widthIn(max = YomuContentMaxWidth)
+                        .widthIn(max = maxContentWidth + windowMargin * 2)
                         .fillMaxWidth()
-                        .padding(horizontal = YomuTheme.space.md)
+                        .padding(horizontal = windowMargin)
                         // Insets are consumption-aware: while the IME is up it already covers the
                         // nav bar, so this collapses instead of double-padding.
                         .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility.only(WindowInsetsSides.Bottom))

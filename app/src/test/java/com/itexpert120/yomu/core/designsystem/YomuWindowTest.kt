@@ -15,15 +15,21 @@ class YomuWindowTest {
     }
 
     @Test
-    fun leadingPaneUsesHalfUntilThe450DpCap() {
-        assertEquals(360.dp, yomuLeadingPaneWidth(720.dp))
-        assertEquals(450.dp, yomuLeadingPaneWidth(900.dp))
-        assertEquals(450.dp, yomuLeadingPaneWidth(1280.dp))
+    fun leadingPaneFollowsMaterialPaneWidths() {
+        // Medium: an even split of the space left after two 24dp margins and one 24dp spacer.
+        assertEquals(324.dp, yomuLeadingPaneWidth(720.dp))
+        // Expanded: fixed 360dp pane. Large: fixed 412dp pane.
+        assertEquals(360.dp, yomuLeadingPaneWidth(900.dp))
+        assertEquals(412.dp, yomuLeadingPaneWidth(1280.dp))
     }
 
     @Test
-    fun navigationWidthClassActivatesAt600Dp() {
+    fun widthClassesMatchMaterialBreakpoints() {
         assertEquals(YomuWidthClass.Compact, YomuWidthClass.fromWidth(599.dp))
         assertEquals(YomuWidthClass.Medium, YomuWidthClass.fromWidth(600.dp))
+        assertEquals(YomuWidthClass.Expanded, YomuWidthClass.fromWidth(840.dp))
+        assertEquals(YomuWidthClass.Large, YomuWidthClass.fromWidth(1200.dp))
+        assertEquals(16.dp, YomuWidthClass.Compact.margin)
+        assertEquals(24.dp, YomuWidthClass.Medium.margin)
     }
 }

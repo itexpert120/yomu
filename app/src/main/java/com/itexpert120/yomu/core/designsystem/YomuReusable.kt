@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
@@ -173,20 +174,20 @@ fun YomuBottomSheet(
         // clearance is moved onto the content below so text/controls still sit above the bar.
         contentWindowInsets = { WindowInsets(0) },
     ) {
-        // ModalBottomSheet hosts its content in its own Dialog window, which by default resizes
-        // (adjustResize) when the IME opens. That shrinks the window below our 60%-of-screen max
-        // height, so the sheet fills whatever's left near the top instead of staying put — reads as
-        // the whole sheet jumping up. Pan mode keeps the window's size fixed and only shifts content
-        // enough to keep the focused field visible, so a focused input scrolls into view without the
-        // sheet itself resizing/relocating.
+        // The sheet's dialog window is edge-to-edge, so the keyboard arrives as IME insets rather than
+        // a window resize. Resize mode guarantees those insets are dispatched (pan mode left the
+        // sheet sitting under the keyboard); the content then pads itself above the IME, lifting
+        // the whole sheet with its fields still visible.
         val dialogView = LocalView.current
         SideEffect {
             (dialogView.parent as? DialogWindowProvider)?.window
-                ?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+                ?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Outermost, so the height cap below applies to the space left above the keyboard.
+                .imePadding()
                 .then(
                     if (scrollable) {
                         Modifier

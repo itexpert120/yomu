@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
@@ -214,8 +216,8 @@ private fun TabletSettingsLayout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                startModifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                endModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                startModifier = Modifier.padding(top = 8.dp),
+                endModifier = Modifier.padding(top = 8.dp),
                 startContent = {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -232,8 +234,10 @@ private fun TabletSettingsLayout(
                     }
                 },
                 endContent = {
+                    // Detail pane keeps a readable line length on wide landscape tablets.
                     Column(
                         modifier = Modifier
+                            .widthIn(max = YomuReadableMaxWidth)
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
                             .padding(bottom = navBottom + 28.dp),
