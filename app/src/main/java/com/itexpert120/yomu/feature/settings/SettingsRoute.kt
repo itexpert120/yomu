@@ -1,6 +1,5 @@
 package com.itexpert120.yomu.feature.settings
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,7 +22,6 @@ fun SettingsRoute(
     val readerDefaults by readerDefaultsViewModel.state.collectAsState()
     val preference = appearance.themePreference
     val oledDark = appearance.oledDark
-    val dynamicColors = appearance.dynamicColors
     val systemDark = isSystemInDarkTheme()
     // The OLED toggle only has an effect when the resolved theme is dark.
     val darkActive = when (preference) {
@@ -31,17 +29,17 @@ fun SettingsRoute(
         ThemePreference.Light -> false
         ThemePreference.Dark -> true
     }
-    val dynamicColorsAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     SettingsScreen(
         selectedTheme = preference,
         oledDark = oledDark,
         oledEnabled = darkActive,
-        dynamicColors = dynamicColors,
-        dynamicColorsAvailable = dynamicColorsAvailable,
+        accentSelection = appearance.accentSelection,
+        colorStyle = appearance.colorStyle,
         onSelectTheme = appViewModel::onSelectTheme,
         onToggleOled = appViewModel::onSetOledDark,
-        onToggleDynamicColors = appViewModel::onSetDynamicColors,
+        onSelectAccent = { appViewModel.onSelectAccent(it) },
+        onSelectColorStyle = { appViewModel.onSelectColorStyle(it) },
         readerSettings = readerDefaults.settings,
         customThemes = readerDefaults.customThemes,
         customFonts = readerDefaults.installedFonts,

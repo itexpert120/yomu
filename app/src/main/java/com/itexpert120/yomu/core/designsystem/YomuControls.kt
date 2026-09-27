@@ -2,11 +2,14 @@ package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,12 +39,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -159,27 +167,71 @@ fun YomuSingleChoiceSegmentedControl(
 ) {
     if (options.isEmpty()) return
     val selected = selectedIndex.coerceIn(0, options.lastIndex)
+    YomuConnectedChoiceGroup(
+        options = options.indices.toList(),
+        selected = selected,
+        label = { options[it] },
+        onSelect = onSelected,
+        modifier = modifier,
+    )
+}
+
+/**
+ * M3 Expressive connected button group for mutually exclusive options (the replacement for
+ * segmented buttons). The selected toggle morphs to its square selected shape and takes the
+ * emphasized label style, so selection reads from shape and weight as well as colour.
+ */
+@Composable
+fun <T> YomuConnectedChoiceGroup(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ((T) -> ImageVector)? = null,
+    enabled: Boolean = true,
+    height: Dp = ButtonDefaults.MinHeight,
+) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = modifier.fillMaxWidth().selectableGroup(),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
     ) {
         options.forEachIndexed { index, option ->
+            val checked = option == selected
             ToggleButton(
-                checked = index == selected,
-                onCheckedChange = { onSelected(index) },
+                checked = checked,
+                onCheckedChange = {
+                    if (!checked) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onSelect(option)
+                },
+                enabled = enabled,
                 shapes = when {
-                    options.size == 1 -> ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight)
+                    options.size == 1 -> ToggleButtonDefaults.shapesFor(height)
                     index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                     index == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                 },
-                modifier = Modifier.weight(1f).semantics {
-                    role = Role.RadioButton
-                    this.selected = index == selected
-                },
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = height)
+                    .semantics {
+                        role = Role.RadioButton
+                        this.selected = checked
+                    },
             ) {
-                Text(text = option, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                if (icon != null) {
+                    Icon(icon(option), contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+                }
+                Text(
+                    text = label(option),
+                    style = if (checked) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

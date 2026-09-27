@@ -9,7 +9,7 @@ Room is live at **schema version 14** (`core/database/YomuDatabase`, schemas exp
 - Built tables: `books`, `chapter_reads`, `chapter_progress`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
 - Compatibility-only tables: `sync_metadata` and `sync_records` are retained so databases from an experimental version-13 sync build open without data loss; no current feature reads or writes them.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
-- Library view preferences and app settings (theme, OLED toggle, and opt-in dynamic colours) live in Preferences DataStore. The legacy accent preference remains persisted but is ignored; active app colors use fixed Material 3 light/dark schemes unless dynamic colours are enabled on Android 12+, in which case they apply to both modes.
+- Library view preferences and app settings (theme mode, OLED toggle, colour source, palette style) live in Preferences DataStore. The colour source (`accent_color`: `wallpaper`, a preset name, or `#ARGB`) and `color_style` drive the whole Material 3 scheme — presets and custom colours are expanded into tonal light/dark schemes with MaterialKolor. With no stored source, Android 12+ defaults to the wallpaper palette (unless the retired "Wallpaper colors" toggle was switched off) and older devices to the Ocean preset.
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
 - Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
@@ -272,7 +272,7 @@ Rules:
 
 ### ThemePreset
 
-> Partly built. App theme choice (`ThemePreference`: System/Light/Dark), a pure-black/OLED toggle, and an Android 12+ dynamic-colours opt-in for both modes are persisted in DataStore. The legacy `AccentSelection` value remains stored for compatibility but does not override the active Material 3 app scheme. Reader colour themes are a code-defined enum (`ReaderThemeMode`: Light/Dark/Sepia/Black/Custom). The persisted **custom** `ThemePreset` table below is planned.
+> Partly built. App theme choice (`ThemePreference`: System/Light/Dark), a pure-black/OLED toggle, the colour source (`AccentSelection`: Wallpaper / `AccentColor` preset / custom ARGB) and palette style (`ColorStyle`) are persisted in DataStore and generate the active Material 3 scheme. Per-book lifetime reading time comes from `reading_totals` (joined to books; removed books keep their time). Reader colour themes are a code-defined enum (`ReaderThemeMode`: Light/Dark/Sepia/Black/Custom). The persisted **custom** `ThemePreset` table below is planned.
 
 Built-in presets can be code-defined. User themes should be persisted.
 

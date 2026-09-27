@@ -2,8 +2,8 @@ package com.itexpert120.yomu.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.itexpert120.yomu.core.model.AccentColor
 import com.itexpert120.yomu.core.model.AccentSelection
+import com.itexpert120.yomu.core.model.ColorStyle
 import com.itexpert120.yomu.core.model.ThemePreference
 import com.itexpert120.yomu.data.settings.AppSettingsRepository
 import com.itexpert120.yomu.data.stats.ReadingWriteQueue
@@ -20,8 +20,8 @@ import javax.inject.Inject
 data class AppAppearance(
     val themePreference: ThemePreference = ThemePreference.System,
     val oledDark: Boolean = false,
-    val dynamicColors: Boolean = false,
-    val accentSelection: AccentSelection = AccentSelection.Default,
+    val accentSelection: AccentSelection = AccentSelection.FallbackPreset,
+    val colorStyle: ColorStyle = ColorStyle.Balanced,
     val isLoaded: Boolean = false,
 )
 
@@ -39,14 +39,14 @@ class AppViewModel @Inject constructor(
     val appearance: StateFlow<AppAppearance> = combine(
         settings.themePreference,
         settings.oledDark,
-        settings.dynamicColors,
         settings.accentSelection,
-    ) { themePreference, oledDark, dynamicColors, accentSelection ->
+        settings.colorStyle,
+    ) { themePreference, oledDark, accentSelection, colorStyle ->
         AppAppearance(
             themePreference = themePreference,
             oledDark = oledDark,
-            dynamicColors = dynamicColors,
             accentSelection = accentSelection,
+            colorStyle = colorStyle,
             isLoaded = true,
         )
     }.catch {
@@ -69,15 +69,11 @@ class AppViewModel @Inject constructor(
         settings.setOledDark(enabled)
     }
 
-    fun onSetDynamicColors(enabled: Boolean) = viewModelScope.launch {
-        settings.setDynamicColors(enabled)
+    fun onSelectAccent(selection: AccentSelection) = viewModelScope.launch {
+        settings.setAccentSelection(selection)
     }
 
-    fun onSelectAccent(accent: AccentColor) = viewModelScope.launch {
-        settings.setAccentSelection(AccentSelection.Preset(accent))
-    }
-
-    fun onSelectCustomAccent(argb: Long) = viewModelScope.launch {
-        settings.setAccentSelection(AccentSelection.Custom(argb))
+    fun onSelectColorStyle(style: ColorStyle) = viewModelScope.launch {
+        settings.setColorStyle(style)
     }
 }

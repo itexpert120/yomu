@@ -69,3 +69,16 @@ data class ReadingStats(
     val secondsLast7Days: Long = 0L,
     val secondsLast30Days: Long = 0L,
 )
+
+/**
+ * Lifetime reading time for one book. [bookId]/[coverImagePath] are null and [title] is a
+ * placeholder when the book has since been removed — its time still counts toward the total.
+ */
+data class BookReadingTime(
+    val bookId: String?,
+    val title: String,
+    val author: String?,
+    val coverImagePath: String?,
+    val seconds: Long,
+    val sessionCount: Int,
+)

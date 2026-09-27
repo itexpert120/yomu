@@ -96,6 +96,11 @@ fun YomuBookCard(
     }
 }
 
+/**
+ * A titled settings section in the M3 Expressive settings pattern: an emphasized primary-coloured
+ * header sits on the surface, and the section's rows provide their own segmented containment —
+ * no card-inside-card nesting. [outlined] draws a quiet boundary for sections that need one.
+ */
 @Composable
 fun YomuSettingGroup(
     title: String,
@@ -104,38 +109,39 @@ fun YomuSettingGroup(
     subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-        border = if (outlined) {
-            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        } else {
-            null
-        },
-    ) {
-        Column(
-            modifier = Modifier.padding(YomuTheme.space.md),
-            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val body: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
+            Column(
+                modifier = Modifier.padding(horizontal = YomuTheme.space.xxs),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 Text(
                     text = title,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = YomuTheme.type.section,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMediumEmphasized,
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = YomuTheme.type.caption,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            content()
+            Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm), content = content)
         }
+    }
+    if (outlined) {
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.outlinedCardColors(),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(Modifier.padding(YomuTheme.space.md)) { body() }
+        }
+    } else {
+        Column(modifier = modifier.fillMaxWidth().padding(top = YomuTheme.space.xs)) { body() }
     }
 }
 

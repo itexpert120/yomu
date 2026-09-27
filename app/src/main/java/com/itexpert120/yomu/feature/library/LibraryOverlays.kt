@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
@@ -42,7 +43,7 @@ internal fun ConfirmRemoveDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = onConfirm, shapes = ButtonDefaults.shapes()) {
                 Text("Remove")
             }
         },
@@ -77,7 +78,7 @@ internal fun ImportNotice(
             .semantics { liveRegion = LiveRegionMode.Assertive },
         action = if (!importing && canRetry) {
             {
-                TextButton(onClick = onRetry) {
+                TextButton(onClick = onRetry, shapes = ButtonDefaults.shapes()) {
                     Text("Retry")
                 }
             }

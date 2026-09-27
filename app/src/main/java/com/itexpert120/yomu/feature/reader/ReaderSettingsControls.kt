@@ -4,31 +4,36 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.TextDecrease
+import androidx.compose.material.icons.rounded.TextIncrease
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
+import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
+import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuSingleChoiceSegmentedControl
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
-import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.core.designsystem.YomuValueChip
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
@@ -39,11 +44,6 @@ import com.itexpert120.yomu.core.model.ReaderThemeMode
 import java.util.Locale
 import kotlin.math.round
 import kotlin.math.roundToInt
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-}
 
 /** Page themes share the grouped settings treatment in defaults and reading controls. */
 @Composable
@@ -65,9 +65,10 @@ internal fun ReaderThemeRow(settings: ReaderSettings, onUpdateSettings: (ReaderS
                     androidx.compose.material3.Surface(
                         color = Color(palette.backgroundArgb),
                         contentColor = Color(palette.textArgb),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     ) {
-                        Text("Aa", modifier = Modifier.padding(10.dp), style = YomuTheme.type.body)
+                        Text("Aa", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.titleMediumEmphasized)
                     }
                 },
             ) {
@@ -86,7 +87,7 @@ internal fun ReaderCustomThemeRow(
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
 ) {
     if (customThemes.isNotEmpty()) {
-        SectionLabel("Saved")
+        YomuSectionLabel("Saved")
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -102,12 +103,15 @@ internal fun ReaderCustomThemeRow(
             }
         }
     }
-    YomuButton(
-        text = "Customise theme",
+    FilledTonalButton(
         onClick = onOpenCustomTheme,
-        emphasis = YomuButtonEmphasis.Secondary,
+        shapes = ButtonDefaults.shapes(),
         modifier = Modifier.fillMaxWidth(),
-    )
+    ) {
+        Icon(Icons.Rounded.Palette, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        Text("Customise theme")
+    }
 }
 
 @Composable
@@ -159,47 +163,43 @@ internal fun ReaderFontRow(
 internal fun ReaderFontSizeControl(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    position: YomuSettingPosition = YomuSettingPosition.First,
 ) {
     val min = ReaderSettings.MIN_FONT_SCALE
     val max = ReaderSettings.MAX_FONT_SCALE
     val step = ReaderSettings.FONT_SCALE_STEP
     fun snap(value: Float): Float = (round(value / step) * step).coerceIn(min, max)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = "Font size",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
-            modifier = Modifier.weight(1f),
-        )
-        val atDefault = settings.fontScale == ReaderSettings.DEFAULT_FONT_SCALE
-        Text(
-            text = "${(settings.fontScale * 100).roundToInt()}%",
-            color = if (atDefault) YomuTheme.colors.textMuted else YomuTheme.colors.accent,
-            style = YomuTheme.type.mono,
-            modifier = Modifier
-                .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                .yomuPressable(
-                    enabled = !atDefault,
-                    onClick = { onUpdateSettings(settings.copy(fontScale = ReaderSettings.DEFAULT_FONT_SCALE)) },
-                    pressedScale = 1f,
-                )
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-        )
-    }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        RoundIcon(Icons.Rounded.Remove, "Decrease font size") {
-            onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale - step)))
+    val atDefault = settings.fontScale == ReaderSettings.DEFAULT_FONT_SCALE
+    YomuSettingContainer(position = position) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Font size",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            YomuValueChip(
+                text = "${(settings.fontScale * 100).roundToInt()}%",
+                customized = !atDefault,
+                onReset = { onUpdateSettings(settings.copy(fontScale = ReaderSettings.DEFAULT_FONT_SCALE)) },
+                resetLabel = "Reset font size",
+            )
         }
-        ReaderSlider(
-            fraction = (settings.fontScale - min) / (max - min),
-            onSeek = { onUpdateSettings(settings.copy(fontScale = snap(min + it * (max - min)))) },
-            modifier = Modifier.weight(1f),
-        )
-        RoundIcon(Icons.Rounded.Add, "Increase font size") {
-            onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale + step)))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            RoundIcon(Icons.Rounded.TextDecrease, "Decrease font size") {
+                onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale - step)))
+            }
+            ReaderSlider(
+                fraction = (settings.fontScale - min) / (max - min),
+                onSeek = { onUpdateSettings(settings.copy(fontScale = snap(min + it * (max - min)))) },
+                modifier = Modifier.weight(1f),
+                contentDescription = "Font size",
+            )
+            RoundIcon(Icons.Rounded.TextIncrease, "Increase font size") {
+                onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale + step)))
+            }
         }
     }
 }
@@ -233,6 +233,7 @@ internal fun ReaderTypographySliders(
         step = ReaderSettings.LINE_HEIGHT_STEP,
         valueText = { String.format(Locale.US, "%.2f", it) },
         onChange = { onUpdateSettings(settings.copy(lineHeight = it)) },
+        position = YomuSettingPosition.Middle,
     )
     AutoSlider(
         label = "Page margins",
@@ -243,6 +244,7 @@ internal fun ReaderTypographySliders(
         step = ReaderSettings.PAGE_MARGINS_STEP,
         valueText = { String.format(Locale.US, "%.1f", it) },
         onChange = { onUpdateSettings(settings.copy(pageMargins = it)) },
+        position = YomuSettingPosition.Middle,
     )
     AutoSlider(
         label = "Paragraph spacing",
@@ -253,6 +255,7 @@ internal fun ReaderTypographySliders(
         step = ReaderSettings.PARAGRAPH_SPACING_STEP,
         valueText = { String.format(Locale.US, "%.1f", it) },
         onChange = { onUpdateSettings(settings.copy(paragraphSpacing = it)) },
+        position = YomuSettingPosition.Last,
     )
 }
 
@@ -368,9 +371,11 @@ internal fun ReaderPreferenceControls(
                 customFonts = customFonts,
                 onManageFonts = onManageFonts,
             )
-            ReaderFontSizeControl(settings, onUpdateSettings)
             ReaderTextAlignControl(settings, onUpdateSettings)
-            ReaderTypographySliders(settings, onUpdateSettings)
+            YomuSettingList {
+                ReaderFontSizeControl(settings, onUpdateSettings)
+                ReaderTypographySliders(settings, onUpdateSettings)
+            }
         }
 
         YomuSettingGroup(

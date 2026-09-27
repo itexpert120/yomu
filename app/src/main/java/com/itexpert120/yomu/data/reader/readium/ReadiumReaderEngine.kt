@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.data.reader.readium
 
+import android.animation.ValueAnimator
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -1167,13 +1168,17 @@ private class ReadiumReaderSession(
         injectJs(js)
     }
 
+    // Page turns slide horizontally (Readium's animated pagination) unless the system has animations
+    // turned off. Readium defaults to an instant jump, which made tap-to-turn feel like a hard cut.
     override fun goForward() {
-        (navigator as? OverflowableNavigator)?.goForward()
+        (navigator as? OverflowableNavigator)?.goForward(animated = pageTurnAnimated())
     }
 
     override fun goBackward() {
-        (navigator as? OverflowableNavigator)?.goBackward()
+        (navigator as? OverflowableNavigator)?.goBackward(animated = pageTurnAnimated())
     }
+
+    private fun pageTurnAnimated(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
 
     override fun nextChapter() = goToLogicalSectionOffset(+1)
 

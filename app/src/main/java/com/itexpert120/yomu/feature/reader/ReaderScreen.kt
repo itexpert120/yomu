@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -64,7 +65,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
@@ -74,6 +74,8 @@ import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderNavigator
 import com.itexpert120.yomu.core.reader.ReaderRenderState
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 // Intentionally colours the system bars to the reading theme via the (now-deprecated) window
 // setters — the only way to keep the bars seamless with the page without a system scrim.
@@ -315,9 +317,12 @@ fun ReaderScreen(
     // Non-immersive keeps the page inset below the bars (their height reserved). The chrome always
     // stays shown while loading or when immersive is off (title/Back/footer visible).
     val immersive = reading.settings.immersiveChrome
-    val pageReady = reading.renderState is ReaderRenderState.Ready
+    // A chapter transition keeps the chrome as it was; only the initial open (or a failure) forces
+    // it visible. Treating transitions as "not ready" flashed the immersive top bar every chapter.
+    val chromeForcedByLoad = reading.renderState is ReaderRenderState.Opening ||
+        reading.renderState is ReaderRenderState.Failed
     val readerSurfacesAvailable = reading.renderState !is ReaderRenderState.Opening
-    val chromeShown = !pageReady || !immersive || state.chapterControlsVisible
+    val chromeShown = chromeForcedByLoad || !immersive || state.chapterControlsVisible
     val topInset = when {
         immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeTop
         immersive -> 0.dp
@@ -335,17 +340,37 @@ fun ReaderScreen(
     val background = Color(reading.settings.backgroundArgb)
     val onBackground = Color(reading.settings.textArgb)
 
+    // Page reveal: the new chapter fades in on an effects spring while travelling a short distance
+    // in its reading direction on a spatial spring — rising into place going forward, settling down
+    // going back — so a chapter change reads as continuous motion rather than a pop.
     val reveal = remember { Animatable(1f) }
+    val revealShift = remember { Animatable(0f) }
+    val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     LaunchedEffect(reading.renderState) {
-        when {
-            reading.renderState !is ReaderRenderState.Ready -> reveal.snapTo(0f)
-            !yomuAnimationsEnabled() -> reveal.snapTo(1f)
-            else -> reveal.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 120, easing = YomuMotion.EmphasizedDecel),
-            )
+        when (val render = reading.renderState) {
+            is ReaderRenderState.Transitioning -> {
+                reveal.snapTo(0f)
+                revealShift.snapTo(if (render.forward) 1f else -1f)
+            }
+
+            !is ReaderRenderState.Ready -> {
+                reveal.snapTo(0f)
+                revealShift.snapTo(0f)
+            }
+
+            else -> if (!yomuAnimationsEnabled()) {
+                reveal.snapTo(1f)
+                revealShift.snapTo(0f)
+            } else {
+                coroutineScope {
+                    launch { reveal.animateTo(1f, effectsSpec) }
+                    launch { revealShift.animateTo(0f, spatialSpec) }
+                }
+            }
         }
     }
+    val revealTravelPx = with(LocalDensity.current) { ChapterRevealTravel.toPx() }
     // Session creation changes which layer owns the opening scrim. Keep the indicator as movable
     // content so Compose transfers its animation state instead of disposing and restarting it.
     val openingContent = remember {
@@ -373,6 +398,7 @@ fun ReaderScreen(
                         .padding(top = topInset, bottom = bottomInset)
                         .graphicsLayer {
                             alpha = reveal.value
+                            translationY = revealShift.value * revealTravelPx
                         },
                 )
 
@@ -635,3 +661,6 @@ private fun androidx.compose.foundation.layout.BoxScope.ReaderFailure(
         YomuButton(text = "Back to library", onClick = onBack)
     }
 }
+
+/** How far a newly revealed chapter travels into place. */
+private val ChapterRevealTravel = 40.dp

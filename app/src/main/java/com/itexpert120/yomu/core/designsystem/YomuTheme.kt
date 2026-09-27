@@ -6,13 +6,12 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -22,6 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itexpert120.yomu.core.model.AccentSelection
+import com.itexpert120.yomu.core.model.ColorStyle
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamicColorScheme
+import com.materialkolor.dynamiccolor.ColorSpec
 
 @Immutable
 data class YomuColors(
@@ -113,104 +117,83 @@ private val FallbackYomuColors = YomuColors(
     highlightPink = Color(0xFFF48FB1),
 )
 
-private val YomuShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+/** The full M3 Expressive corner scale (adds large-increased, extra-large-increased, 2XL). */
+private val YomuShapes = Shapes()
+
+/**
+ * Baseline M3 type scale plus the paired `*Emphasized` styles call sites opt into for headlines,
+ * hero figures, actions, and selected states. Material's emphasized tokens lean on a variable-font
+ * weight axis the system Roboto doesn't apply, so each emphasized style gets an explicit heavier
+ * weight at the same size and line height.
+ */
+private val YomuTypography = Typography().let { base ->
+    base.copy(
+        displayLargeEmphasized = base.displayLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
+        displayMediumEmphasized = base.displayMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.25).sp),
+        displaySmallEmphasized = base.displaySmall.copy(fontWeight = FontWeight.SemiBold),
+        headlineLargeEmphasized = base.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
+        headlineMediumEmphasized = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+        headlineSmallEmphasized = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+        titleLargeEmphasized = base.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        titleMediumEmphasized = base.titleMedium.copy(fontWeight = FontWeight.Bold),
+        titleSmallEmphasized = base.titleSmall.copy(fontWeight = FontWeight.Bold),
+        bodyLargeEmphasized = base.bodyLarge.copy(fontWeight = FontWeight.Medium),
+        bodyMediumEmphasized = base.bodyMedium.copy(fontWeight = FontWeight.Medium),
+        bodySmallEmphasized = base.bodySmall.copy(fontWeight = FontWeight.Medium),
+        labelLargeEmphasized = base.labelLarge.copy(fontWeight = FontWeight.Bold),
+        labelMediumEmphasized = base.labelMedium.copy(fontWeight = FontWeight.Bold),
+        labelSmallEmphasized = base.labelSmall.copy(fontWeight = FontWeight.Bold),
+    )
+}
+
+/**
+ * Resolves the app [ColorScheme] for a theme mode and colour source. Seeds are expanded with the
+ * 2025 Material colour spec so presets produce the same tonal roles Android's own palette does.
+ */
+@Composable
+fun yomuColorScheme(
+    mode: YomuThemeMode,
+    accent: AccentSelection,
+    style: ColorStyle,
+): ColorScheme {
+    val context = LocalContext.current
+    val dark = mode != YomuThemeMode.Light
+    val wallpaper = accent == AccentSelection.Wallpaper && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val base = remember(mode, accent, style, wallpaper) {
+        if (wallpaper) {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else {
+            seededColorScheme(accent.seedArgb(), dark, style)
+        }
+    }
+    return if (mode == YomuThemeMode.Oled) base.toOled() else base
+}
+
+/** Preview/picker helper: a seeded scheme without composition. */
+fun yomuSeededColorScheme(seedArgb: Long, dark: Boolean, style: ColorStyle): ColorScheme = seededColorScheme(seedArgb, dark, style)
+
+private fun seededColorScheme(seedArgb: Long, dark: Boolean, style: ColorStyle): ColorScheme = dynamicColorScheme(
+    seedColor = Color(seedArgb),
+    isDark = dark,
+    style = style.toPaletteStyle(),
+    specVersion = ColorSpec.SpecVersion.SPEC_2025,
 )
 
-private val BaseTypography = Typography()
-private val YomuTypography = Typography(
-    displayLarge = BaseTypography.displayLarge.copy(fontWeight = FontWeight.SemiBold),
-    displayMedium = BaseTypography.displayMedium.copy(fontWeight = FontWeight.SemiBold),
-    displaySmall = BaseTypography.displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
-    headlineLarge = BaseTypography.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
-    headlineMedium = BaseTypography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-    headlineSmall = BaseTypography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-    titleLarge = BaseTypography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-    titleMedium = BaseTypography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    labelLarge = BaseTypography.labelLarge.copy(fontWeight = FontWeight.Medium),
-)
+private fun AccentSelection.seedArgb(): Long = when (this) {
+    is AccentSelection.Preset -> accent.seed
+    is AccentSelection.Custom -> argb
+    AccentSelection.Wallpaper -> (AccentSelection.FallbackPreset as AccentSelection.Preset).accent.seed
+}
 
-private val YomuLightColorScheme = lightColorScheme(
-    primary = Color(0xFF6750A4),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFEADDFF),
-    onPrimaryContainer = Color(0xFF21005D),
-    inversePrimary = Color(0xFFD0BCFF),
-    secondary = Color(0xFF625B71),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE8DEF8),
-    onSecondaryContainer = Color(0xFF1D192B),
-    tertiary = Color(0xFF7D5260),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFD8E4),
-    onTertiaryContainer = Color(0xFF31111D),
-    error = Color(0xFFBA1A1A),
-    onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFFFFBFE),
-    onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFBFE),
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EC),
-    onSurfaceVariant = Color(0xFF49454F),
-    outline = Color(0xFF79747E),
-    outlineVariant = Color(0xFFCAC4D0),
-    scrim = Color.Black,
-    inverseSurface = Color(0xFF313033),
-    inverseOnSurface = Color(0xFFF4EFF4),
-    surfaceDim = Color(0xFFE4E1E6),
-    surfaceBright = Color(0xFFFFFBFE),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF7F2FA),
-    surfaceContainer = Color(0xFFF3EDF7),
-    surfaceContainerHigh = Color(0xFFECE6F0),
-    surfaceContainerHighest = Color(0xFFE6E0E9),
-)
+private fun ColorStyle.toPaletteStyle(): PaletteStyle = when (this) {
+    ColorStyle.Balanced -> PaletteStyle.TonalSpot
+    ColorStyle.Vibrant -> PaletteStyle.Vibrant
+    ColorStyle.Expressive -> PaletteStyle.Expressive
+    ColorStyle.Monochrome -> PaletteStyle.Monochrome
+}
 
-private val YomuDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFD0BCFF),
-    onPrimary = Color(0xFF381E72),
-    primaryContainer = Color(0xFF4F378B),
-    onPrimaryContainer = Color(0xFFEADDFF),
-    inversePrimary = Color(0xFF6750A4),
-    secondary = Color(0xFFCCC2DC),
-    onSecondary = Color(0xFF332D41),
-    secondaryContainer = Color(0xFF4A4458),
-    onSecondaryContainer = Color(0xFFE8DEF8),
-    tertiary = Color(0xFFEFB8C8),
-    onTertiary = Color(0xFF492532),
-    tertiaryContainer = Color(0xFF633B48),
-    onTertiaryContainer = Color(0xFFFFD8E4),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF1C1B1F),
-    onBackground = Color(0xFFE6E1E5),
-    surface = Color(0xFF1C1B1F),
-    onSurface = Color(0xFFE6E1E5),
-    surfaceVariant = Color(0xFF49454F),
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    outline = Color(0xFF938F99),
-    outlineVariant = Color(0xFF49454F),
-    scrim = Color.Black,
-    inverseSurface = Color(0xFFE6E1E5),
-    inverseOnSurface = Color(0xFF313033),
-    surfaceDim = Color(0xFF141218),
-    surfaceBright = Color(0xFF3B383E),
-    surfaceContainerLowest = Color(0xFF0F0D13),
-    surfaceContainerLow = Color(0xFF1D1B20),
-    surfaceContainer = Color(0xFF211F26),
-    surfaceContainerHigh = Color(0xFF2B292F),
-    surfaceContainerHighest = Color(0xFF36343B),
-)
-
-private val YomuOledColorScheme = YomuDarkColorScheme.copy(
+/** Pure-black surfaces for OLED; containers keep a faint tonal step so grouping stays legible. */
+internal fun ColorScheme.toOled(): ColorScheme = copy(
     background = Color.Black,
     surface = Color.Black,
     surfaceDim = Color.Black,
@@ -220,12 +203,6 @@ private val YomuOledColorScheme = YomuDarkColorScheme.copy(
     surfaceContainerHigh = Color(0xFF1B1B1B),
     surfaceContainerHighest = Color(0xFF242424),
 )
-
-internal fun yomuStaticColorScheme(mode: YomuThemeMode): ColorScheme = when (mode) {
-    YomuThemeMode.Light -> YomuLightColorScheme
-    YomuThemeMode.Dark -> YomuDarkColorScheme
-    YomuThemeMode.Oled -> YomuOledColorScheme
-}
 
 val LocalYomuColors = staticCompositionLocalOf { FallbackYomuColors }
 val LocalYomuType = staticCompositionLocalOf { yomuType(YomuTypography) }
@@ -251,20 +228,12 @@ object YomuTheme {
 fun YomuDesignTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeMode: YomuThemeMode? = null,
-    dynamicColors: Boolean = false,
+    accent: AccentSelection = AccentSelection.FallbackPreset,
+    colorStyle: ColorStyle = ColorStyle.Balanced,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
     val mode = themeMode ?: if (darkTheme) YomuThemeMode.Dark else YomuThemeMode.Light
-    val colorScheme = when {
-        mode == YomuThemeMode.Oled -> yomuStaticColorScheme(mode)
-        dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && mode == YomuThemeMode.Light -> {
-            dynamicLightColorScheme(context)
-        }
-
-        dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicDarkColorScheme(context)
-        else -> yomuStaticColorScheme(mode)
-    }
+    val colorScheme = yomuColorScheme(mode, accent, colorStyle)
 
     MaterialExpressiveTheme(
         colorScheme = colorScheme,

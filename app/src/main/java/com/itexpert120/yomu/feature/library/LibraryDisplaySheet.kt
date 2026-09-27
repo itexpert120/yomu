@@ -4,25 +4,22 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
@@ -58,7 +55,7 @@ internal fun LibraryOptionsSheet(
         ) {
             Text(
                 text = "Arrange library",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
             )
 
             ArrangementChoiceGroup(
@@ -81,7 +78,6 @@ internal fun LibraryOptionsSheet(
                 selected = viewMode,
                 label = { it.label },
                 onSelected = onViewModeChange,
-                showSelectionIcon = false,
             )
             GridColumnsControl(
                 title = "Portrait columns",
@@ -98,6 +94,7 @@ internal fun LibraryOptionsSheet(
 
             Button(
                 onClick = dismiss,
+                shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Done")
@@ -192,7 +189,6 @@ private fun <T> ArrangementChoiceGroup(
     selected: T,
     label: (T) -> String,
     onSelected: (T) -> Unit,
-    showSelectionIcon: Boolean = true,
 ) {
     Column(
         modifier = modifier,
@@ -202,33 +198,11 @@ private fun <T> ArrangementChoiceGroup(
             text = title,
             style = MaterialTheme.typography.titleMedium,
         )
-        SingleChoiceSegmentedButtonRow(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            options.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = option == selected,
-                    onClick = { onSelected(option) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = options.size,
-                    ),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    icon = {
-                        if (showSelectionIcon) {
-                            SegmentedButtonDefaults.Icon(active = option == selected)
-                        }
-                    },
-                ) {
-                    Text(
-                        text = label(option),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                }
-            }
-        }
+        YomuConnectedChoiceGroup(
+            options = options,
+            selected = selected,
+            label = label,
+            onSelect = onSelected,
+        )
     }
 }

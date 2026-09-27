@@ -1,5 +1,8 @@
 package com.itexpert120.yomu.feature.library
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -29,18 +33,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import java.io.File
 
@@ -52,9 +61,15 @@ fun GridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
+    val selection = rememberCoverSelection(selected)
     Card(
-        modifier = modifier.yomuPressable(onClick = onClick, onLongClick = onLongPress),
-        shape = MaterialTheme.shapes.large,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = selection.scale
+                scaleY = selection.scale
+            }
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress),
+        shape = selection.shape,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.secondaryContainer
@@ -117,10 +132,14 @@ fun CompactGridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val shape = MaterialTheme.shapes.large
+    val selection = rememberCoverSelection(selected)
     Box(
         modifier = modifier
-            .clip(shape)
+            .graphicsLayer {
+                scaleX = selection.scale
+                scaleY = selection.scale
+            }
+            .clip(selection.shape)
             .yomuPressable(onClick = onClick, onLongClick = onLongPress)
             .semantics { contentDescription = book.title },
     ) {
@@ -169,10 +188,14 @@ fun CoverOnlyGridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val shape = MaterialTheme.shapes.large
+    val selection = rememberCoverSelection(selected)
     Box(
         modifier = modifier
-            .clip(shape)
+            .graphicsLayer {
+                scaleX = selection.scale
+                scaleY = selection.scale
+            }
+            .clip(selection.shape)
             .yomuPressable(onClick = onClick, onLongClick = onLongPress)
             .semantics { contentDescription = book.title },
     ) {
@@ -197,11 +220,12 @@ fun BookListRow(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
+    val selection = rememberCoverSelection(selected)
     Card(
         modifier = modifier
             .fillMaxWidth()
             .yomuPressable(onClick = onClick, onLongClick = onLongPress),
-        shape = MaterialTheme.shapes.large,
+        shape = selection.shape,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.secondaryContainer
@@ -330,8 +354,8 @@ fun ImportEmptyCard(onImport: () -> Unit) {
 fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
     Text(
         text = title,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.titleMediumEmphasized,
         modifier = modifier.padding(top = 8.dp),
     )
 }
@@ -407,6 +431,8 @@ internal fun LibraryProgressIndicator(
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
         },
         trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+        strokeCap = StrokeCap.Round,
+        gapSize = 0.dp,
         drawStopIndicator = {},
         modifier = modifier,
     )
@@ -415,4 +441,26 @@ internal fun LibraryProgressIndicator(
 @Composable
 fun ProgressLine(progress: Float) {
     LibraryProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+}
+
+private class CoverSelection(val shape: Shape, val scale: Float)
+
+/**
+ * Selection as shape + size: a selected cover rounds its corners and settles slightly smaller on
+ * the expressive spatial spring, so selection reads from shape, not colour alone.
+ */
+@Composable
+private fun rememberCoverSelection(selected: Boolean): CoverSelection {
+    val animate = yomuAnimationsEnabled()
+    val corner by animateDpAsState(
+        targetValue = if (selected) 28.dp else 16.dp,
+        animationSpec = if (animate) MaterialTheme.motionScheme.fastSpatialSpec() else snap(),
+        label = "coverCorner",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 0.94f else 1f,
+        animationSpec = if (animate) MaterialTheme.motionScheme.fastSpatialSpec() else snap(),
+        label = "coverScale",
+    )
+    return CoverSelection(RoundedCornerShape(corner), scale)
 }

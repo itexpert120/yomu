@@ -2,23 +2,30 @@ package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
-import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailDefaults
 import androidx.compose.material3.WideNavigationRailItem
-import androidx.compose.material3.WideNavigationRailItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,20 +115,22 @@ fun YomuNavigationBarItem(
     icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
+    selectedIcon: ImageVector = icon,
 ) {
     ShortNavigationBarItem(
-        colors = ShortNavigationBarItemDefaults.colors(
-            selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedTextColor = MaterialTheme.colorScheme.primary,
-        ),
         selected = selected,
         onClick = onClick,
         modifier = modifier,
-        icon = { Icon(icon, contentDescription = null) },
-        label = {
-            Text(label, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium)
-        },
+        icon = { Icon(if (selected) selectedIcon else icon, contentDescription = null) },
+        label = { YomuNavigationLabel(label, selected) },
+    )
+}
+
+@Composable
+private fun YomuNavigationLabel(label: String, selected: Boolean) {
+    Text(
+        text = label,
+        style = if (selected) MaterialTheme.typography.labelMediumEmphasized else MaterialTheme.typography.labelMedium,
     )
 }
 
@@ -147,21 +156,15 @@ fun YomuNavigationRailItem(
     icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
+    selectedIcon: ImageVector = icon,
 ) {
     WideNavigationRailItem(
         railExpanded = false,
-        colors = WideNavigationRailItemDefaults.colors(
-            selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedTextColor = MaterialTheme.colorScheme.primary,
-        ),
         selected = selected,
         onClick = onClick,
         modifier = modifier,
-        icon = { Icon(icon, contentDescription = null) },
-        label = {
-            Text(label, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium)
-        },
+        icon = { Icon(if (selected) selectedIcon else icon, contentDescription = null) },
+        label = { YomuNavigationLabel(label, selected) },
     )
 }
 
@@ -178,4 +181,71 @@ fun YomuSelectionMark(
             modifier = modifier,
         )
     }
+}
+
+/** One labelled action in a [YomuFloatingToolbar]. */
+data class YomuToolbarAction(
+    val icon: ImageVector,
+    val label: String,
+    val onClick: () -> Unit,
+    val enabled: Boolean = true,
+    val selected: Boolean = false,
+)
+
+/**
+ * M3 Expressive floating toolbar for contextual page actions. [vibrant] switches to the
+ * high-emphasis colour scheme that marks a temporary mode (e.g. selection); standard keeps focus on
+ * the content underneath. Actions stay labelled — icon-only bulk actions tested worse for clarity.
+ */
+@Composable
+fun YomuFloatingToolbar(
+    actions: List<YomuToolbarAction>,
+    modifier: Modifier = Modifier,
+    vibrant: Boolean = false,
+    // Surfaces themed by something other than the app scheme (the reader page) pass their own.
+    containerColor: androidx.compose.ui.graphics.Color? = null,
+    contentColor: androidx.compose.ui.graphics.Color? = null,
+) {
+    val base = if (vibrant) {
+        FloatingToolbarDefaults.vibrantFloatingToolbarColors()
+    } else {
+        FloatingToolbarDefaults.standardFloatingToolbarColors()
+    }
+    val colors = base.copy(
+        toolbarContainerColor = containerColor ?: base.toolbarContainerColor,
+        toolbarContentColor = contentColor ?: base.toolbarContentColor,
+    )
+    HorizontalFloatingToolbar(
+        expanded = true,
+        colors = colors,
+        modifier = modifier,
+    ) {
+        actions.forEach { action ->
+            val contentColor = colors.toolbarContentColor
+            if (action.selected) {
+                FilledTonalButton(
+                    onClick = action.onClick,
+                    enabled = action.enabled,
+                    shapes = ButtonDefaults.shapes(),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                    modifier = Modifier.semantics { this.selected = true },
+                ) { ToolbarActionContent(action) }
+            } else {
+                TextButton(
+                    onClick = action.onClick,
+                    enabled = action.enabled,
+                    shapes = ButtonDefaults.shapes(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                ) { ToolbarActionContent(action) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolbarActionContent(action: YomuToolbarAction) {
+    Icon(action.icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+    Text(action.label, style = MaterialTheme.typography.labelLargeEmphasized, maxLines = 1)
 }

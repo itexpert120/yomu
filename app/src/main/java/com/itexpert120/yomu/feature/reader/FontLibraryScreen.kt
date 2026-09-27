@@ -10,9 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FileDownload
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -115,6 +116,8 @@ private fun FontLibraryCatalog(
             onValueChange = onQueryChange,
             label = "Search fonts",
             placeholder = "e.g. Merriweather",
+            imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words,
             modifier = Modifier.fillMaxWidth(),
         )
         if (error != null) {
@@ -198,11 +201,7 @@ private fun FontLibraryRow(
         },
     ) {
         when {
-            downloading -> CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(22.dp),
-            )
+            downloading -> CircularWavyProgressIndicator(modifier = Modifier.size(28.dp))
 
             installed -> {
                 Icon(
@@ -211,7 +210,7 @@ private fun FontLibraryRow(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
                 )
-                IconButton(onClick = onRemove) {
+                IconButton(onClick = onRemove, shapes = IconButtonDefaults.shapes()) {
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
                         contentDescription = "Remove $family",
@@ -219,7 +218,7 @@ private fun FontLibraryRow(
                 }
             }
 
-            else -> IconButton(onClick = onInstall) {
+            else -> IconButton(onClick = onInstall, shapes = IconButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.Rounded.FileDownload,
                     contentDescription = "Download $family",

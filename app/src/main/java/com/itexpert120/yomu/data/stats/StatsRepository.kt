@@ -8,6 +8,7 @@ import com.itexpert120.yomu.core.database.ReadingTotalEntity
 import com.itexpert120.yomu.core.database.ReadingWriteReceipt
 import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import com.itexpert120.yomu.core.model.isBookCompleted
@@ -135,6 +136,25 @@ class StatsRepository internal constructor(
             secondsLast30Days = day.secondsLast30Days,
         )
     }
+
+    /** Lifetime reading time per book, longest first, joined to current library metadata. */
+    val bookReadingTimes: Flow<List<BookReadingTime>> = combine(
+        dao.observeReadingTotals(),
+        dao.observeBooks(),
+    ) { totals, books ->
+        val byId = books.associateBy { it.id }
+        totals.map { total ->
+            val book = byId[total.bookId]
+            BookReadingTime(
+                bookId = book?.id,
+                title = book?.title ?: "Removed book",
+                author = book?.author?.takeIf { it.isNotBlank() },
+                coverImagePath = book?.coverImagePath,
+                seconds = total.seconds,
+                sessionCount = total.sessionCount,
+            )
+        }
+    }.distinctUntilChanged()
 
     val recentSessions: Flow<List<ReadingSessionItem>> = combine(
         dao.observeRecentSessions(RECENT_LIMIT),

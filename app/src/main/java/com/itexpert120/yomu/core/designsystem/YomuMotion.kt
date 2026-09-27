@@ -8,7 +8,6 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.PathEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -26,12 +25,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 /**
- * Yomu's unified motion language. One calm vocabulary — fade + scale + slide — so every
- * appearing/disappearing surface across the app (reader chrome, menus, library and details
- * transitions) blends between states the same way instead of each animating ad hoc.
- *
- * Grammar: springs for spatial motion (scale/slide) so it feels physical and tweens for fades.
- * Spatial springs are near-critical (no visible bounce) to match the reader's calm tone.
+ * Yomu's unified motion language, built on the Material 3 Expressive motion scheme so custom
+ * transitions share the springs Material components use. Grammar: geometry (slide, scale, size,
+ * shape) takes *spatial* springs, which may overshoot; opacity and colour take *effects* springs,
+ * which never do. Small elements use the fast tokens, surfaces the default ones. Screen-level
+ * shared-axis transitions keep fixed timings so the handoff never shows a seam.
  */
 object YomuMotion {
     val scheme = MotionScheme.expressive()
@@ -55,12 +53,6 @@ object YomuMotion {
         ScreenTransitionDurationMillis - ScreenTransitionFadeOutMillis
     val ScreenTransitionDistance = 30.dp
 
-    const val FabExpandMillis = 260
-    const val FabCollapseMillis = 200
-    const val FabLabelFadeInMillis = 180
-    const val FabLabelFadeInDelayMillis = 40
-    const val FabLabelFadeOutMillis = 120
-
     const val PopupScaleFrom = 0.90f
 }
 
@@ -75,24 +67,24 @@ fun yomuAnimationsEnabled(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_COD
 fun yomuChromeEnter(fromBottom: Boolean = true): EnterTransition {
     if (!yomuAnimationsEnabled()) return EnterTransition.None
     val offset: (Int) -> Int = if (fromBottom) { h -> h / 3 } else { h -> -h / 3 }
-    return fadeIn(spring(stiffness = 380f)) +
-        slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f), initialOffsetY = offset)
+    return fadeIn(YomuMotion.scheme.defaultEffectsSpec()) +
+        slideInVertically(YomuMotion.scheme.defaultSpatialSpec(), initialOffsetY = offset)
 }
 
 fun yomuChromeExit(toBottom: Boolean = true): ExitTransition {
     if (!yomuAnimationsEnabled()) return ExitTransition.None
     val offset: (Int) -> Int = if (toBottom) { h -> h / 3 } else { h -> -h / 3 }
-    return fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
-        slideOutVertically(spring(dampingRatio = 0.85f, stiffness = 380f), targetOffsetY = offset)
+    return fadeOut(YomuMotion.scheme.fastEffectsSpec()) +
+        slideOutVertically(YomuMotion.scheme.defaultSpatialSpec(), targetOffsetY = offset)
 }
 
 /** Enter for popups/menus that should "materialize" in place — scale + fade, no slide. */
 fun yomuPopupEnter(origin: TransformOrigin = TransformOrigin.Center): EnterTransition = if (!yomuAnimationsEnabled()) {
     EnterTransition.None
 } else {
-    fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
+    fadeIn(YomuMotion.scheme.fastEffectsSpec()) +
         scaleIn(
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
+            animationSpec = YomuMotion.scheme.fastSpatialSpec(),
             initialScale = YomuMotion.PopupScaleFrom,
             transformOrigin = origin,
         )
@@ -101,9 +93,9 @@ fun yomuPopupEnter(origin: TransformOrigin = TransformOrigin.Center): EnterTrans
 fun yomuPopupExit(origin: TransformOrigin = TransformOrigin.Center): ExitTransition = if (!yomuAnimationsEnabled()) {
     ExitTransition.None
 } else {
-    fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
+    fadeOut(YomuMotion.scheme.fastEffectsSpec()) +
         scaleOut(
-            animationSpec = spring(dampingRatio = 1f, stiffness = 420f),
+            animationSpec = YomuMotion.scheme.fastEffectsSpec(),
             targetScale = YomuMotion.PopupScaleFrom,
             transformOrigin = origin,
         )
@@ -216,12 +208,12 @@ fun <S> AnimatedContentTransitionScope<S>.yomuContentSwap(forward: Boolean = tru
     } else {
         AnimatedContentTransitionScope.SlideDirection.Right
     }
-    val slide = spring<IntOffset>(dampingRatio = 0.9f, stiffness = 320f)
+    val slide = YomuMotion.scheme.defaultSpatialSpec<IntOffset>()
     return (
-        fadeIn(tween(YomuMotion.FadeInMillis, easing = YomuMotion.EmphasizedDecel)) +
+        fadeIn(YomuMotion.scheme.defaultEffectsSpec()) +
             slideIntoContainer(direction, animationSpec = slide)
         ) togetherWith (
-        fadeOut(tween(YomuMotion.FadeOutMillis, easing = YomuMotion.EmphasizedAccel)) +
+        fadeOut(YomuMotion.scheme.fastEffectsSpec()) +
             slideOutOfContainer(direction, animationSpec = slide)
         )
 }

@@ -8,17 +8,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -153,33 +157,41 @@ internal fun AboutContent() {
 private fun AboutHero() {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = MaterialTheme.shapes.extraLargeIncreased,
         color = MaterialTheme.colorScheme.primaryContainer,
-        tonalElevation = 1.dp,
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // The mark sits on a scalloped shape — the one decorative flourish on this page.
             Box(
                 modifier = Modifier
-                    .size(84.dp)
-                    .background(Color(0xFF050505), MaterialTheme.shapes.large),
+                    .size(96.dp)
+                    .clip(MaterialShapes.Cookie12Sided.toShape())
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.open_reader_logo),
-                    contentDescription = "Open Reader logo",
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(64.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color(0xFF050505), MaterialTheme.shapes.large),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.open_reader_logo),
+                        contentDescription = "Open Reader logo",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Open Reader",
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineSmallEmphasized,
                 )
                 Text(
                     text = "Private · offline · EPUB reader",
@@ -187,7 +199,7 @@ private fun AboutHero() {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Surface(
-                    shape = MaterialTheme.shapes.large,
+                    shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) {

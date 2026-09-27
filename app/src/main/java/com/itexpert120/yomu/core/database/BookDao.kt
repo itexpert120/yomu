@@ -227,6 +227,10 @@ interface BookDao {
     )
     suspend fun pruneReadingSessions(limit: Int)
 
+    /** Lifetime per-book reading totals, longest first. Survives book removal by design. */
+    @Query("SELECT * FROM reading_totals WHERE seconds > 0 ORDER BY seconds DESC")
+    fun observeReadingTotals(): Flow<List<ReadingTotalEntity>>
+
     /** Total seconds spent reading a single book, summed across its sessions (0 if none). */
     @Query("SELECT COALESCE(SUM(seconds), 0) FROM reading_totals WHERE bookId = :bookId")
     fun observeBookReadingSeconds(bookId: String): Flow<Long>

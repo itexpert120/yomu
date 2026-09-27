@@ -53,6 +53,13 @@ android {
     compileSdkMinor = 0
 }
 
+kotlin {
+    compilerOptions {
+        // The UI is built on Material 3 Expressive, whose shape/morph APIs are still experimental.
+        optIn.add("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
+    }
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
@@ -92,6 +99,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.swipe)
+    implementation(libs.material.kolor)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

@@ -6,6 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -193,9 +196,11 @@ private fun TopLevelNavigationShell(
         LayoutDirection.Rtl -> !forward
     }
 
+    var librarySelecting by remember { mutableStateOf(false) }
     YomuTopLevelNavigation(
         selected = selected,
         onSelected = navController::navigateTopLevel,
+        barVisible = !librarySelecting,
     ) { hostModifier ->
         NavHost(
             navController = navController,
@@ -248,6 +253,7 @@ private fun TopLevelNavigationShell(
                 LibraryRoute(
                     onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
                     onOpenDetails = onOpenDetails,
+                    onSelectionModeChange = { librarySelecting = it },
                 )
             }
             composable<Stats> {

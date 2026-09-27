@@ -7,7 +7,6 @@ import android.os.BatteryManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -60,8 +59,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
+import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -107,7 +107,7 @@ internal fun ReaderTopBar(
                 Text(
                     text = chapter.ifBlank { "Reading" },
                     color = content,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMediumEmphasized,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -282,7 +282,7 @@ internal fun BoxScope.ReaderChapterControlsBar(
     }
 }
 
-/** Selection-style actions keep the reader chrome compact and easy to scan. */
+/** Reader actions as an M3 Expressive floating toolbar, coloured from the reading theme. */
 // The bundled Material icon set has no AutoMirrored Toc symbol, so keep the semantic Toc glyph.
 @Suppress("DEPRECATION")
 @Composable
@@ -294,47 +294,19 @@ private fun ReaderActionBar(
     onSearch: () -> Unit,
     onDisplay: () -> Unit,
 ) {
-    androidx.compose.material3.Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = if (floating) androidx.compose.ui.graphics.lerp(background, content, 0.04f) else background,
-        contentColor = content,
-        shape = RoundedCornerShape(
-            topStart = 28.dp,
-            topEnd = 28.dp,
-            bottomStart = if (floating) 28.dp else 0.dp,
-            bottomEnd = if (floating) 28.dp else 0.dp,
-        ),
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = if (floating) 0.dp else 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            YomuLabeledIconAction(
-                icon = Icons.Rounded.Toc,
-                label = "Browse",
-                onClick = onBrowse,
-                contentColor = content,
-                containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
-                modifier = Modifier.weight(1f),
-            )
-            YomuLabeledIconAction(
-                icon = Icons.Rounded.Search,
-                label = "Search",
-                onClick = onSearch,
-                contentColor = content,
-                containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
-                modifier = Modifier.weight(1f),
-            )
-            YomuLabeledIconAction(
-                icon = Icons.Rounded.Tune,
-                label = "Display",
-                onClick = onDisplay,
-                contentColor = content,
-                containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f),
-                modifier = Modifier.weight(1f),
-            )
-        }
+        YomuFloatingToolbar(
+            containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.10f),
+            contentColor = content,
+            actions = listOf(
+                YomuToolbarAction(Icons.Rounded.Toc, "Browse", onBrowse),
+                YomuToolbarAction(Icons.Rounded.Search, "Search", onSearch),
+                YomuToolbarAction(Icons.Rounded.Tune, "Display", onDisplay),
+            ),
+        )
     }
 }
 

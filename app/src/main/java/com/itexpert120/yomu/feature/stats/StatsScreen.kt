@@ -19,19 +19,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.TaskAlt
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,13 +49,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.graphics.shapes.RoundedPolygon
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
@@ -55,6 +64,7 @@ import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
+import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import java.io.File
@@ -79,6 +89,7 @@ fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
             TabletStatsLayout(
                 stats = state.stats,
                 history = state.history,
+                bookTimes = state.bookTimes,
                 onBack = onBack,
             )
         } else {
@@ -90,7 +101,7 @@ fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
                 when {
                     state.isLoading -> LoadingState()
                     state.error != null -> StatusText(state.error)
-                    else -> StatsContent(stats = state.stats, history = state.history)
+                    else -> StatsContent(stats = state.stats, history = state.history, bookTimes = state.bookTimes)
                 }
             }
         }
@@ -101,6 +112,7 @@ fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
 private fun TabletStatsLayout(
     stats: ReadingStats,
     history: List<ReadingSessionItem>,
+    bookTimes: List<BookReadingTime>,
     onBack: (() -> Unit)?,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -127,6 +139,7 @@ private fun TabletStatsLayout(
                             supporting = "A quick view of your reading.",
                         )
                         AtAGlanceCard(stats)
+                        BookTimeHeaderAndList(bookTimes)
                         SectionHeader(
                             title = "Reading details",
                             supporting = "The small signals behind your routine.",
@@ -188,25 +201,41 @@ private fun ReadingMetricGrid(metrics: List<DetailMetric>) {
 
 @Composable
 private fun ReadingMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
+    // Highlighted metrics borrow an accent container; the rest stay on neutral surfaces so the
+    // accents keep their pull.
+    val (container, content) = when (metric.accent) {
+        MetricAccent.None -> MaterialTheme.colorScheme.surfaceContainer to MaterialTheme.colorScheme.onSurface
+        MetricAccent.Secondary -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        MetricAccent.Tertiary -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+    }
     Surface(
-        modifier = modifier.heightIn(min = 88.dp),
+        modifier = modifier.heightIn(min = 96.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
+        color = container,
+        contentColor = content,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (metric.icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(metric.shape.toShape())
+                        .background(content.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(metric.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+            }
             Text(
                 text = metric.value,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
             )
             Text(
                 text = metric.label,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = content.copy(alpha = 0.78f),
                 style = MaterialTheme.typography.labelLarge,
             )
         }
@@ -217,6 +246,7 @@ private fun ReadingMetricCard(metric: DetailMetric, modifier: Modifier = Modifie
 private fun ColumnScope.StatsContent(
     stats: ReadingStats,
     history: List<ReadingSessionItem>,
+    bookTimes: List<BookReadingTime>,
 ) {
     HistoricalDetailNotice(stats)
     SectionHeader(
@@ -224,6 +254,7 @@ private fun ColumnScope.StatsContent(
         supporting = "A quick view of your reading.",
     )
     AtAGlanceCard(stats)
+    BookTimeHeaderAndList(bookTimes)
     if (stats.sessionCount == 0 && stats.totalReadingSeconds == 0L) {
         EmptyActivityCard()
     } else {
@@ -236,6 +267,18 @@ private fun ColumnScope.StatsContent(
             History(history)
         }
     }
+}
+
+@Composable
+private fun BookTimeHeaderAndList(bookTimes: List<BookReadingTime>) {
+    if (bookTimes.isEmpty()) return
+    val total = bookTimes.sumOf { it.seconds }
+    SectionHeader(
+        title = "Time by book",
+        supporting = "${formatReadingTime(total)} across ${bookTimes.size} " +
+            "${if (bookTimes.size == 1) "book" else "books"}.",
+    )
+    BookTimeSection(books = bookTimes, formatTime = ::formatReadingTime)
 }
 
 @Composable
@@ -258,10 +301,7 @@ private fun LoadingState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(28.dp),
-            strokeWidth = 3.dp,
-        )
+        LoadingIndicator()
         Text(
             text = "Gathering your reading history…",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -286,25 +326,59 @@ private fun StatusText(text: String) {
 @Composable
 private fun AtAGlanceCard(stats: ReadingStats) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Hero moment: editorial display type plus a sunny shape motif, on the brightest accent.
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            shape = MaterialTheme.shapes.extraLargeIncreased,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         ) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Total reading time", style = MaterialTheme.typography.labelLarge)
-                Text(formatReadingTime(stats.totalReadingSeconds), style = MaterialTheme.typography.displayMedium)
-                Text("Across your reading sessions", style = MaterialTheme.typography.bodyMedium)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(20.dp)
+                        .size(72.dp)
+                        .clip(MaterialShapes.Sunny.toShape())
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Total reading time", style = MaterialTheme.typography.titleMediumEmphasized)
+                    Text(
+                        formatReadingTime(stats.totalReadingSeconds),
+                        style = MaterialTheme.typography.displayLargeEmphasized,
+                    )
+                    Text("Across your reading sessions", style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
         ReadingMetricGrid(
             listOf(
-                DetailMetric(formatDays(stats.currentStreakDays), "Current streak"),
-                DetailMetric(stats.booksInLibrary.toString(), "Library items"),
-                DetailMetric(stats.booksFinished.toString(), "Completed books"),
-                DetailMetric(formatReadingTime(stats.secondsLast7Days), "Last 7 days"),
-                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days"),
+                DetailMetric(
+                    formatDays(stats.currentStreakDays),
+                    "Current streak",
+                    icon = Icons.Rounded.LocalFireDepartment,
+                    shape = MaterialShapes.Cookie6Sided,
+                    accent = MetricAccent.Tertiary,
+                ),
+                DetailMetric(
+                    formatReadingTime(stats.secondsLast7Days),
+                    "Last 7 days",
+                    icon = Icons.Rounded.DateRange,
+                    shape = MaterialShapes.Cookie4Sided,
+                    accent = MetricAccent.Secondary,
+                ),
+                DetailMetric(stats.booksInLibrary.toString(), "Library items", icon = Icons.AutoMirrored.Rounded.LibraryBooks),
+                DetailMetric(stats.booksFinished.toString(), "Completed books", icon = Icons.Rounded.TaskAlt),
+                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days", icon = Icons.Rounded.CalendarMonth),
             ),
         )
     }
@@ -326,7 +400,7 @@ private fun EmptyActivityCard() {
         ) {
             Surface(
                 modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.large,
+                shape = MaterialShapes.Cookie9Sided.toShape(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ) {
@@ -368,7 +442,7 @@ private fun SectionHeader(
         Text(
             text = title,
             color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleLargeEmphasized,
         )
         Text(
             text = supporting,
@@ -378,9 +452,14 @@ private fun SectionHeader(
     }
 }
 
+private enum class MetricAccent { None, Secondary, Tertiary }
+
 private data class DetailMetric(
     val value: String,
     val label: String,
+    val icon: ImageVector? = null,
+    val shape: RoundedPolygon = MaterialShapes.Circle,
+    val accent: MetricAccent = MetricAccent.None,
 )
 
 @Composable
@@ -419,6 +498,7 @@ private fun ColumnScope.History(history: List<ReadingSessionItem>) {
     if (consolidated.size > visibleCount) {
         TextButton(
             onClick = { visibleCount += HistoryPage },
+            shapes = ButtonDefaults.shapes(),
             modifier = Modifier.align(Alignment.CenterHorizontally),
         ) {
             Text(text = "Show more")
@@ -445,7 +525,7 @@ private fun HistoryCard(day: LocalDate, sessions: List<ReadingSessionItem>) {
                 Text(
                     text = formatDayHeader(day),
                     color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMediumEmphasized,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(

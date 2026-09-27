@@ -46,6 +46,8 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
+import com.itexpert120.yomu.core.model.AccentSelection
+import com.itexpert120.yomu.core.model.ColorStyle
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -54,7 +56,7 @@ import com.itexpert120.yomu.feature.about.AboutContent
 import com.itexpert120.yomu.feature.reader.ReaderPreferenceControls
 
 private enum class SettingsPane(val title: String, val subtitle: String) {
-    Appearance("Appearance", "Theme, dynamic color, and OLED"),
+    Appearance("Appearance", "Mode, colour theme, and OLED"),
     Reading("Reading", "Reader defaults and font library"),
     About("About", "Privacy, terms, and acknowledgements"),
 }
@@ -64,11 +66,12 @@ fun SettingsScreen(
     selectedTheme: ThemePreference,
     oledDark: Boolean,
     oledEnabled: Boolean,
-    dynamicColors: Boolean,
-    dynamicColorsAvailable: Boolean,
+    accentSelection: AccentSelection,
+    colorStyle: ColorStyle,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
-    onToggleDynamicColors: (Boolean) -> Unit,
+    onSelectAccent: (AccentSelection) -> Unit,
+    onSelectColorStyle: (ColorStyle) -> Unit,
     readerSettings: ReaderSettings,
     customThemes: List<CustomReaderTheme>,
     customFonts: List<CustomFontRef>,
@@ -85,11 +88,12 @@ fun SettingsScreen(
                 selectedTheme = selectedTheme,
                 oledDark = oledDark,
                 oledEnabled = oledEnabled,
-                dynamicColors = dynamicColors,
-                dynamicColorsAvailable = dynamicColorsAvailable,
+                accentSelection = accentSelection,
+                colorStyle = colorStyle,
                 onSelectTheme = onSelectTheme,
                 onToggleOled = onToggleOled,
-                onToggleDynamicColors = onToggleDynamicColors,
+                onSelectAccent = onSelectAccent,
+                onSelectColorStyle = onSelectColorStyle,
                 readerSettings = readerSettings,
                 customThemes = customThemes,
                 customFonts = customFonts,
@@ -104,11 +108,12 @@ fun SettingsScreen(
                 selectedTheme = selectedTheme,
                 oledDark = oledDark,
                 oledEnabled = oledEnabled,
-                dynamicColors = dynamicColors,
-                dynamicColorsAvailable = dynamicColorsAvailable,
+                accentSelection = accentSelection,
+                colorStyle = colorStyle,
                 onSelectTheme = onSelectTheme,
                 onToggleOled = onToggleOled,
-                onToggleDynamicColors = onToggleDynamicColors,
+                onSelectAccent = onSelectAccent,
+                onSelectColorStyle = onSelectColorStyle,
                 readerSettings = readerSettings,
                 customThemes = customThemes,
                 customFonts = customFonts,
@@ -128,11 +133,12 @@ private fun PhoneSettingsLayout(
     selectedTheme: ThemePreference,
     oledDark: Boolean,
     oledEnabled: Boolean,
-    dynamicColors: Boolean,
-    dynamicColorsAvailable: Boolean,
+    accentSelection: AccentSelection,
+    colorStyle: ColorStyle,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
-    onToggleDynamicColors: (Boolean) -> Unit,
+    onSelectAccent: (AccentSelection) -> Unit,
+    onSelectColorStyle: (ColorStyle) -> Unit,
     readerSettings: ReaderSettings,
     customThemes: List<CustomReaderTheme>,
     customFonts: List<CustomFontRef>,
@@ -153,11 +159,12 @@ private fun PhoneSettingsLayout(
                 selectedTheme = selectedTheme,
                 oledDark = oledDark,
                 oledEnabled = oledEnabled,
-                dynamicColors = dynamicColors,
-                dynamicColorsAvailable = dynamicColorsAvailable,
+                accentSelection = accentSelection,
+                colorStyle = colorStyle,
                 onSelectTheme = onSelectTheme,
                 onToggleOled = onToggleOled,
-                onToggleDynamicColors = onToggleDynamicColors,
+                onSelectAccent = onSelectAccent,
+                onSelectColorStyle = onSelectColorStyle,
             )
             ReaderControls(
                 readerSettings = readerSettings,
@@ -179,11 +186,12 @@ private fun TabletSettingsLayout(
     selectedTheme: ThemePreference,
     oledDark: Boolean,
     oledEnabled: Boolean,
-    dynamicColors: Boolean,
-    dynamicColorsAvailable: Boolean,
+    accentSelection: AccentSelection,
+    colorStyle: ColorStyle,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
-    onToggleDynamicColors: (Boolean) -> Unit,
+    onSelectAccent: (AccentSelection) -> Unit,
+    onSelectColorStyle: (ColorStyle) -> Unit,
     readerSettings: ReaderSettings,
     customThemes: List<CustomReaderTheme>,
     customFonts: List<CustomFontRef>,
@@ -236,11 +244,12 @@ private fun TabletSettingsLayout(
                                 selectedTheme = selectedTheme,
                                 oledDark = oledDark,
                                 oledEnabled = oledEnabled,
-                                dynamicColors = dynamicColors,
-                                dynamicColorsAvailable = dynamicColorsAvailable,
+                                accentSelection = accentSelection,
+                                colorStyle = colorStyle,
                                 onSelectTheme = onSelectTheme,
                                 onToggleOled = onToggleOled,
-                                onToggleDynamicColors = onToggleDynamicColors,
+                                onSelectAccent = onSelectAccent,
+                                onSelectColorStyle = onSelectColorStyle,
                             )
 
                             SettingsPane.Reading -> ReaderControls(
@@ -332,62 +341,51 @@ private fun AppearanceGroup(
     selectedTheme: ThemePreference,
     oledDark: Boolean,
     oledEnabled: Boolean,
-    dynamicColors: Boolean,
-    dynamicColorsAvailable: Boolean,
+    accentSelection: AccentSelection,
+    colorStyle: ColorStyle,
     onSelectTheme: (ThemePreference) -> Unit,
     onToggleOled: (Boolean) -> Unit,
-    onToggleDynamicColors: (Boolean) -> Unit,
+    onSelectAccent: (AccentSelection) -> Unit,
+    onSelectColorStyle: (ColorStyle) -> Unit,
 ) {
     YomuSettingGroup(
         title = "Appearance",
         subtitle = "Set the app’s tone. Reader page themes stay independent.",
     ) {
-        Text(
-            text = "App theme",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelLarge,
-        )
+        AppearanceLabel("Mode")
         ThemeChoiceRow(
             selectedTheme = selectedTheme,
             onSelectTheme = onSelectTheme,
         )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            DynamicColorsSettingRow(
-                checked = dynamicColors && dynamicColorsAvailable,
-                available = dynamicColorsAvailable,
-                onCheckedChange = onToggleDynamicColors,
-            )
-            OledSettingRow(
-                checked = oledDark && oledEnabled,
-                enabled = oledEnabled,
-                onCheckedChange = onToggleOled,
-            )
-        }
+        AppearanceLabel("Colour theme")
+        ColorThemePicker(
+            selection = accentSelection,
+            style = colorStyle,
+            onSelect = onSelectAccent,
+        )
+        AppearanceLabel(
+            if (accentSelection == AccentSelection.Wallpaper) "Palette style · set by your wallpaper" else "Palette style",
+        )
+        ColorStyleRow(
+            selected = colorStyle,
+            enabled = accentSelection != AccentSelection.Wallpaper,
+            onSelect = onSelectColorStyle,
+        )
+        OledSettingRow(
+            checked = oledDark && oledEnabled,
+            enabled = oledEnabled,
+            onCheckedChange = onToggleOled,
+        )
     }
 }
 
 @Composable
-private fun DynamicColorsSettingRow(
-    checked: Boolean,
-    available: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    YomuSettingRow(
-        title = "Wallpaper colors",
-        position = YomuSettingPosition.First,
-        subtitle = if (available) {
-            "Use wallpaper colors for light and dark app themes"
-        } else {
-            "Requires Android 12 or newer"
-        },
-        enabled = available,
-    ) {
-        YomuTogglePill(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = available,
-        )
-    }
+private fun AppearanceLabel(text: String) {
+    Text(
+        text = text,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelLarge,
+    )
 }
 
 @Composable
@@ -398,7 +396,7 @@ private fun OledSettingRow(
 ) {
     YomuSettingRow(
         title = "OLED black",
-        position = YomuSettingPosition.Last,
+        position = YomuSettingPosition.Single,
         subtitle = if (enabled) {
             "Use true black surfaces in dark mode"
         } else {
@@ -457,11 +455,12 @@ private fun TabletSettingsPreview() {
             selectedTheme = ThemePreference.System,
             oledDark = false,
             oledEnabled = true,
-            dynamicColors = false,
-            dynamicColorsAvailable = true,
+            accentSelection = AccentSelection.FallbackPreset,
+            colorStyle = ColorStyle.Balanced,
             onSelectTheme = {},
             onToggleOled = {},
-            onToggleDynamicColors = {},
+            onSelectAccent = {},
+            onSelectColorStyle = {},
             readerSettings = ReaderSettings(),
             customThemes = emptyList(),
             customFonts = emptyList(),

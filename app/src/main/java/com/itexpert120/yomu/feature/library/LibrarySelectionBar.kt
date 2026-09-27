@@ -2,10 +2,10 @@
 
 package com.itexpert120.yomu.feature.library
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
@@ -13,18 +13,18 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Deselect
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.SelectAll
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
+import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
+import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 
 /** Contextual top bar that keeps selection state and primary selection controls visible. */
 @Composable
@@ -37,7 +37,7 @@ internal fun LibrarySelectionTopBar(
 ) {
     TopAppBar(
         navigationIcon = {
-            IconButton(onClick = onClose) {
+            IconButton(onClick = onClose, shapes = IconButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Exit selection",
@@ -51,6 +51,7 @@ internal fun LibrarySelectionTopBar(
         },
         actions = {
             IconButton(
+                shapes = IconButtonDefaults.shapes(),
                 onClick = if (allSelected) onDeselectAll else onSelectAll,
             ) {
                 Icon(
@@ -70,7 +71,10 @@ internal fun LibrarySelectionTopBar(
     )
 }
 
-/** Direct bulk actions moved out of the selection top-bar overflow menu. */
+/**
+ * Bulk actions as a vibrant M3 Expressive floating toolbar: it floats above the grid (the nav bar
+ * steps aside while selecting) and its vibrant colours signal the temporary selection mode.
+ */
 @Composable
 internal fun LibrarySelectionToolbar(
     onMarkRead: () -> Unit,
@@ -78,35 +82,15 @@ internal fun LibrarySelectionToolbar(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BottomAppBar(
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        actions = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.CheckCircle,
-                    label = "Read",
-                    onClick = onMarkRead,
-                    modifier = Modifier.weight(1f),
-                )
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.RemoveDone,
-                    label = "Unread",
-                    onClick = onMarkUnread,
-                    modifier = Modifier.weight(1f),
-                )
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.Delete,
-                    label = "Remove",
-                    onClick = onDelete,
-                    contentColor = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        },
+    YomuFloatingToolbar(
+        vibrant = true,
+        actions = listOf(
+            YomuToolbarAction(Icons.Rounded.CheckCircle, "Read", onMarkRead),
+            YomuToolbarAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread),
+            YomuToolbarAction(Icons.Rounded.Delete, "Remove", onDelete),
+        ),
+        modifier = modifier
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(bottom = 16.dp),
     )
 }

@@ -1,6 +1,6 @@
 # Design Language
 
-Open Reader should feel like a native Android app while keeping a reader-first identity. The v2 UI follows Material 3 Expressive principles — a fixed app-owned palette by default, optional dynamic colours for light and dark modes, clear Material roles, adaptive layouts, accessible native interactions, purposeful motion, and expressive typography/shapes — rather than inventing a second visual language.
+Open Reader should feel like a native Android app while keeping a reader-first identity. The v2 UI follows Material 3 Expressive principles — a user-chosen colour theme (wallpaper palette by default on Android 12+, eight seeded presets or a custom seed, each in Balanced/Vibrant/Expressive/Mono styles), clear Material roles, adaptive layouts, accessible native interactions, purposeful motion, and expressive typography/shapes — rather than inventing a second visual language.
 
 ## Implementation status (current)
 
@@ -69,6 +69,16 @@ Do not copy these products. Use them as proof that native Android can feel custo
 8. Material roles and defaults should define the interaction foundation; product-specific reader surfaces may layer on top only when reading comfort requires it.
 
 ## Material 3 Expressive Rules
+
+Applied patterns (2026-09 refresh):
+
+- **Hierarchy**: flexible app bars; emphasized type for headlines, hero figures, actions and selected states; primary-coloured section headers above segmented groups (no card-inside-card nesting).
+- **Containment**: settings and sheet controls use segmented list items / containers separated by the segmented gap; toggles carry check/close thumb icons.
+- **Selection**: connected button groups replace segmented buttons; selected covers round and shrink; colour swatches morph circle → cookie.
+- **Toolbars**: contextual actions (library/chapter selection, reader actions) use floating toolbars — vibrant for temporary modes — and the nav bar steps aside rather than stacking.
+- **Feedback**: the morphing loading indicator for short waits, wavy progress for long or hero progress, haptic ticks on toggles, choice groups, swatches and snapped sliders.
+- **Hero moments** (kept to a few): empty library, Book Details cover, Stats reading-time card, About.
+- **Motion**: geometry on spatial springs, fades on effects springs; library items animate to new positions; chapters reveal directionally; paged taps slide.
 
 Use these as the baseline for every redesign:
 

@@ -8,7 +8,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,8 +17,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -30,13 +31,18 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +58,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -59,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuLoadingState
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -183,6 +191,13 @@ fun LibraryScreen(
             }
             previous = current
         }
+    }
+
+    // Scrolling the results means the user is done typing: drop the keyboard so it doesn't cover them.
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(gridState, listState) {
+        snapshotFlow { gridState.isScrollInProgress || listState.isScrollInProgress }
+            .collect { scrolling -> if (scrolling) focusManager.clearFocus() }
     }
 
     // Tap opens book details; long-press starts multi-select. While selecting, both toggle.
@@ -381,6 +396,7 @@ private fun LibraryTopBarTransition(
                 scrollBehavior = scrollBehavior,
                 showImport = state.totalCount > 0,
                 resultCount = state.selectableCount,
+                bookCount = state.totalCount,
             )
         }
         AnimatedVisibility(
@@ -402,10 +418,8 @@ private fun LibraryTopBarTransition(
 
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.LibraryLoading() {
-    Text(
-        text = "Loading library…",
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.bodyLarge,
+    YomuLoadingState(
+        message = "Loading library…",
         modifier = Modifier.align(Alignment.Center),
     )
 }
@@ -419,30 +433,34 @@ private fun EmptyLibrary(onImport: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(92.dp)
-                .clip(MaterialTheme.shapes.large)
-                .background(Color(0xFF050505))
-                .border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    MaterialTheme.shapes.large,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.open_reader_logo),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(64.dp),
+        // Hero moment: the mark sits on a scalloped Material shape — decorative, never text-bearing.
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(168.dp)
+                    .clip(MaterialShapes.Cookie12Sided.toShape())
+                    .background(MaterialTheme.colorScheme.primaryContainer),
             )
+            Box(
+                modifier = Modifier
+                    .size(92.dp)
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .background(Color(0xFF050505)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.open_reader_logo),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(64.dp),
+                )
+            }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
         Text(
             text = "Welcome to Open Reader",
             color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.headlineLarge,
+            style = MaterialTheme.typography.headlineLargeEmphasized,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
@@ -454,11 +472,20 @@ private fun EmptyLibrary(onImport: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(28.dp))
+        val buttonHeight = ButtonDefaults.MediumContainerHeight
         Button(
             onClick = onImport,
-            modifier = Modifier.fillMaxWidth(),
+            shapes = ButtonDefaults.shapesFor(buttonHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(buttonHeight),
+            modifier = Modifier.heightIn(min = buttonHeight),
         ) {
-            Text("Import EPUB")
+            Icon(
+                Icons.Rounded.Add,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.iconSizeFor(buttonHeight)),
+            )
+            Spacer(Modifier.width(ButtonDefaults.iconSpacingFor(buttonHeight)))
+            Text("Import EPUB", style = ButtonDefaults.textStyleFor(buttonHeight))
         }
         Spacer(Modifier.height(12.dp))
         Text(
@@ -484,7 +511,7 @@ private fun EmptySearchResults(
     ) {
         Text(
             text = "No books found",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
@@ -494,7 +521,7 @@ private fun EmptySearchResults(
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
-        TextButton(onClick = onClearSearch) {
+        TextButton(onClick = onClearSearch, shapes = ButtonDefaults.shapes()) {
             Text("Clear search")
         }
     }
@@ -543,12 +570,19 @@ private fun LibraryGrid(
                     }
                 }
                 items(group.books, key = { it.id }) { book ->
+                    // Re-sorting, grouping, or filtering slides covers to their new slots.
+                    val itemModifier = Modifier.animateItem(
+                        fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    )
                     when (viewMode) {
                         LibraryViewMode.ComfortableGrid -> GridBookCard(
                             book = book,
                             onClick = { onBookClick(book) },
                             onLongPress = { onBookLongPress(book) },
                             selected = book.id in selectedIds,
+                            modifier = itemModifier,
                         )
 
                         LibraryViewMode.CompactGrid -> CompactGridBookCard(
@@ -556,6 +590,7 @@ private fun LibraryGrid(
                             onClick = { onBookClick(book) },
                             onLongPress = { onBookLongPress(book) },
                             selected = book.id in selectedIds,
+                            modifier = itemModifier,
                         )
 
                         LibraryViewMode.CoverOnlyGrid -> CoverOnlyGridBookCard(
@@ -563,6 +598,7 @@ private fun LibraryGrid(
                             onClick = { onBookClick(book) },
                             onLongPress = { onBookLongPress(book) },
                             selected = book.id in selectedIds,
+                            modifier = itemModifier,
                         )
 
                         LibraryViewMode.List -> Unit
@@ -603,6 +639,11 @@ private fun LibraryList(
                         onClick = { onBookClick(book) },
                         onLongPress = { onBookLongPress(book) },
                         selected = book.id in selectedIds,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                            placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                            fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        ),
                     )
                 }
             }

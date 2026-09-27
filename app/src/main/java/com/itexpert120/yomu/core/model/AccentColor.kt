@@ -1,42 +1,55 @@
 package com.itexpert120.yomu.core.model
 
 /**
- * User-selectable accent. Each preset carries a [light] variant (dark enough for white text on
- * it) and a [dark] variant (light enough for dark text), so the accent reads well in both themes.
- * Stored as the enum name.
+ * User-selectable app colour theme presets. Each [seed] is expanded into a full Material 3 tonal
+ * scheme (light and dark) at theme time, so one value drives every colour role. Stored as the enum
+ * name.
  */
-enum class AccentColor(val label: String, val light: Long, val dark: Long) {
-    Forest("Forest", 0xFF1D4F3A, 0xFFB8D88F),
-    Ocean("Ocean", 0xFF1C5A78, 0xFF8FC6E8),
-    Violet("Violet", 0xFF5B3E86, 0xFFC4A9E8),
-    Amber("Amber", 0xFF8A5414, 0xFFE7BD7E),
-    Rose("Rose", 0xFF8E2F4C, 0xFFE89BB0),
-    Slate("Slate", 0xFF3C4A57, 0xFFAEC0CE),
+enum class AccentColor(val label: String, val seed: Long) {
+    Ocean("Ocean", 0xFF1F6FEB),
+    Teal("Teal", 0xFF00897B),
+    Forest("Forest", 0xFF3B7D2E),
+    Amber("Amber", 0xFFE0A030),
+    Coral("Coral", 0xFFE8674A),
+    Rose("Rose", 0xFFD1487A),
+    Violet("Violet", 0xFF6750A4),
+    Slate("Slate", 0xFF5B6B7A),
 }
 
-/** The chosen accent: one of the [AccentColor] presets, or a custom ARGB color. */
+/**
+ * The chosen app colour source: Android's wallpaper palette, one of the [AccentColor] presets, or
+ * a custom ARGB seed.
+ */
 sealed interface AccentSelection {
+    data object Wallpaper : AccentSelection
     data class Preset(val accent: AccentColor) : AccentSelection
     data class Custom(val argb: Long) : AccentSelection
 
-    /** Resolves to the ARGB value for the current theme brightness. */
-    fun resolve(dark: Boolean): Long = when (this) {
-        is Preset -> if (dark) accent.dark else accent.light
-        is Custom -> argb
-    }
-
     companion object {
-        val Default: AccentSelection = Preset(AccentColor.Forest)
+        /** Used when wallpaper colours are unavailable (pre-Android 12). */
+        val FallbackPreset: AccentSelection = Preset(AccentColor.Ocean)
 
-        fun deserialize(value: String?): AccentSelection = when {
-            value == null -> Default
-            value.startsWith("#") -> value.drop(1).toLongOrNull(16)?.let { Custom(it) } ?: Default
-            else -> runCatching { Preset(AccentColor.valueOf(value)) }.getOrDefault(Default)
+        fun deserialize(value: String?): AccentSelection? = when {
+            value == null -> null
+            value == WallpaperKey -> Wallpaper
+            value.startsWith("#") -> value.drop(1).toLongOrNull(16)?.let { Custom(it) }
+            else -> runCatching { Preset(AccentColor.valueOf(value)) }.getOrNull()
         }
 
         fun serialize(selection: AccentSelection): String = when (selection) {
+            Wallpaper -> WallpaperKey
             is Preset -> selection.accent.name
             is Custom -> "#" + selection.argb.toString(16).uppercase()
         }
+
+        private const val WallpaperKey = "wallpaper"
     }
+}
+
+/** How strongly the seed colour is expressed across the generated scheme. */
+enum class ColorStyle(val label: String) {
+    Balanced("Balanced"),
+    Vibrant("Vibrant"),
+    Expressive("Expressive"),
+    Monochrome("Mono"),
 }

@@ -10,15 +10,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -62,17 +66,26 @@ internal fun ReaderSearchSheet(
         ) {
             Text(
                 text = "Search in book",
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
             )
+            val focusManager = LocalFocusManager.current
+            val focusRequester = remember { FocusRequester() }
+            // Opening search means the user wants to type: focus the field (unless results are
+            // already showing, e.g. when returning to a previous search).
+            LaunchedEffect(Unit) { if (searchQuery.isEmpty()) focusRequester.requestFocus() }
             YomuTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 label = "Search in book",
-                placeholder = "Search…",
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSubmitSearch() }),
-                modifier = Modifier.fillMaxWidth(),
+                placeholder = "Words or phrases",
+                imeAction = ImeAction.Search,
+                onImeAction = {
+                    onSubmitSearch()
+                    // Drop the keyboard so the results list has the room.
+                    focusManager.clearFocus()
+                },
+                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             )
             Column(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                 when {
@@ -128,11 +141,7 @@ private fun SearchMessage(text: String, showProgress: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showProgress) {
-            CircularProgressIndicator(
-                color = YomuTheme.colors.accent,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp),
-            )
+            CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
         }
         Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
     }

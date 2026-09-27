@@ -67,7 +67,8 @@ fun YomuApp(
 
     YomuDesignTheme(
         themeMode = resolved,
-        dynamicColors = appearance.dynamicColors,
+        accent = appearance.accentSelection,
+        colorStyle = appearance.colorStyle,
     ) {
         // Opaque app-coloured backing so the seamless screen transition never reveals the window
         // background (which would torch during navigation in dark mode).

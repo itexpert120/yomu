@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -202,11 +202,7 @@ private fun BrowseLoading() {
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircularProgressIndicator(
-            color = YomuTheme.colors.accent,
-            strokeWidth = 2.dp,
-            modifier = Modifier.size(20.dp),
-        )
+        LoadingIndicator(modifier = Modifier.size(40.dp))
         Text("Building contents…", color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
     }
 }

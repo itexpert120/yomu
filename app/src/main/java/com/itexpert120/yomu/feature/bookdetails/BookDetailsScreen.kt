@@ -30,10 +30,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -59,23 +61,24 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.SelectAll
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -115,14 +118,17 @@ import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
-import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
+import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
 import com.itexpert120.yomu.core.designsystem.YomuMotion
+import com.itexpert120.yomu.core.designsystem.YomuProgressBar
+import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
+import com.itexpert120.yomu.core.designsystem.yomuDecorativeShape
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.designsystem.yomuPressable
@@ -485,25 +491,41 @@ private fun BookDetailsTopBar(
                         )
                         Box {
                             HeaderIconButton(Icons.Rounded.MoreVert, "Book options", { showActions = true })
-                            DropdownMenu(expanded = showActions, onDismissRequest = { showActions = false }) {
+                            // M3 Expressive vertical menu: the destructive action sits in its own
+                            // group, separated by the standard group gap.
+                            DropdownMenuPopup(expanded = showActions, onDismissRequest = { showActions = false }) {
+                                val groupCount = if (hasTimeline) 2 else 1
                                 if (hasTimeline) {
+                                    DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, groupCount)) {
+                                        DropdownMenuItem(
+                                            text = { Text("Reading timeline") },
+                                            shape = MenuDefaults.itemShape(0, 1).shape,
+                                            leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) },
+                                            onClick = {
+                                                showActions = false
+                                                onTimeline()
+                                            },
+                                        )
+                                    }
+                                    Spacer(Modifier.height(MenuDefaults.GroupSpacing))
+                                }
+                                DropdownMenuGroup(shapes = MenuDefaults.groupShape(groupCount - 1, groupCount)) {
                                     DropdownMenuItem(
-                                        text = { Text("Reading timeline") },
-                                        leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) },
+                                        text = { Text("Remove book", color = MaterialTheme.colorScheme.error) },
+                                        shape = MenuDefaults.itemShape(0, 1).shape,
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Rounded.DeleteOutline,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
                                         onClick = {
                                             showActions = false
-                                            onTimeline()
+                                            onRemove()
                                         },
                                     )
                                 }
-                                DropdownMenuItem(
-                                    text = { Text("Remove book", color = MaterialTheme.colorScheme.error) },
-                                    leadingIcon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showActions = false
-                                        onRemove()
-                                    },
-                                )
                             }
                         }
                     }
@@ -737,8 +759,8 @@ private fun BookHeader(
                         ) {
                             Text(
                                 text = "${(book.progress.coerceIn(0f, 1f) * 100).toInt()}% read",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.titleMediumEmphasized,
                             )
                             Text(
                                 text = book.remaining,
@@ -763,7 +785,7 @@ private fun BookHeader(
                 Text(
                     text = "About",
                     color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLargeEmphasized,
                 )
                 ExpandableBookDescription(description = description)
             }
@@ -783,7 +805,7 @@ private fun BookIdentityDetails(
         Text(
             text = book.title,
             color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMediumEmphasized,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
@@ -838,7 +860,7 @@ private fun ReadingStatus(
             )
             Text(
                 text = state.statusLabel(),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelLargeEmphasized,
             )
             if (readingTime != null) {
                 Text(
@@ -945,6 +967,7 @@ private fun ExpandableBookDescription(description: String) {
         )
         if (expandable) {
             TextButton(
+                shapes = ButtonDefaults.shapes(),
                 onClick = { expanded = !expanded },
                 contentPadding = ButtonDefaults.TextButtonContentPadding,
             ) {
@@ -1256,7 +1279,7 @@ private fun ChapterSelectionTopBar(
 ) {
     TopAppBar(
         navigationIcon = {
-            IconButton(onClick = onClose) {
+            IconButton(onClick = onClose, shapes = IconButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Exit chapter selection",
@@ -1268,6 +1291,7 @@ private fun ChapterSelectionTopBar(
         },
         actions = {
             IconButton(
+                shapes = IconButtonDefaults.shapes(),
                 onClick = if (allSelected) onDeselectAll else onSelectAll,
             ) {
                 Icon(
@@ -1292,38 +1316,16 @@ private fun ChapterSelectionToolbar(
     modifier: Modifier = Modifier,
 ) {
     val hasSelection = selectedCount > 0
-    BottomAppBar(
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        actions = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.CheckCircle,
-                    label = "Read",
-                    onClick = onMarkRead,
-                    enabled = hasSelection,
-                    modifier = Modifier.weight(1f),
-                )
-                YomuLabeledIconAction(
-                    icon = Icons.Rounded.RemoveDone,
-                    label = "Unread",
-                    onClick = onMarkUnread,
-                    enabled = hasSelection,
-                    modifier = Modifier.weight(1f),
-                )
-                YomuLabeledIconAction(
-                    icon = Icons.AutoMirrored.Rounded.PlaylistAddCheck,
-                    label = "To here",
-                    onClick = onMarkPrevious,
-                    enabled = hasSelection,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        },
+    YomuFloatingToolbar(
+        vibrant = true,
+        actions = listOf(
+            YomuToolbarAction(Icons.Rounded.CheckCircle, "Read", onMarkRead, enabled = hasSelection),
+            YomuToolbarAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread, enabled = hasSelection),
+            YomuToolbarAction(Icons.AutoMirrored.Rounded.PlaylistAddCheck, "To here", onMarkPrevious, enabled = hasSelection),
+        ),
+        modifier = modifier
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(bottom = 16.dp),
     )
 }
 
@@ -1361,11 +1363,7 @@ private fun TocLoading() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary,
-            strokeWidth = 2.5.dp,
-            modifier = Modifier.size(30.dp),
-        )
+        LoadingIndicator()
         Text(
             text = "Building contents…",
             color = MaterialTheme.colorScheme.onSurface,
@@ -1402,15 +1400,8 @@ private fun SeriesTag(series: String) {
 
 @Composable
 private fun DetailProgress(progress: Float) {
-    LinearProgressIndicator(
-        progress = { progress.coerceIn(0f, 1f) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .clip(MaterialTheme.shapes.small),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-    )
+    // The book's headline progress uses the expressive wavy style.
+    YomuProgressBar(progress = progress, wavy = true)
 }
 
 @Composable
@@ -1418,6 +1409,15 @@ private fun DetailCover(book: BookDetailsUi, onClick: () -> Unit, modifier: Modi
     val clickable = book.coverImagePath != null
     Card(
         modifier = modifier
+            // Hero moment: a soft scalloped shape peeks out behind the cover.
+            .yomuDecorativeShape(
+                polygon = MaterialShapes.Cookie12Sided,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                scale = 1.05f,
+                rotation = 12f,
+                offsetX = -0.22f,
+                offsetY = -0.42f,
+            )
             .then(
                 if (clickable) Modifier.yomuPressable(onClick = onClick) else Modifier,
             )

@@ -5,6 +5,8 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -17,9 +19,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 fun LibraryRoute(
     onOpenReader: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
+    onSelectionModeChange: (Boolean) -> Unit = {},
 ) {
     val viewModel: LibraryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
+
+    // Selection swaps the navigation bar for a floating toolbar; M3 never shows both at once.
+    LaunchedEffect(state.selectionMode) { onSelectionModeChange(state.selectionMode) }
+    DisposableEffect(Unit) { onDispose { onSelectionModeChange(false) } }
 
     // The picker returns one or many EPUBs; the use case copies them immediately, so a temporary
     // read grant is enough (no persistable permission needed).

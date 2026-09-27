@@ -1,7 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,24 +15,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -43,8 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -54,193 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
-
-@Composable
-fun YomuDropdownMenu(
-    expanded: Boolean,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    if (expanded) {
-        Popup(
-            onDismissRequest = onDismiss,
-            properties = PopupProperties(focusable = true),
-        ) {
-            AnimatedVisibility(
-                visible = expanded,
-                enter = yomuPopupEnter(),
-                exit = yomuPopupExit(),
-            ) {
-                Box(modifier = modifier) {
-                    content()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun YomuDropdownMenuItem(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .yomuPressable(onClick = onClick)
-            .clip(MaterialTheme.shapes.medium)
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    Color.Transparent
-                },
-            )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onSecondaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            style = YomuTheme.type.body,
-            modifier = Modifier.weight(1f),
-        )
-        if (selected) {
-            Icon(
-                imageVector = Icons.Rounded.Check,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
-@Composable
-fun YomuDropdownMenuContainer(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    androidx.compose.material3.Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 3.dp,
-        shadowElevation = 8.dp,
-    ) {
-        Column(Modifier.padding(vertical = 4.dp)) {
-            content()
-        }
-    }
-}
-
-@Composable
-fun YomuPillFilter(
-    label: String,
-    value: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    AssistChip(
-        onClick = onClick,
-        modifier = modifier,
-        label = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = value, color = MaterialTheme.colorScheme.onSurface)
-            }
-        },
-        trailingIcon = {
-            Icon(
-                imageVector = Icons.Rounded.KeyboardArrowDown,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-        shape = MaterialTheme.shapes.large,
-    )
-}
-
-enum class YomuIconButtonEmphasis {
-    Primary,
-    Quiet,
-}
-
-@Composable
-fun YomuCircleIconButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    emphasis: YomuIconButtonEmphasis = YomuIconButtonEmphasis.Quiet,
-    icon: @Composable () -> Unit,
-) {
-    when (emphasis) {
-        YomuIconButtonEmphasis.Primary -> androidx.compose.material3.FilledIconButton(
-            onClick = onClick,
-            modifier = modifier.size(48.dp),
-            shape = MaterialTheme.shapes.large,
-        ) {
-            icon()
-        }
-
-        YomuIconButtonEmphasis.Quiet -> androidx.compose.material3.FilledTonalIconButton(
-            onClick = onClick,
-            modifier = modifier.size(48.dp),
-            shape = MaterialTheme.shapes.large,
-        ) {
-            icon()
-        }
-    }
-}
-
-@Composable
-fun YomuCircleIconButton(
-    onClick: () -> Unit,
-    icon: ImageVector,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    emphasis: YomuIconButtonEmphasis = YomuIconButtonEmphasis.Quiet,
-    tint: Color = when (emphasis) {
-        YomuIconButtonEmphasis.Primary -> YomuTheme.colors.appBackground
-        YomuIconButtonEmphasis.Quiet -> YomuTheme.colors.textPrimary
-    },
-) {
-    when (emphasis) {
-        YomuIconButtonEmphasis.Primary -> androidx.compose.material3.FilledIconButton(
-            onClick = onClick,
-            modifier = modifier.size(48.dp),
-            shape = MaterialTheme.shapes.large,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = tint,
-            )
-        }
-
-        YomuIconButtonEmphasis.Quiet -> androidx.compose.material3.FilledTonalIconButton(
-            onClick = onClick,
-            modifier = modifier.size(48.dp),
-            shape = MaterialTheme.shapes.large,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = tint,
-            )
-        }
-    }
-}
 
 /** Material 3 drag handle compatibility wrapper for [YomuBottomSheet]s. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -416,75 +218,6 @@ fun YomuBottomSheet(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             content(::animatedDismiss)
-        }
-    }
-}
-
-@Composable
-fun <T> YomuOptionSheet(
-    visible: Boolean,
-    onDismiss: () -> Unit,
-    title: String,
-    options: List<T>,
-    selectedOption: T,
-    onSelect: (T) -> Unit,
-    label: (T) -> String = { (it as Enum<*>).name.replaceFirstChar { c -> c.titlecase() } },
-) where T : Enum<T> {
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { dismiss ->
-        Text(
-            text = title,
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.title,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-        options.forEach { option ->
-            val isSelected = option == selectedOption
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .yomuPressable(
-                        onClick = {
-                            onSelect(option)
-                            dismiss()
-                        },
-                    )
-                    .clip(RoundedCornerShape(YomuTheme.radius.md))
-                    .background(if (isSelected) YomuTheme.colors.accentSoft else Color.Transparent)
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = label(option),
-                    color = if (isSelected) YomuTheme.colors.accent else YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.body,
-                    modifier = Modifier.weight(1f),
-                )
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = null,
-                        tint = YomuTheme.colors.accent,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp)
-                .yomuPressable(onClick = dismiss)
-                .clip(RoundedCornerShape(YomuTheme.radius.md))
-                .background(YomuTheme.colors.surface)
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "Cancel",
-                color = YomuTheme.colors.textSecondary,
-                style = YomuTheme.type.body,
-            )
         }
     }
 }
