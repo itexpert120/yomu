@@ -383,38 +383,25 @@ private fun LibraryTopBarTransition(
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     Box {
-        AnimatedVisibility(
-            visible = !state.selectionMode,
-            enter = yomuChromeEnter(fromBottom = false),
-            exit = yomuChromeExit(toBottom = false),
-        ) {
-            LibraryTopBar(
-                searchActive = state.searchActive,
-                searchQuery = state.searchQuery,
-                onSearchToggle = onSearchToggle,
-                onSearchQueryChange = onSearchQueryChange,
-                onImport = onImport,
-                onOptionsSheetToggle = onOptionsSheetToggle,
-                scrollBehavior = scrollBehavior,
-                showImport = state.totalCount > 0,
-                resultCount = state.selectableCount,
-                bookCount = state.totalCount,
-            )
-        }
-        AnimatedVisibility(
-            visible = state.selectionMode,
-            enter = yomuChromeEnter(fromBottom = false),
-            exit = yomuChromeExit(toBottom = false),
-        ) {
-            LibrarySelectionTopBar(
-                selectedCount = state.selectedIds.size,
-                allSelected = state.selectedIds.isNotEmpty() &&
-                    state.selectedIds.size == state.selectableCount,
-                onClose = onExitSelection,
-                onSelectAll = onSelectAll,
-                onDeselectAll = onDeselectAll,
-            )
-        }
+        LibraryTopBar(
+            searchActive = state.searchActive,
+            searchQuery = state.searchQuery,
+            onSearchToggle = onSearchToggle,
+            onSearchQueryChange = onSearchQueryChange,
+            onImport = onImport,
+            onOptionsSheetToggle = onOptionsSheetToggle,
+            scrollBehavior = scrollBehavior,
+            showImport = state.totalCount > 0,
+            resultCount = state.selectableCount,
+            bookCount = state.totalCount,
+            selectionMode = state.selectionMode,
+            selectedCount = state.selectedIds.size,
+            allSelected = state.selectedIds.isNotEmpty() &&
+                state.selectedIds.size == state.selectableCount,
+            onExitSelection = onExitSelection,
+            onSelectAll = onSelectAll,
+            onDeselectAll = onDeselectAll,
+        )
     }
 }
 
