@@ -76,7 +76,14 @@ data class DictionaryLicense(val name: String = "", val url: String = "")
 
 /** Outcome of a word lookup. */
 sealed interface DictionaryResult {
-    data class Found(val response: DictionaryResponse) : DictionaryResult
+    data class Found(
+        val response: DictionaryResponse,
+        // Set when the looked-up word was an inflection and [response] is its base word.
+        val inflectionOf: InflectionNote? = null,
+    ) : DictionaryResult
     data object NotFound : DictionaryResult
     data object Error : DictionaryResult
 }
+
+/** "[word] is the [description] of the base word", e.g. muttered / simple past and past participle. */
+data class InflectionNote(val word: String, val description: String, val partOfSpeech: String = "")

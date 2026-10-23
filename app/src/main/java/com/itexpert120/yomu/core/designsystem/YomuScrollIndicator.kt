@@ -12,20 +12,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -53,15 +58,20 @@ private data class ScrollThumbGeometry(
 )
 
 private val ScrollIndicatorWidth = 4.dp
-private val ScrollIndicatorDragWidth = 24.dp
+private val ScrollIndicatorPressedWidth = 8.dp
+private val ScrollIndicatorDragWidth = 32.dp
 private val ScrollIndicatorMinThumbHeight = 48.dp
+
+// Extra grab room above/below the thumb: a 48dp target is easy to miss by a few dp on a fast swipe.
+private val ScrollIndicatorThumbTouchSlop = 16.dp
 
 /**
  * A compact Material-aligned vertical scrollbar for any Compose scroll container that exposes a
  * [ScrollIndicatorState]. It remains subtly visible at rest and strengthens while content moves,
  * making long reading and chapter surfaces easy to orient without competing with their content.
- * The wider transparent drag lane keeps the visible rail delicate while supporting thumb dragging.
- * Track taps are ignored so an incidental touch beside book-details content never jumps the list.
+ * The wider transparent drag lane keeps the visible rail delicate while supporting thumb dragging;
+ * the thumb is excluded from the system back gesture (it sits in the edge-swipe zone) and widens
+ * while held. Track taps are ignored so an incidental touch beside content never jumps the list.
  */
 @Composable
 fun YomuVerticalScrollIndicator(
@@ -138,6 +148,15 @@ private fun VerticalScrollIndicator(
         },
         label = "verticalScrollIndicatorAlpha",
     )
+    var dragging by remember { mutableStateOf(false) }
+    val thumbWidthFraction by animateFloatAsState(
+        targetValue = if (dragging) 1f else ScrollIndicatorWidth / ScrollIndicatorPressedWidth,
+        animationSpec = if (yomuAnimationsEnabled()) tween(durationMillis = 120) else snap(),
+        label = "verticalScrollIndicatorWidth",
+    )
+    val density = LocalDensity.current
+    val thumbSlopPx = with(density) { ScrollIndicatorThumbTouchSlop.toPx() }
+    val minThumbHeightPx = with(density) { ScrollIndicatorMinThumbHeight.toPx() }
     val currentMetrics = rememberUpdatedState(metrics)
     val currentOnScrollToProgress = rememberUpdatedState(onScrollToProgress)
     val dragProgress = remember { Channel<Float>(capacity = Channel.CONFLATED) }
@@ -153,6 +172,20 @@ private fun VerticalScrollIndicator(
     Box(
         modifier = modifier
             .width(ScrollIndicatorDragWidth)
+            // The thumb lives in the right-edge back-gesture zone; without this the system often
+            // claims the drag before the app sees it. Only the thumb's band is excluded.
+            .systemGestureExclusion { coordinates ->
+                val current = currentMetrics.value
+                val height = coordinates.size.height.toFloat()
+                if (!current.scrollable || height <= 0f) return@systemGestureExclusion Rect.Zero
+                val thumb = current.thumbGeometry(height, minThumbHeightPx)
+                Rect(
+                    left = 0f,
+                    top = (thumb.top - thumbSlopPx).coerceAtLeast(0f),
+                    right = coordinates.size.width.toFloat(),
+                    bottom = (thumb.top + thumb.height + thumbSlopPx).coerceAtMost(height),
+                )
+            }
             .semantics {
                 if (metrics.scrollable) {
                     val range = (metrics.contentSize - metrics.viewportSize).coerceAtLeast(1)
@@ -176,11 +209,15 @@ private fun VerticalScrollIndicator(
                         trackHeight = size.height.toFloat(),
                         minThumbHeight = minThumbHeight,
                     )
-                    if (down.position.y !in initialThumb.top..(initialThumb.top + initialThumb.height)) {
+                    val slop = ScrollIndicatorThumbTouchSlop.toPx()
+                    val grabRange = (initialThumb.top - slop)..(initialThumb.top + initialThumb.height + slop)
+                    if (down.position.y !in grabRange) {
                         return@awaitEachGesture
                     }
                     down.consume()
-                    val grabOffset = down.position.y - initialThumb.top
+                    dragging = true
+                    // Clamp so a grab in the slop band keeps the finger on the thumb's edge.
+                    val grabOffset = (down.position.y - initialThumb.top).coerceIn(0f, initialThumb.height)
 
                     fun scrollTo(pointerY: Float) {
                         val latestMetrics = currentMetrics.value
@@ -194,12 +231,16 @@ private fun VerticalScrollIndicator(
                         dragProgress.trySend(progress)
                     }
 
-                    while (true) {
-                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
-                            ?: break
-                        if (!change.pressed) break
-                        change.consume()
-                        scrollTo(change.position.y)
+                    try {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                ?: break
+                            if (!change.pressed) break
+                            change.consume()
+                            scrollTo(change.position.y)
+                        }
+                    } finally {
+                        dragging = false
                     }
                 }
             },
@@ -208,7 +249,7 @@ private fun VerticalScrollIndicator(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .width(ScrollIndicatorWidth),
+                .width(ScrollIndicatorPressedWidth),
         ) {
             if (!metrics.scrollable || alpha <= 0f || size.height <= 0f) return@Canvas
 
@@ -216,20 +257,25 @@ private fun VerticalScrollIndicator(
                 trackHeight = size.height,
                 minThumbHeight = ScrollIndicatorMinThumbHeight.toPx(),
             )
-            val radius = size.width / 2f
+            // Right-aligned so the rail keeps its edge position as the thumb widens while held.
+            val railWidth = ScrollIndicatorWidth.toPx()
+            val thumbWidth = size.width * thumbWidthFraction
+            val railRadius = railWidth / 2f
+            val thumbRadius = thumbWidth / 2f
 
             drawRoundRect(
                 color = trackColor,
-                size = size,
-                cornerRadius = CornerRadius(radius, radius),
+                topLeft = Offset(size.width - railWidth, 0f),
+                size = Size(railWidth, size.height),
+                cornerRadius = CornerRadius(railRadius, railRadius),
                 alpha = alpha * 0.22f,
             )
             drawRoundRect(
                 color = thumbColor,
-                topLeft = Offset(0f, thumb.top),
-                size = Size(size.width, thumb.height),
-                cornerRadius = CornerRadius(radius, radius),
-                alpha = alpha,
+                topLeft = Offset(size.width - thumbWidth, thumb.top),
+                size = Size(thumbWidth, thumb.height),
+                cornerRadius = CornerRadius(thumbRadius, thumbRadius),
+                alpha = if (dragging) 1f else alpha,
             )
         }
     }

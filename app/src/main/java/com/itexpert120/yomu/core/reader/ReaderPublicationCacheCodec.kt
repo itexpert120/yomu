@@ -15,6 +15,9 @@ object ReaderPublicationCacheCodec {
         if (tocJson == null) return null
         val toc = runCatching { json.decodeFromString<List<ReaderTocItem>>(tocJson) }
             .getOrNull() ?: return null
+        // TOCs cached before non-ASCII anchors were repaired stored those rows as unjumpable with an
+        // encoded `#` (`%23`) in the href; treat them as a miss so the TOC is re-extracted.
+        if (toc.any { it.locatorJson == null && "%23" in it.resourceHref }) return null
         val weights = resourceWeightsJson
             ?.let { runCatching { json.decodeFromString<Map<String, Int>>(it) }.getOrNull() }
             ?.filterValues { it > 0 }

@@ -61,6 +61,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.SelectAll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -276,6 +277,7 @@ fun BookDetailsScreen(
                         detailsScrollState = detailsScrollState,
                         navBottom = navBottom,
                         topInset = topBarHeight,
+                        onRead = onRead,
                         onIdentityBottom = { identityBottomPx = it },
                         onDetailsPaneTop = { detailsPaneTopPx = it },
                         onCoverClick = { if (book.coverImagePath != null) showCover = true },
@@ -376,8 +378,9 @@ fun BookDetailsScreen(
                     .onSizeChanged { topBarHeightPx = it.height },
             )
 
-            // Primary action floats over the content (hidden while multi-selecting chapters).
-            if (book != null) {
+            // Primary action floats over the content (hidden while multi-selecting chapters). Two
+            // panes dock it in the details pane instead, so it never covers the chapter list.
+            if (book != null && !twoPane) {
                 AnimatedVisibility(
                     visible = !toc.selectionMode,
                     enter = yomuPopupEnter(BookDetailsFabTransformOrigin),
@@ -603,6 +606,7 @@ private fun TwoPaneDetails(
     detailsScrollState: androidx.compose.foundation.ScrollState,
     navBottom: androidx.compose.ui.unit.Dp,
     topInset: Dp,
+    onRead: () -> Unit,
     onIdentityBottom: (Float) -> Unit,
     onDetailsPaneTop: (Float) -> Unit,
     onCoverClick: () -> Unit,
@@ -620,56 +624,72 @@ private fun TwoPaneDetails(
             .fillMaxSize()
             .padding(top = topInset + 8.dp),
         startContent = {
-            // Left pane: book identity + progress + description, independently scrollable.
-            BoxWithConstraints(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = navBottom + 16.dp)
-                    .clip(MaterialTheme.shapes.extraLarge)
-                    .onGloballyPositioned { onDetailsPaneTop(it.boundsInWindow().top) },
+                    .padding(bottom = navBottom + 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // The cover and title sit side by side only when the fixed pane is roomy enough.
-                val stackIdentity = maxWidth < 440.dp
-                Column(
+                // Left pane: book identity + progress + description, independently scrollable.
+                BoxWithConstraints(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(detailsScrollState)
-                        .padding(bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.extraLarge)
+                        .onGloballyPositioned { onDetailsPaneTop(it.boundsInWindow().top) },
                 ) {
-                    BookHeader(
-                        book = book,
-                        onCoverClick = onCoverClick,
-                        coverWidth = if (stackIdentity) 160.dp else 176.dp,
-                        stackIdentity = stackIdentity,
-                        identityModifier = Modifier.onGloballyPositioned {
-                            onIdentityBottom(it.boundsInWindow().bottom)
-                        },
+                    // The cover and title sit side by side only when the fixed pane is roomy enough.
+                    val stackIdentity = maxWidth < 440.dp
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(detailsScrollState)
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        BookHeader(
+                            book = book,
+                            onCoverClick = onCoverClick,
+                            coverWidth = if (stackIdentity) 160.dp else 176.dp,
+                            stackIdentity = stackIdentity,
+                            identityModifier = Modifier.onGloballyPositioned {
+                                onIdentityBottom(it.boundsInWindow().bottom)
+                            },
+                        )
+                    }
+                    YomuVerticalScrollIndicator(
+                        state = detailsScrollState,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
                     )
                 }
-                YomuVerticalScrollIndicator(
-                    state = detailsScrollState,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                DockedReadButton(
+                    reading = book.readingState == ReadingState.Reading,
+                    enabled = !toc.selectionMode,
+                    onClick = onRead,
                 )
             }
         },
         endContent = {
             // Right pane: the contents list (virtualized) in its own contained surface.
+            val paneColor = MaterialTheme.colorScheme.surfaceContainerLow
+            val listBottomPadding = if (toc.selectionMode) 96.dp else 0.dp
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = navBottom + 16.dp),
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                color = paneColor,
             ) {
                 Box(Modifier.fillMaxSize()) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
+                        // Only the floating selection toolbar overlaps this pane, so the list keeps
+                        // trailing room for it while selecting and none otherwise.
+                        contentPadding = PaddingValues(bottom = listBottomPadding),
                         verticalArrangement = Arrangement.Top,
                     ) {
                         tocSection(
@@ -680,6 +700,7 @@ private fun TwoPaneDetails(
                             onEnterSelection = onEnterChapterSelection,
                             onToggleSelection = onToggleChapterSelection,
                             onToggleBookmark = onToggleChapterBookmark,
+                            surfaceColor = paneColor,
                         )
                     }
                     YomuVerticalScrollIndicator(
@@ -687,7 +708,7 @@ private fun TwoPaneDetails(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .fillMaxHeight()
-                            .padding(top = 12.dp, end = 4.dp, bottom = 96.dp),
+                            .padding(top = 12.dp, end = 4.dp, bottom = listBottomPadding + 12.dp),
                     )
                 }
             }
@@ -765,6 +786,7 @@ private fun BookHeader(
                 }
 
                 if (book.progress > 0f) {
+                    val progressLabel = "${(book.progress.coerceIn(0f, 1f) * 100).toInt()}% read"
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -777,16 +799,19 @@ private fun BookHeader(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
-                                text = "${(book.progress.coerceIn(0f, 1f) * 100).toInt()}% read",
+                                text = progressLabel,
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.titleMediumEmphasized,
                             )
-                            Text(
-                                text = book.remaining,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelMedium,
-                                textAlign = TextAlign.End,
-                            )
+                            // remaining can be the same "N% read" text as the headline above.
+                            if (book.remaining != progressLabel) {
+                                Text(
+                                    text = book.remaining,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.End,
+                                )
+                            }
                         }
                         DetailProgress(book.progress)
                     }
@@ -867,6 +892,8 @@ private fun ReadingStatus(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
+            // The icon, label and the smaller reading-time text otherwise top-align and look offset.
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = when (state) {
@@ -932,12 +959,6 @@ private fun ReadingTimeline(book: BookDetailsUi) {
 @Composable
 private fun TimelineRow(label: String, value: String) {
     ListItem(
-        headlineContent = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        },
         leadingContent = {
             Icon(
                 imageVector = Icons.Rounded.History,
@@ -956,7 +977,12 @@ private fun TimelineRow(label: String, value: String) {
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
         ),
-    )
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
 }
 
 @Composable
@@ -1025,6 +1051,34 @@ private fun FloatingReadButton(
     )
 }
 
+/** Two-pane primary action, docked under the details pane instead of floating over the list. */
+@Composable
+private fun DockedReadButton(
+    reading: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val label = if (reading) "Resume" else "Read"
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shapes = ButtonDefaults.shapes(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .semantics { testTagsAsResourceId = true }
+            .testTag("book-details-read"),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = null,
+            modifier = Modifier.size(ButtonDefaults.IconSize),
+        )
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        Text(text = label, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
 /** Contents header (with sort control) followed by the flattened, virtualized TOC entries. */
 @OptIn(ExperimentalFoundationApi::class)
 private fun LazyListScope.tocSection(
@@ -1035,11 +1089,12 @@ private fun LazyListScope.tocSection(
     onEnterSelection: (Int) -> Unit,
     onToggleSelection: (Int) -> Unit,
     onToggleBookmark: (Int) -> Unit,
+    surfaceColor: Color? = null,
 ) {
     // Pin the "Contents" header + sort switcher so it stays reachable while the (potentially long)
     // chapter list scrolls underneath, instead of scrolling away with the first rows.
     stickyHeader {
-        ContentsHeader(toc = toc, onTocSortChange = onTocSortChange)
+        ContentsHeader(toc = toc, onTocSortChange = onTocSortChange, surfaceColor = surfaceColor)
     }
 
     when {
@@ -1062,18 +1117,23 @@ private fun LazyListScope.tocSection(
                 },
                 onToggleRead = { onSetChapterRead(entry.uid, !entry.read) },
                 onToggleBookmark = { onToggleBookmark(entry.uid) },
+                surfaceColor = surfaceColor,
             )
         }
     }
 }
 
 @Composable
-private fun ContentsHeader(toc: TocUiState, onTocSortChange: (TocSortMode) -> Unit) {
+private fun ContentsHeader(
+    toc: TocUiState,
+    onTocSortChange: (TocSortMode) -> Unit,
+    surfaceColor: Color? = null,
+) {
     Row(
         // Opaque background: as a pinned sticky header, scrolling TOC rows must not show through it.
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .background(surfaceColor ?: MaterialTheme.colorScheme.background)
             .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1130,12 +1190,13 @@ private fun TocRow(
     onLongPress: () -> Unit,
     onToggleRead: () -> Unit,
     onToggleBookmark: () -> Unit,
+    surfaceColor: Color? = null,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (entry.selected) {
             MaterialTheme.colorScheme.secondaryContainer
         } else {
-            MaterialTheme.colorScheme.background
+            surfaceColor ?: MaterialTheme.colorScheme.background
         },
         animationSpec = tween(durationMillis = 220),
         label = "tocRowSelectionContainer",
@@ -1232,16 +1293,6 @@ private fun TocListItem(
         colors = ListItemDefaults.colors(
             containerColor = containerColor,
         ),
-        headlineContent = {
-            Text(
-                text = entry.title,
-                color = headlineColor,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = (entry.depth * 16).dp),
-            )
-        },
         trailingContent = if (entry.jumpable) {
             {
                 Box(
@@ -1265,7 +1316,16 @@ private fun TocListItem(
         } else {
             null
         },
-    )
+    ) {
+        Text(
+            text = entry.title,
+            color = headlineColor,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = (entry.depth * 16).dp),
+        )
+    }
 }
 
 private fun tocSwipeAction(

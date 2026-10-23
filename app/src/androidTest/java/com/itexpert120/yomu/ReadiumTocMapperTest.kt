@@ -11,6 +11,7 @@ import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Manifest
 import org.readium.r2.shared.publication.Metadata
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.Url
 import org.readium.r2.shared.util.mediatype.MediaType
 
 @RunWith(AndroidJUnit4::class)
@@ -69,5 +70,29 @@ class ReadiumTocMapperTest {
             mapped.map { it.item.id },
         )
         assertEquals(listOf(0, 0), mapped.map { it.readingOrderIndex })
+    }
+
+    @Test
+    fun nonAsciiAnchorMangledByEpubParserStaysJumpable() {
+        val resource = Link(
+            href = Href("Text/ch864.xhtml")!!,
+            mediaType = MediaType.XHTML,
+        )
+        // Url.fromEpubHref falls back to this for non-ASCII hrefs, encoding the `#` into the path.
+        val mangled = Url.fromDecodedPath("Text/ch864.xhtml#chapter-851-dwayne-dantèss")!!
+        val publication = Publication(
+            Manifest(
+                metadata = Metadata(),
+                readingOrder = listOf(resource),
+                tableOfContents = listOf(Link(Href(mangled), title = "Chapter 851")),
+            ),
+        )
+
+        val entry = publication.flattenedTableOfContents().single()
+
+        assertNotNull(entry.item.locatorJson)
+        assertEquals(0, entry.readingOrderIndex)
+        assertEquals("Text/ch864.xhtml", entry.locator!!.href.toString())
+        assertEquals(listOf("chapter-851-dwayne-dantèss"), entry.locator!!.locations.fragments)
     }
 }

@@ -837,7 +837,11 @@ internal class ReadingExperience(
         .split(Regex("\\s+"))
         .firstOrNull()
         ?.lowercase()
+        // Books use typographic apostrophes ("couldn’t"); normalise them so they aren't dropped.
+        ?.replace('’', '\'')
+        ?.replace('‘', '\'')
         ?.filter { it.isLetter() || it == '-' || it == '\'' }
+        ?.trim('-', '\'')
         ?.takeIf { it.isNotBlank() }
 
     private companion object {

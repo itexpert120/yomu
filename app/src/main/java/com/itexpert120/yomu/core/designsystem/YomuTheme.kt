@@ -189,7 +189,7 @@ private fun ColorStyle.toPaletteStyle(): PaletteStyle = when (this) {
     ColorStyle.Balanced -> PaletteStyle.TonalSpot
     ColorStyle.Vibrant -> PaletteStyle.Vibrant
     ColorStyle.Expressive -> PaletteStyle.Expressive
-    ColorStyle.Monochrome -> PaletteStyle.Monochrome
+    ColorStyle.Neutral -> PaletteStyle.Neutral
 }
 
 /** Pure-black surfaces for OLED; containers keep a faint tonal step so grouping stays legible. */

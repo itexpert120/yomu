@@ -118,7 +118,7 @@ internal fun ReaderControlsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             YomuConnectedChoiceGroup(
                 options = SheetTab.entries,
@@ -131,7 +131,6 @@ internal fun ReaderControlsSheet(
                     }
                 },
                 onSelect = { tab = it },
-                height = ButtonDefaults.MediumContainerHeight,
             )
             AnimatedContent(
                 targetState = tab,
@@ -206,7 +205,7 @@ private fun ControlsTab(
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         YomuSectionLabel("Chapter")
-        YomuSettingContainer {
+        YomuSettingContainer(dense = true) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -214,7 +213,8 @@ private fun ControlsTab(
                 RoundIcon(
                     Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                     "Previous chapter",
-                    onPreviousChapter,
+                    compact = true,
+                    onClick = onPreviousChapter,
                 )
                 ReaderSlider(
                     fraction = chapterFraction,
@@ -229,14 +229,14 @@ private fun ControlsTab(
                     snapPoints = chapters.size,
                     contentDescription = "Chapter selector",
                 )
-                RoundIcon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next chapter", onNextChapter)
+                RoundIcon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next chapter", compact = true, onClick = onNextChapter)
             }
             Text(
                 text = chapters.getOrNull(previewChapterIndex)?.let { chapter ->
                     "${previewChapterIndex + 1} of ${chapters.size} · ${chapter.title}"
                 } ?: "No chapters available",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -245,14 +245,21 @@ private fun ControlsTab(
         // Brightness + extra dim are contextual to the current reading session, so they stay here.
         YomuSectionLabel("Brightness")
         YomuSettingList {
-            YomuSettingRow(title = "Use system brightness", position = YomuSettingPosition.First) {
-                YomuTogglePill(
-                    checked = s.useSystemBrightness,
-                    onCheckedChange = { onUpdateSettings(s.copy(useSystemBrightness = it)) },
-                )
+            YomuSettingContainer(position = YomuSettingPosition.First, dense = true) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Use system brightness",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    YomuTogglePill(
+                        checked = s.useSystemBrightness,
+                        onCheckedChange = { onUpdateSettings(s.copy(useSystemBrightness = it)) },
+                    )
+                }
             }
             if (!s.useSystemBrightness) {
-                YomuSettingContainer(position = YomuSettingPosition.Middle) {
+                YomuSettingContainer(position = YomuSettingPosition.Middle, dense = true) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -269,11 +276,11 @@ private fun ControlsTab(
                     }
                 }
             }
-            YomuSettingContainer(position = YomuSettingPosition.Last) {
+            YomuSettingContainer(position = YomuSettingPosition.Last, dense = true) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "Extra dim",
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
                     YomuValueChip(
@@ -297,7 +304,7 @@ private fun ControlsTab(
         // Defaults (ReaderChromeToggles) — a single renderer so the two surfaces can never drift out
         // of sync and no option is missed in one place but not the other.
         YomuSectionLabel("Footer & screen")
-        ReaderChromeToggles(settings = s, onUpdateSettings = onUpdateSettings)
+        ReaderChromeToggles(settings = s, onUpdateSettings = onUpdateSettings, compact = true)
     }
 }
 
@@ -316,7 +323,7 @@ private fun DisplayTab(
     val s = state.experience.settings
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         YomuSectionLabel("Theme · this book")
-        ReaderThemeRow(s, onUpdateSettings)
+        ReaderThemeRow(s, onUpdateSettings, compact = true)
         if (s.theme == ReaderThemeMode.Custom) {
             ReaderCustomThemeRow(s, state.customThemes, onOpenCustomTheme, onApplyCustomTheme)
         }
@@ -328,8 +335,8 @@ private fun DisplayTab(
         YomuSectionLabel("Text")
         ReaderTextAlignControl(s, onUpdateSettings)
         YomuSettingList {
-            ReaderFontSizeControl(s, onUpdateSettings)
-            ReaderTypographySliders(s, onUpdateSettings)
+            ReaderFontSizeControl(s, onUpdateSettings, compact = true)
+            ReaderTypographySliders(s, onUpdateSettings, compact = true)
         }
 
         // Drop this book's overrides and follow the global Reading Defaults again.
@@ -360,15 +367,16 @@ internal fun AutoSlider(
     valueText: (Float) -> String,
     onChange: (Float?) -> Unit,
     position: YomuSettingPosition = YomuSettingPosition.Single,
+    compact: Boolean = false,
 ) {
     fun snap(v: Float): Float = (round(v / step) * step).coerceIn(min, max)
     val auto = value == null
     val current = value ?: default
-    YomuSettingContainer(position = position) {
+    YomuSettingContainer(position = position, dense = compact) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyLarge,
+                style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
             // "Auto" when at the engine default; tap a concrete value to reset back to Auto.
@@ -383,7 +391,7 @@ internal fun AutoSlider(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            RoundIcon(Icons.Rounded.Remove, "Decrease $label") { onChange(snap(current - step)) }
+            RoundIcon(Icons.Rounded.Remove, "Decrease $label", compact = compact) { onChange(snap(current - step)) }
             ReaderSlider(
                 fraction = ((current - min) / (max - min)).coerceIn(0f, 1f),
                 // Tick marks the default value's position on the track.
@@ -392,7 +400,7 @@ internal fun AutoSlider(
                 contentDescription = label,
                 modifier = Modifier.weight(1f),
             )
-            RoundIcon(Icons.Rounded.Add, "Increase $label") { onChange(snap(current + step)) }
+            RoundIcon(Icons.Rounded.Add, "Increase $label", compact = compact) { onChange(snap(current + step)) }
         }
     }
 }
@@ -630,8 +638,20 @@ internal fun AddFontChip(onClick: () -> Unit) {
 internal fun RoundIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
+    if (compact) {
+        // A quiet step button: the slider carries the emphasis; a tonal circle on each side is noise.
+        IconButton(
+            onClick = onClick,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(imageVector = icon, contentDescription = description, modifier = Modifier.size(20.dp))
+        }
+        return
+    }
     FilledTonalIconButton(
         onClick = onClick,
         shapes = IconButtonDefaults.shapes(),

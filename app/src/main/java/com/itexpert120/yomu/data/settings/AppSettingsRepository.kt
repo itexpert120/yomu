@@ -43,7 +43,7 @@ class AppSettingsRepository @Inject constructor(
     }
 
     val colorStyle: Flow<ColorStyle> = dataStore.data.map { prefs ->
-        prefs[KeyColorStyle]?.let { runCatching { ColorStyle.valueOf(it) }.getOrNull() }
+        prefs[KeyColorStyle]?.let(ColorStyle::fromStoredName)
             ?: ColorStyle.Balanced
     }
 

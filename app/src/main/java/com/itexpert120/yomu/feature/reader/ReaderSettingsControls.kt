@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -9,19 +10,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.TextDecrease
 import androidx.compose.material.icons.rounded.TextIncrease
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
@@ -45,9 +51,20 @@ import java.util.Locale
 import kotlin.math.round
 import kotlin.math.roundToInt
 
-/** Page themes share the grouped settings treatment in defaults and reading controls. */
+/**
+ * Page themes share the grouped settings treatment in defaults and reading controls. [compact]
+ * renders a single row of "Aa" tiles instead of one list row per theme (used by the reader sheet).
+ */
 @Composable
-internal fun ReaderThemeRow(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
+internal fun ReaderThemeRow(
+    settings: ReaderSettings,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    compact: Boolean = false,
+) {
+    if (compact) {
+        ReaderThemeTiles(settings, onUpdateSettings)
+        return
+    }
     YomuSettingList(modifier = Modifier.selectableGroup()) {
         ReaderThemeMode.entries.forEachIndexed { index, mode ->
             val palette = settings.copy(theme = mode)
@@ -73,6 +90,49 @@ internal fun ReaderThemeRow(settings: ReaderSettings, onUpdateSettings: (ReaderS
                 },
             ) {
                 androidx.compose.material3.RadioButton(selected = settings.theme == mode, onClick = null)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+        ReaderThemeMode.entries.forEach { mode ->
+            val palette = settings.copy(theme = mode)
+            val selected = settings.theme == mode
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(MaterialTheme.shapes.medium)
+                    .selectable(
+                        selected = selected,
+                        role = androidx.compose.ui.semantics.Role.RadioButton,
+                        onClick = { onUpdateSettings(palette) },
+                    )
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                androidx.compose.material3.Surface(
+                    color = Color(palette.backgroundArgb),
+                    contentColor = Color(palette.textArgb),
+                    shape = MaterialTheme.shapes.large,
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = if (selected) 2.dp else 1.dp,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("Aa", style = MaterialTheme.typography.titleMediumEmphasized)
+                    }
+                }
+                Text(
+                    text = mode.name,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = if (selected) MaterialTheme.typography.labelMediumEmphasized else MaterialTheme.typography.labelMedium,
+                )
             }
         }
     }
@@ -164,17 +224,18 @@ internal fun ReaderFontSizeControl(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
     position: YomuSettingPosition = YomuSettingPosition.First,
+    compact: Boolean = false,
 ) {
     val min = ReaderSettings.MIN_FONT_SCALE
     val max = ReaderSettings.MAX_FONT_SCALE
     val step = ReaderSettings.FONT_SCALE_STEP
     fun snap(value: Float): Float = (round(value / step) * step).coerceIn(min, max)
     val atDefault = settings.fontScale == ReaderSettings.DEFAULT_FONT_SCALE
-    YomuSettingContainer(position = position) {
+    YomuSettingContainer(position = position, dense = compact) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Font size",
-                style = MaterialTheme.typography.bodyLarge,
+                style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
             YomuValueChip(
@@ -188,7 +249,7 @@ internal fun ReaderFontSizeControl(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            RoundIcon(Icons.Rounded.TextDecrease, "Decrease font size") {
+            RoundIcon(Icons.Rounded.TextDecrease, "Decrease font size", compact = compact) {
                 onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale - step)))
             }
             ReaderSlider(
@@ -197,7 +258,7 @@ internal fun ReaderFontSizeControl(
                 modifier = Modifier.weight(1f),
                 contentDescription = "Font size",
             )
-            RoundIcon(Icons.Rounded.TextIncrease, "Increase font size") {
+            RoundIcon(Icons.Rounded.TextIncrease, "Increase font size", compact = compact) {
                 onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale + step)))
             }
         }
@@ -223,6 +284,7 @@ internal fun ReaderTextAlignControl(
 internal fun ReaderTypographySliders(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    compact: Boolean = false,
 ) {
     AutoSlider(
         label = "Line height",
@@ -234,6 +296,7 @@ internal fun ReaderTypographySliders(
         valueText = { String.format(Locale.US, "%.2f", it) },
         onChange = { onUpdateSettings(settings.copy(lineHeight = it)) },
         position = YomuSettingPosition.Middle,
+        compact = compact,
     )
     AutoSlider(
         label = "Page margins",
@@ -245,6 +308,7 @@ internal fun ReaderTypographySliders(
         valueText = { String.format(Locale.US, "%.1f", it) },
         onChange = { onUpdateSettings(settings.copy(pageMargins = it)) },
         position = YomuSettingPosition.Middle,
+        compact = compact,
     )
     AutoSlider(
         label = "Paragraph spacing",
@@ -256,6 +320,7 @@ internal fun ReaderTypographySliders(
         valueText = { String.format(Locale.US, "%.1f", it) },
         onChange = { onUpdateSettings(settings.copy(paragraphSpacing = it)) },
         position = YomuSettingPosition.Last,
+        compact = compact,
     )
 }
 
@@ -263,7 +328,12 @@ internal fun ReaderTypographySliders(
 internal fun ReaderChromeToggles(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    compact: Boolean = false,
 ) {
+    if (compact) {
+        CompactChromeToggles(settings, onUpdateSettings)
+        return
+    }
     YomuSettingList {
         YomuSettingRow(title = "Show footer", position = YomuSettingPosition.First) {
             YomuTogglePill(
@@ -326,6 +396,89 @@ internal fun ReaderChromeToggles(
             )
         }
     }
+}
+
+/**
+ * The same options as [ReaderChromeToggles], as chips: the footer switch with its contents beneath,
+ * then the screen behaviours. Keeps the in-reader sheet short without dropping any option.
+ */
+@Composable
+private fun CompactChromeToggles(
+    settings: ReaderSettings,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+) {
+    YomuSettingList {
+        YomuSettingContainer(position = YomuSettingPosition.First, dense = true) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Footer",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                YomuTogglePill(
+                    checked = settings.showFooter,
+                    onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
+                )
+            }
+            // Items stay visible but disable when the footer is off, so the layout doesn't jump.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ToggleChip("Battery", settings.footerShowBattery, settings.showFooter) {
+                    onUpdateSettings(settings.copy(footerShowBattery = it))
+                }
+                ToggleChip("Clock", settings.footerShowClock, settings.showFooter) {
+                    onUpdateSettings(settings.copy(footerShowClock = it))
+                }
+                ToggleChip("Progress", settings.footerShowProgress, settings.showFooter) {
+                    onUpdateSettings(settings.copy(footerShowProgress = it))
+                }
+                ToggleChip("Chapter left", settings.footerShowPagesLeft, settings.showFooter) {
+                    onUpdateSettings(settings.copy(footerShowPagesLeft = it))
+                }
+            }
+        }
+        YomuSettingContainer(position = YomuSettingPosition.Last, dense = true) {
+            Text(text = "Screen", style = MaterialTheme.typography.bodyMedium)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ToggleChip("Keep on", settings.keepScreenOn) {
+                    onUpdateSettings(settings.copy(keepScreenOn = it))
+                }
+                // The scrollbar only exists in scroll mode (a native WebView scroll).
+                ToggleChip("Scrollbar", settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
+                    onUpdateSettings(settings.copy(showScrollbar = it))
+                }
+                ToggleChip("Immersive", settings.immersiveChrome) {
+                    onUpdateSettings(settings.copy(immersiveChrome = it))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleChip(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    FilterChip(
+        selected = checked,
+        onClick = { onCheckedChange(!checked) },
+        enabled = enabled,
+        label = { Text(label) },
+        leadingIcon = if (checked) {
+            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+        } else {
+            null
+        },
+        shape = MaterialTheme.shapes.large,
+    )
 }
 
 /**

@@ -40,6 +40,7 @@ import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.core.web.openWebSearchSheet
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -447,8 +448,13 @@ private class ReadiumReaderSession(
                 // in. "Look up" hands the selected text to the dictionary flow; this also replaces the
                 // old floating look-up bar.
                 selectionActionModeCallback = object : ActionMode.Callback {
+                    // "Look up" is single-word only (the dictionary has no phrases); hidden while the
+                    // selection spans several words. Cached because reading the selection is async.
+                    private var multiWordSelection = false
+
                     override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                         menu ?: return false
+                        multiWordSelection = false
                         menu.add(Menu.NONE, MENU_COPY, 0, android.R.string.copy)
                         menu.add(Menu.NONE, MENU_HIGHLIGHT, 1, "Highlight")
                         menu.add(Menu.NONE, MENU_LOOK_UP, 2, "Look up")
@@ -458,7 +464,21 @@ private class ReadiumReaderSession(
                         return true
                     }
 
-                    override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) = false
+                    override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                        menu?.findItem(MENU_LOOK_UP)?.isVisible = !multiWordSelection
+                        // Chromium re-prepares the menu as the selection changes; re-check it and
+                        // invalidate only on a change, so this settles after one extra pass.
+                        scope.launch {
+                            val text = (navigator as? SelectableNavigator)?.currentSelection()
+                                ?.locator?.text?.highlight
+                            val multiWord = text.isMultiWord()
+                            if (multiWord != multiWordSelection) {
+                                multiWordSelection = multiWord
+                                mode?.invalidate()
+                            }
+                        }
+                        return true
+                    }
 
                     override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
                         val id = item?.itemId ?: return false
@@ -482,7 +502,13 @@ private class ReadiumReaderSession(
                                     MENU_COPY -> copySelection(text)
                                     MENU_SPEAK -> speak(text)
                                     MENU_SHARE -> shareSelection(text)
-                                    MENU_LOOK_UP -> _lookUpRequests.tryEmit(text)
+                                    // Hidden for phrases, but a menu that hasn't re-prepared yet can
+                                    // still fire it: the dictionary only knows words, so use the web.
+                                    MENU_LOOK_UP -> if (text.isMultiWord()) {
+                                        searchWeb("${text.trim { !it.isLetterOrDigit() }} meaning")
+                                    } else {
+                                        _lookUpRequests.tryEmit(text)
+                                    }
                                     MENU_SEARCH_WEB -> searchWeb(text)
                                     MENU_HIGHLIGHT -> _highlightRequests.tryEmit(
                                         ReaderHighlightDraft(
@@ -1470,7 +1496,14 @@ private class ReadiumReaderSession(
         runCatching { context.startActivity(chooser) }
     }
 
+    private fun String?.isMultiWord(): Boolean = this?.trim()?.contains(Regex("\\s")) == true
+
     private fun searchWeb(text: String) {
+        // Prefer the bottom-sheet tab, which needs the hosting Activity; fall back to full screen.
+        navigator?.activity?.let {
+            it.openWebSearchSheet(text)
+            return
+        }
         val uri = Uri.parse("https://www.google.com/search").buildUpon()
             .appendQueryParameter("q", text)
             .build()

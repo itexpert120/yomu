@@ -42,6 +42,7 @@ import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -166,6 +167,10 @@ fun ReaderScreen(
             onReadingPaused()
         }
     }
+    // The system bars show while the reader menu is up, so one back gesture (or the status bar) leaves
+    // the reader instead of the first swipe only revealing hidden bars. Otherwise reading is full-screen.
+    val systemBarsShown = state.chapterControlsVisible
+    val currentSystemBarsShown by rememberUpdatedState(systemBarsShown)
     // Hide both system bars for full-screen reading. Android re-shows the bars whenever the window
     // loses and regains focus (returning from background, multi-window, etc.), so this must be
     // re-applied on every ON_RESUME — not just once. A one-shot effect here is why content used to
@@ -179,23 +184,7 @@ fun ReaderScreen(
         }
         fun hideSystemBars() {
             window ?: return
-            val controller = WindowCompat.getInsetsController(window, view)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val lp = window.attributes
-                lp.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                window.attributes = lp
-            }
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            window.decorView.systemUiVisibility =
-                View.SYSTEM_UI_FLAG_IMMERSIVE or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_FULLSCREEN
-            controller.hide(WindowInsetsCompat.Type.systemBars())
+            if (currentSystemBarsShown) showReaderSystemBars(window, view) else hideReaderSystemBars(window, view)
         }
         val lifecycle = (view.context.findActivity() as? LifecycleOwner)?.lifecycle
         val observer = LifecycleEventObserver { _, event ->
@@ -212,7 +201,7 @@ fun ReaderScreen(
         // recursively invoke the listener.
         val decorView = window?.decorView
         val insetsListener = OnApplyWindowInsetsListener { _, insets ->
-            if (insets.isVisible(WindowInsetsCompat.Type.systemBars())) hideSystemBars()
+            if (insets.isVisible(WindowInsetsCompat.Type.systemBars()) && !currentSystemBarsShown) hideSystemBars()
             insets
         }
         decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, insetsListener) }
@@ -227,6 +216,10 @@ fun ReaderScreen(
             decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
             restoreWindow?.invoke()
         }
+    }
+    LaunchedEffect(systemBarsShown) {
+        val window = view.context.findActivity()?.window ?: return@LaunchedEffect
+        if (systemBarsShown) showReaderSystemBars(window, view) else hideReaderSystemBars(window, view)
     }
     // Colour the system bars to the reading background so the status area matches the page on every
     // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).
@@ -470,6 +463,7 @@ fun ReaderScreen(
                             chapterProgression = reading.chapterProgression,
                             settings = reading.settings,
                             onContentHeight = { footerPx = it },
+                            showDeviceStatus = !systemBarsShown,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .graphicsLayer {
@@ -664,3 +658,44 @@ private fun androidx.compose.foundation.layout.BoxScope.ReaderFailure(
 
 /** How far a newly revealed chapter travels into place. */
 private val ChapterRevealTravel = 40.dp
+
+private fun applyReaderCutoutMode(window: android.view.Window) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val lp = window.attributes
+        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        window.attributes = lp
+    }
+}
+
+/** Full-screen reading: both system bars hidden, revealed transiently by a swipe. */
+// The legacy layout flags are deliberate: they keep the WebView laid out under the bars on every API
+// level, which the insets controller alone does not guarantee.
+@Suppress("DEPRECATION")
+private fun hideReaderSystemBars(window: android.view.Window, view: View) {
+    val controller = WindowCompat.getInsetsController(window, view)
+    applyReaderCutoutMode(window)
+    controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    window.decorView.systemUiVisibility =
+        View.SYSTEM_UI_FLAG_IMMERSIVE or
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+        View.SYSTEM_UI_FLAG_FULLSCREEN
+    controller.hide(WindowInsetsCompat.Type.systemBars())
+}
+
+/**
+ * Menu open: bars visible so one back gesture exits. The layout flags stay, so the page is still laid
+ * out edge-to-edge and the bars draw over it rather than reflowing the text.
+ */
+@Suppress("DEPRECATION")
+private fun showReaderSystemBars(window: android.view.Window, view: View) {
+    val controller = WindowCompat.getInsetsController(window, view)
+    applyReaderCutoutMode(window)
+    window.decorView.systemUiVisibility =
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+    controller.show(WindowInsetsCompat.Type.systemBars())
+}

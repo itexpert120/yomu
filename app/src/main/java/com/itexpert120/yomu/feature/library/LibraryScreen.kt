@@ -526,8 +526,8 @@ private fun LibraryGrid(
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
-    // Center the grid within a comfortable max width so covers don't stretch edge-to-edge on a
-    // wide tablet/desktop; on a phone this is a no-op (screen < max width).
+    // Cap the grid at a comfortable max width so covers don't stretch edge-to-edge on a wide
+    // tablet/desktop, start-aligned so it shares the header's left edge; a no-op on phones.
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val widthClass = YomuWidthClass.fromWidth(maxWidth)
         // In Auto mode, give covers more room to breathe as the screen widens — slightly larger
@@ -553,7 +553,7 @@ private fun LibraryGrid(
             modifier = Modifier
                 .widthIn(max = YomuContentMaxWidth)
                 .fillMaxSize()
-                .align(Alignment.TopCenter),
+                .align(Alignment.TopStart),
             contentPadding = PaddingValues(start = margin, end = margin, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(if (widthClass.isWide) 24.dp else 20.dp),
             horizontalArrangement = Arrangement.spacedBy(gutter),
@@ -613,14 +613,14 @@ private fun LibraryList(
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
-    // column centered on screen. Phones are unaffected (screen < max width).
+    // column, start-aligned with the header. Phones are unaffected (screen < max width).
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = state,
             modifier = Modifier
                 .widthIn(max = YomuReadableMaxWidth)
                 .fillMaxSize()
-                .align(Alignment.TopCenter),
+                .align(Alignment.TopStart),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {

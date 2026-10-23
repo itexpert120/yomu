@@ -1,6 +1,12 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,21 +18,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -35,27 +48,41 @@ import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
-import com.itexpert120.yomu.data.dictionary.DictionaryEntry
-import com.itexpert120.yomu.data.dictionary.DictionaryPronunciation
+import com.itexpert120.yomu.core.web.openWebSearchSheet
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.dictionary.DictionarySense
 
 /** One rendered block in the definitions list. */
 private sealed interface LookupBlock {
-    data class Phonetics(val items: List<DictionaryPronunciation>) : LookupBlock
-    data class Entry(val entry: DictionaryEntry) : LookupBlock
-    data class Source(val url: String, val license: String?) : LookupBlock
+    data class PartOfSpeech(val group: PosGroup) : LookupBlock
+    data class Footer(val sourceUrl: String?, val license: String?) : LookupBlock
 }
+
+/** Wiktionary splits a word into one entry per etymology; the sheet merges them per part of speech. */
+private data class PosGroup(
+    val partOfSpeech: String,
+    val senses: List<DictionarySense>,
+    val forms: List<String>,
+    val synonyms: List<String>,
+    val antonyms: List<String>,
+)
+
+/** One accent's IPA, e.g. "/skɒf/" + "UK". */
+private data class PronunciationLabel(val ipa: String, val accent: String?)
 
 /** Bottom sheet showing a word's dictionary definition (or loading / not-found / error states). */
 @Composable
@@ -70,17 +97,21 @@ internal fun WordLookupSheet(
     YomuBottomSheet(visible = state != null, onDismiss = onDismiss, scrollable = false) { _ ->
         if (state == null) return@YomuBottomSheet
         val found = state.result as? DictionaryResult.Found
-        val blocks = remember(found) { found?.toBlocks().orEmpty() }
+        val pronunciations = remember(found) { found?.pronunciationLabels().orEmpty() }
+        // An inflection ("muttered") resolves to its base word ("mutter"), which is what's shown.
+        val headword = found?.inflectionOf?.let { found.response.word.ifBlank { null } } ?: state.word
 
+        val lookupMotion = MaterialTheme.motionScheme
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .animateContentSize(lookupMotion.defaultSpatialSpec())
                 .semantics { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (state.canGoBack) {
                     CircleIconButton(
@@ -90,58 +121,78 @@ internal fun WordLookupSheet(
                         onClick = onBack,
                     )
                 }
-                Text(
-                    text = state.word,
-                    color = YomuTheme.colors.textPrimary,
-                    style = YomuTheme.type.display,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = headword,
+                        color = YomuTheme.colors.textPrimary,
+                        style = MaterialTheme.typography.headlineMediumEmphasized,
+                    )
+                    found?.inflectionOf?.let { note ->
+                        Text(
+                            text = "${note.word} · ${note.description}",
+                            color = YomuTheme.colors.textMuted,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    if (pronunciations.isNotEmpty()) {
+                        PronunciationLine(pronunciations, onClick = { onPronounce(headword) })
+                    }
+                }
                 // No audio clips in this API — speak the word with the device voice instead.
                 CircleIconButton(
                     icon = Icons.AutoMirrored.Rounded.VolumeUp,
                     description = "Pronounce",
                     tint = YomuTheme.colors.accent,
-                    onClick = { onPronounce(state.word) },
+                    onClick = { onPronounce(headword) },
                 )
             }
 
-            when {
-                state.loading -> LoadingRow()
+            // Cross-fade loading → result (or error) while the column's height springs to fit, so
+            // the sheet grows smoothly instead of jumping when the definition arrives.
+            AnimatedContent(
+                targetState = state,
+                contentKey = { Triple(it.word, it.loading, it.result?.let { r -> r::class }) },
+                transitionSpec = {
+                    (fadeIn(lookupMotion.defaultEffectsSpec()) togetherWith fadeOut(lookupMotion.fastEffectsSpec()))
+                        .using(SizeTransform(clip = false) { _, _ -> lookupMotion.defaultSpatialSpec() })
+                },
+                label = "wordLookupBody",
+            ) { target ->
+                val targetBlocks = remember(target.result) {
+                    (target.result as? DictionaryResult.Found)?.toBlocks().orEmpty()
+                }
+                when {
+                    target.loading -> LoadingRow()
 
-                blocks.isNotEmpty() -> LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 480.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(blocks) { block ->
-                        when (block) {
-                            is LookupBlock.Phonetics -> PhoneticsRow(block.items)
-                            is LookupBlock.Entry -> EntrySection(block.entry, onLookUpWord)
-                            is LookupBlock.Source -> SourceLink(block.url, block.license)
+                    targetBlocks.isNotEmpty() -> LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 480.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        items(targetBlocks) { block ->
+                            when (block) {
+                                is LookupBlock.PartOfSpeech -> PartOfSpeechSection(block.group, onLookUpWord)
+                                is LookupBlock.Footer -> LookupFooter(block.sourceUrl, block.license)
+                            }
                         }
                     }
+
+                    target.result is DictionaryResult.Error -> LookupMessage(
+                        text = "Couldn't reach the dictionary. Check your connection and try again.",
+                        word = target.word,
+                        onRetry = onRetry,
+                    )
+
+                    else -> LookupMessage(
+                        text = "No definition found for “${target.word}”.",
+                        word = target.word,
+                        onRetry = null,
+                    )
                 }
-
-                state.result is DictionaryResult.Error -> Text(
-                    text = "Couldn't reach the dictionary. Check your connection and try again.",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.body,
-                )
-
-                else -> Text(
-                    text = "No definition found for “${state.word}”.",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.body,
-                )
-            }
-            if (state.result is DictionaryResult.Error && !state.loading) {
-                YomuButton(
-                    text = "Try again",
-                    onClick = onRetry,
-                    modifier = Modifier.fillMaxWidth(),
-                    emphasis = YomuButtonEmphasis.Secondary,
-                )
             }
         }
     }
@@ -156,16 +207,16 @@ private fun CircleIconButton(
 ) {
     FilledTonalIconButton(
         onClick = onClick,
-        modifier = Modifier.size(40.dp),
-        shape = MaterialTheme.shapes.large,
+        shapes = IconButtonDefaults.shapes(),
     ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
     }
 }
 
 @Composable
 private fun LoadingRow() {
     Row(
+        modifier = Modifier.padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -179,133 +230,175 @@ private fun LoadingRow() {
 }
 
 @Composable
-private fun PhoneticsRow(items: List<DictionaryPronunciation>) {
-    // A single row of pronunciation chips that scrolls horizontally — keeps it to one tidy line
-    // instead of wrapping into a cluttered block when a word has many accent variants.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items.forEach { pron ->
-            AssistChip(
-                onClick = {},
-                label = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = pron.text,
-                            style = YomuTheme.type.mono,
-                            maxLines = 1,
-                        )
-                        pron.tags.firstOrNull()?.let { tag ->
-                            Text(
-                                text = tag,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = YomuTheme.type.caption,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                },
-                shape = MaterialTheme.shapes.large,
-            )
-        }
-    }
-}
-
-@Composable
-private fun EntrySection(entry: DictionaryEntry, onLookUpWord: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (entry.partOfSpeech.isNotBlank()) {
-            Text(
-                text = entry.partOfSpeech,
-                color = YomuTheme.colors.accent,
-                style = YomuTheme.type.caption.copy(fontStyle = FontStyle.Italic),
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-        if (entry.forms.isNotEmpty()) {
-            RelatedRow("Forms", entry.forms.map { it.word }.distinct(), onLookUpWord)
-        }
-        entry.senses.forEachIndexed { index, sense ->
-            SenseItem(label = "${index + 1}", sense = sense, onLookUpWord = onLookUpWord)
-        }
-        if (entry.synonyms.isNotEmpty()) RelatedRow("Synonyms", entry.synonyms, onLookUpWord)
-        if (entry.antonyms.isNotEmpty()) RelatedRow("Antonyms", entry.antonyms, onLookUpWord)
-    }
-}
-
-@Composable
-private fun SenseItem(label: String, sense: DictionarySense, onLookUpWord: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (sense.tags.isNotEmpty()) {
-            Text(
-                text = sense.tags.joinToString(" · "),
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-            )
-        }
-        TappableText(
-            prefix = "$label. ",
-            text = sense.definition,
-            color = YomuTheme.colors.textPrimary,
-            italic = false,
-            onWord = onLookUpWord,
-        )
-        sense.examples.forEach { example ->
-            TappableText(
-                prefix = "",
-                text = "“$example”",
-                color = YomuTheme.colors.textMuted,
-                italic = true,
-                onWord = onLookUpWord,
-                modifier = Modifier.padding(start = 14.dp),
-            )
-        }
-        sense.quotes.forEach { quote ->
-            Column(
-                modifier = Modifier.padding(start = 14.dp, top = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                Text(
-                    text = "“${quote.text}”",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.body.copy(fontStyle = FontStyle.Italic),
+private fun LookupMessage(text: String, word: String, onRetry: (() -> Unit)?) {
+    val activity = LocalActivity.current
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (onRetry != null) {
+                YomuButton(
+                    text = "Try again",
+                    onClick = onRetry,
+                    modifier = Modifier.weight(1f),
+                    emphasis = YomuButtonEmphasis.Secondary,
                 )
-                if (quote.reference.isNotBlank()) {
-                    Text(
-                        text = quote.reference,
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.caption,
-                    )
+            }
+            YomuButton(
+                text = "Search the web",
+                onClick = { activity?.openWebSearchSheet("define $word") },
+                modifier = Modifier.weight(1f),
+                // With nothing to retry, the web is the way forward, so it gets the primary style.
+                emphasis = if (onRetry == null) YomuButtonEmphasis.Primary else YomuButtonEmphasis.Secondary,
+            )
+        }
+    }
+}
+
+/** IPA in Cardo: device monospace/UI fonts (e.g. Xiaomi's) often lack IPA glyphs and render tofu. */
+@Composable
+private fun rememberIpaFontFamily(): FontFamily {
+    val assets = LocalContext.current.assets
+    return remember(assets) { FontFamily(Font("fonts/Cardo-Regular.ttf", assets)) }
+}
+
+@Composable
+private fun PronunciationLine(items: List<PronunciationLabel>, onClick: () -> Unit) {
+    val ipaFont = rememberIpaFontFamily()
+    val text = remember(items, ipaFont) {
+        buildAnnotatedString {
+            items.forEachIndexed { index, item ->
+                if (index > 0) append("   ")
+                withStyle(SpanStyle(fontFamily = ipaFont)) { append(item.ipa) }
+                item.accent?.let { accent ->
+                    withStyle(SpanStyle(fontSize = 12.sp, letterSpacing = 0.4.sp)) { append("  $accent") }
                 }
             }
         }
-        if (sense.synonyms.isNotEmpty()) RelatedRow("Synonyms", sense.synonyms, onLookUpWord)
-        if (sense.antonyms.isNotEmpty()) RelatedRow("Antonyms", sense.antonyms, onLookUpWord)
-        // Nested senses, indented and sub-numbered (1.1, 1.2, …).
-        sense.subsenses.forEachIndexed { subIndex, sub ->
-            Column(modifier = Modifier.padding(start = 14.dp)) {
-                SenseItem(label = "$label.${subIndex + 1}", sense = sub, onLookUpWord = onLookUpWord)
-            }
-        }
     }
+    Text(
+        text = text,
+        color = YomuTheme.colors.textSecondary,
+        style = MaterialTheme.typography.titleMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.yomuPressable(onClick = onClick, pressedScale = 1f),
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RelatedRow(label: String, words: List<String>, onLookUpWord: (String) -> Unit) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.padding(top = 2.dp),
-    ) {
-        Text(text = label, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        FlowRow(
+private fun PartOfSpeechSection(group: PosGroup, onLookUpWord: (String) -> Unit) {
+    var expanded by remember(group) { mutableStateOf(false) }
+    val visible = if (expanded) group.senses else group.senses.take(COLLAPSED_SENSES)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            words.forEach { word -> WordChip(word, onLookUpWord) }
+            if (group.partOfSpeech.isNotBlank()) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ) {
+                    Text(
+                        text = group.partOfSpeech,
+                        style = MaterialTheme.typography.labelLargeEmphasized,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            if (group.forms.isNotEmpty()) {
+                Text(
+                    text = group.forms.joinToString(" · "),
+                    color = YomuTheme.colors.textMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        visible.forEachIndexed { index, sense ->
+            SenseItem(number = index + 1, sense = sense, onLookUpWord = onLookUpWord)
+        }
+        val hidden = group.senses.size - COLLAPSED_SENSES
+        if (hidden > 0) {
+            TextButton(
+                onClick = { expanded = !expanded },
+                shapes = ButtonDefaults.shapes(),
+                contentPadding = ButtonDefaults.TextButtonContentPadding,
+            ) {
+                Text(if (expanded) "Show fewer" else "Show $hidden more")
+            }
+        }
+        if (group.synonyms.isNotEmpty() || group.antonyms.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (group.synonyms.isNotEmpty()) {
+                    RelatedLabel("Similar")
+                    group.synonyms.take(MAX_RELATED).forEach { WordChip(it, onLookUpWord) }
+                }
+                if (group.antonyms.isNotEmpty()) {
+                    RelatedLabel("Opposite")
+                    group.antonyms.take(MAX_RELATED).forEach { WordChip(it, onLookUpWord) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelatedLabel(text: String) {
+    Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+}
+
+@Composable
+private fun SenseItem(number: Int, sense: DictionarySense, onLookUpWord: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "$number",
+            color = YomuTheme.colors.accent,
+            style = MaterialTheme.typography.titleSmallEmphasized,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Wiktionary often repeats the tags inline as a "(transitive, …)" prefix already.
+            if (sense.tags.isNotEmpty() && !sense.definition.startsWith("(")) {
+                Text(
+                    text = sense.tags.joinToString(" · "),
+                    color = YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption.copy(fontStyle = FontStyle.Italic),
+                )
+            }
+            TappableText(
+                prefix = "",
+                text = sense.definition,
+                color = YomuTheme.colors.textPrimary,
+                italic = false,
+                onWord = onLookUpWord,
+            )
+            // One short example reads well; Wiktionary's long dated citations (quotes) are omitted.
+            sense.examples.firstOrNull()?.let { example ->
+                TappableText(
+                    prefix = "",
+                    text = "“$example”",
+                    color = YomuTheme.colors.textMuted,
+                    italic = true,
+                    onWord = onLookUpWord,
+                )
+            }
+            sense.subsenses.take(MAX_SUBSENSES).forEach { sub ->
+                TappableText(
+                    prefix = "• ",
+                    text = sub.definition,
+                    color = YomuTheme.colors.textSecondary,
+                    italic = false,
+                    onWord = onLookUpWord,
+                )
+            }
         }
     }
 }
@@ -333,9 +426,8 @@ private fun TappableText(
     onWord: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val linkStyles = remember(color) {
-        TextLinkStyles(style = SpanStyle(color = color, textDecoration = TextDecoration.Underline))
-    }
+    // No underline: a definition full of underlines reads as noise. The footer hint covers discovery.
+    val linkStyles = remember(color) { TextLinkStyles(style = SpanStyle(color = color)) }
     val annotated = remember(prefix, text, linkStyles) {
         buildAnnotatedString {
             if (prefix.isNotEmpty()) append(prefix)
@@ -393,33 +485,41 @@ private val STOPWORDS: Set<String> = setOf(
 )
 
 @Composable
-private fun SourceLink(url: String, license: String?) {
+private fun LookupFooter(url: String?, license: String?) {
     val handler = androidx.compose.ui.platform.LocalUriHandler.current
-    val safeUrl = remember(url) { trustedSourceUrl(url) }
-    // Show the host (e.g. "en.wiktionary.org") as the tappable link, plus the licence underneath.
+    val safeUrl = remember(url) { url?.let(::trustedSourceUrl) }
+    // Show the host (e.g. "en.wiktionary.org") as the tappable link, plus the licence.
     val host = remember(url) {
-        url.substringAfter("://", url).substringBefore("/").ifBlank { url }
+        url?.substringAfter("://", url)?.substringBefore("/")?.ifBlank { url }
     }
     Column(
-        modifier = Modifier.padding(top = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(text = "Source", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-        if (safeUrl != null) {
-            Text(
-                text = host,
-                color = YomuTheme.colors.accent,
-                style = YomuTheme.type.body,
-                modifier = Modifier.yomuPressable(
-                    onClick = { runCatching { handler.openUri(safeUrl) } },
-                    pressedScale = 1f,
-                ),
-            )
-        } else {
-            Text(text = host, color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
-        }
-        if (!license.isNullOrBlank()) {
-            Text(text = license, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+        Text(
+            text = "Tap any word in a definition to look it up.",
+            color = YomuTheme.colors.textMuted,
+            style = YomuTheme.type.caption,
+        )
+        if (host != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = host,
+                    color = if (safeUrl != null) YomuTheme.colors.accent else YomuTheme.colors.textMuted,
+                    style = YomuTheme.type.caption,
+                    modifier = if (safeUrl != null) {
+                        Modifier.yomuPressable(
+                            onClick = { runCatching { handler.openUri(safeUrl) } },
+                            pressedScale = 1f,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
+                if (!license.isNullOrBlank()) {
+                    Text(text = "· $license", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+                }
+            }
         }
     }
 }
@@ -434,16 +534,54 @@ private fun trustedSourceUrl(raw: String): String? {
 }
 
 private fun DictionaryResult.Found.toBlocks(): List<LookupBlock> = buildList {
-    // Pronunciations: gather across entries, dedupe by IPA text.
-    val pronunciations = response.entries
+    response.entries
+        .groupBy { it.partOfSpeech.trim().lowercase() }
+        .map { (pos, entries) ->
+            PosGroup(
+                partOfSpeech = pos,
+                senses = entries.flatMap { it.senses }.filter { it.definition.isNotBlank() },
+                forms = entries.flatMap { e -> e.forms.map { it.word } }
+                    .filter { !it.equals(response.word, ignoreCase = true) }
+                    .distinct()
+                    .take(MAX_FORMS),
+                synonyms = entries.flatMap { e -> e.synonyms + e.senses.flatMap { it.synonyms } }.distinct(),
+                antonyms = entries.flatMap { e -> e.antonyms + e.senses.flatMap { it.antonyms } }.distinct(),
+            )
+        }
+        .filter { it.senses.isNotEmpty() }
+        // The inflected word's own part of speech ("muttered" → verb) leads; letter/symbol entries
+        // ("a" the character) are rarely what a reader means, so they go last.
+        .sortedBy {
+            when {
+                it.partOfSpeech == inflectionOf?.partOfSpeech?.lowercase() -> 0
+                it.partOfSpeech in LOW_PRIORITY_POS -> 2
+                else -> 1
+            }
+        }
+        .forEach { add(LookupBlock.PartOfSpeech(it)) }
+    add(LookupBlock.Footer(response.source?.url?.takeIf { it.isNotBlank() }, response.source?.license?.name))
+}
+
+/** Up to one UK and one US IPA (falling back to the first one listed), deduped. */
+private fun DictionaryResult.Found.pronunciationLabels(): List<PronunciationLabel> {
+    fun accentOf(tags: List<String>): String? = when {
+        tags.any { "American" in it || it == "US" } -> "US"
+        tags.any { "Received" in it || "British" in it || it == "UK" } -> "UK"
+        else -> null
+    }
+    val labelled = response.entries
         .flatMap { it.pronunciations }
         .filter { it.text.isNotBlank() }
-        .distinctBy { it.text }
-    if (pronunciations.isNotEmpty()) add(LookupBlock.Phonetics(pronunciations))
-
-    response.entries.forEach { entry -> add(LookupBlock.Entry(entry)) }
-
-    response.source?.let { src ->
-        if (src.url.isNotBlank()) add(LookupBlock.Source(src.url, src.license?.name))
-    }
+        .map { PronunciationLabel(it.text, accentOf(it.tags)) }
+    val picks = listOfNotNull(
+        labelled.firstOrNull { it.accent == "UK" },
+        labelled.firstOrNull { it.accent == "US" },
+    ).ifEmpty { labelled.take(1) }
+    return picks.distinctBy { it.ipa }
 }
+
+private const val COLLAPSED_SENSES = 3
+private const val MAX_SUBSENSES = 2
+private const val MAX_FORMS = 4
+private const val MAX_RELATED = 6
+private val LOW_PRIORITY_POS = setOf("character", "symbol", "letter", "number", "punctuation")

@@ -31,6 +31,20 @@ class YomuThemeTest {
     }
 
     @Test
+    fun neutralStyleStillFollowsTheSeed() {
+        val ocean = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = false, style = ColorStyle.Neutral)
+        val coral = yomuSeededColorScheme(AccentColor.Coral.seed, dark = false, style = ColorStyle.Neutral)
+        assertNotEquals(ocean.primary, coral.primary)
+    }
+
+    @Test
+    fun storedMonochromeStyleMigratesToNeutral() {
+        assertEquals(ColorStyle.Neutral, ColorStyle.fromStoredName("Monochrome"))
+        assertEquals(ColorStyle.Vibrant, ColorStyle.fromStoredName("Vibrant"))
+        assertNull(ColorStyle.fromStoredName("NotAStyle"))
+    }
+
+    @Test
     fun oledUsesBlackBaseAndTieredContainers() {
         val oled = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = true, style = ColorStyle.Balanced).toOled()
 

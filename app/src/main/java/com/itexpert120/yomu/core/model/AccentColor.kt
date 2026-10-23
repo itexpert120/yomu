@@ -51,5 +51,17 @@ enum class ColorStyle(val label: String) {
     Balanced("Balanced"),
     Vibrant("Vibrant"),
     Expressive("Expressive"),
-    Monochrome("Mono"),
+
+    // Near-greyscale, faintly tinted by the seed (pure monochrome would ignore the seed entirely).
+    Neutral("Neutral"),
+    ;
+
+    companion object {
+        /** Parses a stored name; "Monochrome" was renamed to [Neutral]. */
+        fun fromStoredName(name: String): ColorStyle? = if (name == "Monochrome") {
+            Neutral
+        } else {
+            entries.firstOrNull { it.name == name }
+        }
+    }
 }

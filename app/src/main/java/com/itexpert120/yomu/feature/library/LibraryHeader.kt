@@ -55,9 +55,14 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -71,7 +76,8 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 
 /**
- * Search stays in place so entering a query never replaces the collection toolbar. Selection mode
+ * Search stays in place so entering a query never replaces the collection toolbar; once scrolled
+ * into the library it folds into a search action and returns on demand. Selection mode
  * reuses this same header — the title, navigation icon and actions swap in place and the search
  * field fades out — so the grid below never jumps when selection starts or ends.
  */
@@ -108,6 +114,15 @@ internal fun LibraryTopBar(
         label = "selectionTint",
     )
     val headerTint = maxOf(collapseTint, selectionTint)
+    // Once the title has collapsed (scrolled into the library), the search field folds away and a
+    // search action takes its place; tapping it brings the field back focused. An in-progress search
+    // (focused or with a query) always keeps the field.
+    var searchRevealed by remember { mutableStateOf(false) }
+    var searchFocused by remember { mutableStateOf(false) }
+    val titleCollapsed = scrollBehavior.state.collapsedFraction > 0.5f
+    LaunchedEffect(titleCollapsed) { if (!titleCollapsed) searchRevealed = false }
+    val searchFieldVisible = !titleCollapsed || searchRevealed || searchFocused || searchQuery.isNotEmpty()
+    val searchFocusRequester = remember { FocusRequester() }
     val headerColor = lerp(
         MaterialTheme.colorScheme.background,
         MaterialTheme.colorScheme.surfaceContainer,
@@ -184,6 +199,17 @@ internal fun LibraryTopBar(
                                 onClick = if (allSelected) onDeselectAll else onSelectAll,
                             )
                         } else {
+                            AnimatedVisibility(
+                                visible = !searchFieldVisible,
+                                enter = fadeIn() + scaleIn(),
+                                exit = fadeOut() + scaleOut(),
+                            ) {
+                                TooltipIconButton(
+                                    label = "Search library",
+                                    icon = Icons.Rounded.Search,
+                                    onClick = { searchRevealed = true },
+                                )
+                            }
                             if (showImport) {
                                 TooltipIconButton(
                                     label = "Import book",
@@ -214,8 +240,16 @@ internal fun LibraryTopBar(
             // animates on a non-bouncing spring so the grid glides up by just that row instead of
             // jumping, while the title and actions above stay put.
             val layoutSpring = remember { MotionScheme.standard() }
+            // Focus the field once it has been revealed from the search action.
+            LaunchedEffect(searchRevealed) {
+                if (searchRevealed) {
+                    // The field is only attached after this frame's layout; focusing earlier is a no-op.
+                    withFrameNanos { }
+                    runCatching { searchFocusRequester.requestFocus() }
+                }
+            }
             AnimatedVisibility(
-                visible = !selectionMode,
+                visible = !selectionMode && searchFieldVisible,
                 enter = expandVertically(layoutSpring.defaultSpatialSpec(), expandFrom = Alignment.Top) +
                     fadeIn(layoutSpring.defaultEffectsSpec()),
                 exit = shrinkVertically(layoutSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Top) +
@@ -232,9 +266,15 @@ internal fun LibraryTopBar(
                     TextField(
                         value = searchQuery,
                         onValueChange = onSearchQueryChange,
-                        modifier = Modifier.fillMaxWidth().onFocusChanged {
-                            if (it.isFocused && !searchActive) onSearchToggle()
-                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(searchFocusRequester)
+                            .onFocusChanged {
+                                if (it.isFocused && !searchActive) onSearchToggle()
+                                // Leaving an empty, revealed field lets it fold away again.
+                                if (searchFocused && !it.isFocused && searchQuery.isEmpty()) searchRevealed = false
+                                searchFocused = it.isFocused
+                            },
                         placeholder = { Text("Search your library") },
                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "Search library") },
                         trailingIcon = if (searchQuery.isNotEmpty()) {

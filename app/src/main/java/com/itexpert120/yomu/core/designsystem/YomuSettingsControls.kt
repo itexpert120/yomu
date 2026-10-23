@@ -103,7 +103,6 @@ fun YomuSettingRow(
 
     if (position == null) {
         ListItem(
-            headlineContent = headline,
             supportingContent = supporting,
             leadingContent = leadingContent,
             trailingContent = { trailing() },
@@ -111,6 +110,7 @@ fun YomuSettingRow(
             modifier = semanticsModifier.then(
                 if (onClick != null) Modifier.yomuPressable(onClick = onClick, enabled = enabled, role = role) else Modifier,
             ),
+            content = headline,
         )
         return
     }
@@ -172,6 +172,8 @@ private fun yomuSegmentedColors() = ListItemDefaults.segmentedColors(
 fun YomuSettingContainer(
     modifier: Modifier = Modifier,
     position: YomuSettingPosition = YomuSettingPosition.Single,
+    // Tighter padding/spacing for transient surfaces (e.g. the in-reader sheet) over full pages.
+    dense: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -180,8 +182,8 @@ fun YomuSettingContainer(
         color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = if (dense) 10.dp else 14.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(if (dense) 4.dp else 8.dp),
             content = content,
         )
     }

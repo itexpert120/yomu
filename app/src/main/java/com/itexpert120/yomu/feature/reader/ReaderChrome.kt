@@ -108,7 +108,7 @@ internal fun ReaderTopBar(
                     text = chapter.ifBlank { "Reading" },
                     color = content,
                     style = MaterialTheme.typography.titleMediumEmphasized,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             },
@@ -160,9 +160,13 @@ internal fun ReaderTopBar(
                 actionIconContentColor = content,
             ),
             windowInsets = WindowInsets(0),
+            // The title is a single line, so the default 64dp bar is mostly empty space.
+            expandedHeight = ReaderTopBarHeight,
         )
     }
 }
+
+private val ReaderTopBarHeight = 52.dp
 
 @Composable
 internal fun ReaderFooter(
@@ -172,8 +176,12 @@ internal fun ReaderFooter(
     settings: ReaderSettings,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    // False while the system status bar is showing (reader menu open): it already has both.
+    showDeviceStatus: Boolean = true,
 ) {
     val bg = Color(settings.backgroundArgb)
+    val showBattery = settings.footerShowBattery && showDeviceStatus
+    val showClock = settings.footerShowClock && showDeviceStatus
     val muted = Color(settings.colorPalette.secondaryTextArgb)
     val time = rememberClock()
     val battery = rememberBattery()
@@ -192,7 +200,7 @@ internal fun ReaderFooter(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Battery on the left: a horizontal bar whose fill tracks the level.
-                if (settings.footerShowBattery) {
+                if (showBattery) {
                     BatteryIndicator(
                         level = battery.level,
                         charging = battery.charging,
@@ -200,8 +208,8 @@ internal fun ReaderFooter(
                         background = bg,
                     )
                 }
-                if (settings.footerShowClock) {
-                    if (settings.footerShowBattery) Spacer(Modifier.width(14.dp))
+                if (showClock) {
+                    if (showBattery) Spacer(Modifier.width(14.dp))
                     Text(text = time, color = muted, style = YomuTheme.type.mono)
                 }
                 val chapterRemainingLabel = when (settings.layout) {
@@ -216,7 +224,7 @@ internal fun ReaderFooter(
                     }
                 }
                 if (settings.footerShowPagesLeft && chapterRemainingLabel != null) {
-                    if (settings.footerShowBattery || settings.footerShowClock) {
+                    if (showBattery || showClock) {
                         Spacer(Modifier.width(14.dp))
                     }
                     Text(

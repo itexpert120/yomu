@@ -1,11 +1,13 @@
 package com.itexpert120.yomu.data.reader.readium
 
+import android.net.Uri
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import org.json.JSONObject
 import org.readium.r2.shared.DelicateReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.Url
 
 internal data class ReadiumTocEntry(
     val item: ReaderTocItem,
@@ -44,11 +46,17 @@ internal fun Publication.flattenedTableOfContents(): List<ReadiumTocEntry> = bui
         links.forEach { link ->
             val title = link.title?.trim()?.takeIf { it.isNotEmpty() }
             if (title != null) {
-                val target = link.url()
+                fun resourceFor(url: Url): Link? {
+                    val normalized = url.removeFragment().normalize()
+                    return exactResources[normalized.toString()]
+                        ?: resourcesWithoutQuery[normalized.removeQuery().toString()]
+                }
+                val original = link.url()
+                val target = original.takeIf { resourceFor(it) != null }
+                    ?: link.repairedNonAsciiHref()?.takeIf { resourceFor(it) != null }
+                    ?: original
                 val resourceUrl = target.removeFragment()
-                val normalized = resourceUrl.normalize()
-                val resourceLink = exactResources[normalized.toString()]
-                    ?: resourcesWithoutQuery[normalized.removeQuery().toString()]
+                val resourceLink = resourceFor(target)
                 val locator = resourceLink?.mediaType?.let { mediaType ->
                     Locator(
                         href = resourceUrl,
@@ -111,6 +119,21 @@ internal fun Publication.cachedTableOfContents(items: List<ReaderTocItem>): List
         )
     }
     return entries
+}
+
+/**
+ * Readium's `Url.fromEpubHref` rejects any href containing non-ASCII characters (e.g.
+ * `ch864.xhtml#chapter-851-dwayne-dantèss`) as a URL and falls back to treating the whole string as
+ * a decoded path, which percent-encodes the `#` and drops the fragment. Split it back apart.
+ */
+private fun Link.repairedNonAsciiHref(): Url? {
+    val url = url()
+    if (url.fragment != null) return null
+    val path = url.path ?: return null
+    val hash = path.indexOf('#').takeIf { it > 0 } ?: return null
+    val resource = Url.fromDecodedPath(path.substring(0, hash)) ?: return null
+    val fragment = path.substring(hash + 1).takeIf { it.isNotEmpty() } ?: return resource
+    return Url("$resource#${Uri.encode(fragment)}") ?: resource
 }
 
 private fun Locator.stableTocId(): String = buildString {
