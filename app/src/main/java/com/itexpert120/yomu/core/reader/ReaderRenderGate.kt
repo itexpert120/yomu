@@ -18,10 +18,13 @@ internal class ReaderRenderGate {
         return generation
     }
 
-    fun fail(expected: Long) {
-        if (expected == generation) {
-            generation++
-            mutableState.value = ReaderRenderState.Failed
+    /**
+     * Shows a transition that never finished its checks, as it is. The generation is kept, so a
+     * late [reveal] for the same transition still completes normally.
+     */
+    fun revealStalled(expected: Long, href: String?) {
+        if (expected == generation && mutableState.value is ReaderRenderState.Transitioning) {
+            mutableState.value = ReaderRenderState.Ready(href)
         }
     }
 

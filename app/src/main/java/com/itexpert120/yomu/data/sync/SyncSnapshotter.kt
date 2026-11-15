@@ -30,7 +30,7 @@ internal class SyncSnapshotter @Inject constructor(
     suspend fun snapshot(kind: SyncKind): List<LocalRecord> = when (kind) {
         SyncKind.Meta -> dao.books().mapNotNull(::meta)
         SyncKind.Progress -> dao.books().mapNotNull(::progress)
-        SyncKind.Chapters -> chapters()
+        SyncKind.Chapter -> chapters()
         SyncKind.Bookmark -> bookmarks()
         SyncKind.Highlight -> highlights()
         SyncKind.BookSettings -> bookSettings()
@@ -75,22 +75,28 @@ internal class SyncSnapshotter @Inject constructor(
 
     private suspend fun chapters(): List<LocalRecord> {
         val shaById = localBooks()
-        val reads = dao.chapterReads().groupBy { it.bookId }
-        val progress = dao.chapterProgress().groupBy { it.bookId }
-        return (reads.keys + progress.keys).mapNotNull { bookId ->
-            val sha = shaById[bookId] ?: return@mapNotNull null
-            val states = progress[bookId].orEmpty()
-                .map { ChapterState(it.chapterId, it.progress, it.updatedAt, it.manuallyRead) }
-                .sortedBy { it.id }
-            val payload = ChaptersPayload(reads[bookId].orEmpty().map { it.chapterId }.sorted(), states)
+        val read = dao.chapterReads().mapTo(HashSet()) { it.bookId to it.chapterId }
+        val progress = dao.chapterProgress().associateBy { it.bookId to it.chapterId }
+        return (read + progress.keys).mapNotNull { key ->
+            val sha = shaById[key.first] ?: return@mapNotNull null
+            val row = progress[key]
+            val payload = ChapterPayload(key in read, row?.progress, row?.updatedAt ?: 0L, row?.manuallyRead ?: false)
             LocalRecord(
-                SyncKind.Chapters,
+                SyncKind.Chapter,
+                ChapterRecordId.of(sha, key.second),
                 sha,
-                sha,
-                SyncJson.encodeToString(ChaptersPayload.serializer(), payload),
-                states.maxOfOrNull { it.updatedAt } ?: 1,
+                SyncJson.encodeToString(ChapterPayload.serializer(), payload),
+                maxOf(payload.updatedAt, 1),
             )
         }
+    }
+
+    /** One chapter's current state on this device, or null if it has none. */
+    suspend fun chapterFor(bookId: String, chapterId: String): ChapterPayload? {
+        val read = dao.isChapterRead(bookId, chapterId)
+        val row = dao.chapterProgressFor(bookId, chapterId)
+        if (!read && row == null) return null
+        return ChapterPayload(read, row?.progress, row?.updatedAt ?: 0L, row?.manuallyRead ?: false)
     }
 
     private suspend fun bookmarks(): List<LocalRecord> {

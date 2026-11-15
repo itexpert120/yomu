@@ -130,24 +130,29 @@ interface SyncDao {
         finishedAt: Long,
     )
 
-    @Query("DELETE FROM chapter_reads WHERE bookId = :bookId")
-    suspend fun deleteChapterReads(bookId: String)
+    @Query("SELECT EXISTS(SELECT 1 FROM chapter_reads WHERE bookId = :bookId AND chapterId = :chapterId)")
+    suspend fun isChapterRead(bookId: String, chapterId: String): Boolean
 
-    @Query("DELETE FROM chapter_progress WHERE bookId = :bookId")
-    suspend fun deleteChapterProgress(bookId: String)
+    @Query("SELECT * FROM chapter_progress WHERE bookId = :bookId AND chapterId = :chapterId")
+    suspend fun chapterProgressFor(bookId: String, chapterId: String): ChapterProgressEntity?
+
+    @Query("DELETE FROM chapter_reads WHERE bookId = :bookId AND chapterId = :chapterId")
+    suspend fun deleteChapterRead(bookId: String, chapterId: String)
+
+    @Query("DELETE FROM chapter_progress WHERE bookId = :bookId AND chapterId = :chapterId")
+    suspend fun deleteChapterProgressFor(bookId: String, chapterId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertChapterReads(rows: List<ChapterReadEntity>)
+    suspend fun insertChapterRead(row: ChapterReadEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertChapterProgress(rows: List<ChapterProgressEntity>)
+    suspend fun insertChapterProgress(row: ChapterProgressEntity)
 
+    /** Makes one chapter's rows match a synced state ([progress] null = no progress row). */
     @Transaction
-    suspend fun replaceChapters(bookId: String, reads: List<ChapterReadEntity>, progress: List<ChapterProgressEntity>) {
-        deleteChapterReads(bookId)
-        deleteChapterProgress(bookId)
-        if (reads.isNotEmpty()) insertChapterReads(reads)
-        if (progress.isNotEmpty()) insertChapterProgress(progress)
+    suspend fun applyChapter(bookId: String, chapterId: String, read: Boolean, progress: ChapterProgressEntity?) {
+        if (read) insertChapterRead(ChapterReadEntity(bookId, chapterId)) else deleteChapterRead(bookId, chapterId)
+        if (progress != null) insertChapterProgress(progress) else deleteChapterProgressFor(bookId, chapterId)
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -6,17 +6,22 @@ import android.net.Network
 import android.os.SystemClock
 import android.util.Log
 import com.itexpert120.yomu.BuildConfig
+import com.itexpert120.yomu.app.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.convex.android.MobileConvexClient
 import dev.convex.android.QuerySubscriber
 import dev.convex.android.WebSocketState
 import dev.convex.android.WebSocketStateSubscriber
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -92,6 +97,7 @@ internal interface SyncTransport {
 @Singleton
 internal class ConvexSyncTransport @Inject constructor(
     @ApplicationContext context: Context,
+    @ApplicationScope private val scope: CoroutineScope,
 ) : SyncTransport {
     // Per build type: debug → Convex dev deployment, release → production (see app/build.gradle.kts).
     override val available: Boolean = BuildConfig.SYNC_CONVEX_URL.isNotBlank()
@@ -130,8 +136,35 @@ internal class ConvexSyncTransport @Inject constructor(
             current ?: newClient(_generation.value).also {
                 current = it
                 clientCreatedAt = SystemClock.elapsedRealtime()
+                armWatchdog()
             }
         }
+
+    // A device that only listens never makes a call that could time out, and Android doesn't always
+    // notice a dead link, so a client that stays disconnected is replaced after a while. The wait
+    // doubles each time (reset on connecting) so a genuinely offline device doesn't churn.
+    private var watchdog: Job? = null
+    private var watchdogDelayMs = WATCHDOG_MIN_MS
+
+    private fun armWatchdog() = synchronized(lock) {
+        if (watchdog?.isActive == true) return@synchronized
+        val wait = watchdogDelayMs
+        watchdog = scope.launch {
+            delay(wait)
+            synchronized(lock) {
+                watchdog = null
+                if (_connected.value) return@launch
+                watchdogDelayMs = (wait * 2).coerceAtMost(WATCHDOG_MAX_MS)
+            }
+            reconnect("still disconnected after ${wait / 1000} s")
+        }
+    }
+
+    private fun disarmWatchdog() = synchronized(lock) {
+        watchdog?.cancel()
+        watchdog = null
+        watchdogDelayMs = WATCHDOG_MIN_MS
+    }
 
     // A closed client can still report state changes; only the current generation's count.
     private fun newClient(generation: Int) = MobileConvexClient(
@@ -142,6 +175,7 @@ internal class ConvexSyncTransport @Inject constructor(
                 if (generation != _generation.value) return
                 Log.d(TAG, "Connection: $state")
                 _connected.value = state == WebSocketState.CONNECTED
+                if (state == WebSocketState.CONNECTED) disarmWatchdog() else armWatchdog()
             }
         },
     )
@@ -235,6 +269,8 @@ internal class ConvexSyncTransport @Inject constructor(
         private const val TAG = "SyncTransport"
         private const val CALL_TIMEOUT_MS = 15_000L
         private const val CONNECT_GRACE_MS = 10_000L
+        private const val WATCHDOG_MIN_MS = 15_000L
+        private const val WATCHDOG_MAX_MS = 5 * 60_000L
 
         /** Maps the backend's application errors (`unknown_group`, `client_outdated`) to typed ones. */
         fun Throwable.classify(): Exception? {

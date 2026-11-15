@@ -2,7 +2,6 @@ package com.itexpert120.yomu.data.sync
 
 import com.itexpert120.yomu.core.database.BookmarkEntity
 import com.itexpert120.yomu.core.database.ChapterProgressEntity
-import com.itexpert120.yomu.core.database.ChapterReadEntity
 import com.itexpert120.yomu.core.database.HighlightEntity
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.database.SyncMetadataEntity
@@ -65,6 +64,7 @@ internal class SyncApplier @Inject constructor(
             SyncKind.Bookmark -> payload?.let { SyncJson.decodeFromString(BookmarkPayload.serializer(), it).sha256 }
             SyncKind.Highlight -> payload?.let { SyncJson.decodeFromString(HighlightPayload.serializer(), it).sha256 }
             SyncKind.Session -> payload?.let { SyncJson.decodeFromString(SessionPayload.serializer(), it).sha256 }
+            SyncKind.Chapter -> ChapterRecordId.sha256(id)
             else -> if (kind.bookBound) id else null
         }
         val book = sha?.let { dao.bookByHash(it) }
@@ -94,21 +94,23 @@ internal class SyncApplier @Inject constructor(
 
             SyncKind.Progress -> applyProgress(id, payload ?: return Applied(null), device, hlc)
 
-            SyncKind.Chapters -> {
+            SyncKind.Chapter -> {
                 val localBookId = bookId ?: return Applied(payload)
+                val chapterId = ChapterRecordId.chapterId(id)
                 if (payload == null) {
-                    dao.replaceChapters(localBookId, emptyList(), emptyList())
+                    dao.applyChapter(localBookId, chapterId, read = false, progress = null)
                     return Applied(null)
                 }
-                val remote = SyncJson.decodeFromString(ChaptersPayload.serializer(), payload)
-                val local = if (firstContact) snapshotter.snapshot(SyncKind.Chapters).firstOrNull { it.entityId == id } else null
-                val result = local?.let { mergeChapters(SyncJson.decodeFromString(ChaptersPayload.serializer(), it.payload), remote) } ?: remote
-                dao.replaceChapters(
+                val remote = SyncJson.decodeFromString(ChapterPayload.serializer(), payload)
+                val local = if (firstContact) snapshotter.chapterFor(localBookId, chapterId) else null
+                val result = local?.mergedWith(remote) ?: remote
+                dao.applyChapter(
                     localBookId,
-                    result.read.map { ChapterReadEntity(localBookId, it) },
-                    result.progress.map { ChapterProgressEntity(localBookId, it.id, it.progress, it.updatedAt, it.manual) },
+                    chapterId,
+                    read = result.read,
+                    progress = result.progress?.let { ChapterProgressEntity(localBookId, chapterId, it, result.updatedAt, result.manual) },
                 )
-                val resultPayload = SyncJson.encodeToString(ChaptersPayload.serializer(), result)
+                val resultPayload = SyncJson.encodeToString(ChapterPayload.serializer(), result)
                 Applied(resultPayload, dirty = resultPayload != payload)
             }
 
@@ -254,14 +256,6 @@ internal class SyncApplier @Inject constructor(
         }
 
         else -> Applied(payload)
-    }
-
-    private fun mergeChapters(local: ChaptersPayload, remote: ChaptersPayload): ChaptersPayload {
-        val progress = (local.progress + remote.progress)
-            .groupBy { it.id }
-            .map { (_, states) -> states.maxWith(compareBy<ChapterState> { it.progress }.thenBy { it.updatedAt }) }
-            .sortedBy { it.id }
-        return ChaptersPayload((local.read + remote.read).distinct().sorted(), progress)
     }
 
     private var installedCache: Map<String, CustomFontRef> = emptyMap()

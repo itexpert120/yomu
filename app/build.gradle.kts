@@ -18,6 +18,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // JNA (via the Convex client) also ships armeabi/mips libraries no supported device can load.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+        }
     }
 
     buildTypes {
@@ -28,8 +33,7 @@ android {
             buildConfigField("String", "SYNC_CONVEX_URL", "\"https://industrious-dogfish-192.eu-west-1.convex.cloud\"")
         }
         release {
-            // Set after `npx convex deploy` creates the production deployment.
-            buildConfigField("String", "SYNC_CONVEX_URL", "\"\"")
+            buildConfigField("String", "SYNC_CONVEX_URL", "\"https://colorful-kudu-684.convex.cloud\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

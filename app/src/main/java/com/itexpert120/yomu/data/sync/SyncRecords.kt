@@ -11,7 +11,10 @@ internal enum class SyncKind(val key: String, val bookBound: Boolean, val neverD
     // Never deleted: an unedited or unopened book simply has no record to send.
     Meta("meta", bookBound = true, neverDeleted = true),
     Progress("progress", bookBound = true, neverDeleted = true),
-    Chapters("chapters", bookBound = true),
+
+    // One record per chapter (`<sha>|<chapterId>`), so devices changing different chapters of the
+    // same book never overwrite each other.
+    Chapter("chapter", bookBound = true),
     Bookmark("bookmark", bookBound = true),
     Highlight("highlight", bookBound = true),
     BookSettings("bookSettings", bookBound = true),
@@ -60,11 +63,24 @@ internal data class ProgressPayload(
     val finishedAt: Long,
 )
 
+/** One chapter's state. [progress] null = no progress row (then [updatedAt] is 0 and [manual] false). */
 @Serializable
-internal data class ChapterState(val id: String, val progress: Float, val updatedAt: Long, val manual: Boolean)
+internal data class ChapterPayload(val read: Boolean, val progress: Float?, val updatedAt: Long, val manual: Boolean) {
+    /** First-contact merge of two devices' pre-sync state: read on either side, furthest progress. */
+    fun mergedWith(other: ChapterPayload): ChapterPayload {
+        val furthest = listOf(this, other)
+            .filter { it.progress != null }
+            .maxWithOrNull(compareBy<ChapterPayload> { it.progress }.thenBy { it.updatedAt })
+        return ChapterPayload(read || other.read, furthest?.progress, furthest?.updatedAt ?: 0L, furthest?.manual ?: false)
+    }
+}
 
-@Serializable
-internal data class ChaptersPayload(val read: List<String>, val progress: List<ChapterState>)
+/** Entity id of a chapter record: the book's hash, then the chapter id (which may contain anything). */
+internal object ChapterRecordId {
+    fun of(sha256: String, chapterId: String) = "$sha256|$chapterId"
+    fun sha256(id: String) = id.substringBefore('|')
+    fun chapterId(id: String) = id.substringAfter('|')
+}
 
 @Serializable
 internal data class BookmarkPayload(

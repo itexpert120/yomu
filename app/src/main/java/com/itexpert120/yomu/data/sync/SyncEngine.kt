@@ -1,6 +1,8 @@
 package com.itexpert120.yomu.data.sync
 
+import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -10,6 +12,7 @@ import com.itexpert120.yomu.core.database.SyncLedgerEntity
 import com.itexpert120.yomu.core.database.SyncMetadataEntity
 import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.data.sync.crypto.SyncKeys
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +73,7 @@ internal class SyncEngine @Inject constructor(
     private val snapshotter: SyncSnapshotter,
     private val applier: SyncApplier,
     private val transport: SyncTransport,
+    @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val mutex = Mutex()
@@ -80,6 +84,14 @@ internal class SyncEngine @Inject constructor(
     private val pushRequests = Channel<Unit>(Channel.CONFLATED)
     private lateinit var clock: HlcClock
     private lateinit var device: String
+
+    /** Shown to other devices in "Continue from <device>": the name the user gave this device. */
+    private val deviceLabel: String by lazy {
+        runCatching { Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: Build.MODEL
+    }
 
     fun start(keys: SyncKeys) {
         if (job?.isActive == true) return
@@ -352,7 +364,7 @@ internal class SyncEngine @Inject constructor(
             val envelope = SyncEnvelope(
                 name = row.recordKey,
                 payload = row.payloadJson,
-                device = if (row.kind == SyncKind.Progress.key) DEVICE_LABEL else null,
+                device = if (row.kind == SyncKind.Progress.key) deviceLabel else null,
             )
             val serverKey = keys.serverKey(row.recordKey)
             val blob = keys.seal(serverKey, SyncJson.encodeToString(SyncEnvelope.serializer(), envelope).encodeToByteArray())
@@ -408,14 +420,11 @@ internal class SyncEngine @Inject constructor(
         private const val DEBOUNCE_MILLIS = 1_500L
         private const val RETRY_MILLIS = 30_000L
 
-        /** Shown to other devices in "Continue from <device>". */
-        val DEVICE_LABEL: String = Build.MODEL
-
         /** Which record kinds each table feeds. */
         private val TABLE_KINDS = mapOf(
             "books" to setOf(SyncKind.Meta, SyncKind.Progress),
-            "chapter_reads" to setOf(SyncKind.Chapters),
-            "chapter_progress" to setOf(SyncKind.Chapters),
+            "chapter_reads" to setOf(SyncKind.Chapter),
+            "chapter_progress" to setOf(SyncKind.Chapter),
             "bookmarks" to setOf(SyncKind.Bookmark),
             "highlights" to setOf(SyncKind.Highlight),
             "reader_settings" to setOf(SyncKind.BookSettings),

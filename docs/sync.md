@@ -8,10 +8,10 @@ emulator (join by words, settings and chapter state syncing, "Continue from <dev
 Jump in both directions across chapters and layouts). Code: Convex backend (`backend/convex/`),
 `data/sync/` (phrase codec, keys/encryption, HLC, ledger snapshotter/applier, engine, Convex
 transport, repository), `feature/sync/` (Settings → Sync, words + QR sheet, scanner, join sheet),
-and the reader's portable-locator capture + offer prompt. Remaining: the production Convex
-deployment (release builds ship with sync unavailable until its URL is set), and QR scanning has
-only been exercised in code, not with a real camera. The Auth0 email/password login that preceded
-this design was removed.
+and the reader's portable-locator capture + offer prompt. The production Convex deployment exists
+and release builds point at it. Remaining: per-chapter records and the release build's sync have
+not been re-verified on devices since they changed, and QR scanning has only been exercised in
+code, not with a real camera. The Auth0 email/password login that preceded this design was removed.
 
 ## Builds and versions
 
@@ -28,6 +28,11 @@ this design was removed.
   client never recovers once its socket dies with the network, so the transport rebuilds it when
   Android reports the network back (or a call times out while disconnected) and the engine
   resubscribes. Calls time out after 15 s so offline actions report an error instead of spinning.
+  A watchdog also replaces a client that stays disconnected (after 15 s, doubling up to 5 min,
+  reset on connecting), which covers a device that is only listening and so never makes a call
+  that could time out.
+- **Native libraries:** `abiFilters` keeps arm64-v8a, armeabi-v7a, x86_64 and x86; JNA's
+  armeabi/mips libraries are dropped.
 - **16 KB pages:** JNA (pulled in by Convex) is pinned to 5.19.1 because 5.14's x86_64 library
   isn't 16 KB-aligned.
 
@@ -83,8 +88,8 @@ when that file is imported.
 | Logical record | Contents |
 |---|---|
 | `meta/<sha>` | User-edited title, subtitle, author, description (written only on edit, so a fresh import can't overwrite an edit). Cover images are files and don't sync. |
-| `progress/<sha>` | Portable locator, book/total progression, current chapter, started/finished/last-opened times, and the device label for the prompt. |
-| `chapters/<sha>` | Read-chapter set and per-chapter progress. |
+| `progress/<sha>` | Portable locator, book/total progression, current chapter, started/finished/last-opened times, and the device label for the prompt (the user's device name, falling back to the hardware model). |
+| `chapter/<sha>\|<chapterId>` | One chapter's read mark and progress (progress, updated time, manual flag); a chapter with neither is a tombstone. One record per chapter, so two devices changing different chapters of the same book both keep their changes. On first contact, pre-sync state merges (read on either side, furthest progress). |
 | `bookmark/<id>`, `highlight/<id>` | One record each (ids are UUIDs); deletions sync as tombstones. |
 | `bookSettings/<sha>` | Per-book reader settings override, minus device-specific fields. |
 | `session/<id>` | One reading session (book, start, seconds). Rollups (days, totals) are rebuilt from sessions on each device. |

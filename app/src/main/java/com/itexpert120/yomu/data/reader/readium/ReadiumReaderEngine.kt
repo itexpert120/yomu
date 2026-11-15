@@ -1089,8 +1089,8 @@ private class ReadiumReaderSession(
         val generation = renderGeneration
         revealWatchdog = scope.launch {
             delay(STYLE_REVEAL_TIMEOUT_MS)
-            Log.w(TAG, "Chapter reveal timed out (generation $generation)")
-            renderGate.fail(generation)
+            Log.w(TAG, "Chapter reveal timed out (generation $generation); revealing as is")
+            renderGate.revealStalled(generation, lastLocator?.href?.toString())
         }
     }
 

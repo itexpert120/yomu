@@ -7,13 +7,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderRenderGateTest {
-    @Test fun failedStylingCannotBeBypassedByContentOrTimeout() = runBlocking {
+    @Test fun failedStylingSkipsLaterChecksAndStaysCovered() = runBlocking {
         val gate = ReaderRenderGate()
         val generation = gate.transition(true)
         assertFalse(gate.reveal(generation, "c", { true }, { false }, { error("unexpected") }, { error("unexpected") }))
-        gate.fail(generation)
-        assertEquals(ReaderRenderState.Failed, gate.state.value)
-        assertFalse(gate.reveal(generation, "c", { true }, { true }, { true }, { true }))
+        assertTrue(gate.state.value is ReaderRenderState.Transitioning)
+    }
+
+    @Test fun stalledTransitionIsRevealedAndCanStillFinish() = runBlocking {
+        val gate = ReaderRenderGate()
+        val generation = gate.transition(true)
+        gate.revealStalled(generation, "c")
+        assertEquals(ReaderRenderState.Ready("c"), gate.state.value)
+        assertTrue(gate.reveal(generation, "c", { true }, { true }, { true }, { true }))
+    }
+
+    @Test fun staleStallTimeoutDoesNotRevealANewerTransition() {
+        val gate = ReaderRenderGate()
+        val stale = gate.transition(true)
+        gate.transition(false)
+        gate.revealStalled(stale, "c")
+        assertTrue(gate.state.value is ReaderRenderState.Transitioning)
     }
 
     @Test fun revealRequiresCurrentGenerationAndAllChecksInOrder() = runBlocking {
