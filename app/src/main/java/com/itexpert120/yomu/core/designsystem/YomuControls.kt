@@ -27,9 +27,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -59,9 +57,14 @@ fun YomuButton(
     modifier: Modifier = Modifier,
     emphasis: YomuButtonEmphasis = YomuButtonEmphasis.Primary,
     enabled: Boolean = true,
+    icon: ImageVector? = null,
 ) {
     val buttonHeight = ButtonDefaults.MinHeight
     val label: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        }
         Text(text = text, style = ButtonDefaults.textStyleFor(buttonHeight))
     }
     when (emphasis) {
@@ -129,32 +132,8 @@ fun YomuSegmentedControl(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (options.isEmpty()) return
-    val selected = selectedIndex.coerceIn(0, options.lastIndex)
-    PrimaryTabRow(
-        selectedTabIndex = selected,
-        modifier = modifier,
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.primary,
-        divider = {},
-    ) {
-        options.forEachIndexed { index, option ->
-            Tab(
-                selected = index == selected,
-                onClick = { onSelected(index) },
-                modifier = Modifier.semantics {
-                    this.selected = index == selected
-                },
-                text = {
-                    Text(
-                        text = option,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-            )
-        }
-    }
+    // Tabs and exclusive choices share one control: the connected button group.
+    YomuSingleChoiceSegmentedControl(options, selectedIndex, onSelected, modifier)
 }
 
 /** Material 3 segmented choice control for compact, mutually exclusive settings. */

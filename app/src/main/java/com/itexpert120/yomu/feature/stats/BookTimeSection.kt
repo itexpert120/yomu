@@ -2,6 +2,7 @@ package com.itexpert120.yomu.feature.stats
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,18 +12,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,15 +32,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
+import com.itexpert120.yomu.core.designsystem.YomuProgressBar
 import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.BookReadingTime
@@ -66,7 +68,7 @@ internal fun BookTimeSection(
 
     Column(
         modifier = Modifier.fillMaxWidth().animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
         YomuSettingList {
             visible.forEachIndexed { index, book ->
@@ -80,7 +82,7 @@ internal fun BookTimeSection(
             }
         }
         if (books.size > CollapsedBookCount) {
-            TextButton(
+            FilledTonalButton(
                 onClick = { expanded = !expanded },
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -119,13 +121,13 @@ private fun BookTimeRow(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
             Box(
                 modifier = Modifier
                     .width(40.dp)
-                    .aspectRatio(1f / 1.5f)
-                    .clip(MaterialTheme.shapes.small)
+                    .aspectRatio(YomuBookCoverAspectRatio)
+                    .clip(YomuShapeTokens.cover)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center,
             ) {
@@ -178,12 +180,12 @@ private fun BookTimeRow(
                 )
             }
         }
-        LinearProgressIndicator(
-            progress = { animatedShare.value },
-            modifier = Modifier.fillMaxWidth().height(6.dp),
-            strokeCap = StrokeCap.Round,
-            trackColor = MaterialTheme.colorScheme.secondaryContainer,
-            drawStopIndicator = {},
-        )
+        ShareBar(animatedShare)
     }
+}
+
+/** Kept separate so the grow-in animation only recomposes the bar, not the whole row. */
+@Composable
+private fun ShareBar(share: Animatable<Float, AnimationVector1D>) {
+    YomuProgressBar(progress = share.value)
 }

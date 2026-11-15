@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
@@ -54,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,7 +89,13 @@ internal fun ReaderTopBar(
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val actionColor = androidx.compose.ui.graphics.lerp(background, content, 0.08f)
+    val actionColor = lerp(background, content, ReaderChromeTonalStep)
+    // The bar hangs from the top edge: square where it meets the status area, the theme's
+    // extra-large corner below.
+    val barShape = MaterialTheme.shapes.extraLarge.copy(
+        topStart = CornerSize(0.dp),
+        topEnd = CornerSize(0.dp),
+    )
     Column(modifier = modifier.fillMaxWidth().onSizeChanged { onContentHeight(it.height) }) {
         // The navigator draws edge-to-edge. Keep the cutout/status backdrop solid, then use the
         // platform top app bar for native touch targets, semantics, and expressive motion defaults.
@@ -102,7 +110,7 @@ internal fun ReaderTopBar(
         TopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)),
+                .clip(barShape),
             title = {
                 Text(
                     text = chapter.ifBlank { "Reading" },
@@ -167,6 +175,12 @@ internal fun ReaderTopBar(
 }
 
 private val ReaderTopBarHeight = 52.dp
+
+/**
+ * How far reader chrome controls (top-bar buttons, the floating toolbar) step from the page colour
+ * toward the text colour — one tonal step for every chrome surface.
+ */
+private const val ReaderChromeTonalStep = 0.10f
 
 @Composable
 internal fun ReaderFooter(
@@ -275,8 +289,8 @@ internal fun BoxScope.ReaderChapterControlsBar(
         Box(
             modifier = Modifier.fillMaxWidth()
                 .background(background)
-                .padding(horizontal = if (floating) 12.dp else 0.dp)
-                .padding(bottom = if (floating) floatingBottomInset + 12.dp else 0.dp),
+                .padding(horizontal = if (floating) YomuTheme.space.sm else 0.dp)
+                .padding(bottom = if (floating) floatingBottomInset + YomuTheme.space.sm else 0.dp),
         ) {
             ReaderActionBar(
                 background = background,
@@ -303,11 +317,11 @@ private fun ReaderActionBar(
     onDisplay: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = if (floating) 0.dp else 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = if (floating) 0.dp else YomuTheme.space.xs),
         contentAlignment = Alignment.Center,
     ) {
         YomuFloatingToolbar(
-            containerColor = androidx.compose.ui.graphics.lerp(background, content, 0.10f),
+            containerColor = lerp(background, content, ReaderChromeTonalStep),
             contentColor = content,
             actions = listOf(
                 YomuToolbarAction(Icons.Rounded.Toc, "Browse", onBrowse),

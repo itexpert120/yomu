@@ -15,22 +15,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -51,15 +50,17 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuButton
 import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
+import com.itexpert120.yomu.core.designsystem.YomuEmptyState
+import com.itexpert120.yomu.core.designsystem.YomuLoadingState
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.web.openWebSearchSheet
@@ -84,6 +85,9 @@ private data class PosGroup(
 /** One accent's IPA, e.g. "/skɒf/" + "UK". */
 private data class PronunciationLabel(val ipa: String, val accent: String?)
 
+/** Space the lookup sheet needs around its definitions: drag handle, header, bottom inset. */
+private val LookupSheetReservedHeight = 220.dp
+
 /** Bottom sheet showing a word's dictionary definition (or loading / not-found / error states). */
 @Composable
 internal fun WordLookupSheet(
@@ -94,7 +98,7 @@ internal fun WordLookupSheet(
     onBack: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    YomuBottomSheet(visible = state != null, onDismiss = onDismiss, scrollable = false) { _ ->
+    YomuBottomSheet(visible = state != null, onDismiss = onDismiss, scrollable = false) { dismiss ->
         if (state == null) return@YomuBottomSheet
         val found = state.result as? DictionaryResult.Found
         val pronunciations = remember(found) { found?.pronunciationLabels().orEmpty() }
@@ -107,47 +111,37 @@ internal fun WordLookupSheet(
                 .fillMaxWidth()
                 .animateContentSize(lookupMotion.defaultSpatialSpec())
                 .semantics { liveRegion = LiveRegionMode.Polite },
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
                 if (state.canGoBack) {
                     CircleIconButton(
                         icon = Icons.AutoMirrored.Rounded.ArrowBack,
                         description = "Back",
-                        tint = YomuTheme.colors.textSecondary,
                         onClick = onBack,
                     )
                 }
-                Column(
+                // The looked-up word is the sheet's title; the inflection note is its supporting line.
+                YomuSheetHeader(
+                    title = headword,
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = headword,
-                        color = YomuTheme.colors.textPrimary,
-                        style = MaterialTheme.typography.headlineMediumEmphasized,
-                    )
-                    found?.inflectionOf?.let { note ->
-                        Text(
-                            text = "${note.word} · ${note.description}",
-                            color = YomuTheme.colors.textMuted,
-                            style = MaterialTheme.typography.bodyMedium,
+                    subtitle = found?.inflectionOf?.let { note -> "${note.word} · ${note.description}" },
+                    onClose = dismiss,
+                    trailing = {
+                        // No audio clips in this API — speak the word with the device voice instead.
+                        CircleIconButton(
+                            icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                            description = "Pronounce",
+                            onClick = { onPronounce(headword) },
                         )
-                    }
-                    if (pronunciations.isNotEmpty()) {
-                        PronunciationLine(pronunciations, onClick = { onPronounce(headword) })
-                    }
-                }
-                // No audio clips in this API — speak the word with the device voice instead.
-                CircleIconButton(
-                    icon = Icons.AutoMirrored.Rounded.VolumeUp,
-                    description = "Pronounce",
-                    tint = YomuTheme.colors.accent,
-                    onClick = { onPronounce(headword) },
+                    },
                 )
+            }
+            if (pronunciations.isNotEmpty()) {
+                PronunciationLine(pronunciations, onClick = { onPronounce(headword) })
             }
 
             // Cross-fade loading → result (or error) while the column's height springs to fit, so
@@ -165,13 +159,16 @@ internal fun WordLookupSheet(
                     (target.result as? DictionaryResult.Found)?.toBlocks().orEmpty()
                 }
                 when {
-                    target.loading -> LoadingRow()
+                    target.loading -> YomuLoadingState(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = YomuTheme.space.md),
+                        message = "Looking up…",
+                    )
 
                     targetBlocks.isNotEmpty() -> LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 480.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                            .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight)),
+                        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.lg),
                     ) {
                         items(targetBlocks) { block ->
                             when (block) {
@@ -182,13 +179,17 @@ internal fun WordLookupSheet(
                     }
 
                     target.result is DictionaryResult.Error -> LookupMessage(
-                        text = "Couldn't reach the dictionary. Check your connection and try again.",
+                        icon = Icons.Rounded.CloudOff,
+                        title = "Couldn't reach the dictionary",
+                        text = "Check your connection and try again.",
                         word = target.word,
                         onRetry = onRetry,
                     )
 
                     else -> LookupMessage(
-                        text = "No definition found for “${target.word}”.",
+                        icon = Icons.Rounded.SearchOff,
+                        title = "No definition found",
+                        text = "Nothing for “${target.word}” in the dictionary.",
                         word = target.word,
                         onRetry = null,
                     )
@@ -200,58 +201,48 @@ internal fun WordLookupSheet(
 
 @Composable
 private fun CircleIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     description: String,
-    tint: Color,
     onClick: () -> Unit,
 ) {
     FilledTonalIconButton(
         onClick = onClick,
         shapes = IconButtonDefaults.shapes(),
     ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = description)
     }
 }
 
 @Composable
-private fun LoadingRow() {
-    Row(
-        modifier = Modifier.padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        LoadingIndicator(modifier = Modifier.size(36.dp))
-        Text(
-            text = "Looking up…",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.body,
-        )
-    }
-}
-
-@Composable
-private fun LookupMessage(text: String, word: String, onRetry: (() -> Unit)?) {
+private fun LookupMessage(
+    icon: ImageVector,
+    title: String,
+    text: String,
+    word: String,
+    onRetry: (() -> Unit)?,
+) {
     val activity = LocalActivity.current
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    YomuEmptyState(
+        icon = icon,
+        title = title,
+        body = text,
+        compact = true,
+        actions = {
             if (onRetry != null) {
                 YomuButton(
                     text = "Try again",
                     onClick = onRetry,
-                    modifier = Modifier.weight(1f),
                     emphasis = YomuButtonEmphasis.Secondary,
                 )
             }
             YomuButton(
                 text = "Search the web",
                 onClick = { activity?.openWebSearchSheet("define $word") },
-                modifier = Modifier.weight(1f),
                 // With nothing to retry, the web is the way forward, so it gets the primary style.
                 emphasis = if (onRetry == null) YomuButtonEmphasis.Primary else YomuButtonEmphasis.Secondary,
             )
-        }
-    }
+        },
+    )
 }
 
 /** IPA in Cardo: device monospace/UI fonts (e.g. Xiaomi's) often lack IPA glyphs and render tofu. */
@@ -264,20 +255,21 @@ private fun rememberIpaFontFamily(): FontFamily {
 @Composable
 private fun PronunciationLine(items: List<PronunciationLabel>, onClick: () -> Unit) {
     val ipaFont = rememberIpaFontFamily()
-    val text = remember(items, ipaFont) {
+    val accentStyle = MaterialTheme.typography.labelMedium.toSpanStyle()
+    val text = remember(items, ipaFont, accentStyle) {
         buildAnnotatedString {
             items.forEachIndexed { index, item ->
                 if (index > 0) append("   ")
                 withStyle(SpanStyle(fontFamily = ipaFont)) { append(item.ipa) }
                 item.accent?.let { accent ->
-                    withStyle(SpanStyle(fontSize = 12.sp, letterSpacing = 0.4.sp)) { append("  $accent") }
+                    withStyle(accentStyle) { append("  $accent") }
                 }
             }
         }
     }
     Text(
         text = text,
-        color = YomuTheme.colors.textSecondary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.titleMedium,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -290,28 +282,28 @@ private fun PronunciationLine(items: List<PronunciationLabel>, onClick: () -> Un
 private fun PartOfSpeechSection(group: PosGroup, onLookUpWord: (String) -> Unit) {
     var expanded by remember(group) { mutableStateOf(false) }
     val visible = if (expanded) group.senses else group.senses.take(COLLAPSED_SENSES)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
             if (group.partOfSpeech.isNotBlank()) {
                 Surface(
-                    shape = MaterialTheme.shapes.small,
+                    shape = YomuShapeTokens.inset,
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 ) {
                     Text(
                         text = group.partOfSpeech,
                         style = MaterialTheme.typography.labelLargeEmphasized,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = YomuTheme.space.xs, vertical = YomuTheme.space.xxs),
                     )
                 }
             }
             if (group.forms.isNotEmpty()) {
                 Text(
                     text = group.forms.joinToString(" · "),
-                    color = YomuTheme.colors.textMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -323,18 +315,16 @@ private fun PartOfSpeechSection(group: PosGroup, onLookUpWord: (String) -> Unit)
         }
         val hidden = group.senses.size - COLLAPSED_SENSES
         if (hidden > 0) {
-            TextButton(
+            YomuButton(
+                text = if (expanded) "Show fewer" else "Show $hidden more",
                 onClick = { expanded = !expanded },
-                shapes = ButtonDefaults.shapes(),
-                contentPadding = ButtonDefaults.TextButtonContentPadding,
-            ) {
-                Text(if (expanded) "Show fewer" else "Show $hidden more")
-            }
+                emphasis = YomuButtonEmphasis.Secondary,
+            )
         }
         if (group.synonyms.isNotEmpty() || group.antonyms.isNotEmpty()) {
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 if (group.synonyms.isNotEmpty()) {
@@ -352,31 +342,31 @@ private fun PartOfSpeechSection(group: PosGroup, onLookUpWord: (String) -> Unit)
 
 @Composable
 private fun RelatedLabel(text: String) {
-    Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+    Text(text = text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
 private fun SenseItem(number: Int, sense: DictionarySense, onLookUpWord: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
         Text(
             text = "$number",
-            color = YomuTheme.colors.accent,
+            color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.titleSmallEmphasized,
             modifier = Modifier.padding(top = 2.dp),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs)) {
             // Wiktionary often repeats the tags inline as a "(transitive, …)" prefix already.
             if (sense.tags.isNotEmpty() && !sense.definition.startsWith("(")) {
                 Text(
                     text = sense.tags.joinToString(" · "),
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption.copy(fontStyle = FontStyle.Italic),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
                 )
             }
             TappableText(
                 prefix = "",
                 text = sense.definition,
-                color = YomuTheme.colors.textPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 italic = false,
                 onWord = onLookUpWord,
             )
@@ -385,7 +375,7 @@ private fun SenseItem(number: Int, sense: DictionarySense, onLookUpWord: (String
                 TappableText(
                     prefix = "",
                     text = "“$example”",
-                    color = YomuTheme.colors.textMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     italic = true,
                     onWord = onLookUpWord,
                 )
@@ -394,7 +384,7 @@ private fun SenseItem(number: Int, sense: DictionarySense, onLookUpWord: (String
                 TappableText(
                     prefix = "• ",
                     text = sub.definition,
-                    color = YomuTheme.colors.textSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     italic = false,
                     onWord = onLookUpWord,
                 )
@@ -408,7 +398,7 @@ private fun WordChip(word: String, onLookUpWord: (String) -> Unit) {
     AssistChip(
         onClick = { onLookUpWord(word) },
         label = { Text(word) },
-        shape = MaterialTheme.shapes.large,
+        shape = YomuShapeTokens.pill,
     )
 }
 
@@ -452,9 +442,8 @@ private fun TappableText(
     Text(
         text = annotated,
         color = color,
-        style = YomuTheme.type.body.copy(
+        style = MaterialTheme.typography.bodyLarge.copy(
             fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-            fontWeight = FontWeight.Normal,
         ),
         modifier = modifier,
     )
@@ -493,20 +482,24 @@ private fun LookupFooter(url: String?, license: String?) {
         url?.substringAfter("://", url)?.substringBefore("/")?.ifBlank { url }
     }
     Column(
-        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.padding(top = YomuTheme.space.xxs, bottom = YomuTheme.space.xs),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
     ) {
         Text(
             text = "Tap any word in a definition to look it up.",
-            color = YomuTheme.colors.textMuted,
-            style = YomuTheme.type.caption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
         )
         if (host != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs)) {
                 Text(
                     text = host,
-                    color = if (safeUrl != null) YomuTheme.colors.accent else YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
+                    color = if (safeUrl != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    style = MaterialTheme.typography.bodySmall,
                     modifier = if (safeUrl != null) {
                         Modifier.yomuPressable(
                             onClick = { runCatching { handler.openUri(safeUrl) } },
@@ -517,7 +510,11 @@ private fun LookupFooter(url: String?, license: String?) {
                     },
                 )
                 if (!license.isNullOrBlank()) {
-                    Text(text = "· $license", color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
+                    Text(
+                        text = "· $license",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
         }

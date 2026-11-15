@@ -6,8 +6,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,16 +18,20 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -54,6 +60,7 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,19 +68,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
-import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.YomuScreenTitle
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
+import com.itexpert120.yomu.core.designsystem.yomuPopupExit
+import com.itexpert120.yomu.core.designsystem.yomuStableSystemBarInsets
 
 /**
  * Search stays in place so entering a query never replaces the collection toolbar; once scrolled
@@ -93,6 +109,9 @@ internal fun LibraryTopBar(
     showImport: Boolean,
     resultCount: Int,
     bookCount: Int,
+    // Leading/trailing edge of the (centred, width-capped) library content, so the title and the
+    // search row line up with the grid or list below.
+    contentInset: Dp = 16.dp,
     selectionMode: Boolean = false,
     selectedCount: Int = 0,
     allSelected: Boolean = false,
@@ -104,37 +123,39 @@ internal fun LibraryTopBar(
     LaunchedEffect(searchActive) {
         if (!searchActive) focusManager.clearFocus()
     }
-    // The app bar and the search row share one surface, so the whole header tints together as the
-    // library scrolls under it (tracking the same collapse fraction the app bar uses).
-    val collapseTint = FastOutLinearInEasing.transform(scrollBehavior.state.collapsedFraction)
+    val animate = yomuAnimationsEnabled()
     // Selection is a contextual mode: the header takes the container tint to signal it.
-    val selectionTint by animateFloatAsState(
+    val selectionTint = animateFloatAsState(
         targetValue = if (selectionMode) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        animationSpec = if (animate) MaterialTheme.motionScheme.defaultEffectsSpec() else snap(),
         label = "selectionTint",
     )
-    val headerTint = maxOf(collapseTint, selectionTint)
+    // The app bar and the search row share one surface, so the whole header tints together as the
+    // library scrolls under it (tracking the same collapse fraction the app bar uses). Evaluated in
+    // the draw phase so scrolling repaints the header without recomposing it.
+    val headerTint: () -> Float = {
+        maxOf(
+            YomuMotion.EmphasizedAccel.transform(scrollBehavior.state.collapsedFraction),
+            selectionTint.value,
+        )
+    }
     // Once the title has collapsed (scrolled into the library), the search field folds away and a
     // search action takes its place; tapping it brings the field back focused. An in-progress search
     // (focused or with a query) always keeps the field.
     var searchRevealed by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
-    val titleCollapsed = scrollBehavior.state.collapsedFraction > 0.5f
+    val titleCollapsed by remember(scrollBehavior) {
+        derivedStateOf { scrollBehavior.state.collapsedFraction > 0.5f }
+    }
     LaunchedEffect(titleCollapsed) { if (!titleCollapsed) searchRevealed = false }
     val searchFieldVisible = !titleCollapsed || searchRevealed || searchFocused || searchQuery.isNotEmpty()
     val searchFocusRequester = remember { FocusRequester() }
-    val headerColor = lerp(
-        MaterialTheme.colorScheme.background,
-        MaterialTheme.colorScheme.surfaceContainer,
-        headerTint,
-    )
-    // Keep the field distinct from whichever surface is behind it.
-    val fieldColor = lerp(
-        MaterialTheme.colorScheme.surfaceContainerHigh,
-        MaterialTheme.colorScheme.surfaceContainerHighest,
-        headerTint,
-    )
-    Column(Modifier.background(headerColor)) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        Modifier.drawBehind {
+            drawRect(lerp(scheme.background, scheme.surfaceContainer, headerTint()))
+        },
+    ) {
         LargeFlexibleTopAppBar(
             title = {
                 AnimatedContent(
@@ -142,7 +163,7 @@ internal fun LibraryTopBar(
                     transitionSpec = { headerSwap() },
                     label = "libraryTitle",
                 ) { selecting ->
-                    Text(
+                    YomuScreenTitle(
                         if (selecting) {
                             if (selectedCount == 1) "1 selected" else "$selectedCount selected"
                         } else {
@@ -167,15 +188,24 @@ internal fun LibraryTopBar(
             navigationIcon = {
                 // The slot's width animates with the icon, so the title glides into place instead
                 // of snapping left once the close button has faded out.
+                // (Standard, non-bouncing springs: an overshooting width would wobble the title.)
                 val slotSpring = remember { MotionScheme.standard() }
                 AnimatedVisibility(
                     visible = selectionMode,
-                    enter = expandHorizontally(slotSpring.defaultSpatialSpec(), expandFrom = Alignment.Start) +
-                        fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                        scaleIn(MaterialTheme.motionScheme.fastSpatialSpec()),
-                    exit = shrinkHorizontally(slotSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Start) +
-                        fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                        scaleOut(MaterialTheme.motionScheme.fastSpatialSpec()),
+                    enter = if (animate) {
+                        expandHorizontally(slotSpring.defaultSpatialSpec(), expandFrom = Alignment.Start) +
+                            fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                            scaleIn(MaterialTheme.motionScheme.fastSpatialSpec())
+                    } else {
+                        EnterTransition.None
+                    },
+                    exit = if (animate) {
+                        shrinkHorizontally(slotSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Start) +
+                            fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                            scaleOut(MaterialTheme.motionScheme.fastSpatialSpec())
+                    } else {
+                        ExitTransition.None
+                    },
                 ) {
                     TooltipIconButton(
                         label = "Exit selection",
@@ -185,6 +215,12 @@ internal fun LibraryTopBar(
                 }
             },
             scrollBehavior = scrollBehavior,
+            // Same stable insets as YomuScreenHeader, so the bar stays put while the outgoing
+            // reader still hides the system bars. The bar's own title inset is 16dp; the extra
+            // gutter shifts it to the content's leading edge.
+            windowInsets = yomuStableSystemBarInsets()
+                .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
+                .add((contentInset - 16.dp).coerceAtLeast(0.dp).let { WindowInsets(left = it, right = it) }),
             actions = {
                 AnimatedContent(
                     targetState = selectionMode,
@@ -201,8 +237,8 @@ internal fun LibraryTopBar(
                         } else {
                             AnimatedVisibility(
                                 visible = !searchFieldVisible,
-                                enter = fadeIn() + scaleIn(),
-                                exit = fadeOut() + scaleOut(),
+                                enter = yomuPopupEnter(),
+                                exit = yomuPopupExit(),
                             ) {
                                 TooltipIconButton(
                                     label = "Search library",
@@ -233,9 +269,6 @@ internal fun LibraryTopBar(
             ),
         )
         if (showImport || searchActive) {
-            val margin = YomuWidthClass.fromWidth(
-                with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() },
-            ).margin
             // Selection folds the search row away rather than leaving an empty band: the height
             // animates on a non-bouncing spring so the grid glides up by just that row instead of
             // jumping, while the title and actions above stay put.
@@ -250,24 +283,40 @@ internal fun LibraryTopBar(
             }
             AnimatedVisibility(
                 visible = !selectionMode && searchFieldVisible,
-                enter = expandVertically(layoutSpring.defaultSpatialSpec(), expandFrom = Alignment.Top) +
-                    fadeIn(layoutSpring.defaultEffectsSpec()),
-                exit = shrinkVertically(layoutSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Top) +
-                    fadeOut(layoutSpring.fastEffectsSpec()),
+                enter = if (animate) {
+                    expandVertically(layoutSpring.defaultSpatialSpec(), expandFrom = Alignment.Top) +
+                        fadeIn(layoutSpring.defaultEffectsSpec())
+                } else {
+                    EnterTransition.None
+                },
+                exit = if (animate) {
+                    shrinkVertically(layoutSpring.defaultSpatialSpec(), shrinkTowards = Alignment.Top) +
+                        fadeOut(layoutSpring.fastEffectsSpec())
+                } else {
+                    ExitTransition.None
+                },
             ) {
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = margin, vertical = 8.dp)
+                        .padding(horizontal = contentInset, vertical = YomuTheme.space.xs)
                         // A full-width field across a landscape tablet reads as a web form; cap it.
                         .widthIn(max = YomuReadableMaxWidth)
                         .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
                 ) {
                     TextField(
                         value = searchQuery,
                         onValueChange = onSearchQueryChange,
                         modifier = Modifier
                             .fillMaxWidth()
+                            // The pill paints its own container in the draw phase, keeping the
+                            // field distinct from whichever header tint is behind it.
+                            .clip(YomuShapeTokens.pill)
+                            .drawBehind {
+                                drawRect(
+                                    lerp(scheme.surfaceContainerHigh, scheme.surfaceContainerHighest, headerTint()),
+                                )
+                            }
                             .focusRequester(searchFocusRequester)
                             .onFocusChanged {
                                 if (it.isFocused && !searchActive) onSearchToggle()
@@ -287,10 +336,10 @@ internal fun LibraryTopBar(
                             null
                         },
                         singleLine = true,
-                        shape = CircleShape,
+                        shape = YomuShapeTokens.pill,
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = fieldColor,
-                            unfocusedContainerColor = fieldColor,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                         ),
@@ -302,7 +351,7 @@ internal fun LibraryTopBar(
                             text = "$resultCount ${if (resultCount == 1) "book" else "books"} found",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = YomuTheme.space.md),
                         )
                     }
                 }
@@ -346,5 +395,9 @@ private fun TooltipIconButton(
 }
 
 /** Title/action swap between browsing and selection: a quick fade with a small vertical lift. */
-private fun <S> AnimatedContentTransitionScope<S>.headerSwap(): ContentTransform = (fadeIn() + androidx.compose.animation.slideInVertically { it / 3 }) togetherWith
-    (fadeOut() + androidx.compose.animation.slideOutVertically { -it / 3 })
+private fun <S> AnimatedContentTransitionScope<S>.headerSwap(): ContentTransform {
+    if (!yomuAnimationsEnabled()) return EnterTransition.None togetherWith ExitTransition.None
+    val lift = YomuMotion.scheme.fastSpatialSpec<IntOffset>()
+    return (fadeIn(YomuMotion.scheme.fastEffectsSpec()) + slideInVertically(lift) { it / 3 }) togetherWith
+        (fadeOut(YomuMotion.scheme.fastEffectsSpec()) + slideOutVertically(lift) { -it / 3 })
+}

@@ -59,19 +59,29 @@ fun YomuProgressBar(
     progress: Float,
     modifier: Modifier = Modifier,
     wavy: Boolean = false,
+) = YomuProgressBar(progress = { progress }, modifier = modifier, wavy = wavy)
+
+/**
+ * Lambda form for animated progress: the value is read while drawing, so an animating bar never
+ * recomposes its parent.
+ */
+@Composable
+fun YomuProgressBar(
+    progress: () -> Float,
+    modifier: Modifier = Modifier,
+    wavy: Boolean = false,
 ) {
-    val value = progress.coerceIn(0f, 1f)
     if (wavy) {
         LinearWavyProgressIndicator(
-            progress = { value },
+            progress = { progress().coerceIn(0f, 1f) },
             modifier = modifier.fillMaxWidth(),
         )
     } else {
         LinearProgressIndicator(
-            progress = { value },
+            progress = { progress().coerceIn(0f, 1f) },
             modifier = modifier.fillMaxWidth().height(6.dp),
             strokeCap = StrokeCap.Round,
-            trackColor = MaterialTheme.colorScheme.secondaryContainer,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         )
     }
 }

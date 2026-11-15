@@ -1,8 +1,9 @@
 package com.itexpert120.yomu.core.designsystem
 
 import android.view.WindowManager
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,14 +27,17 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -83,8 +87,17 @@ fun YomuBottomSheet(
     if (YomuWidthClass.fromWidth(windowWidth).isWide) {
         val maxHeight = with(density) { windowSize.height.toDp() - 48.dp }
         val scrollState = rememberScrollState()
+        // The panel materializes with the shared popup motion, and dismissals play the exit before
+        // the dialog window is torn down.
+        val panelState = remember { MutableTransitionState(false).apply { targetState = true } }
+        val dismissPanel: () -> Unit = { panelState.targetState = false }
+        if (panelState.isIdle && !panelState.currentState && !panelState.targetState) {
+            LaunchedEffect(Unit) { onDismiss() }
+        }
+        // Pure-black (OLED) surfaces need a hairline to separate the panel from the dimmed page.
+        val oled = MaterialTheme.colorScheme.surface == Color.Black
         Dialog(
-            onDismissRequest = onDismiss,
+            onDismissRequest = dismissPanel,
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false,
@@ -94,7 +107,7 @@ fun YomuBottomSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
-                    .padding(24.dp),
+                    .padding(YomuTheme.space.lg),
                 contentAlignment = Alignment.Center,
             ) {
                 // The wide layout fills the Dialog window, so platform outside-click handling never
@@ -102,48 +115,66 @@ fun YomuBottomSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(onDismiss) {
-                            detectTapGestures(onTap = { onDismiss() })
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = { dismissPanel() })
                         },
                 )
-                Column(
-                    modifier = Modifier
-                        // Do not impose a percentage minimum before the cap: on a landscape tablet
-                        // that would make widthIn(max=460.dp) ineffective.
-                        .widthIn(min = 280.dp, max = wideMaxWidth)
-                        .heightIn(
-                            min = minHeight.coerceAtMost(maxHeight),
-                            max = maxHeight,
-                        )
-                        .shadow(18.dp, MaterialTheme.shapes.extraLarge)
-                        .clip(MaterialTheme.shapes.extraLarge)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainerLow,
-                            MaterialTheme.shapes.extraLarge,
-                        )
-                        .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant,
-                            MaterialTheme.shapes.extraLarge,
-                        )
-                        // Keep taps on empty panel space from reaching the dismiss scrim behind it.
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = {})
-                        }
-                        .then(
-                            if (scrollable) {
-                                Modifier.verticalScroll(scrollState)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .padding(
-                            horizontal = horizontalContentPadding ?: 24.dp,
-                            vertical = 24.dp,
-                        ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                AnimatedVisibility(
+                    visibleState = panelState,
+                    enter = yomuPopupEnter(),
+                    exit = yomuPopupExit(),
                 ) {
-                    content(onDismiss)
+                    Surface(
+                        modifier = Modifier
+                            // Do not impose a percentage minimum before the cap: on a landscape tablet
+                            // that would make widthIn(max=460.dp) ineffective.
+                            .widthIn(min = 280.dp, max = wideMaxWidth)
+                            .heightIn(
+                                min = minHeight.coerceAtMost(maxHeight),
+                                max = maxHeight,
+                            )
+                            // Keep taps on empty panel space from reaching the dismiss scrim behind it.
+                            .pointerInput(Unit) {
+                                detectTapGestures(onTap = {})
+                            },
+                        shape = YomuShapeTokens.hero,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 6.dp,
+                        border = if (oled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .then(
+                                    if (scrollable) {
+                                        Modifier
+                                            .then(
+                                                if (showScrollEdgeShadow) {
+                                                    Modifier.yomuScrollEdgeShadow(
+                                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                                        top = scrollState.canScrollBackward,
+                                                        bottom = scrollState.canScrollForward,
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                },
+                                            )
+                                            .verticalScroll(scrollState)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .padding(
+                                    horizontal = horizontalContentPadding ?: YomuTheme.space.lg,
+                                    vertical = YomuTheme.space.lg,
+                                ),
+                            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+                        ) {
+                            CompositionLocalProvider(LocalYomuSheetPresentation provides YomuSheetPresentation.Dialog) {
+                                content(dismissPanel)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -200,7 +231,7 @@ fun YomuBottomSheet(
                                     // Fade content into the panel at whichever edge has more to scroll, so a
                                     // tall sheet doesn't hard-cut under the drag handle or at its bottom.
                                     Modifier.yomuScrollEdgeShadow(
-                                        color = YomuTheme.colors.panel,
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
                                         top = scrollState.canScrollBackward,
                                         bottom = scrollState.canScrollForward,
                                     )
@@ -213,10 +244,10 @@ fun YomuBottomSheet(
                         Modifier.heightIn(min = minHeight.coerceAtMost(maxHeight))
                     },
                 )
-                .padding(horizontal = horizontalContentPadding ?: 20.dp)
+                .padding(horizontal = horizontalContentPadding ?: YomuTheme.space.lg)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(bottom = YomuTheme.space.lg),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
         ) {
             content(::animatedDismiss)
         }

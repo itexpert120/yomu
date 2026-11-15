@@ -12,8 +12,8 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 
 /**
@@ -36,6 +36,6 @@ internal fun LibrarySelectionToolbar(
         ),
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(bottom = 16.dp),
+            .padding(bottom = YomuTheme.space.md),
     )
 }

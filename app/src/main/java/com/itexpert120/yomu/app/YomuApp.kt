@@ -5,13 +5,14 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Snackbar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.app.navigation.YomuNavHost
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuNotice
+import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.ThemePreference
@@ -81,19 +84,29 @@ fun YomuApp(
                 appViewModel = appViewModel,
                 externalOpenViewModel = externalOpenViewModel,
             )
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .widthIn(max = 568.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-            )
+            val noticeModifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .imePadding()
+                .widthIn(max = 568.dp)
+                .fillMaxWidth()
+                .padding(YomuTheme.space.md)
+            SnackbarHost(hostState = snackbarHostState, modifier = noticeModifier) { data ->
+                YomuNotice(
+                    text = data.visuals.message,
+                    icon = Icons.Rounded.ErrorOutline,
+                    tone = YomuNoticeTone.Floating,
+                )
+            }
             readingWriteError?.let { message ->
-                Snackbar(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
-                    action = { TextButton(onClick = appViewModel::onRetryReadingWrites) { Text("Retry") } },
-                ) { Text(message) }
+                YomuNotice(
+                    text = message,
+                    modifier = noticeModifier,
+                    icon = Icons.Rounded.ErrorOutline,
+                    tone = YomuNoticeTone.Floating,
+                    actionLabel = "Retry",
+                    onAction = appViewModel::onRetryReadingWrites,
+                )
             }
         }
     }

@@ -4,6 +4,12 @@ import android.content.ContentValues
 import android.content.Context
 import android.os.Build
 import android.provider.MediaStore
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,12 +24,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.SaveAlt
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -32,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -47,7 +55,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
-import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
+import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -66,8 +77,17 @@ internal fun CoverViewerDialog(
 ) {
     val statusTop =
         WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    val space = YomuTheme.space
+    val animate = yomuAnimationsEnabled()
+    // The viewer animates in and out inside its dialog window, so every dismissal path starts the
+    // exit and the caller is only told to drop the dialog once that has finished.
+    val visibleState = remember { MutableTransitionState(false).apply { targetState = true } }
+    val close = { visibleState.targetState = false }
+    LaunchedEffect(visibleState.isIdle, visibleState.currentState) {
+        if (visibleState.isIdle && !visibleState.currentState) onClose()
+    }
     Dialog(
-        onDismissRequest = onClose,
+        onDismissRequest = close,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
@@ -100,67 +120,81 @@ internal fun CoverViewerDialog(
                 isAppearanceLightNavigationBars = false
             }
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClose,
-                ),
-            contentAlignment = Alignment.Center,
+        // The scrim fades; the cover and its actions materialize in place on top of it.
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = if (animate) fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) else EnterTransition.None,
+            exit = if (animate) fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) else ExitTransition.None,
         ) {
-            // Pinch to zoom, drag to pan, double-tap to toggle. Scale is clamped; panning is only
-            // allowed while zoomed in (and resets when returning to 1×).
-            var scale by remember { mutableFloatStateOf(1f) }
-            var offset by remember { mutableStateOf(Offset.Zero) }
-            AsyncImage(
-                model = File(coverPath),
-                contentDescription = title,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { onClose() },
-                            onDoubleTap = {
-                                if (scale > 1f) {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                } else {
-                                    scale = 2.5f
-                                }
-                            },
-                        )
-                    }
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(1f, 5f)
-                            offset = if (scale > 1f) offset + pan else Offset.Zero
-                        }
-                    }
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offset.x
-                        translationY = offset.y
-                    },
-            )
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = statusTop + 8.dp, end = 12.dp),
-            ) {
-                CircleAction(Icons.Rounded.SaveAlt, "Save to gallery", onSave)
-            }
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = statusTop + 8.dp, start = 12.dp),
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.92f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = close,
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
-                CircleAction(Icons.Rounded.Close, "Close", onClose)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .animateEnterExit(enter = yomuPopupEnter(), exit = yomuPopupExit()),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // Pinch to zoom, drag to pan, double-tap to toggle. Scale is clamped; panning
+                    // is only allowed while zoomed in (and resets when returning to 1×).
+                    var scale by remember { mutableFloatStateOf(1f) }
+                    var offset by remember { mutableStateOf(Offset.Zero) }
+                    AsyncImage(
+                        model = File(coverPath),
+                        contentDescription = title,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(space.lg)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { close() },
+                                    onDoubleTap = {
+                                        if (scale > 1f) {
+                                            scale = 1f
+                                            offset = Offset.Zero
+                                        } else {
+                                            scale = 2.5f
+                                        }
+                                    },
+                                )
+                            }
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    offset = if (scale > 1f) offset + pan else Offset.Zero
+                                }
+                            }
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offset.x
+                                translationY = offset.y
+                            },
+                    )
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = statusTop + space.xs, end = space.sm),
+                    ) {
+                        CircleAction(Icons.Rounded.SaveAlt, "Save to gallery", onSave)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(top = statusTop + space.xs, start = space.sm),
+                    ) {
+                        CircleAction(Icons.Rounded.Close, "Close", close)
+                    }
+                }
             }
         }
     }
@@ -168,20 +202,12 @@ internal fun CoverViewerDialog(
 
 @Composable
 private fun CircleAction(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.16f))
-            .yomuPressable(onClick = onClick, pressedScale = 1f),
-        contentAlignment = Alignment.Center,
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        shapes = IconButtonDefaults.shapes(),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = Color.White,
-            modifier = Modifier.size(20.dp),
-        )
+        Icon(imageVector = icon, contentDescription = description)
     }
 }
 

@@ -79,11 +79,14 @@ fun YomuSettingRow(
     leadingContent: (@Composable () -> Unit)? = null,
     position: YomuSettingPosition? = null,
     role: Role = Role.Button,
+    // Destructive actions carry the error role on their title.
+    destructive: Boolean = false,
     trailing: @Composable () -> Unit,
 ) {
     val headline: @Composable () -> Unit = {
         Text(
             text = title,
+            color = if (destructive) MaterialTheme.colorScheme.error else Color.Unspecified,
             style = if (selected) {
                 MaterialTheme.typography.bodyLargeEmphasized
             } else {

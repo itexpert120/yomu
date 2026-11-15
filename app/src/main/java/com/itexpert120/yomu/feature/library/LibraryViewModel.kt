@@ -208,7 +208,6 @@ class LibraryViewModel @Inject constructor(
             viewMode = prefs.viewMode,
             portraitGridColumns = prefs.portraitGridColumns,
             landscapeGridColumns = prefs.landscapeGridColumns,
-            coverCrop = prefs.coverCrop,
             searchActive = search.active,
             searchQuery = search.query,
             isImporting = import.isImporting,

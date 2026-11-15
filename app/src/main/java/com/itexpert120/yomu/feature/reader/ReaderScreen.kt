@@ -9,18 +9,14 @@ import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -29,10 +25,13 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,8 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
@@ -65,7 +62,13 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
+import com.itexpert120.yomu.core.designsystem.YomuBadgeTone
 import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
+import com.itexpert120.yomu.core.designsystem.YomuEmptyState
+import com.itexpert120.yomu.core.designsystem.YomuLoadingIndicator
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
@@ -132,13 +135,17 @@ fun ReaderScreen(
     onAcceptSyncOffer: () -> Unit = {},
     onDismissSyncOffer: () -> Unit = {},
 ) {
-    if (state.experience.settingsError != null) {
-        SaveFailureNotice(state.experience.settingsError, onRetrySettings)
-    } else if (state.experience.annotationError != null) {
-        SaveFailureNotice(state.experience.annotationError, onRetryAnnotations)
-    } else {
-        SyncOfferNotice(state.experience.syncOffer, onAcceptSyncOffer, onDismissSyncOffer)
-    }
+    // One notice at a time, in priority order. Each stays composed (with a null value) so it can
+    // play its exit instead of being cut when another branch takes over.
+    val settingsError = state.experience.settingsError
+    val annotationError = state.experience.annotationError.takeIf { settingsError == null }
+    SaveFailureNotice(settingsError, onRetrySettings)
+    SaveFailureNotice(annotationError, onRetryAnnotations)
+    SyncOfferNotice(
+        offer = state.experience.syncOffer.takeIf { settingsError == null && annotationError == null },
+        onJump = onAcceptSyncOffer,
+        onDismiss = onDismissSyncOffer,
+    )
     val view = LocalView.current
     val reading = state.experience
     val readyMarker = (reading.renderState as? ReaderRenderState.Ready)?.takeUnless { reading.loading }
@@ -302,7 +309,7 @@ fun ReaderScreen(
         if (reading.settings.layout == ReaderLayout.Scroll && reading.settings.showFooter) {
             // Just enough breathing room so the last line doesn't sit tight under the footer; the footer
             // height itself is already reserved below.
-            4.dp
+            YomuTheme.space.xxs
         } else {
             0.dp
         }
@@ -331,11 +338,13 @@ fun ReaderScreen(
             immersive -> 0.dp
             else -> baseBottomInset
         },
+        animationSpec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.defaultSpatialSpec() else snap(),
         label = "readerBottomInset",
     )
 
     val background = Color(reading.settings.backgroundArgb)
     val onBackground = Color(reading.settings.textArgb)
+    val mutedOnBackground = Color(reading.settings.colorPalette.secondaryTextArgb)
 
     // Page reveal: the new chapter fades in on an effects spring while travelling a short distance
     // in its reading direction on a spatial spring — rising into place going forward, settling down
@@ -344,6 +353,7 @@ fun ReaderScreen(
     val revealShift = remember { Animatable(0f) }
     val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val fastEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     LaunchedEffect(reading.renderState) {
         when (val render = reading.renderState) {
             is ReaderRenderState.Transitioning -> {
@@ -371,7 +381,7 @@ fun ReaderScreen(
     // Session creation changes which layer owns the opening scrim. Keep the indicator as movable
     // content so Compose transfers its animation state instead of disposing and restarting it.
     val openingContent = remember {
-        movableContentOf<Modifier> { modifier -> ReaderOpening(modifier) }
+        movableContentOf<Modifier, Color> { modifier, color -> ReaderOpening(color, modifier) }
     }
 
     Box(
@@ -392,7 +402,8 @@ fun ReaderScreen(
                     immersive = immersive,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = topInset, bottom = bottomInset)
+                        // The spatial spring may overshoot below zero; padding must not.
+                        .padding(top = topInset, bottom = bottomInset.coerceAtLeast(0.dp))
                         .graphicsLayer {
                             alpha = reveal.value
                             translationY = revealShift.value * revealTravelPx
@@ -407,7 +418,7 @@ fun ReaderScreen(
                             .matchParentSize()
                             .background(background),
                     ) {
-                        openingContent(Modifier.align(Alignment.Center))
+                        openingContent(Modifier.align(Alignment.Center), mutedOnBackground)
                     }
                 }
 
@@ -451,14 +462,24 @@ fun ReaderScreen(
                     if (reading.settings.showFooter) {
                         // Keep the footer composed even while hidden so its measured height is always known —
                         // the controls bar can anchor above it on the first immersive reveal, and the EPUB
-                        // page can reserve it in non-immersive mode. Animate alpha + a slide off its own edge.
+                        // page can reserve it in non-immersive mode. It moves with the same motion as the
+                        // top bar and toolbar (yomuChromeEnter/Exit): an effects fade plus a spatial slide of
+                        // a third of its height off its own edge, both read in the layer block only.
+                        val animateFooter = yomuAnimationsEnabled()
+                        val footerFadeSpec: AnimationSpec<Float> = when {
+                            !animateFooter -> snap()
+                            chromeShown -> effectsSpec
+                            else -> fastEffectsSpec
+                        }
+                        val footerSlideSpec: AnimationSpec<Float> = if (animateFooter) spatialSpec else snap()
                         val footerAlpha by animateFloatAsState(
                             targetValue = if (chromeShown) 1f else 0f,
+                            animationSpec = footerFadeSpec,
                             label = "readerFooterAlpha",
                         )
                         val footerSlidePx by animateFloatAsState(
                             targetValue = if (chromeShown) 0f else footerPx / 3f,
-                            animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
+                            animationSpec = footerSlideSpec,
                             label = "readerFooterSlide",
                         )
                         ReaderFooter(
@@ -471,7 +492,7 @@ fun ReaderScreen(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .graphicsLayer {
-                                    alpha = footerAlpha
+                                    alpha = footerAlpha.coerceIn(0f, 1f)
                                     translationY = footerSlidePx
                                 },
                         )
@@ -542,6 +563,7 @@ fun ReaderScreen(
 
                     ReaderBrowseSheet(
                         tab = state.browseTab,
+                        bookTitle = reading.title,
                         toc = reading.tableOfContents,
                         tocLoading = reading.tocLoading,
                         currentHref = reading.currentHref,
@@ -589,7 +611,7 @@ fun ReaderScreen(
                 }
             }
 
-            else -> openingContent(Modifier.align(Alignment.Center))
+            else -> openingContent(Modifier.align(Alignment.Center), mutedOnBackground)
         }
     }
 }
@@ -600,65 +622,56 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+/** The opening state: the shared morphing indicator, captioned in the reading theme's muted ink. */
 @Composable
-private fun ReaderOpening(modifier: Modifier = Modifier) {
+private fun ReaderOpening(captionColor: Color, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
     ) {
-        ReaderOpeningSpinner()
-        Text(text = "Opening…", color = YomuTheme.colors.textMuted, style = YomuTheme.type.body)
+        YomuLoadingIndicator()
+        Text(text = "Opening…", color = captionColor, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
+/**
+ * The book could not be opened. The page behind is in the reading theme, so the message sits on
+ * its own app-themed surface to keep the shared empty-state colours legible on any page colour.
+ */
 @Composable
-private fun ReaderOpeningSpinner() {
-    val rotation by rememberInfiniteTransition(label = "readerOpeningTransition").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-        ),
-        label = "readerOpeningRotation",
-    )
-    val color = YomuTheme.colors.accent
-    Canvas(
-        modifier = Modifier
-            .size(24.dp)
-            .graphicsLayer { rotationZ = rotation },
-    ) {
-        drawArc(
-            color = color,
-            startAngle = -90f,
-            sweepAngle = 105f,
-            useCenter = false,
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
-        )
-    }
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.BoxScope.ReaderFailure(
+private fun BoxScope.ReaderFailure(
     onBack: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    Column(
+    Surface(
         modifier = Modifier
             .align(Alignment.Center)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(YomuTheme.space.lg)
+            .widthIn(max = ReaderFailureMaxWidth),
+        shape = YomuShapeTokens.hero,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Text(
-            text = "This book couldn't be opened.",
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.body,
+        YomuEmptyState(
+            icon = Icons.Rounded.ErrorOutline,
+            title = "This book couldn't be opened",
+            body = "The file may have moved or be damaged. Try again, or head back to your library.",
+            shape = YomuBadgeShape.Burst,
+            tone = YomuBadgeTone.Error,
+            actions = {
+                YomuButton(text = "Try again", onClick = onRetry)
+                YomuButton(
+                    text = "Back to library",
+                    onClick = onBack,
+                    emphasis = YomuButtonEmphasis.Secondary,
+                )
+            },
         )
-        YomuButton(text = "Try again", onClick = onRetry)
-        YomuButton(text = "Back to library", onClick = onBack)
     }
 }
+
+private val ReaderFailureMaxWidth = 420.dp
 
 /** How far a newly revealed chapter travels into place. */
 private val ChapterRevealTravel = 40.dp

@@ -2,23 +2,21 @@ package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -28,16 +26,23 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuEmptyState
+import com.itexpert120.yomu.core.designsystem.YomuLoadingState
+import com.itexpert120.yomu.core.designsystem.YomuNotice
+import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
+import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
+import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
+
+/** Space the Search sheet needs around its results: drag handle, header, field, count, insets. */
+private val SearchSheetReservedHeight = 288.dp
 
 @Composable
 internal fun ReaderSearchSheet(
@@ -57,18 +62,14 @@ internal fun ReaderSearchSheet(
         onDismiss = onDismiss,
         scrollable = false,
         minHeight = 360.dp,
-    ) { _ ->
+    ) { dismiss ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 280.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
-            Text(
-                text = "Search in book",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-            )
+            YomuSheetHeader(title = "Search in book", onClose = dismiss)
             val focusManager = LocalFocusManager.current
             val focusRequester = remember { FocusRequester() }
             // Opening search means the user wants to type: focus the field (unless results are
@@ -87,19 +88,28 @@ internal fun ReaderSearchSheet(
                 },
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             )
-            Column(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+            Column(
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            ) {
                 when {
-                    searchInProgress -> SearchMessage("Searching…", showProgress = true)
-                    searchError != null -> Text(
-                        text = searchError,
-                        color = YomuTheme.colors.danger,
-                        style = YomuTheme.type.caption,
+                    searchInProgress -> YomuLoadingState(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = YomuTheme.space.md),
+                        message = "Searching…",
                     )
 
-                    searchPerformed && searchResults.isEmpty() -> Text(
-                        text = "No results",
-                        color = YomuTheme.colors.textMuted,
-                        style = YomuTheme.type.caption,
+                    searchError != null -> YomuNotice(
+                        text = searchError,
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Rounded.ErrorOutline,
+                        tone = YomuNoticeTone.Error,
+                    )
+
+                    searchPerformed && searchResults.isEmpty() -> YomuEmptyState(
+                        icon = Icons.Rounded.SearchOff,
+                        title = "No results",
+                        body = "Try a different word or a shorter phrase.",
+                        compact = true,
                     )
 
                     searchResults.isNotEmpty() -> {
@@ -109,19 +119,22 @@ internal fun ReaderSearchSheet(
                             } else {
                                 "${searchResults.size} ${if (searchResults.size == 1) "match" else "matches"}"
                             },
-                            color = YomuTheme.colors.textMuted,
-                            style = YomuTheme.type.caption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = YomuTheme.space.xxs),
                         )
+                        val accent = MaterialTheme.colorScheme.primary
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 420.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                .heightIn(max = readerSheetListMaxHeight(SearchSheetReservedHeight)),
+                            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
                         ) {
-                            itemsIndexed(searchResults) { _, result ->
+                            itemsIndexed(searchResults) { index, result ->
                                 SearchResultRow(
                                     result = result,
-                                    accent = YomuTheme.colors.accent,
+                                    accent = accent,
+                                    position = yomuSettingPosition(index, searchResults.size),
                                     onClick = { onJumpToSearchResult(result.locatorJson) },
                                 )
                             }
@@ -133,57 +146,29 @@ internal fun ReaderSearchSheet(
     }
 }
 
-@Composable
-private fun SearchMessage(text: String, showProgress: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (showProgress) {
-            CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
-        }
-        Text(text = text, color = YomuTheme.colors.textMuted, style = YomuTheme.type.caption)
-    }
-}
-
-/** A single in-book search match with chapter and highlighted context. */
+/** A single in-book search match: the highlighted context, with its chapter as supporting text. */
 @Composable
 internal fun SearchResultRow(
     result: ReaderSearchResult,
     accent: Color,
     onClick: () -> Unit,
+    position: YomuSettingPosition = YomuSettingPosition.Single,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .yomuPressable(onClick = onClick, pressedScale = 1f)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        result.chapterTitle?.takeIf { it.isNotBlank() }?.let { chapter ->
-            Text(
-                text = chapter,
-                color = YomuTheme.colors.textMuted,
-                style = YomuTheme.type.caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+    val matchWeight = MaterialTheme.typography.bodyLargeEmphasized.fontWeight
+    val context = remember(result, accent, matchWeight) {
+        buildAnnotatedString {
+            // Trim long context so the match stays visible within two lines.
+            append(result.before.takeLast(48))
+            withStyle(SpanStyle(color = accent, fontWeight = matchWeight)) {
+                append(result.match)
+            }
+            append(result.after.take(64))
         }
-        Text(
-            text = buildAnnotatedString {
-                // Trim long context so the match stays visible within two lines.
-                append(result.before.takeLast(48))
-                withStyle(SpanStyle(color = accent, fontWeight = FontWeight.SemiBold)) {
-                    append(result.match)
-                }
-                append(result.after.take(64))
-            },
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.caption,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
+    ReaderBrowseRow(
+        title = context,
+        onClick = onClick,
+        position = position,
+        supporting = result.chapterTitle?.takeIf { it.isNotBlank() },
+    )
 }

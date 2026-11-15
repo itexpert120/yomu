@@ -1,7 +1,10 @@
 package com.itexpert120.yomu.feature.sync
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.compose.CameraXViewfinder
@@ -14,14 +17,15 @@ import androidx.camera.lifecycle.awaitInstance
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.NoPhotography
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,13 +37,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -48,6 +56,12 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
+import com.itexpert120.yomu.core.designsystem.YomuEmptyState
+import com.itexpert120.yomu.core.designsystem.YomuLoadingState
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import kotlinx.coroutines.awaitCancellation
 
 /**
@@ -68,9 +82,10 @@ internal fun SyncQrCode(content: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .clip(MaterialTheme.shapes.large)
+            .clip(YomuShapeTokens.hero)
             .background(Color.White)
-            .padding(16.dp),
+            // Doubles as the quiet zone, and keeps the corner finders clear of the hero radius.
+            .padding(YomuTheme.space.lg),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val cell = size.width / matrix.width
@@ -99,31 +114,82 @@ internal fun SyncQrScanner(onScanned: (String) -> Unit, modifier: Modifier = Mod
         denied = !ok
     }
     LaunchedEffect(Unit) { if (!granted) permission.launch(Manifest.permission.CAMERA) }
+    // Coming back from system settings: pick up a permission granted there.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            granted = true
+            denied = false
+        }
+    }
 
+    val showDenied = denied && !granted
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(MaterialTheme.shapes.extraLarge)
+            // The denied message sizes to its content so large text never clips in the square.
+            .then(if (showDenied) Modifier else Modifier.aspectRatio(1f))
+            .clip(YomuShapeTokens.hero)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         when {
-            granted -> CameraQrPreview(onScanned)
-            denied -> Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(24.dp),
+            granted -> {
+                CameraQrPreview(onScanned)
+                ScanReticle(Modifier.fillMaxSize())
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(YomuTheme.space.md),
+                    shape = YomuShapeTokens.pill,
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                ) {
+                    Text(
+                        text = "Point the camera at the code on your other device",
+                        modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xxs),
+                        style = MaterialTheme.typography.labelMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            showDenied -> YomuEmptyState(
+                icon = Icons.Rounded.NoPhotography,
+                title = "Camera access is off",
+                body = "Allow camera access in system settings to scan, or type the words instead.",
+                compact = true,
             ) {
-                Text("Camera access is off", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Allow camera access in system settings to scan, or type the words instead.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
+                YomuButton(
+                    text = "Open settings",
+                    onClick = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    },
+                    emphasis = YomuButtonEmphasis.Secondary,
                 )
             }
+
+            else -> YomuLoadingState(message = "Waiting for camera access…")
         }
+    }
+}
+
+/** A rounded frame that shows where to place the code. White, since it sits on the camera image. */
+@Composable
+private fun ScanReticle(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val side = size.minDimension * 0.62f
+        drawRoundRect(
+            color = Color.White,
+            topLeft = Offset((size.width - side) / 2f, (size.height - side) / 2f),
+            size = Size(side, side),
+            cornerRadius = CornerRadius(24.dp.toPx()),
+            style = Stroke(width = 3.dp.toPx()),
+        )
     }
 }
 

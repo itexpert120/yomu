@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,11 +38,11 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 
 /** Keep app chrome stationary while the outgoing reader still hides the system bars. */
@@ -56,19 +57,17 @@ fun YomuScreenHeader(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    // Extra inset on each side so the title lines up with width-capped, centred content below.
+    contentGutter: Dp = 0.dp,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     LargeFlexibleTopAppBar(
-        windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
+        windowInsets = yomuStableSystemBarInsets()
+            .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
+            .add(WindowInsets(left = contentGutter, right = contentGutter)),
         scrollBehavior = scrollBehavior,
         modifier = modifier.zIndex(1f),
-        title = {
-            Text(
-                text = title,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
+        title = { YomuScreenTitle(title) },
         subtitle = subtitle?.let { text ->
             {
                 Text(
@@ -88,6 +87,22 @@ fun YomuScreenHeader(
             containerColor = MaterialTheme.colorScheme.background,
             scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
+    )
+}
+
+/**
+ * The Yomu screen title: every top-level and detail screen sets its app-bar title in the same
+ * emphasized weight with slightly tightened tracking, at whatever size the bar is interpolating.
+ */
+@Composable
+fun YomuScreenTitle(text: String, modifier: Modifier = Modifier, maxLines: Int = 2) {
+    Text(
+        text = text,
+        modifier = modifier,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.2).sp,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -121,17 +136,19 @@ fun YomuScreenScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
-    val windowMargin = YomuWidthClass.fromWidth(
-        with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() },
-    ).margin
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     YomuAppSurface(modifier = modifier) {
+        // Measured (not window) width, so a navigation rail beside this screen is accounted for.
+        val windowMargin = YomuWidthClass.fromWidth(maxWidth).margin
+        // The bar's own title inset is 16dp; shift it to the centred column's leading edge.
+        val headerGutter = ((maxWidth - maxContentWidth) / 2 - 16.dp).coerceAtLeast(windowMargin - 16.dp)
         Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
             YomuScreenHeader(
                 title = title,
                 onBack = onBack,
                 subtitle = subtitle,
                 scrollBehavior = scrollBehavior,
+                contentGutter = headerGutter,
                 trailing = trailing,
             )
             Column(
@@ -162,7 +179,7 @@ fun YomuScreenScaffold(
                         // nav bar, so this collapses instead of double-padding.
                         .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility.only(WindowInsetsSides.Bottom))
                         .padding(top = YomuTheme.space.xxs, bottom = YomuTheme.space.lg),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
                     content = content,
                 )
             }

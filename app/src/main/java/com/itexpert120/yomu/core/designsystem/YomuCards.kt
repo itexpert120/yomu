@@ -111,23 +111,7 @@ fun YomuSettingGroup(
 ) {
     val body: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
-            Column(
-                modifier = Modifier.padding(horizontal = YomuTheme.space.xxs),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = title,
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+            YomuSectionHeader(title = title, subtitle = subtitle)
             Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm), content = content)
         }
     }

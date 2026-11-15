@@ -1,27 +1,13 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuPressable
+import androidx.compose.ui.text.AnnotatedString
+import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 
 /** A single bookmark row (jump on tap, delete on the trailing button). Used by the Browse sheet. */
@@ -30,51 +16,23 @@ internal fun BookmarkRow(
     bookmark: ReaderBookmark,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    position: YomuSettingPosition = YomuSettingPosition.Single,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .yomuPressable(onClick = onClick, pressedScale = 1f)
-            .padding(vertical = 8.dp, horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            Icons.Rounded.Bookmark,
-            contentDescription = null,
-            tint = YomuTheme.colors.accent,
-            modifier = Modifier.size(16.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = bookmark.chapterTitle?.takeIf { it.isNotBlank() } ?: "Bookmark",
-                color = YomuTheme.colors.textPrimary,
-                style = YomuTheme.type.caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            bookmark.progression?.let { progression ->
-                Text(
-                    text = "${(progression * 100).toInt()}%",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
-                )
-            }
-        }
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .yomuPressable(onClick = onDelete, pressedScale = 1f),
-            contentAlignment = Alignment.Center,
-        ) {
+    ReaderBrowseRow(
+        title = AnnotatedString(bookmark.chapterTitle?.takeIf { it.isNotBlank() } ?: "Bookmark"),
+        onClick = onClick,
+        position = position,
+        supporting = bookmark.progression?.let { "${(it * 100).toInt()}%" },
+        titleMaxLines = 1,
+        leading = {
             Icon(
-                Icons.Rounded.Delete,
-                contentDescription = "Delete",
-                tint = YomuTheme.colors.textMuted,
-                modifier = Modifier.size(18.dp),
+                imageVector = Icons.Rounded.Bookmark,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
             )
-        }
-    }
+        },
+        trailingIcon = Icons.Rounded.Delete,
+        trailingDescription = "Delete bookmark",
+        onTrailingClick = onDelete,
+    )
 }

@@ -1,11 +1,14 @@
 package com.itexpert120.yomu.feature.library
 
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -18,40 +21,49 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
+import com.itexpert120.yomu.core.designsystem.YomuProgressBar
+import com.itexpert120.yomu.core.designsystem.YomuSectionHeader
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import java.io.File
+
+/*
+ * One selection language for every library view mode: the cover settles slightly smaller under a
+ * single primary tint with one check badge, and a card that has a container moves it to
+ * secondaryContainer. No borders, no elevation; corners come from YomuShapeTokens.
+ */
 
 @Composable
 fun GridBookCard(
@@ -61,65 +73,34 @@ fun GridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val selection = rememberCoverSelection(selected)
-    Card(
+    val container = rememberCardContainer(selected)
+    Column(
         modifier = modifier
-            .graphicsLayer {
-                scaleX = selection.scale
-                scaleY = selection.scale
-            }
-            .yomuPressable(onClick = onClick, onLongClick = onLongPress),
-        shape = selection.shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-        ),
-        border = if (selected) {
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        },
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            .clip(YomuShapeTokens.tile)
+            .drawBehind { drawRect(container.value) }
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
+            .semantics { this.selected = selected }
+            .padding(YomuTheme.space.xs),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        SelectableCover(book = book, selected = selected, modifier = Modifier.fillMaxWidth())
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Two title lines, so rows of cards keep one height.
+                .height(42.dp)
+                .padding(horizontal = YomuTheme.space.xxs),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                BookCoverImage(
-                    book = book,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                SelectionMarker(selected)
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-                    .padding(horizontal = 2.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
-            ) {
-                LibraryProgressIndicator(
-                    progress = book.progress,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+            Text(
+                text = book.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+        YomuProgressBar(progress = book.progress)
     }
 }
 
@@ -132,23 +113,22 @@ fun CompactGridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val selection = rememberCoverSelection(selected)
-    Box(
+    SelectableCover(
+        book = book,
+        selected = selected,
         modifier = modifier
-            .graphicsLayer {
-                scaleX = selection.scale
-                scaleY = selection.scale
-            }
-            .clip(selection.shape)
+            .clip(YomuShapeTokens.cover)
             .yomuPressable(onClick = onClick, onLongClick = onLongPress)
-            .semantics { contentDescription = book.title },
+            .semantics {
+                contentDescription = book.title
+                this.selected = selected
+            },
     ) {
-        BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(72.dp)
+                .height(88.dp)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.86f)),
@@ -156,26 +136,22 @@ fun CompactGridBookCard(
                     ),
                 ),
         )
-        Text(
-            text = book.title,
-            color = Color.White,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(4.dp),
+                .padding(YomuTheme.space.xs),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
-            LibraryProgressIndicator(book.progress, Modifier.fillMaxSize())
+            Text(
+                text = book.title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            YomuProgressBar(progress = book.progress)
         }
-        SelectionMarker(selected)
     }
 }
 
@@ -188,27 +164,23 @@ fun CoverOnlyGridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val selection = rememberCoverSelection(selected)
-    Box(
+    SelectableCover(
+        book = book,
+        selected = selected,
         modifier = modifier
-            .graphicsLayer {
-                scaleX = selection.scale
-                scaleY = selection.scale
-            }
-            .clip(selection.shape)
+            .clip(YomuShapeTokens.cover)
             .yomuPressable(onClick = onClick, onLongClick = onLongPress)
-            .semantics { contentDescription = book.title },
+            .semantics {
+                contentDescription = book.title
+                this.selected = selected
+            },
     ) {
-        BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
-        Box(
+        YomuProgressBar(
+            progress = book.progress,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(4.dp),
-        ) {
-            LibraryProgressIndicator(book.progress, Modifier.fillMaxSize())
-        }
-        SelectionMarker(selected)
+                .padding(YomuTheme.space.xs),
+        )
     }
 }
 
@@ -220,144 +192,124 @@ fun BookListRow(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val selection = rememberCoverSelection(selected)
-    Card(
+    val container = rememberCardContainer(selected)
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .yomuPressable(onClick = onClick, onLongClick = onLongPress),
-        shape = selection.shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-        ),
-        border = if (selected) {
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        },
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            .clip(YomuShapeTokens.tile)
+            .drawBehind { drawRect(container.value) }
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
+            .semantics { this.selected = selected }
+            .padding(YomuTheme.space.sm),
+        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        ListItem(
-            modifier = Modifier.fillMaxWidth(),
-            leadingContent = {
-                BookCoverImage(
-                    book = book,
-                    modifier = Modifier.width(56.dp),
-                )
-            },
-            headlineContent = {
-                Text(
-                    text = book.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            supportingContent = {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(
-                        text = book.author,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    LibraryProgressIndicator(
-                        progress = book.progress,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            trailingContent = {
-                if (selected) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = "Selected",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
-                    val percent = (book.progress.coerceIn(0f, 1f) * 100).toInt()
-                    Text(
-                        text = "$percent%",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = Color.Transparent,
-            ),
-        )
-    }
-}
-
-@Composable
-internal fun BoxScope.SelectionMarker(selected: Boolean) {
-    if (!selected) return
-    val shape = MaterialTheme.shapes.medium
-    Box(
-        modifier = Modifier
-            .matchParentSize()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
-            .border(2.dp, MaterialTheme.colorScheme.primary, shape),
-    )
-    Box(
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(6.dp)
-            .size(22.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Check,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(14.dp),
-        )
-    }
-}
-
-@Composable
-fun ImportEmptyCard(onImport: () -> Unit) {
-    OutlinedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .yomuPressable(onClick = onImport),
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        SelectableCover(book = book, selected = selected, modifier = Modifier.width(56.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
         ) {
-            Icon(
-                imageVector = Icons.Rounded.Add,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+            Text(
+                text = book.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "Import EPUB",
-                style = MaterialTheme.typography.labelLarge,
+                text = book.author,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            YomuProgressBar(
+                progress = book.progress,
+                modifier = Modifier.padding(top = YomuTheme.space.xxs),
             )
         }
+        val percent = (book.progress.coerceIn(0f, 1f) * 100).toInt()
+        Text(
+            text = "$percent%",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }
 
 @Composable
 fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
-    Text(
-        text = title,
-        color = MaterialTheme.colorScheme.primary,
-        style = MaterialTheme.typography.titleMediumEmphasized,
-        modifier = modifier.padding(top = 8.dp),
-    )
+    YomuSectionHeader(title = title, modifier = modifier.padding(top = YomuTheme.space.xs))
+}
+
+/**
+ * A cover that carries the selection treatment. [overlay] draws on the cover (title scrim,
+ * progress) beneath the selection tint.
+ */
+@Composable
+private fun SelectableCover(
+    book: LibraryBook,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    overlay: @Composable BoxScope.() -> Unit = {},
+) {
+    val scale = rememberCoverScale(selected)
+    Box(
+        modifier = modifier
+            // Read in the draw phase, so settling the cover never recomposes the card.
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
+            .clip(YomuShapeTokens.cover),
+    ) {
+        BookCoverImage(book = book, modifier = Modifier.fillMaxWidth())
+        overlay()
+        SelectionMark(selected)
+    }
+}
+
+@Composable
+private fun BoxScope.SelectionMark(selected: Boolean) {
+    val animate = yomuAnimationsEnabled()
+    AnimatedVisibility(
+        visible = selected,
+        modifier = Modifier.matchParentSize(),
+        enter = if (animate) fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) else EnterTransition.None,
+        exit = if (animate) fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) else ExitTransition.None,
+    ) {
+        // Flip after the first frame so the badge morphs circle → scallop as it appears.
+        var settled by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { settled = true }
+        val badgeShape = rememberSelectionMorphShape(
+            selected = settled,
+            unselected = MaterialShapes.Circle,
+            selectedPolygon = MaterialShapes.Cookie9Sided,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                // Scrim over the cover image, so the tint is an alpha of the primary role.
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(YomuTheme.space.xxs)
+                    .size(24.dp)
+                    .clip(badgeShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -367,8 +319,8 @@ internal fun BookCoverImage(
 ) {
     Box(
         modifier = modifier
-            .aspectRatio(1f / 1.55f)
-            .clip(MaterialTheme.shapes.medium)
+            .aspectRatio(YomuBookCoverAspectRatio)
+            .clip(YomuShapeTokens.cover)
             .background(Brush.verticalGradient(book.coverColors)),
     ) {
         // Real extracted cover when available; otherwise the generated gradient + title placeholder.
@@ -383,7 +335,7 @@ internal fun BookCoverImage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(10.dp),
+                    .padding(YomuTheme.space.xs),
             ) {
                 Box(
                     modifier = Modifier
@@ -416,51 +368,22 @@ internal fun BookCoverImage(
     }
 }
 
-/** Shows a muted track for untouched books so every card exposes the same progress affordance. */
+/** Selected covers settle slightly smaller on the fast spatial spring. */
 @Composable
-internal fun LibraryProgressIndicator(
-    progress: Float,
-    modifier: Modifier = Modifier,
-) {
-    val fraction = progress.coerceIn(0f, 1f)
-    LinearProgressIndicator(
-        progress = { fraction },
-        color = if (fraction > 0f) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
-        },
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-        strokeCap = StrokeCap.Round,
-        gapSize = 0.dp,
-        drawStopIndicator = {},
-        modifier = modifier,
-    )
-}
+private fun rememberCoverScale(selected: Boolean): State<Float> = animateFloatAsState(
+    targetValue = if (selected) 0.92f else 1f,
+    animationSpec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.fastSpatialSpec() else snap(),
+    label = "coverScale",
+)
 
+/** Card container on the tonal ladder; selection moves it to secondaryContainer. */
 @Composable
-fun ProgressLine(progress: Float) {
-    LibraryProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
-}
-
-private class CoverSelection(val shape: Shape, val scale: Float)
-
-/**
- * Selection as shape + size: a selected cover rounds its corners and settles slightly smaller on
- * the expressive spatial spring, so selection reads from shape, not colour alone.
- */
-@Composable
-private fun rememberCoverSelection(selected: Boolean): CoverSelection {
-    val animate = yomuAnimationsEnabled()
-    val corner by animateDpAsState(
-        targetValue = if (selected) 28.dp else 16.dp,
-        animationSpec = if (animate) MaterialTheme.motionScheme.fastSpatialSpec() else snap(),
-        label = "coverCorner",
-    )
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 0.94f else 1f,
-        animationSpec = if (animate) MaterialTheme.motionScheme.fastSpatialSpec() else snap(),
-        label = "coverScale",
-    )
-    return CoverSelection(RoundedCornerShape(corner), scale)
-}
+private fun rememberCardContainer(selected: Boolean): State<Color> = animateColorAsState(
+    targetValue = if (selected) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    },
+    animationSpec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.fastEffectsSpec() else snap(),
+    label = "cardContainer",
+)

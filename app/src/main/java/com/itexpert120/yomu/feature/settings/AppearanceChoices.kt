@@ -24,14 +24,12 @@ import androidx.compose.material.icons.rounded.Colorize
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Wallpaper
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
@@ -63,6 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuColorPicker
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
+import com.itexpert120.yomu.core.designsystem.YomuDialog
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.designsystem.yomuSeededColorScheme
@@ -123,8 +124,8 @@ internal fun ColorThemePicker(
 
     FlowRow(
         modifier = Modifier.fillMaxWidth().selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
     ) {
         if (wallpaperAvailable) {
             val scheme = remember(dark) {
@@ -227,22 +228,7 @@ private fun ColorSwatch(
                     )
                 }
             } else {
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.sweepGradient(
-                            listOf(
-                                Color(0xFFE8674A),
-                                Color(0xFFE0A030),
-                                Color(0xFF3B7D2E),
-                                Color(0xFF00897B),
-                                Color(0xFF1F6FEB),
-                                Color(0xFF6750A4),
-                                Color(0xFFD1487A),
-                                Color(0xFFE8674A),
-                            ),
-                        ),
-                    ),
-                )
+                Box(Modifier.fillMaxSize().background(Brush.sweepGradient(CustomSwatchSweep)))
             }
             val centerIcon = if (selected) Icons.Rounded.Check else badge
             if (centerIcon != null) {
@@ -268,7 +254,7 @@ private fun ColorSwatch(
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
+            modifier = Modifier.padding(top = YomuTheme.space.xxs),
         )
     }
 }
@@ -280,31 +266,33 @@ private fun CustomSeedDialog(
     onApply: (Color) -> Unit,
 ) {
     var color by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Rounded.Colorize, contentDescription = null) },
-        title = { Text("Custom colour") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    "Pick a seed. Open Reader builds a full light and dark palette from it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                YomuColorPicker(color = color, onColorChange = { color = it })
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .clip(MaterialTheme.shapes.large)
-                        .background(color),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onApply(color) }, shapes = ButtonDefaults.shapes()) { Text("Apply") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) { Text("Cancel") }
-        },
-    )
+    YomuDialog(
+        title = "Custom colour",
+        confirmLabel = "Apply",
+        onConfirm = { onApply(color) },
+        onDismiss = onDismiss,
+        text = "Pick a seed. Open Reader builds a full light and dark palette from it.",
+        icon = Icons.Rounded.Colorize,
+    ) {
+        YomuColorPicker(color = color, onColorChange = { color = it })
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clip(YomuShapeTokens.tile)
+                .background(color),
+        )
+    }
 }
+
+// The "pick anything" rainbow shown on the Custom swatch before a seed is chosen.
+private val CustomSwatchSweep = listOf(
+    Color(0xFFE8674A),
+    Color(0xFFE0A030),
+    Color(0xFF3B7D2E),
+    Color(0xFF00897B),
+    Color(0xFF1F6FEB),
+    Color(0xFF6750A4),
+    Color(0xFFD1487A),
+    Color(0xFFE8674A),
+)

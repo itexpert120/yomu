@@ -2,8 +2,7 @@ package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -49,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -71,18 +68,20 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTextField
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
-import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
-import com.itexpert120.yomu.core.reader.ReaderTocItem
 import java.io.File
 import kotlin.math.round
 import kotlin.math.roundToInt
@@ -112,14 +111,21 @@ internal fun ReaderControlsSheet(
         visible = visible,
         onDismiss = onDismiss,
         showScrollEdgeShadow = false,
-    ) { _ ->
+    ) { dismiss ->
         Column(
             // Animate the height as tab content of differing size swaps in.
             modifier = Modifier
                 .fillMaxWidth()
-                .animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .animateContentSize(
+                    if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.defaultSpatialSpec() else snap(),
+                ),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
+            YomuSheetHeader(
+                title = "Reading settings",
+                subtitle = state.experience.title.takeIf { it.isNotBlank() },
+                onClose = dismiss,
+            )
             YomuConnectedChoiceGroup(
                 options = SheetTab.entries,
                 selected = tab,
@@ -203,12 +209,12 @@ private fun ControlsTab(
     } else {
         currentChapterIndex.toFloat() / chapters.lastIndex
     }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
         YomuSectionLabel("Chapter")
         YomuSettingContainer(dense = true) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
                 RoundIcon(
                     Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
@@ -262,7 +268,7 @@ private fun ControlsTab(
                 YomuSettingContainer(position = YomuSettingPosition.Middle, dense = true) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
                     ) {
                         Icon(Icons.Rounded.BrightnessLow, contentDescription = null)
                         ReaderSlider(
@@ -321,7 +327,7 @@ private fun DisplayTab(
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
 ) {
     val s = state.experience.settings
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
         YomuSectionLabel("Theme · this book")
         ReaderThemeRow(s, onUpdateSettings, compact = true)
         if (s.theme == ReaderThemeMode.Custom) {
@@ -343,7 +349,7 @@ private fun DisplayTab(
         OutlinedButton(
             onClick = onResetSettings,
             shapes = ButtonDefaults.shapes(),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = YomuTheme.space.xs),
         ) {
             Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
             Spacer(Modifier.width(ButtonDefaults.IconSpacing))
@@ -389,7 +395,7 @@ internal fun AutoSlider(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
             RoundIcon(Icons.Rounded.Remove, "Decrease $label", compact = compact) { onChange(snap(current - step)) }
             ReaderSlider(
@@ -428,20 +434,15 @@ internal fun CustomThemeSheet(
         name = ""
         focusManager.clearFocus()
     }
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { _ ->
+    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { dismiss ->
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
-            Text(
-                text = "Custom theme",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-            )
-            Text(
-                text = "Changes apply to the page as you edit.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
+            YomuSheetHeader(
+                title = "Custom theme",
+                subtitle = "Changes apply to the page as you edit.",
+                onClose = dismiss,
             )
 
             YomuSectionLabel("Background colour")
@@ -477,7 +478,7 @@ internal fun CustomThemeSheet(
             YomuSectionLabel("Save as a palette")
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
                 YomuTextField(
                     value = name,
@@ -493,7 +494,7 @@ internal fun CustomThemeSheet(
                     onClick = ::save,
                     enabled = name.isNotBlank(),
                     shapes = ButtonDefaults.shapes(),
-                    modifier = Modifier.padding(top = 6.dp),
+                    modifier = Modifier.padding(top = YomuTheme.space.xs),
                 ) {
                     Text("Save")
                 }
@@ -506,6 +507,8 @@ internal fun CustomThemeSheet(
                         SavedThemeRow(
                             theme = theme,
                             position = yomuSettingPosition(index, customThemes.size),
+                            selected = settings.customBackground == theme.background &&
+                                settings.customText == theme.text,
                             onApply = { onApply(theme) },
                             onDelete = { onDelete(theme.id) },
                         )
@@ -520,58 +523,28 @@ internal fun CustomThemeSheet(
 private fun SavedThemeRow(
     theme: CustomReaderTheme,
     position: YomuSettingPosition,
+    selected: Boolean,
     onApply: () -> Unit,
     onDelete: () -> Unit,
 ) {
     YomuSettingRow(
         title = theme.name,
         position = position,
+        selected = selected,
         onClick = onApply,
         leadingContent = {
             // Preview: page colour with the text colour as an inner dot.
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color(theme.background))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(Color(theme.text)),
-                )
-            }
+            ReaderSwatch(
+                color = Color(theme.background),
+                innerColor = Color(theme.text),
+                selected = selected,
+                size = 32.dp,
+            )
         },
     ) {
         IconButton(onClick = onDelete, shapes = IconButtonDefaults.shapes()) {
             Icon(Icons.Rounded.Delete, contentDescription = "Delete ${theme.name}")
         }
-    }
-}
-
-@Composable
-internal fun TocSheetRow(item: ReaderTocItem, current: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(if (current) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .yomuPressable(onClick = onClick, pressedScale = 1f)
-            // Indent by TOC depth.
-            .padding(start = (12 + item.depth * 14).dp, top = 11.dp, bottom = 11.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = item.title,
-            color = if (current) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = if (current) MaterialTheme.typography.bodyLargeEmphasized else MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -617,7 +590,7 @@ private fun ReaderFontFilterChip(
         } else {
             null
         },
-        shape = MaterialTheme.shapes.large,
+        shape = YomuShapeTokens.pill,
         modifier = Modifier.heightIn(min = 40.dp),
     )
 }
@@ -629,7 +602,7 @@ internal fun AddFontChip(onClick: () -> Unit) {
         onClick = onClick,
         label = { Text("Add font") },
         leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
-        shape = MaterialTheme.shapes.large,
+        shape = YomuShapeTokens.pill,
         modifier = Modifier.heightIn(min = 40.dp),
     )
 }

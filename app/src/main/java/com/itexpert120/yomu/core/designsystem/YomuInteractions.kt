@@ -2,28 +2,27 @@
 
 package com.itexpert120.yomu.core.designsystem
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -50,28 +49,35 @@ fun Modifier.yomuPressable(
     val pressed by interaction.collectIsPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
     val motionEnabled = yomuAnimationsEnabled()
-    val scale by animateFloatAsState(
+    val scale = animateFloatAsState(
         targetValue = if (motionEnabled && pressed && enabled) pressedScale else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "yomuPressScale",
     )
     val haptics = LocalHapticFeedback.current
-    val focusColor = YomuTheme.colors.accent
+    val focusColor = MaterialTheme.colorScheme.primary
     val longClick: (() -> Unit)? = onLongClick?.let { action ->
         {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             action()
         }
     }
-    scale(scale)
+    // Read the animated scale inside the layer block: the press animates on the render path at the
+    // display's native refresh rate without recomposing or relaying out the pressed element.
+    graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
+    }
         .drawWithContent {
             drawContent()
             if (focused) {
                 val stroke = 2.dp.toPx()
-                drawRect(
+                val radius = 12.dp.toPx()
+                drawRoundRect(
                     color = focusColor,
                     topLeft = Offset(stroke / 2f, stroke / 2f),
                     size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(radius, radius),
                     style = Stroke(stroke),
                 )
             }
@@ -106,18 +112,22 @@ fun Modifier.yomuScrollEdgeShadow(
     bottom: Boolean = false,
     height: Dp = 20.dp,
 ): Modifier = composed {
-    val topAlpha by animateFloatAsState(
+    val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val topState = animateFloatAsState(
         targetValue = if (top) 1f else 0f,
-        animationSpec = if (yomuAnimationsEnabled()) tween() else snap(),
+        animationSpec = if (yomuAnimationsEnabled()) effects else snap(),
         label = "yomuScrollEdgeTop",
     )
-    val bottomAlpha by animateFloatAsState(
+    val bottomState = animateFloatAsState(
         targetValue = if (bottom) 1f else 0f,
-        animationSpec = if (yomuAnimationsEnabled()) tween() else snap(),
+        animationSpec = if (yomuAnimationsEnabled()) effects else snap(),
         label = "yomuScrollEdgeBottom",
     )
     drawWithContent {
         drawContent()
+        // Alphas are read in the draw phase only, so the fade never recomposes the scroll container.
+        val topAlpha = topState.value
+        val bottomAlpha = bottomState.value
         val h = height.toPx()
         if (h <= 0f) return@drawWithContent
         if (topAlpha > 0f) {

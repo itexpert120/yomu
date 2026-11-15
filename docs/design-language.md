@@ -45,6 +45,20 @@ Home uses Material ShortNavigationBar and WideNavigationRail with primary-contai
 
 Shared screen headers and Home navigation reserve system-bar insets regardless of bar visibility, including cutout clearance. Returning from the immersive reader therefore keeps the incoming Home layout stationary while Android restores the status and navigation bars.
 
+## The Yomu signature (2026-11 refinement pass)
+
+Yomu stays native Material 3 Expressive — system Roboto, Material roles, Material components — and gets its own look from a small set of decisions applied the same way on every screen, phone and tablet. They live in `core/designsystem/YomuSignature.kt`; feature code uses them instead of literal shapes, colours or ad hoc surfaces.
+
+- **Corner grammar** (`YomuShapeTokens`): `hero` (extra-large) for hero cards, contained panes and dialogs; segmented rows (large outer corners, tight seams) for grouped content; `tile` (large) for grid tiles and cards; `inset` (small) for inline tags and thumbnails; `pill` for chips, status and value readouts; `cover` for **every** book cover, always at `YomuBookCoverAspectRatio` (1:1.5).
+- **Tonal surface ladder** (`YomuCard` / `YomuCardTone`): page = `background`, group = `surfaceContainer` (the segmented-row tone), raised = `surfaceContainerHigh`, hero = `primaryContainer`, alternate hero = `tertiaryContainer`. Cards never use borders, shadows or elevation to separate themselves; only floating notices and the tablet dialog carry a shadow.
+- **Shape badges** (`YomuShapeBadge`, `YomuBadgeShape`): one small family of Material shape-library forms — Cookie (the primary Yomu mark), Scallop, Sunny (time/activity), Clover (neutral/empty), Burst (problems). They mark hero moments (empty library, Book Details cover backdrop, Stats total, About) and **every** empty, error and missing state through `YomuEmptyState`. Never behind running text. Selection marks on covers and colour swatches morph circle → cookie (`rememberSelectionMorphShape`).
+- **Headers**: one screen title treatment (`YomuScreenTitle`: emphasized weight, slightly tight tracking, aligned to the content column on wide screens), one page-level section header (`YomuSectionHeader`: primary, `titleMediumEmphasized`), the smaller `YomuSectionLabel` inside sheets, and one sheet header (`YomuSheetHeader`) on every bottom sheet.
+- **Messages**: `YomuNotice` (tonal strip; the `Floating` tone replaces stock snackbars) and `YomuDialog` (badge icon, emphasized title, press-morphing buttons, error-toned destructive confirm) replace stock `Snackbar`/`AlertDialog` everywhere.
+- **Sheets on tablets**: every `YomuBottomSheet` becomes a centred dialog (max 460dp) from 600dp width, on the same tonal surface as the phone sheet, materializing with `yomuPopupEnter/Exit` and showing a close button in its header.
+- **Motion personality**: geometry on the expressive spatial springs, opacity/colour on effects springs, no raw `tween`/`spring` in feature code. Presses scale on the fast spatial spring; tabs and panes swap directionally (`yomuContentSwap`); state handoffs fade through.
+- **Native refresh rate**: `MainActivity` calls `preferNativeRefreshRate()` so the window requests the display's fastest mode (90/120/144 Hz). Animations read their values in the draw/layout phase (`graphicsLayer { }`, `offset { }`, draw lambdas) rather than recomposing per frame, so they stay on the render path at that rate.
+- **Spacing**: the 4dp-based `YomuTheme.space` scale (4/8/12/16/24/32/48) for all paddings and gaps; screen gutters come from `YomuWidthClass.margin` (16dp compact, 24dp from medium) measured from the content width, not the window.
+
 ## Visual Direction
 
 The target look is conventional Material 3 Expressive with a calm, reader-focused hierarchy. It should feel recognizably Android on phones and first-class on tablets, without becoming a generic utility dashboard.
@@ -310,9 +324,10 @@ Phone:
 Tablet:
 
 - Navigation rails activate at 600dp of available width; phone layouts remain unchanged below that breakpoint.
-- Shared two-pane layouts activate at 720dp of actual content width. The leading pane receives half the width up to 450dp and the trailing pane receives the remainder; both panes own their scroll state and follow RTL layout direction.
-- Library, Settings, Book Details, and Statistics add context with side-by-side panes instead of stretching a phone column.
-- Reader Browse, Search, and short actions use centered tablet dialogs capped at 460dp; no tablet sheet stretches to a percentage of the landscape window.
+- Shared two-pane layouts activate at 720dp of actual content width. Panes split 50/50 at medium; from expanded the leading pane is a fixed 360dp (412dp at large) and the trailing pane flexes; both panes own their scroll state and follow RTL layout direction.
+- Library, Settings, Book Details, and Statistics add context with side-by-side panes instead of stretching a phone column. Statistics gives the dashboard (hero total, metric tiles, time by book) the wide pane and session history the narrow one.
+- Width-capped single-pane content (720dp readable / 1040dp grids) is centred, and the screen title aligns to that column.
+- Reader Browse, Search, Display and short actions use animated, centred tablet dialogs capped at 460dp; no tablet sheet stretches to a percentage of the landscape window.
 - The library supports Comfortable, Compact, Cover-only, and List modes with independent portrait and landscape column preferences.
 
 Large/foldable/desktop window:

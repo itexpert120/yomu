@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+)
 
 package com.itexpert120.yomu.feature.library
 
@@ -7,17 +10,19 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,18 +36,18 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,7 +57,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -62,13 +66,21 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
+import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
+import com.itexpert120.yomu.core.designsystem.YomuBadgeTone
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuEmptyState
 import com.itexpert120.yomu.core.designsystem.YomuLoadingState
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
+import com.itexpert120.yomu.core.designsystem.YomuShapeBadge
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -99,6 +111,10 @@ private data class LibraryScrollSample(
 
 private val ResumeFabTransformOrigin = TransformOrigin(1f, 1f)
 private val ResumeFabScrollThreshold = 32.dp
+
+// Bottom content padding that lets the last row scroll clear of the floating bottom chrome: the
+// selection toolbar / Resume button (up to 64dp) plus its 16dp margin and a little breathing room.
+private val LibraryBottomChromeClearance = 104.dp
 
 @Composable
 fun LibraryScreen(
@@ -228,31 +244,22 @@ fun LibraryScreen(
         else -> LibraryContentMode.List
     }
 
-    val libraryContent: @Composable (LibraryContentMode) -> Unit = { mode ->
-        when (mode) {
-            LibraryContentMode.Grid -> LibraryGrid(
-                state = gridState,
-                viewMode = state.viewMode,
-                columns = activeColumns,
-                groups = state.groups,
-                selectedIds = state.selectedIds,
-                onBookClick = onCardClick,
-                onBookLongPress = onCardLongPress,
-            )
-
-            LibraryContentMode.List -> LibraryList(
-                state = listState,
-                groups = state.groups,
-                selectedIds = state.selectedIds,
-                onBookClick = onCardClick,
-                onBookLongPress = onCardLongPress,
-            )
-
-            else -> Unit
-        }
-    }
-
     YomuAppSurface {
+        // One width class from the measured width (a navigation rail beside the library is already
+        // accounted for) drives the header, search row, grid and list, so their edges line up.
+        val widthClass = YomuWidthClass.fromWidth(maxWidth)
+        val margin = widthClass.margin
+        // Capped content is centred: its leading edge is the window margin until the cap bites.
+        val gridInset = ((maxWidth - YomuContentMaxWidth) / 2).coerceAtLeast(margin)
+        val listInset = ((maxWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(margin)
+        val headerInset = if (state.viewMode == LibraryViewMode.List) listInset else gridInset
+        val bottomChromeVisible = state.continueReading != null || state.selectionMode
+        val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+        // The last row must scroll clear of the Resume button / selection toolbar.
+        val contentBottom = navBottom +
+            if (bottomChromeVisible) LibraryBottomChromeClearance else YomuTheme.space.lg
+        val contentTop = YomuTheme.space.md
+
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
                 LibraryTopBarTransition(
@@ -265,6 +272,7 @@ fun LibraryScreen(
                     onSelectAll = onSelectAll,
                     onDeselectAll = onDeselectAll,
                     scrollBehavior = scrollBehavior,
+                    contentInset = headerInset,
                 )
                 Box(
                     Modifier
@@ -299,7 +307,36 @@ fun LibraryScreen(
                                 onClearSearch = { onSearchQueryChange("") },
                             )
 
-                            LibraryContentMode.Grid, LibraryContentMode.List -> libraryContent(mode)
+                            LibraryContentMode.Grid -> LibraryGrid(
+                                state = gridState,
+                                viewMode = state.viewMode,
+                                columns = activeColumns,
+                                widthClass = widthClass,
+                                contentPadding = PaddingValues(
+                                    start = gridInset,
+                                    end = gridInset,
+                                    top = contentTop,
+                                    bottom = contentBottom,
+                                ),
+                                groups = state.groups,
+                                selectedIds = state.selectedIds,
+                                onBookClick = onCardClick,
+                                onBookLongPress = onCardLongPress,
+                            )
+
+                            LibraryContentMode.List -> LibraryList(
+                                state = listState,
+                                contentPadding = PaddingValues(
+                                    start = listInset,
+                                    end = listInset,
+                                    top = contentTop,
+                                    bottom = contentBottom,
+                                ),
+                                groups = state.groups,
+                                selectedIds = state.selectedIds,
+                                onBookClick = onCardClick,
+                                onBookLongPress = onCardLongPress,
+                            )
                         }
                     }
                 }
@@ -345,6 +382,7 @@ fun LibraryScreen(
                         book = book,
                         collapsed = resumeCollapsed,
                         onResume = { onOpenReader(book.id) },
+                        endMargin = margin,
                     )
                 }
             }
@@ -354,6 +392,8 @@ fun LibraryScreen(
                 notice = state.importNotice,
                 canRetry = state.canRetryImport,
                 onRetry = onRetryImport,
+                horizontalMargin = margin,
+                aboveBottomChrome = bottomChromeVisible,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
 
@@ -381,28 +421,28 @@ private fun LibraryTopBarTransition(
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
+    contentInset: Dp,
 ) {
-    Box {
-        LibraryTopBar(
-            searchActive = state.searchActive,
-            searchQuery = state.searchQuery,
-            onSearchToggle = onSearchToggle,
-            onSearchQueryChange = onSearchQueryChange,
-            onImport = onImport,
-            onOptionsSheetToggle = onOptionsSheetToggle,
-            scrollBehavior = scrollBehavior,
-            showImport = state.totalCount > 0,
-            resultCount = state.selectableCount,
-            bookCount = state.totalCount,
-            selectionMode = state.selectionMode,
-            selectedCount = state.selectedIds.size,
-            allSelected = state.selectedIds.isNotEmpty() &&
-                state.selectedIds.size == state.selectableCount,
-            onExitSelection = onExitSelection,
-            onSelectAll = onSelectAll,
-            onDeselectAll = onDeselectAll,
-        )
-    }
+    LibraryTopBar(
+        searchActive = state.searchActive,
+        searchQuery = state.searchQuery,
+        onSearchToggle = onSearchToggle,
+        onSearchQueryChange = onSearchQueryChange,
+        onImport = onImport,
+        onOptionsSheetToggle = onOptionsSheetToggle,
+        scrollBehavior = scrollBehavior,
+        showImport = state.totalCount > 0,
+        resultCount = state.selectableCount,
+        bookCount = state.totalCount,
+        contentInset = contentInset,
+        selectionMode = state.selectionMode,
+        selectedCount = state.selectedIds.size,
+        allSelected = state.selectedIds.isNotEmpty() &&
+            state.selectedIds.size == state.selectableCount,
+        onExitSelection = onExitSelection,
+        onSelectAll = onSelectAll,
+        onDeselectAll = onDeselectAll,
+    )
 }
 
 @Composable
@@ -413,54 +453,53 @@ private fun androidx.compose.foundation.layout.BoxScope.LibraryLoading() {
     )
 }
 
+/** Whole-pane states stay centred, and scroll when a landscape phone can't fit them. */
 @Composable
-private fun EmptyLibrary(onImport: () -> Unit) {
+private fun CenteredStatePane(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 32.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = YomuTheme.space.lg, vertical = YomuTheme.space.lg),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        // Hero moment: the mark sits on a scalloped Material shape — decorative, never text-bearing.
-        Box(contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .size(168.dp)
-                    .clip(MaterialShapes.Cookie12Sided.toShape())
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+        content = content,
+    )
+}
+
+@Composable
+private fun EmptyLibrary(onImport: () -> Unit) {
+    CenteredStatePane {
+        // Hero moment: the Yomu mark on the primary badge shape — decorative, never text-bearing.
+        YomuShapeBadge(
+            icon = null,
+            size = 168.dp,
+            shape = YomuBadgeShape.Cookie,
+            tone = YomuBadgeTone.Primary,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.open_reader_logo_monochrome),
+                contentDescription = null,
+                modifier = Modifier.size(88.dp),
             )
-            Box(
-                modifier = Modifier
-                    .size(92.dp)
-                    .clip(MaterialTheme.shapes.extraLarge)
-                    .background(Color(0xFF050505)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.open_reader_logo),
-                    contentDescription = null,
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(64.dp),
-                )
-            }
         }
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(YomuTheme.space.lg))
         Text(
             text = "Welcome to Open Reader",
-            color = MaterialTheme.colorScheme.onBackground,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.headlineLargeEmphasized,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(YomuTheme.space.xs))
         Text(
             text = "A calm, reader-first EPUB library. Import a book to begin — your themes, fonts, " +
                 "reading position and stats all live here.",
+            modifier = Modifier.widthIn(max = 360.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(YomuTheme.space.lg))
         val buttonHeight = ButtonDefaults.MediumContainerHeight
         Button(
             onClick = onImport,
@@ -476,9 +515,10 @@ private fun EmptyLibrary(onImport: () -> Unit) {
             Spacer(Modifier.width(ButtonDefaults.iconSpacingFor(buttonHeight)))
             Text("Import EPUB", style = ButtonDefaults.textStyleFor(buttonHeight))
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(YomuTheme.space.sm))
         Text(
             text = "EPUB files only · kept privately on your device",
+            modifier = Modifier.widthIn(max = 360.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
@@ -491,28 +531,19 @@ private fun EmptySearchResults(
     query: String,
     onClearSearch: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "No books found",
-            style = MaterialTheme.typography.headlineSmallEmphasized,
-            textAlign = TextAlign.Center,
+    CenteredStatePane {
+        YomuEmptyState(
+            icon = Icons.Rounded.SearchOff,
+            title = "No books found",
+            body = "Nothing matches “$query”.",
+            actions = {
+                YomuButton(
+                    text = "Clear search",
+                    onClick = onClearSearch,
+                    emphasis = YomuButtonEmphasis.Secondary,
+                )
+            },
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Nothing matches “$query”.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
-        TextButton(onClick = onClearSearch, shapes = ButtonDefaults.shapes()) {
-            Text("Clear search")
-        }
     }
 }
 
@@ -521,83 +552,79 @@ private fun LibraryGrid(
     state: LazyGridState,
     viewMode: LibraryViewMode,
     columns: Int,
+    widthClass: YomuWidthClass,
+    contentPadding: PaddingValues,
     groups: List<LibraryGroup>,
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
-    // Cap the grid at a comfortable max width so covers don't stretch edge-to-edge on a wide
-    // tablet/desktop, start-aligned so it shares the header's left edge; a no-op on phones.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val widthClass = YomuWidthClass.fromWidth(maxWidth)
-        // In Auto mode, give covers more room to breathe as the screen widens — slightly larger
-        // minimum cell on tablets means fewer, larger covers rather than a dense wall of tiny ones.
-        val autoMinSize = when (widthClass) {
-            YomuWidthClass.Large -> 164.dp
-            YomuWidthClass.Expanded -> 150.dp
-            YomuWidthClass.Medium -> 132.dp
-            YomuWidthClass.Compact -> 118.dp
-        }
-        // Material 3 feed layout: 24dp window margins and wider gutters from medium up.
-        val margin = widthClass.margin
-        val gutter = if (widthClass.isWide) 16.dp else 12.dp
-        LazyVerticalGrid(
-            state = state,
-            // Auto (0): adaptive so covers stay a comfortable size — ~3 columns on a phone, more on a
-            // tablet. A positive value forces that exact column count.
-            columns = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
-                GridCells.Adaptive(minSize = autoMinSize)
-            } else {
-                GridCells.Fixed(columns)
-            },
-            modifier = Modifier
-                .widthIn(max = YomuContentMaxWidth)
-                .fillMaxSize()
-                .align(Alignment.TopStart),
-            contentPadding = PaddingValues(start = margin, end = margin, top = 16.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(if (widthClass.isWide) 24.dp else 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(gutter),
-        ) {
-            groups.forEach { group ->
-                if (group.label.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        GroupSectionHeader(title = group.label)
-                    }
+    // In Auto mode, give covers more room to breathe as the screen widens — slightly larger
+    // minimum cell on tablets means fewer, larger covers rather than a dense wall of tiny ones.
+    // Compact is sized so 360–411dp phones (328–379dp between margins, 12dp gutters) fit 3 columns.
+    val autoMinSize = when (widthClass) {
+        YomuWidthClass.Large -> 164.dp
+        YomuWidthClass.Expanded -> 150.dp
+        YomuWidthClass.Medium -> 132.dp
+        YomuWidthClass.Compact -> 100.dp
+    }
+    // Material 3 feed layout: wider gutters from medium up.
+    val gutter = if (widthClass.isWide) YomuTheme.space.md else YomuTheme.space.sm
+    // The grid spans the pane (so it scrolls from anywhere) and the horizontal content padding
+    // centres the columns within the content cap on wide tablets/desktops; a no-op on phones.
+    LazyVerticalGrid(
+        state = state,
+        // Auto (0): adaptive so covers stay a comfortable size — 3 columns on a phone, more on a
+        // tablet. A positive value forces that exact column count.
+        columns = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
+            GridCells.Adaptive(minSize = autoMinSize)
+        } else {
+            GridCells.Fixed(columns)
+        },
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(if (widthClass.isWide) YomuTheme.space.lg else YomuTheme.space.md),
+        horizontalArrangement = Arrangement.spacedBy(gutter),
+    ) {
+        groups.forEach { group ->
+            if (group.label.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    GroupSectionHeader(title = group.label)
                 }
-                items(group.books, key = { it.id }) { book ->
-                    // Re-sorting, grouping, or filtering slides covers to their new slots.
-                    val itemModifier = Modifier.animateItem(
-                        fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            }
+            items(group.books, key = { it.id }) { book ->
+                // Re-sorting, grouping, or filtering slides covers to their new slots.
+                val itemModifier = Modifier.animateItem(
+                    fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                )
+                when (viewMode) {
+                    LibraryViewMode.ComfortableGrid -> GridBookCard(
+                        book = book,
+                        onClick = { onBookClick(book) },
+                        onLongPress = { onBookLongPress(book) },
+                        selected = book.id in selectedIds,
+                        modifier = itemModifier,
                     )
-                    when (viewMode) {
-                        LibraryViewMode.ComfortableGrid -> GridBookCard(
-                            book = book,
-                            onClick = { onBookClick(book) },
-                            onLongPress = { onBookLongPress(book) },
-                            selected = book.id in selectedIds,
-                            modifier = itemModifier,
-                        )
 
-                        LibraryViewMode.CompactGrid -> CompactGridBookCard(
-                            book = book,
-                            onClick = { onBookClick(book) },
-                            onLongPress = { onBookLongPress(book) },
-                            selected = book.id in selectedIds,
-                            modifier = itemModifier,
-                        )
+                    LibraryViewMode.CompactGrid -> CompactGridBookCard(
+                        book = book,
+                        onClick = { onBookClick(book) },
+                        onLongPress = { onBookLongPress(book) },
+                        selected = book.id in selectedIds,
+                        modifier = itemModifier,
+                    )
 
-                        LibraryViewMode.CoverOnlyGrid -> CoverOnlyGridBookCard(
-                            book = book,
-                            onClick = { onBookClick(book) },
-                            onLongPress = { onBookLongPress(book) },
-                            selected = book.id in selectedIds,
-                            modifier = itemModifier,
-                        )
+                    LibraryViewMode.CoverOnlyGrid -> CoverOnlyGridBookCard(
+                        book = book,
+                        onClick = { onBookClick(book) },
+                        onLongPress = { onBookLongPress(book) },
+                        selected = book.id in selectedIds,
+                        modifier = itemModifier,
+                    )
 
-                        LibraryViewMode.List -> Unit
-                    }
+                    LibraryViewMode.List -> Unit
                 }
             }
         }
@@ -607,40 +634,36 @@ private fun LibraryGrid(
 @Composable
 private fun LibraryList(
     state: LazyListState,
+    contentPadding: PaddingValues,
     groups: List<LibraryGroup>,
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
 ) {
-    // A full-bleed list of rows reads awkwardly on a wide tablet; keep it to a single readable
-    // column, start-aligned with the header. Phones are unaffected (screen < max width).
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = state,
-            modifier = Modifier
-                .widthIn(max = YomuReadableMaxWidth)
-                .fillMaxSize()
-                .align(Alignment.TopStart),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            groups.forEach { group ->
-                if (group.label.isNotEmpty()) {
-                    item { GroupSectionHeader(title = group.label) }
-                }
-                lazyListItems(group.books, key = { it.id }) { book ->
-                    BookListRow(
-                        book = book,
-                        onClick = { onBookClick(book) },
-                        onLongPress = { onBookLongPress(book) },
-                        selected = book.id in selectedIds,
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                            placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                        ),
-                    )
-                }
+    // A full-bleed list of rows reads awkwardly on a wide tablet; the horizontal content padding
+    // keeps it to a single centred, readable column. Phones are unaffected (screen < max width).
+    LazyColumn(
+        state = state,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+    ) {
+        groups.forEach { group ->
+            if (group.label.isNotEmpty()) {
+                item { GroupSectionHeader(title = group.label) }
+            }
+            lazyListItems(group.books, key = { it.id }) { book ->
+                BookListRow(
+                    book = book,
+                    onClick = { onBookClick(book) },
+                    onLongPress = { onBookLongPress(book) },
+                    selected = book.id in selectedIds,
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    ),
+                )
             }
         }
     }
@@ -695,7 +718,7 @@ private fun LibraryPreview(mode: LibraryViewMode) {
                                 )[index],
                                 shortTitle = "Preview book",
                                 author = "Open Reader",
-                                authorLastName = "READER",
+                                authorLastName = "PRESS",
                                 progress = (index + 1) / 8f,
                                 remaining = "12 min",
                                 coverImagePath = null,

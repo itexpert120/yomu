@@ -4,37 +4,37 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.R
+import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
+import com.itexpert120.yomu.core.designsystem.YomuBadgeTone
+import com.itexpert120.yomu.core.designsystem.YomuCard
+import com.itexpert120.yomu.core.designsystem.YomuCardTone
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
-import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
-import com.itexpert120.yomu.core.designsystem.YomuSettingList
-import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
-import com.itexpert120.yomu.core.designsystem.YomuSettingRow
+import com.itexpert120.yomu.core.designsystem.YomuSectionHeader
+import com.itexpert120.yomu.core.designsystem.YomuShapeBadge
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+
+// The logo artwork is drawn for a near-black plate; this is that plate, not a theme colour.
+private val LogoPlate = Color(0xFF050505)
 
 @Composable
 fun AboutRoute(onBack: () -> Unit) {
@@ -45,7 +45,6 @@ fun AboutRoute(onBack: () -> Unit) {
 fun AboutScreen(onBack: () -> Unit) {
     YomuScreenScaffold(
         title = "About Open Reader",
-        subtitle = "A private, reader-first library",
         onBack = onBack,
         showScrollEdgeShadow = false,
     ) {
@@ -56,39 +55,45 @@ fun AboutScreen(onBack: () -> Unit) {
 @Composable
 internal fun AboutContent() {
     AboutHero()
-    AboutFacts()
 
-    YomuSettingGroup(
-        title = "About the app",
-        subtitle = "A native EPUB reader built for calm, long-form reading.",
-    ) {
-        Text(
-            text = "Open Reader is a native Android EPUB reader focused on a calm, " +
-                "reader-first experience with deep typography and theme control.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyLarge,
+    AboutSection(title = "About the app") {
+        ProseCard(
+            body = "Open Reader is a native Android EPUB reader built for calm, long-form reading, with " +
+                "deep typography and theme control.",
         )
     }
 
-    YomuSettingGroup(
+    AboutSection(
         title = "Privacy",
-        subtitle = "What stays on your device, and when Open Reader uses the network.",
+        subtitle = "Effective 15 November 2026",
     ) {
-        PolicyBlock(
-            title = "Effective 14 July 2026",
-            body = "Open Reader is developed by IT Expert 120. Privacy questions can be sent " +
-                "to itexpert120@outlook.com.",
+        ProseCard(
+            heading = "Who we are",
+            body = "Open Reader is developed by IT Expert 120. Privacy questions can be sent to " +
+                "itexpert120@outlook.com.",
         )
-        PolicyBlock(
-            title = "Data kept on your device",
+        ProseCard(
+            heading = "Offline by default",
             body = "Imported EPUB files, covers, book metadata, reading positions, chapter " +
                 "progress, bookmarks, highlights, reading statistics, installed fonts, and " +
                 "settings are stored in Open Reader’s private app storage. Open Reader has no accounts, " +
-                "advertising, analytics, tracking SDKs, or developer-operated servers. Your " +
-                "books and reading history are not uploaded.",
+                "advertising, analytics, or tracking SDKs. Unless you turn on sync or use one " +
+                "of the network features below, nothing leaves your device.",
         )
-        PolicyBlock(
-            title = "Optional network features",
+        ProseCard(
+            heading = "Optional sync",
+            body = "Sync is off until you turn it on, and it needs no account. A 12-word phrase " +
+                "created on your device is the only credential. When sync is on, your reading " +
+                "positions, chapter progress, bookmarks, highlights, reading sessions, edited " +
+                "book details, saved themes, and settings are encrypted on your device before " +
+                "they are uploaded. The sync server, hosted on Convex, stores only ciphertext: " +
+                "it cannot read your data or see which books you have. Book files and covers " +
+                "are never uploaded. Like any online service, the server receives ordinary " +
+                "connection information such as your IP address. Anyone who has your 12 words " +
+                "can read your synced data, and the words cannot be recovered if you lose them.",
+        )
+        ProseCard(
+            heading = "Other network features",
             body = "When you choose Dictionary “Look up,” Open Reader sends only the selected word " +
                 "and language code over HTTPS to freedictionaryapi.com. When you install a " +
                 "Google Font, Open Reader sends the requested font-family name to " +
@@ -99,84 +104,77 @@ internal fun AboutContent() {
                 "browser; the browser and Google then handle that request under their own " +
                 "privacy terms. Pronunciation uses your device’s text-to-speech service.",
         )
-        PolicyBlock(
-            title = "Security, retention, and deletion",
-            body = "Network requests initiated by Open Reader use HTTPS. Local app data is excluded " +
-                "from Android cloud backup and device transfer. Removing a book deletes its " +
-                "app-private EPUB, cover, progress, bookmarks, and highlights. Other local data " +
-                "remains until you clear Open Reader’s storage or uninstall the app. Open Reader cannot " +
-                "delete logs independently retained by external dictionary, font, browser, or " +
-                "text-to-speech providers.",
+        ProseCard(
+            heading = "Security, retention, and deletion",
+            body = "Network requests initiated by Open Reader use encrypted connections. Local app data " +
+                "is excluded from Android cloud backup and device transfer. Removing a book " +
+                "deletes its app-private EPUB, cover, progress, bookmarks, and highlights from " +
+                "this device. “Delete synced data” in Settings removes the encrypted copy from " +
+                "the sync server and stops sync on every device; turning sync off on one " +
+                "device leaves the synced copy in place for your other devices. Other local " +
+                "data remains until you clear Open Reader’s storage or uninstall the app. Open Reader cannot " +
+                "delete logs independently retained by external dictionary, font, browser, " +
+                "hosting, or text-to-speech providers.",
         )
-        Text(
-            text = "Open Reader is not specifically directed to children and does not supply books " +
+        ProseCard(
+            heading = "Children and changes",
+            body = "Open Reader is not specifically directed to children and does not supply books " +
                 "or other reading content. You control the EPUB files you import. Material " +
                 "changes to this policy will be reflected here with a new effective date.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
         )
     }
 
-    YomuSettingGroup(
-        title = "Terms of use",
-        subtitle = "The books you bring in remain your responsibility.",
-    ) {
-        Text(
-            text = "Open Reader is provided “as is”, without warranty of any kind, to the fullest " +
+    AboutSection(title = "Terms of use") {
+        ProseCard(
+            body = "Open Reader is provided “as is”, without warranty of any kind, to the fullest " +
                 "extent permitted by law. You are responsible for the books you import and " +
                 "for complying with their licenses and applicable copyright law. Open Reader does " +
                 "not provide, sell, or distribute any books.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyLarge,
         )
     }
 
-    YomuSettingGroup(
-        title = "Acknowledgements",
-        subtitle = "Open Reader stands on the work of a generous open-source ecosystem.",
-    ) {
-        Text(
-            text = "EPUB parsing and rendering by the Readium Kotlin toolkit (BSD-3-Clause). " +
-                "Cover loading by Coil. Built with Jetpack Compose. Bundled reading fonts " +
-                "are used under the SIL Open Font License. Dictionary definitions from " +
-                "freedictionaryapi.com, sourced from Wiktionary (CC BY-SA).",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyLarge,
+    AboutSection(title = "Acknowledgements") {
+        ProseCard(
+            body = "EPUB parsing and rendering by the Readium Kotlin toolkit (BSD-3-Clause). " +
+                "Cover loading by Coil. Built with Jetpack Compose. Sync runs on Convex. " +
+                "Bundled reading fonts are used under the SIL Open Font License. Dictionary " +
+                "definitions from freedictionaryapi.com, sourced from Wiktionary (CC BY-SA).",
         )
     }
 
     Text(
         text = "© 2026 IT Expert 120. Open Reader is an independent application.",
-        color = YomuTheme.colors.textMuted,
-        style = YomuTheme.type.caption,
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelMedium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(YomuTheme.space.xxs),
     )
 }
 
 @Composable
 private fun AboutHero() {
-    Surface(
+    YomuCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLargeIncreased,
-        color = MaterialTheme.colorScheme.primaryContainer,
+        tone = YomuCardTone.Hero,
+        contentPadding = PaddingValues(YomuTheme.space.lg),
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
         ) {
-            // The mark sits on a scalloped shape — the one decorative flourish on this page.
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(MaterialShapes.Cookie12Sided.toShape())
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center,
+            // The mark sits on the Yomu cookie — the one decorative flourish on this page.
+            YomuShapeBadge(
+                icon = null,
+                size = 96.dp,
+                shape = YomuBadgeShape.Cookie,
+                tone = YomuBadgeTone.Solid,
             ) {
                 Box(
                     modifier = Modifier
                         .size(64.dp)
-                        .background(Color(0xFF050505), MaterialTheme.shapes.large),
+                        .background(LogoPlate, YomuShapeTokens.tile),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -187,26 +185,28 @@ private fun AboutHero() {
                     )
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+            ) {
                 Text(
                     text = "Open Reader",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                     style = MaterialTheme.typography.headlineSmallEmphasized,
                 )
                 Text(
-                    text = "Private · offline · EPUB reader",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f),
+                    text = "Private · offline-first · EPUB reader",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(top = YomuTheme.space.xxs),
+                    shape = YomuShapeTokens.pill,
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ) {
                     Text(
                         text = "v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xxs),
                     )
                 }
             }
@@ -214,31 +214,41 @@ private fun AboutHero() {
     }
 }
 
+/** A page section: the shared header, then its prose blocks. */
 @Composable
-private fun AboutFacts() {
-    YomuSettingList {
-        AboutFact(Icons.Rounded.WifiOff, "Offline first", YomuSettingPosition.First)
-        AboutFact(Icons.Rounded.Lock, "Private by default", YomuSettingPosition.Middle)
-        AboutFact(Icons.AutoMirrored.Rounded.MenuBook, "EPUB focused", YomuSettingPosition.Last)
+private fun AboutSection(
+    title: String,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = YomuTheme.space.xs),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+    ) {
+        YomuSectionHeader(title = title, subtitle = subtitle)
+        content()
     }
 }
 
+/** Read-only prose on the group surface — deliberately not a list row, so it never looks tappable. */
 @Composable
-private fun AboutFact(icon: ImageVector, title: String, position: YomuSettingPosition) {
-    YomuSettingRow(
-        title = title,
-        position = position,
-        leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-        trailing = {},
-    )
-}
-
-@Composable
-private fun PolicyBlock(title: String, body: String) {
-    YomuSettingRow(
-        title = title,
-        subtitle = body,
-        position = YomuSettingPosition.Single,
-        trailing = {},
-    )
+private fun ProseCard(body: String, heading: String? = null) {
+    YomuCard(modifier = Modifier.fillMaxWidth(), tone = YomuCardTone.Group) {
+        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs)) {
+            if (heading != null) {
+                Text(
+                    text = heading,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmallEmphasized,
+                )
+            }
+            Text(
+                text = body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
 }

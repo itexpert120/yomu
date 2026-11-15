@@ -57,7 +57,6 @@ data class LibraryUiState(
     val viewMode: LibraryViewMode = LibraryViewMode.ComfortableGrid,
     val portraitGridColumns: Int = LibraryPreferences.AUTO_COLUMNS,
     val landscapeGridColumns: Int = LibraryPreferences.AUTO_COLUMNS,
-    val coverCrop: Boolean = true,
     val searchActive: Boolean = false,
     val searchQuery: String = "",
     val isImporting: Boolean = false,

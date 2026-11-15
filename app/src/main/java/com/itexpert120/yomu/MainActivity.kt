@@ -18,6 +18,7 @@ import com.itexpert120.yomu.app.SplashThemeStore
 import com.itexpert120.yomu.app.YomuApp
 import com.itexpert120.yomu.app.YomuSplashTheme
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
+import com.itexpert120.yomu.app.preferNativeRefreshRate
 import com.itexpert120.yomu.app.toSplashTheme
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
@@ -52,6 +53,7 @@ class MainActivity : FragmentActivity() {
         // the restored dummy before FragmentActivity dispatches onResume to it.
         removeRestoredReadiumNavigatorFragments(supportFragmentManager)
         enableYomuEdgeToEdge()
+        preferNativeRefreshRate()
         // Cold start from an external "Open with"/share.
         if (savedInstanceState == null) handleExternalIntent(intent)
         setContent {

@@ -90,7 +90,7 @@ class SyncViewModel @Inject constructor(
     fun onScanned(raw: String) {
         val words = SyncQr.decode(raw)
         if (words == null) {
-            local.update { it.copy(join = it.join.copy(error = "That isn't a Yomu sync code.")) }
+            local.update { it.copy(join = it.join.copy(error = "That isn't a Open Reader sync code.")) }
             return
         }
         local.update { it.copy(join = validate(it.join.copy(input = words, scanning = false))) }
@@ -106,7 +106,7 @@ class SyncViewModel @Inject constructor(
             val error = when (val result = sync.join(phrase)) {
                 JoinResult.Joined -> null
                 JoinResult.NotFound -> "No synced library uses these words. Check them against your other device."
-                JoinResult.UpdateRequired -> "Update Yomu to sync with these words."
+                JoinResult.UpdateRequired -> "Update Open Reader to sync with these words."
                 is JoinResult.Failed -> "Couldn't connect. Check your connection and try again."
             }
             local.update { state ->

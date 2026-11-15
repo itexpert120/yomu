@@ -1,37 +1,32 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
+import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 
 /** Edit popup for an existing highlight: recolour (optional) or delete it. */
@@ -42,18 +37,18 @@ internal fun HighlightEditSheet(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    YomuBottomSheet(visible = highlight != null, onDismiss = onDismiss) { _ ->
+    YomuBottomSheet(visible = highlight != null, onDismiss = onDismiss) { dismiss ->
         if (highlight == null) return@YomuBottomSheet
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
-            Text(text = "Highlight", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.body)
+            YomuSheetHeader(title = "Highlight", onClose = dismiss)
             if (highlight.text.isNotBlank()) {
                 Text(
                     text = highlight.text,
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -62,74 +57,44 @@ internal fun HighlightEditSheet(
                 selectedArgb = highlight.colorArgb,
                 onSelect = onSelectColor,
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(YomuTheme.radius.pill))
-                    .yomuPressable(onClick = onDelete, pressedScale = 1f)
-                    .padding(vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
+            TextButton(
+                onClick = onDelete,
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(
                     Icons.Rounded.Delete,
                     contentDescription = null,
-                    tint = YomuTheme.colors.danger,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
                 )
-                Text(text = "Delete", color = YomuTheme.colors.danger, style = YomuTheme.type.control)
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(text = "Delete highlight", style = MaterialTheme.typography.labelLargeEmphasized)
             }
         }
     }
 }
 
+/** A single highlight row: its tint, the highlighted passage, and a delete action. */
 @Composable
 internal fun HighlightRow(
     highlight: ReaderHighlight,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    position: YomuSettingPosition = YomuSettingPosition.Single,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YomuTheme.radius.md))
-            .yomuPressable(onClick = onClick, pressedScale = 1f)
-            .padding(vertical = 8.dp, horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(14.dp)
-                .clip(CircleShape)
-                .background(Color(highlight.colorArgb)),
-        )
-        Text(
-            text = highlight.text.ifBlank { "Highlight" },
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.caption,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .yomuPressable(onClick = onDelete, pressedScale = 1f),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Delete,
-                contentDescription = "Delete",
-                tint = YomuTheme.colors.textMuted,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
+    ReaderBrowseRow(
+        title = AnnotatedString(highlight.text.ifBlank { "Highlight" }),
+        onClick = onClick,
+        position = position,
+        leading = { ReaderSwatch(color = Color(highlight.colorArgb), size = 24.dp) },
+        trailingIcon = Icons.Rounded.Delete,
+        trailingDescription = "Delete highlight",
+        onTrailingClick = onDelete,
+    )
 }
 
-/** Optional tint chips for an existing highlight; the current colour is ringed. */
+/** Optional tints for an existing highlight; the current colour morphs to the selected shape. */
 @Composable
 private fun HighlightColorPalette(
     selectedArgb: Int,
@@ -141,30 +106,18 @@ private fun HighlightColorPalette(
         "Blue" to YomuTheme.colors.highlightBlue,
         "Pink" to YomuTheme.colors.highlightPink,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(
+        modifier = Modifier.selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         colors.forEach { (name, color) ->
             val argb = color.toArgb()
-            val selected = argb == selectedArgb
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(color)
-                    .then(
-                        if (selected) {
-                            Modifier.border(2.dp, YomuTheme.colors.textPrimary, CircleShape)
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .semantics { contentDescription = "$name highlight" }
-                    .selectable(
-                        selected = selected,
-                        role = Role.RadioButton,
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onSelect(argb) },
-                    ),
+            ReaderSwatch(
+                color = color,
+                selected = argb == selectedArgb,
+                contentDescription = "$name highlight",
+                onClick = { onSelect(argb) },
             )
         }
     }

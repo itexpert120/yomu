@@ -2,10 +2,11 @@
 
 package com.itexpert120.yomu.feature.settings
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,8 +15,6 @@ import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
@@ -43,12 +43,17 @@ import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
+import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
+import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
+import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
+import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ColorStyle
 import com.itexpert120.yomu.core.model.CustomFontRef
@@ -164,7 +169,7 @@ private fun PhoneSettingsLayout(
         onBack = onBack,
         showScrollEdgeShadow = false,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md)) {
             AppearanceGroup(
                 selectedTheme = selectedTheme,
                 oledDark = oledDark,
@@ -226,61 +231,78 @@ private fun TabletSettingsLayout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                startModifier = Modifier.padding(top = 8.dp),
-                endModifier = Modifier.padding(top = 8.dp),
+                startModifier = Modifier.padding(top = YomuTheme.space.xs),
+                endModifier = Modifier.padding(top = YomuTheme.space.xs),
                 startContent = {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = navBottom + 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = navBottom + YomuTheme.space.md),
                     ) {
-                        items(SettingsPane.entries, key = { it.name }) { pane ->
-                            SettingsPaneRow(
-                                pane = pane,
-                                selected = pane == selectedPane,
-                                onClick = { selectedPaneName = pane.name },
-                            )
+                        YomuSettingList {
+                            SettingsPane.entries.forEach { pane ->
+                                SettingsPaneRow(
+                                    pane = pane,
+                                    selected = pane == selectedPane,
+                                    onClick = { selectedPaneName = pane.name },
+                                )
+                            }
                         }
                     }
                 },
                 endContent = {
-                    // Detail pane keeps a readable line length on wide landscape tablets.
-                    Column(
-                        modifier = Modifier
-                            .widthIn(max = YomuReadableMaxWidth)
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(bottom = navBottom + 28.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        when (selectedPane) {
-                            SettingsPane.Appearance -> AppearanceGroup(
-                                selectedTheme = selectedTheme,
-                                oledDark = oledDark,
-                                oledEnabled = oledEnabled,
-                                accentSelection = accentSelection,
-                                colorStyle = colorStyle,
-                                onSelectTheme = onSelectTheme,
-                                onToggleOled = onToggleOled,
-                                onSelectAccent = onSelectAccent,
-                                onSelectColorStyle = onSelectColorStyle,
-                            )
+                    AnimatedContent(
+                        targetState = selectedPane,
+                        modifier = Modifier.fillMaxSize(),
+                        transitionSpec = { yomuContentSwap(forward = targetState.ordinal > initialState.ordinal) },
+                        label = "settingsPane",
+                    ) { pane ->
+                        // Each pane owns its scroll state, so offsets never carry over between panes.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            // Detail content keeps a readable line length, centred in its pane.
+                            Column(
+                                modifier = Modifier
+                                    .widthIn(max = YomuReadableMaxWidth)
+                                    .fillMaxWidth()
+                                    .padding(bottom = navBottom + YomuTheme.space.lg),
+                                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
+                            ) {
+                                when (pane) {
+                                    SettingsPane.Appearance -> AppearanceGroup(
+                                        selectedTheme = selectedTheme,
+                                        oledDark = oledDark,
+                                        oledEnabled = oledEnabled,
+                                        accentSelection = accentSelection,
+                                        colorStyle = colorStyle,
+                                        onSelectTheme = onSelectTheme,
+                                        onToggleOled = onToggleOled,
+                                        onSelectAccent = onSelectAccent,
+                                        onSelectColorStyle = onSelectColorStyle,
+                                    )
 
-                            SettingsPane.Reading -> ReaderControls(
-                                readerSettings = readerSettings,
-                                customThemes = customThemes,
-                                customFonts = customFonts,
-                                onUpdateReaderSettings = onUpdateReaderSettings,
-                                onOpenCustomTheme = onOpenCustomTheme,
-                                onApplyCustomTheme = onApplyCustomTheme,
-                                onOpenFontLibrary = onOpenFontLibrary,
-                            )
+                                    SettingsPane.Reading -> ReaderControls(
+                                        readerSettings = readerSettings,
+                                        customThemes = customThemes,
+                                        customFonts = customFonts,
+                                        onUpdateReaderSettings = onUpdateReaderSettings,
+                                        onOpenCustomTheme = onOpenCustomTheme,
+                                        onApplyCustomTheme = onApplyCustomTheme,
+                                        onOpenFontLibrary = onOpenFontLibrary,
+                                    )
 
-                            SettingsPane.Sync -> syncSection()
+                                    SettingsPane.Sync -> syncSection()
 
-                            SettingsPane.About -> AboutContent()
+                                    SettingsPane.About -> AboutContent()
+                                }
+                                if (pane != SettingsPane.About) VersionFooter()
+                            }
                         }
-                        if (selectedPane != SettingsPane.About) VersionFooter()
                     }
                 },
             )
@@ -323,12 +345,15 @@ private fun SettingsPaneRow(
             )
         },
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
+        // The selected row already reads as "you are here"; only the others point onward.
+        if (!selected) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -370,40 +395,37 @@ private fun AppearanceGroup(
         title = "Appearance",
         subtitle = "Set the app’s tone. Reader page themes stay independent.",
     ) {
-        AppearanceLabel("Mode")
-        ThemeChoiceRow(
-            selectedTheme = selectedTheme,
-            onSelectTheme = onSelectTheme,
-        )
-        AppearanceLabel("Colour theme")
-        ColorThemePicker(
-            selection = accentSelection,
-            style = colorStyle,
-            onSelect = onSelectAccent,
-        )
-        AppearanceLabel(
+        YomuSectionLabel("Mode")
+        YomuSettingContainer {
+            ThemeChoiceRow(
+                selectedTheme = selectedTheme,
+                onSelectTheme = onSelectTheme,
+            )
+        }
+        YomuSectionLabel("Colour theme")
+        YomuSettingContainer {
+            ColorThemePicker(
+                selection = accentSelection,
+                style = colorStyle,
+                onSelect = onSelectAccent,
+            )
+        }
+        YomuSectionLabel(
             if (accentSelection == AccentSelection.Wallpaper) "Palette style · set by your wallpaper" else "Palette style",
         )
-        ColorStyleRow(
-            selected = colorStyle,
-            enabled = accentSelection != AccentSelection.Wallpaper,
-            onSelect = onSelectColorStyle,
-        )
+        YomuSettingContainer {
+            ColorStyleRow(
+                selected = colorStyle,
+                enabled = accentSelection != AccentSelection.Wallpaper,
+                onSelect = onSelectColorStyle,
+            )
+        }
         OledSettingRow(
             checked = oledDark && oledEnabled,
             enabled = oledEnabled,
             onCheckedChange = onToggleOled,
         )
     }
-}
-
-@Composable
-private fun AppearanceLabel(text: String) {
-    Text(
-        text = text,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.labelLarge,
-    )
 }
 
 @Composable
@@ -460,7 +482,7 @@ private fun VersionFooter() {
         style = MaterialTheme.typography.labelMedium,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(YomuTheme.space.xxs),
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
 }

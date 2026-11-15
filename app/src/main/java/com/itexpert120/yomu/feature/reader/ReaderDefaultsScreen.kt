@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+)
+
 package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.foundation.BorderStroke
@@ -7,86 +12,76 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
-import com.itexpert120.yomu.core.designsystem.YomuPaneSpacer
+import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
+import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
+import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.YomuTwoPaneMinWidth
-import com.itexpert120.yomu.core.designsystem.yomuLeadingPaneWidth
+import com.itexpert120.yomu.core.designsystem.YomuTwoPane
+import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.model.ReaderSettings
+
+private const val ReaderDefaultsTitle = "Reading defaults"
+private const val ReaderDefaultsSubtitle = "Every new book starts here"
 
 @Composable
 fun ReaderDefaultsRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit) {
     val viewModel: ReaderDefaultsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
     SaveFailureNotice(state.settingsError, viewModel::onRetrySettings)
-    YomuScreenScaffold(
-        title = "Reading defaults",
-        subtitle = "Every new book starts here",
-        onBack = onBack,
-        showScrollEdgeShadow = false,
-        maxContentWidth = YomuContentMaxWidth,
-    ) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            // Material 3 supporting-pane layout: a fixed preview pane beside flexible controls
-            // once there's room for both; stacked below that.
-            val wide = maxWidth >= YomuTwoPaneMinWidth
-            val previewWidth = yomuLeadingPaneWidth(maxWidth).coerceAtMost(360.dp)
-            val controls: @Composable () -> Unit = {
-                ReaderPreferenceControls(
-                    settings = state.settings,
-                    customThemes = state.customThemes,
-                    onUpdateSettings = viewModel::onUpdate,
-                    onOpenCustomTheme = viewModel::onOpenCustomTheme,
-                    onApplyCustomTheme = viewModel::onApplyCustomTheme,
-                    customFonts = state.installedFonts,
-                    onManageFonts = onOpenFontLibrary,
-                )
-            }
-
-            if (wide) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(YomuPaneSpacer),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    ReaderDefaultsPreview(
-                        settings = state.settings,
-                        modifier = Modifier.width(previewWidth),
-                    )
-                    Column(modifier = Modifier.weight(1f).widthIn(max = YomuReadableMaxWidth)) {
-                        controls()
-                    }
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ReaderDefaultsPreview(settings = state.settings)
-                    Text(
-                        text = "Applied to every book unless you override settings from its reader.",
-                        color = YomuTheme.colors.textSecondary,
-                        style = YomuTheme.type.body,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    controls()
-                }
+    val controls: @Composable () -> Unit = {
+        ReaderPreferenceControls(
+            settings = state.settings,
+            customThemes = state.customThemes,
+            onUpdateSettings = viewModel::onUpdate,
+            onOpenCustomTheme = viewModel::onOpenCustomTheme,
+            onApplyCustomTheme = viewModel::onApplyCustomTheme,
+            customFonts = state.installedFonts,
+            onManageFonts = onOpenFontLibrary,
+        )
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Material 3 supporting-pane layout from the expanded breakpoint (the same one YomuTwoPane
+        // screens split at): the preview pane stays put while the controls scroll beside it.
+        // Below that the preview leads a single scrolling column.
+        if (YomuWidthClass.fromWidth(maxWidth).isExpanded) {
+            ReaderDefaultsTwoPane(settings = state.settings, onBack = onBack, controls = controls)
+        } else {
+            YomuScreenScaffold(
+                title = ReaderDefaultsTitle,
+                subtitle = ReaderDefaultsSubtitle,
+                onBack = onBack,
+                showScrollEdgeShadow = false,
+            ) {
+                ReaderDefaultsPreviewPane(settings = state.settings)
+                controls()
             }
         }
     }
@@ -104,43 +99,97 @@ fun ReaderDefaultsRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit) {
 }
 
 @Composable
+private fun ReaderDefaultsTwoPane(
+    settings: ReaderSettings,
+    onBack: () -> Unit,
+    controls: @Composable () -> Unit,
+) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    YomuAppSurface {
+        Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+            YomuScreenHeader(
+                title = ReaderDefaultsTitle,
+                onBack = onBack,
+                subtitle = ReaderDefaultsSubtitle,
+                scrollBehavior = scrollBehavior,
+            )
+            YomuTwoPane(
+                modifier = Modifier.weight(1f),
+                startContent = {
+                    // Scrolls on its own only if the window is too short for the whole preview.
+                    ReaderDefaultsPreviewPane(
+                        settings = settings,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = YomuTheme.space.lg),
+                    )
+                },
+                endContent = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .widthIn(max = YomuReadableMaxWidth)
+                            .fillMaxWidth()
+                            .imePadding()
+                            .verticalScroll(rememberScrollState())
+                            .windowInsetsPadding(
+                                WindowInsets.navigationBarsIgnoringVisibility.only(WindowInsetsSides.Bottom),
+                            )
+                            .padding(bottom = YomuTheme.space.lg),
+                    ) {
+                        controls()
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** The live page preview with its label and the caption explaining what the defaults apply to. */
+@Composable
+private fun ReaderDefaultsPreviewPane(
+    settings: ReaderSettings,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+    ) {
+        YomuSectionLabel("Live preview")
+        ReaderDefaultsPreview(settings = settings)
+        Text(
+            text = "Applied to every book unless you override settings from its reader.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = YomuTheme.space.xxs),
+        )
+    }
+}
+
+@Composable
 private fun ReaderDefaultsPreview(
     settings: ReaderSettings,
     modifier: Modifier = Modifier,
 ) {
+    // Reading-theme colours on purpose: this card is a miniature of the page itself.
     val pageBackground = Color(settings.backgroundArgb)
     val pageText = Color(settings.textArgb)
     val pageMuted = Color(settings.colorPalette.secondaryTextArgb)
+    val pillTint = pageText.copy(alpha = PreviewPillTintAlpha)
     val fontName = settings.customFont?.family ?: settings.font.displayName
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = YomuShapeTokens.hero,
         color = pageBackground,
         contentColor = pageText,
         border = BorderStroke(1.dp, Color(settings.colorPalette.borderArgb)),
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(YomuTheme.space.lg),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(pageText, RoundedCornerShape(YomuTheme.radius.pill)),
-                )
-                Text(
-                    text = "LIVE PREVIEW",
-                    color = pageMuted,
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
                 Text(
                     text = "A page that feels like yours.",
                     color = pageText,
@@ -150,32 +199,27 @@ private fun ReaderDefaultsPreview(
                     text = "Open Reader keeps the words in focus and lets the details recede. " +
                         "These defaults will greet every new book in your library.",
                     color = pageMuted,
-                    style = YomuTheme.type.body,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
-                PreviewPill(
-                    text = settings.layout.name,
-                    background = pageText.copy(alpha = 0.12f),
-                    foreground = pageText,
-                )
-                PreviewPill(
-                    text = fontName,
-                    background = pageText.copy(alpha = 0.12f),
-                    foreground = pageText,
-                )
+                PreviewPill(text = settings.layout.name, background = pillTint, foreground = pageText)
+                PreviewPill(text = fontName, background = pillTint, foreground = pageText)
                 PreviewPill(
                     text = "${(settings.fontScale * 100).toInt()}%",
-                    background = pageText.copy(alpha = 0.12f),
+                    background = pillTint,
                     foreground = pageText,
                 )
             }
         }
     }
 }
+
+/** How strongly the preview's pills tint the page colour toward its text colour. */
+private const val PreviewPillTintAlpha = 0.12f
 
 @Composable
 private fun PreviewPill(
@@ -185,8 +229,8 @@ private fun PreviewPill(
 ) {
     Box(
         modifier = Modifier
-            .background(background, RoundedCornerShape(YomuTheme.radius.pill))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .background(background, YomuShapeTokens.pill)
+            .padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xxs),
     ) {
         Text(
             text = text,

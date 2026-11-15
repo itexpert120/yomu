@@ -3,6 +3,8 @@ package com.itexpert120.yomu.core.designsystem
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -15,14 +17,14 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun YomuAppSurface(
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.() -> Unit,
+    content: @Composable BoxWithConstraintsScope.() -> Unit,
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
     ) {
-        Box(Modifier.fillMaxSize(), content = content)
+        BoxWithConstraints(Modifier.fillMaxSize(), content = content)
     }
 }
 

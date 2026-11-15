@@ -5,12 +5,7 @@ package com.itexpert120.yomu.feature.library
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -20,6 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
+import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
+import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
+import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
+import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuValueChip
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
@@ -47,17 +47,11 @@ internal fun LibraryOptionsSheet(
         onDismiss = onDismiss,
         wideMaxWidth = 460.dp,
     ) { dismiss ->
+        YomuSheetHeader(title = "Arrange library", onClose = dismiss)
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
-            Text(
-                text = "Arrange library",
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-            )
-
             ArrangementChoiceGroup(
                 title = "Sort by",
                 options = SortMode.entries,
@@ -91,15 +85,6 @@ internal fun LibraryOptionsSheet(
                 enabled = viewMode != LibraryViewMode.List,
                 onColumnsChange = onLandscapeColumnsChange,
             )
-
-            Button(
-                onClick = dismiss,
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Done")
-            }
-            Spacer(Modifier.height(4.dp))
         }
     }
 }
@@ -121,62 +106,64 @@ private fun GridColumnsControl(
     } else {
         (value - LibraryPreferences.MIN_COLUMNS + 1).toFloat()
     }
-    val disabledColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    val labelColor = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else disabledColor
-    val valueColor = if (enabled) MaterialTheme.colorScheme.primary else disabledColor
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = if (value == LibraryPreferences.AUTO_COLUMNS) {
-                    "Automatic"
-                } else {
-                    "$value columns"
-                },
-                color = valueColor,
-                style = MaterialTheme.typography.labelLarge,
+            YomuSectionLabel(text = title, modifier = Modifier.weight(1f))
+            // The readout doubles as the reset back to the adaptive column count.
+            YomuValueChip(
+                text = if (value == LibraryPreferences.AUTO_COLUMNS) "Automatic" else "$value columns",
+                customized = enabled && value != LibraryPreferences.AUTO_COLUMNS,
+                onReset = { onColumnsChange(LibraryPreferences.AUTO_COLUMNS) },
+                resetLabel = "Reset to automatic",
             )
         }
-        Slider(
-            value = sliderValue,
-            onValueChange = { position ->
-                val index = position.roundToInt()
-                onColumnsChange(
-                    if (index == 0) {
-                        LibraryPreferences.AUTO_COLUMNS
-                    } else {
-                        index + LibraryPreferences.MIN_COLUMNS - 1
-                    },
+        YomuSettingContainer {
+            Slider(
+                value = sliderValue,
+                onValueChange = { position ->
+                    val index = position.roundToInt()
+                    onColumnsChange(
+                        if (index == 0) {
+                            LibraryPreferences.AUTO_COLUMNS
+                        } else {
+                            index + LibraryPreferences.MIN_COLUMNS - 1
+                        },
+                    )
+                },
+                valueRange = 0f..(
+                    LibraryPreferences.MAX_COLUMNS - LibraryPreferences.MIN_COLUMNS + 1
+                    ).toFloat(),
+                steps = LibraryPreferences.MAX_COLUMNS - LibraryPreferences.MIN_COLUMNS,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (enabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Automatic",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        text = "${LibraryPreferences.MAX_COLUMNS} columns",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            } else {
+                Text(
+                    text = "Columns apply to the grid views.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
                 )
-            },
-            valueRange = 0f..(
-                LibraryPreferences.MAX_COLUMNS - LibraryPreferences.MIN_COLUMNS + 1
-                ).toFloat(),
-            steps = LibraryPreferences.MAX_COLUMNS - LibraryPreferences.MIN_COLUMNS,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "Automatic",
-                color = labelColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = "7 columns",
-                color = labelColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            }
         }
     }
 }
@@ -192,12 +179,9 @@ private fun <T> ArrangementChoiceGroup(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-        )
+        YomuSectionLabel(text = title)
         YomuConnectedChoiceGroup(
             options = options,
             selected = selected,

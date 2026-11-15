@@ -42,7 +42,9 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuSingleChoiceSegmentedControl
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
 import com.itexpert120.yomu.core.model.CustomFontRef
@@ -87,10 +89,10 @@ internal fun ReaderThemeRow(
                     androidx.compose.material3.Surface(
                         color = Color(palette.backgroundArgb),
                         contentColor = Color(palette.textArgb),
-                        shape = MaterialTheme.shapes.medium,
+                        shape = YomuShapeTokens.tile,
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     ) {
-                        Text("Aa", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+                        Text("Aa", modifier = Modifier.padding(YomuTheme.space.sm), style = MaterialTheme.typography.titleMediumEmphasized)
                     }
                 },
             ) {
@@ -109,20 +111,20 @@ private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (Reader
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(MaterialTheme.shapes.medium)
+                    .clip(YomuShapeTokens.tile)
                     .selectable(
                         selected = selected,
                         role = androidx.compose.ui.semantics.Role.RadioButton,
                         onClick = { onUpdateSettings(palette) },
                     )
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = YomuTheme.space.xxs),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
             ) {
                 androidx.compose.material3.Surface(
                     color = Color(palette.backgroundArgb),
                     contentColor = Color(palette.textArgb),
-                    shape = MaterialTheme.shapes.large,
+                    shape = YomuShapeTokens.tile,
                     border = androidx.compose.foundation.BorderStroke(
                         width = if (selected) 2.dp else 1.dp,
                         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
@@ -155,8 +157,8 @@ internal fun ReaderCustomThemeRow(
         YomuSectionLabel("Saved")
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
             customThemes.forEach { theme ->
                 YomuColorSwatch(
@@ -202,8 +204,8 @@ internal fun ReaderFontRow(
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
         ReaderFont.entries.forEach { font ->
             FontChip(
@@ -252,7 +254,7 @@ internal fun ReaderFontSizeControl(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
             RoundIcon(Icons.Rounded.TextDecrease, "Decrease font size", compact = compact) {
                 onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale - step)))
@@ -439,8 +441,8 @@ private fun CompactChromeToggles(
             }
             // Items stay visible but disable when the footer is off, so the layout doesn't jump.
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
             ) {
                 // Immersive mode never shows these in the footer (the status bar has them instead).
                 if (!settings.immersiveChrome) {
@@ -462,8 +464,8 @@ private fun CompactChromeToggles(
         YomuSettingContainer(position = YomuSettingPosition.Last, dense = true) {
             Text(text = "Screen", style = MaterialTheme.typography.bodyMedium)
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
             ) {
                 ToggleChip("Keep on", settings.keepScreenOn) {
                     onUpdateSettings(settings.copy(keepScreenOn = it))
@@ -497,7 +499,7 @@ private fun ToggleChip(
         } else {
             null
         },
-        shape = MaterialTheme.shapes.large,
+        shape = YomuShapeTokens.pill,
     )
 }
 
@@ -516,7 +518,7 @@ internal fun ReaderPreferenceControls(
     customFonts: List<CustomFontRef> = emptyList(),
     onManageFonts: (() -> Unit)? = null,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md)) {
         YomuSettingGroup(
             title = "Theme",
             subtitle = "Choose the page mood that welcomes you into every book.",
