@@ -20,8 +20,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // JNA (via the Convex client) also ships armeabi/mips libraries no supported device can load.
+        // Release ships ARM only; debug and benchmark add the x86 ABIs below so emulators still work.
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
     }
 
@@ -31,6 +32,7 @@ android {
         // the sync phrase and all records are end-to-end encrypted. Empty = sync unavailable.
         debug {
             buildConfigField("String", "SYNC_CONVEX_URL", "\"https://industrious-dogfish-192.eu-west-1.convex.cloud\"")
+            ndk { abiFilters += listOf("x86_64", "x86") }
         }
         release {
             buildConfigField("String", "SYNC_CONVEX_URL", "\"https://colorful-kudu-684.convex.cloud\"")
@@ -45,6 +47,7 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
+            ndk { abiFilters += listOf("x86_64", "x86") }
         }
     }
     compileOptions {

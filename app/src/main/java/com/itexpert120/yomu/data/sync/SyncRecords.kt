@@ -119,4 +119,7 @@ internal val SyncJson = Json {
     encodeDefaults = true
     ignoreUnknownKeys = true
     explicitNulls = true
+    // Decode-only: an enum value this build no longer has (e.g. a removed bundled font synced from
+    // an older device) becomes the field's default rather than failing the record.
+    coerceInputValues = true
 }

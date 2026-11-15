@@ -16,7 +16,8 @@ enum class ReaderThemeMode { Light, Dark, Sepia, Black, Custom }
 enum class ReaderTextAlign(val label: String) { Default("Auto"), Left("Left"), Justify("Justify") }
 
 /** Bundled reading fonts. [Lora] is the default. Users may also install custom fonts; see
- *  [ReaderSettings.customFont]. */
+ *  [ReaderSettings.customFont]. Removing a value is safe: stored or synced settings that name a
+ *  font no longer bundled decode to the default (the settings and sync Json coerce unknown enums). */
 @Serializable
 enum class ReaderFont(val displayName: String, val cssFamily: String) {
     Lora("Lora", "Lora"),
@@ -24,7 +25,6 @@ enum class ReaderFont(val displayName: String, val cssFamily: String) {
     Rubik("Rubik", "Rubik"),
     Cardo("Cardo", "Cardo"),
     Nunito("Nunito", "Nunito"),
-    Merriweather("Merriweather", "Merriweather"),
 }
 
 /**

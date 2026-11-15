@@ -16,7 +16,7 @@ The recommended stack has been ADOPTED. Pinned versions in use:
 - Navigation Compose 2.9.8 — type-safe routes.
 - kotlinx.serialization — routes and serialized data.
 - SAF — book import with sha256 dedup.
-- Six bundled reading fonts (Lora, Karla, Rubik, Cardo, Nunito, Merriweather) in `app/src/main/assets/fonts/`, registered with Readium.
+- Five bundled reading fonts (Lora, Karla, Rubik, Cardo, Nunito) in `app/src/main/assets/fonts/`, registered with Readium.
 
 NOT yet adopted: Room FTS for search, in-book search, WorkManager-based import (import is currently in-process), Paging 3, EPUBCheck, jsoup, Okio, baseline profiles / macrobenchmark, and any TTS / OPDS / PDF / LCP modules. The per-library sections below keep these as forward-looking options.
 

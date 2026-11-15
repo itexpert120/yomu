@@ -17,7 +17,7 @@ What exists in `core/designsystem`:
 
 The initial migration deliberately uses native Material product surfaces. Reader pages and reader-specific colour themes remain custom where EPUB comfort requires it, while chrome and supporting surfaces use Material semantics, touch targets, ripples, fixed Material 3 colour roles by default, optional Android 12+ dynamic colours for both light and dark modes, and adaptive sheet patterns.
 
-Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), six bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
+Reader/library design surfaces in place: a working EPUB reader with themes (incl. custom background/text colours), five bundled fonts with live previews, brightness, scroll/paged modes, and global + per-book settings; library with search/sort/group/multi-select; book details with virtualized TOC, per-chapter read state, and a cover viewer.
 
 Expressive refinement now starts with Library: a collapsing heading and labeled search/import actions. Shared buttons use Material's expressive press shapes and size-aware typography/padding; the theme explicitly selects expressive motion. Resume remains a floating action button with its scroll-responsive label; there is no large Continue Reading card. Existing collection modes remain available. Rendered device validation remains separate from compilation.
 
@@ -307,7 +307,7 @@ Reader content:
 
 Bundled reader fonts (shipped):
 
-- Six families live in `app/src/main/assets/fonts/` and are registered with Readium: Lora, Karla, Rubik, Cardo, Nunito, and Merriweather. Each is exposed in the reader with a live preview.
+- Five families live in `app/src/main/assets/fonts/` and are registered with Readium: Lora, Karla, Rubik, Cardo, and Nunito. Each is exposed in the reader with a live preview.
 
 The original evaluation shortlist (Literata, Atkinson Hyperlegible, IBM Plex Sans, JetBrains Mono) was not adopted; revisit only if the reader needs accessibility/mono coverage beyond the current set. Licensing must be checked before bundling any additional fonts.
 

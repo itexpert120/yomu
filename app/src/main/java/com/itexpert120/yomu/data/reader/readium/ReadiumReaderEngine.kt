@@ -611,18 +611,6 @@ private class ReadiumReaderSession(
                         setFontWeight(100..900)
                     }
                 }
-                addFontFamilyDeclaration(FontFamily("Merriweather")) {
-                    addFontFace {
-                        addSource("fonts/Merriweather-Regular.ttf", preload = shouldPreloadBundledFont("Merriweather"))
-                        setFontStyle(FontStyle.NORMAL)
-                        setFontWeight(100..900)
-                    }
-                    addFontFace {
-                        addSource("fonts/Merriweather-Italic.ttf")
-                        setFontStyle(FontStyle.ITALIC)
-                        setFontWeight(100..900)
-                    }
-                }
             },
         )
 

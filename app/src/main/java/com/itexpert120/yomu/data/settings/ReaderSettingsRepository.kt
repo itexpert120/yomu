@@ -30,6 +30,9 @@ class ReaderSettingsRepository @Inject constructor(
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
+        // A stored value for a since-removed option (e.g. a bundled font) falls back to the default
+        // instead of invalidating the whole settings object.
+        coerceInputValues = true
     }
 
     val global: Flow<ReaderSettings> = dataStore.data.map { prefs ->

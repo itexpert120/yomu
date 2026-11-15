@@ -18,7 +18,7 @@ The reader is partly built. EPUB content renders through Readium's `EpubNavigato
 | Chapter selector | Done | Discrete TOC-chapter slider that jumps to each chapter's start, with prev/next **chapter** arrows in the Controls sheet. |
 | Theme presets + custom colours | Partial | Presets: Light / Dark (default, soft `#16181D`, non-OLED) / Sepia / Black / Custom. Custom exposes background + text colour pickers. The longer preset/background-pattern lists below are pending. |
 | Brightness | Done | "Use system brightness" toggle or a manual slider (live preview while dragging, commit on release) applied via window `screenBrightness`. |
-| Fonts | Partial | Scroll/paged toggle; font-family chips that preview each typeface (Lora default, Karla, Rubik, Cardo, Nunito, Merriweather; bundled TTFs registered with Readium); font-size slider. Per-role serif/sans/mono assignment and custom-font import are pending. |
+| Fonts | Partial | Scroll/paged toggle; font-family chips that preview each typeface (Lora default, Karla, Rubik, Cardo, Nunito; bundled TTFs registered with Readium); font-size slider. Per-role serif/sans/mono assignment and custom-font import are pending. |
 | TOC | Done | Flattened TOC in the reader and Book Details; logical sections can span multiple EPUB resources. |
 | Chapter read-tracking | Done | Position-weighted per-section percentages persist in Room; a section is marked read only at its logical end. |
 | Reader settings model | Done | One `ReaderSettings`: global default (DataStore) overridden per-book (Room `reader_settings`); editing inside the reader writes that book's override (per-book-on-edit). |
@@ -209,7 +209,7 @@ Actions:
 
 ## Font Settings
 
-Current state: the controls sheet's **Fonts** tab offers a scroll/paged layout toggle, font-family chips that preview each typeface, and a font-size slider. Six bundled families are registered with Readium (Lora default, Karla, Rubik, Cardo, Nunito, Merriweather), with the TTFs in `assets/fonts/`. Per-role (serif/sans/mono) assignment and custom-font import are not built.
+Current state: the controls sheet's **Fonts** tab offers a scroll/paged layout toggle, font-family chips that preview each typeface, and a font-size slider. Five bundled families are registered with Readium (Lora default, Karla, Rubik, Cardo, Nunito), with the TTFs in `assets/fonts/`. Per-role (serif/sans/mono) assignment and custom-font import are not built.
 
 Settings:
 

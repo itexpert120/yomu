@@ -312,7 +312,7 @@ Background mode values:
 
 ### CustomFont
 
-> Implemented. Six bundled fonts are available offline, and users may explicitly download additional Google Fonts into app-private storage.
+> Implemented. Five bundled fonts are available offline, and users may explicitly download additional Google Fonts into app-private storage.
 
 Fields:
 
