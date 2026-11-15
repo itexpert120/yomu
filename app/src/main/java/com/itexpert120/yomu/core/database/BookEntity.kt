@@ -36,4 +36,8 @@ data class BookEntity(
     // Epoch millis for the reading timeline; 0 = not yet started / not yet finished.
     val startedAt: Long,
     val finishedAt: Long,
+    // Layout-independent position (first visible element + its text) for resuming on other screens.
+    val syncLocatorJson: String? = null,
+    // When the user last edited title/author/etc.; 0 = untouched import metadata (never synced).
+    val metadataEditedAt: Long = 0,
 )

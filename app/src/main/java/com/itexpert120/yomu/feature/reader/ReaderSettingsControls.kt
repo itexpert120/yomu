@@ -1,5 +1,10 @@
 package com.itexpert120.yomu.feature.reader
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -343,19 +348,31 @@ internal fun ReaderChromeToggles(
         }
         // The per-item toggles stay visible but disable when the footer is off, so the layout doesn't
         // jump and it's clear what the footer would contain.
-        YomuSettingRow(title = "Battery", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
-            YomuTogglePill(
-                checked = settings.footerShowBattery,
-                onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) },
-                enabled = settings.showFooter,
-            )
-        }
-        YomuSettingRow(title = "Clock", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
-            YomuTogglePill(
-                checked = settings.footerShowClock,
-                onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) },
-                enabled = settings.showFooter,
-            )
+        // Immersive mode only reveals the footer alongside the system status bar, which already shows
+        // battery and time, so those two items can never appear there and their toggles go away.
+        AnimatedVisibility(
+            visible = !settings.immersiveChrome,
+            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        ) {
+            YomuSettingList {
+                YomuSettingRow(title = "Battery", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
+                    YomuTogglePill(
+                        checked = settings.footerShowBattery,
+                        onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) },
+                        enabled = settings.showFooter,
+                    )
+                }
+                YomuSettingRow(title = "Clock", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
+                    YomuTogglePill(
+                        checked = settings.footerShowClock,
+                        onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) },
+                        enabled = settings.showFooter,
+                    )
+                }
+            }
         }
         YomuSettingRow(title = "Reading progress", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
             YomuTogglePill(
@@ -425,11 +442,14 @@ private fun CompactChromeToggles(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                ToggleChip("Battery", settings.footerShowBattery, settings.showFooter) {
-                    onUpdateSettings(settings.copy(footerShowBattery = it))
-                }
-                ToggleChip("Clock", settings.footerShowClock, settings.showFooter) {
-                    onUpdateSettings(settings.copy(footerShowClock = it))
+                // Immersive mode never shows these in the footer (the status bar has them instead).
+                if (!settings.immersiveChrome) {
+                    ToggleChip("Battery", settings.footerShowBattery, settings.showFooter) {
+                        onUpdateSettings(settings.copy(footerShowBattery = it))
+                    }
+                    ToggleChip("Clock", settings.footerShowClock, settings.showFooter) {
+                        onUpdateSettings(settings.copy(footerShowClock = it))
+                    }
                 }
                 ToggleChip("Progress", settings.footerShowProgress, settings.showFooter) {
                     onUpdateSettings(settings.copy(footerShowProgress = it))

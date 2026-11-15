@@ -18,8 +18,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingWriteReceipt::class,
         HighlightEntity::class,
         BookmarkEntity::class,
-        LegacySyncMetadataEntity::class,
-        LegacySyncRecordEntity::class,
+        SyncMetadataEntity::class,
+        SyncLedgerEntity::class,
     ],
     version = YomuDatabase.VERSION,
     exportSchema = true,
@@ -28,9 +28,31 @@ abstract class YomuDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun highlightDao(): HighlightDao
     abstract fun bookmarkDao(): BookmarkDao
+    abstract fun syncDao(): SyncDao
 
     companion object {
-        const val VERSION = 16
+        const val VERSION = 17
+
+        /**
+         * v17 activates sync: books gain a portable (layout-independent) locator and a metadata-edit
+         * time; reading sessions gain a global id and their book's content hash so they can sync and
+         * outlive the local book. Leftovers from the experimental v13 sync are discarded.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `syncLocatorJson` TEXT")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `metadataEditedAt` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `reading_sessions` ADD COLUMN `uuid` TEXT")
+                db.execSQL("ALTER TABLE `reading_sessions` ADD COLUMN `bookSha256` TEXT")
+                db.execSQL(
+                    "UPDATE `reading_sessions` SET `uuid` = lower(hex(randomblob(16))), " +
+                        "`bookSha256` = (SELECT `sha256` FROM `books` WHERE `books`.`id` = `reading_sessions`.`bookId`)",
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_reading_sessions_uuid` ON `reading_sessions` (`uuid`)")
+                db.execSQL("DELETE FROM `sync_records`")
+                db.execSQL("DELETE FROM `sync_metadata`")
+            }
+        }
 
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -210,9 +232,8 @@ abstract class YomuDatabase : RoomDatabase() {
         }
 
         /**
-         * v14 accepts the v13 schema shipped by an earlier development build. That build added
-         * dormant sync tables, while all active library tables match the current schema. They stay
-         * in the Room schema for data compatibility but are not connected to a current feature.
+         * v14 accepts the v13 schema shipped by an earlier development build, which added the sync
+         * tables. They were dormant until v17 reused them for the current sync design.
          */
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {

@@ -112,6 +112,8 @@ class ReaderViewModel @Inject constructor(
     fun onResetBookSettings() = dispatch(ReadingExperienceAction.ResetSettings)
     fun onRetrySettings() = dispatch(ReadingExperienceAction.RetrySettings)
     fun onRetryAnnotations() = dispatch(ReadingExperienceAction.RetryAnnotations)
+    fun onAcceptSyncOffer() = dispatch(ReadingExperienceAction.AcceptSyncOffer)
+    fun onDismissSyncOffer() = dispatch(ReadingExperienceAction.DismissSyncOffer)
 
     fun onOpenCustomTheme() = _state.update { it.copy(customSheetVisible = true, sheetVisible = false) }
 

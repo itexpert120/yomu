@@ -56,14 +56,15 @@ interface BookDao {
 
     // Reverting to unread clears the finished mark but keeps the original start (it was started once).
     @Query(
-        "UPDATE books SET progress = 0.0, totalProgression = NULL, locatorJson = NULL, " +
+        "UPDATE books SET progress = 0.0, totalProgression = NULL, locatorJson = NULL, syncLocatorJson = NULL, " +
             "currentChapterId = NULL, finishedAt = 0 WHERE id = :id",
     )
     suspend fun markUnread(id: String)
 
     @Query(
         "UPDATE books SET title = :title, subtitle = :subtitle, author = :author, " +
-            "description = :description, coverImagePath = :coverImagePath WHERE id = :id",
+            "description = :description, coverImagePath = :coverImagePath, " +
+            "metadataEditedAt = :editedAt WHERE id = :id",
     )
     suspend fun updateMetadata(
         id: String,
@@ -72,11 +73,13 @@ interface BookDao {
         author: String,
         description: String?,
         coverImagePath: String?,
+        editedAt: Long,
     )
 
     @Query(
         "UPDATE books SET progress = :progress, totalProgression = :totalProgression, " +
-            "locatorJson = :locatorJson, currentChapterId = :currentChapterId, " +
+            "locatorJson = :locatorJson, syncLocatorJson = :syncLocatorJson, " +
+            "currentChapterId = :currentChapterId, " +
             "lastOpenedAt = :lastOpenedAt, " +
             "startedAt = CASE WHEN startedAt = 0 THEN :lastOpenedAt ELSE startedAt END, " +
             "finishedAt = CASE WHEN :completed = 1 THEN " +
@@ -88,6 +91,7 @@ interface BookDao {
         progress: Float,
         totalProgression: Double?,
         locatorJson: String?,
+        syncLocatorJson: String?,
         currentChapterId: String?,
         completed: Boolean,
         lastOpenedAt: Long,

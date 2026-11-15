@@ -2,8 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Word lookups, explicit web searches, and user-initiated Google Fonts downloads. -->
+    <!-- Word lookups, explicit web searches, user-initiated Google Fonts downloads, and sync. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Sync reconnects when the network comes back. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Only for scanning a sync QR code; asked for when the scanner opens. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application
         android:name=".YomuApplication"

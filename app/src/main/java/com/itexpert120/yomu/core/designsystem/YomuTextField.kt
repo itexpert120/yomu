@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.VisualTransformation
 
 /**
  * Labeled Material 3 text field used by editors and forms. By default the IME action moves focus to
@@ -40,6 +41,10 @@ fun YomuTextField(
     isError: Boolean = false,
     keyboardOptions: KeyboardOptions? = null,
     keyboardActions: KeyboardActions? = null,
+    // E.g. PasswordVisualTransformation for secret fields.
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    // Replaces the default clear button (e.g. a show/hide password toggle).
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
     val defaultAction: () -> Unit = {
@@ -56,7 +61,7 @@ fun YomuTextField(
         placeholder = placeholder.takeIf { it.isNotEmpty() }?.let { text ->
             { Text(text) }
         },
-        trailingIcon = if (singleLine && value.isNotEmpty()) {
+        trailingIcon = trailingIcon ?: if (singleLine && value.isNotEmpty()) {
             {
                 IconButton(onClick = { onValueChange("") }, shapes = IconButtonDefaults.shapes()) {
                     Icon(Icons.Rounded.Close, contentDescription = "Clear $label")
@@ -67,6 +72,7 @@ fun YomuTextField(
         },
         supportingText = supportingText?.let { text -> { Text(text) } },
         isError = isError,
+        visualTransformation = visualTransformation,
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = keyboardOptions ?: KeyboardOptions(capitalization = capitalization, imeAction = imeAction),

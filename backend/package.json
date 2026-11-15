@@ -1,0 +1,16 @@
+{
+  "name": "yomu-sync-backend",
+  "private": true,
+  "description": "Convex backend for Yomu sync: an end-to-end-encrypted record store addressed by sync-phrase tokens.",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "typecheck": "tsc -p convex --noEmit"
+  },
+  "dependencies": {
+    "convex": "^1.50.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

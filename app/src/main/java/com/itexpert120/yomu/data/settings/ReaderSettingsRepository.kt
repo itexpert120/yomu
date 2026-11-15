@@ -123,7 +123,7 @@ class ReaderSettingsRepository @Inject constructor(
 
     private fun decode(raw: String): ReaderSettings = decodeOrNull(raw) ?: ReaderSettings()
 
-    private fun decodeOrNull(raw: String): ReaderSettings? = runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrNull()
+    internal fun decodeOrNull(raw: String): ReaderSettings? = runCatching { json.decodeFromString<ReaderSettings>(raw) }.getOrNull()
 
     private companion object {
         val KeyGlobal = stringPreferencesKey("reader_settings_global")

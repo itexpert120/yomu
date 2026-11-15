@@ -578,6 +578,36 @@ class ReadingExperienceTest {
         assertEquals(null, writes.error.value)
     }
 
+    @Test
+    fun finalPositionOfPreviousChapterIsSavedWhenTheNextChapterStarts() = runBlocking {
+        val books = FakeBookRepository()
+        val session = FakeReaderSession()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            books = books,
+            scope = this,
+            progressSaveIntervalMillis = Long.MAX_VALUE,
+        )
+
+        experience.start()
+        awaitCondition { experience.state.value.navigator === session }
+        session.renderState.value = ReaderRenderState.Ready("chapter.xhtml")
+        awaitCondition { experience.state.value.renderState is ReaderRenderState.Ready }
+        session.currentLocator.value = locator().copy(chapterProgression = 1.0)
+        awaitCondition { experience.state.value.locator?.chapterProgression == 1.0 }
+        // Turning the last page lands in the next chapter before any periodic save has run.
+        session.currentLocator.value = locator().copy(
+            locatorJson = "{next}",
+            href = "next.xhtml",
+            chapterId = "next.xhtml",
+            chapterProgression = 0.0,
+        )
+        awaitCondition { books.savedProgress.any { it.chapterId == "chapter.xhtml" } }
+
+        assertEquals(1.0, books.savedProgress.first { it.chapterId == "chapter.xhtml" }.chapterProgress)
+        experience.close()
+    }
+
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),

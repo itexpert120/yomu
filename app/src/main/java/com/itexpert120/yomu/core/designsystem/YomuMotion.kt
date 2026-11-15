@@ -1,7 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
 import android.animation.ValueAnimator
-import android.os.Build
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
@@ -57,7 +56,7 @@ object YomuMotion {
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
-fun yomuAnimationsEnabled(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+fun yomuAnimationsEnabled(): Boolean = ValueAnimator.areAnimatorsEnabled()
 
 /**
  * Enter for edge-anchored chrome (bars, pills): fade + slide from its own edge — bottom-anchored

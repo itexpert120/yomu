@@ -67,8 +67,14 @@ data class ReaderLocator(
     // Stable logical TOC section containing [href]. A section may span several reading-order
     // resources, unlike [href], which always identifies the currently rendered resource.
     val chapterId: String? = null,
+    // Other TOC sections that start at the same position as [chapterId] and so share its progress:
+    // several fragment links into one resource whose anchor positions are unknown (for example a
+    // volume's "Image Gallery / Characters / Artworks / Locations" back matter in a single file).
+    val sharedChapterIds: List<String> = emptyList(),
     // A preceding logical section whose end was just crossed through continuous reading.
     val completedChapterId: String? = null,
+    // Sections sharing [completedChapterId]'s start; they complete along with it.
+    val completedSharedChapterIds: List<String> = emptyList(),
     // True only when the actual final page/end of the publication has been reached.
     val completed: Boolean = false,
 )
@@ -184,6 +190,13 @@ interface ReaderSession : ReaderNavigator {
 
     /** Jumps to a specific locator (e.g. a TOC entry's stored position). */
     fun goToLocator(locatorJson: String)
+
+    /**
+     * The current position in a form that survives a different screen size, font, or layout: the
+     * first visible element (selector + surrounding text) with the chapter progression as fallback.
+     * Used to resume on other devices. Null when the navigator can't tell yet.
+     */
+    suspend fun portableLocator(): String? = null
 
     /**
      * Renders the given highlights on the page (replacing the previous set). Safe to call before the

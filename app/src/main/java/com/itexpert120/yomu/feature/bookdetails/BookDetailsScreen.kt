@@ -186,10 +186,12 @@ fun BookDetailsScreen(
         toc.selectedCount == selectableChapterCount
     var readButtonCollapsed by remember { mutableStateOf(false) }
     var topBarHeightPx by remember { mutableIntStateOf(0) }
-    // Two-pane only: where the book's own title block and the left pane's top sit on screen, so
-    // the app bar reveals the title exactly when the in-pane title scrolls out of view.
+    // Where the book's own title block sits on screen versus what covers it (the app bar in one
+    // pane, the details pane's top in two), so the bar reveals the title the moment the in-page
+    // title scrolls out of view.
     var identityBottomPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
     var detailsPaneTopPx by remember { mutableFloatStateOf(0f) }
+    var topBarBottomPx by remember { mutableFloatStateOf(0f) }
     var twoPane by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val readFabScrollThresholdPx = with(density) { ReadFabScrollThreshold.roundToPx() }
@@ -318,6 +320,9 @@ fun BookDetailsScreen(
                                     onCoverClick = {
                                         if (book.coverImagePath != null) showCover = true
                                     },
+                                    identityModifier = Modifier.onGloballyPositioned {
+                                        identityBottomPx = it.boundsInWindow().bottom
+                                    },
                                 )
                             }
 
@@ -364,7 +369,7 @@ fun BookDetailsScreen(
                 titleVisible = if (twoPane) {
                     identityBottomPx <= detailsPaneTopPx
                 } else {
-                    listState.firstVisibleItemIndex > 0
+                    listState.firstVisibleItemIndex > 0 || identityBottomPx <= topBarBottomPx
                 },
                 onBack = onBack,
                 onEdit = onEdit,
@@ -375,7 +380,8 @@ fun BookDetailsScreen(
                 onDeselectAllChapters = onDeselectAllChapters,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .onSizeChanged { topBarHeightPx = it.height },
+                    .onSizeChanged { topBarHeightPx = it.height }
+                    .onGloballyPositioned { topBarBottomPx = it.boundsInWindow().bottom },
             )
 
             // Primary action floats over the content (hidden while multi-selecting chapters). Two
@@ -478,15 +484,15 @@ private fun BookDetailsTopBar(
                 title = {
                     AnimatedVisibility(
                         visible = titleVisible,
-                        enter = fadeIn(animationSpec = tween(durationMillis = 180)) +
+                        enter = fadeIn(animationSpec = tween(durationMillis = 100)) +
                             slideInVertically(
-                                animationSpec = tween(durationMillis = 260),
-                                initialOffsetY = { fullHeight -> fullHeight / 2 },
+                                animationSpec = tween(durationMillis = 150),
+                                initialOffsetY = { fullHeight -> fullHeight / 4 },
                             ),
-                        exit = fadeOut(animationSpec = tween(durationMillis = 120)) +
+                        exit = fadeOut(animationSpec = tween(durationMillis = 80)) +
                             slideOutVertically(
-                                animationSpec = tween(durationMillis = 180),
-                                targetOffsetY = { fullHeight -> fullHeight / 2 },
+                                animationSpec = tween(durationMillis = 120),
+                                targetOffsetY = { fullHeight -> fullHeight / 4 },
                             ),
                         label = "bookDetailsTopBarTitle",
                     ) {
@@ -1205,7 +1211,8 @@ private fun TocRow(
         targetValue = when {
             entry.selected -> MaterialTheme.colorScheme.onSecondaryContainer
             !entry.jumpable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-            entry.read -> MaterialTheme.colorScheme.onSurfaceVariant
+            // Read chapters recede (like visited links) so unread ones stand out at a glance.
+            entry.read -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
             else -> MaterialTheme.colorScheme.onSurface
         },
         animationSpec = tween(durationMillis = 220),
@@ -1304,11 +1311,18 @@ private fun TocListItem(
                             checked = entry.selected,
                             onCheckedChange = null,
                         )
-                    } else {
+                    } else if (entry.read) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = "Read",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    } else if (progress > 0f) {
                         Text(
                             text = "${(progress * 100).toInt()}%",
-                            color = supportingColor,
-                            style = MaterialTheme.typography.labelMedium,
+                            color = if (entry.selected) supportingColor else MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                         )
                     }
                 }

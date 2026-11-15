@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.util.Base64
+import android.util.Log
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
@@ -97,6 +98,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
+import kotlin.math.sign
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 
@@ -291,6 +293,8 @@ private class ReadiumReaderSession(
 
     private var latestVisualPage: VisualPageState? = null
     private var pendingCompletedChapterId: String? = null
+    private var pageTurnSettle: Job? = null
+    private var queuedPageTurns = 0
 
     // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
     private var currentSettings: ReaderSettings = initialSettings
@@ -322,6 +326,16 @@ private class ReadiumReaderSession(
             )
         }
         .sortedWith(compareBy<LogicalSection> { it.orderIndex }.thenBy { it.startProgression })
+
+    // Fragment links into one resource all resolve to the same start (their anchors' positions
+    // aren't known without the DOM), so only the last of them would ever be "current". Let every
+    // section in such a run share the current one's progress instead of leaving the rest at 0%.
+    private val sectionsSharingStart: Map<String, List<String>> = logicalSections
+        .groupBy { it.orderIndex to it.startProgression }
+        .values
+        .filter { it.size > 1 }
+        .flatMap { group -> group.map { section -> section.id to group.map { it.id }.minus(section.id) } }
+        .toMap()
 
     private val listener = object : EpubNavigatorFragment.Listener {
         override fun onExternalLinkActivated(url: AbsoluteUrl) {
@@ -361,6 +375,7 @@ private class ReadiumReaderSession(
         }
 
         override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
+            onPageTurnSettled()
             updateCurrentLocator(
                 locator,
                 visualPage = VisualPageState(
@@ -858,7 +873,9 @@ private class ReadiumReaderSession(
             bookProgress = metrics.bookProgress,
             chapterPagesLeft = visualPagesLeft,
             chapterId = metrics.chapter?.id,
+            sharedChapterIds = metrics.chapter?.id?.let { sectionsSharingStart[it] }.orEmpty(),
             completedChapterId = crossedChapterId,
+            completedSharedChapterIds = crossedChapterId?.let { sectionsSharingStart[it] }.orEmpty(),
             completed = metrics.completed,
         )
         if (resourceChanged) {
@@ -1072,6 +1089,7 @@ private class ReadiumReaderSession(
         val generation = renderGeneration
         revealWatchdog = scope.launch {
             delay(STYLE_REVEAL_TIMEOUT_MS)
+            Log.w(TAG, "Chapter reveal timed out (generation $generation)")
             renderGate.fail(generation)
         }
     }
@@ -1196,15 +1214,58 @@ private class ReadiumReaderSession(
 
     // Page turns slide horizontally (Readium's animated pagination) unless the system has animations
     // turned off. Readium defaults to an instant jump, which made tap-to-turn feel like a hard cut.
-    override fun goForward() {
-        (navigator as? OverflowableNavigator)?.goForward(animated = pageTurnAnimated())
+    override fun goForward() = requestPageTurn(forward = true)
+
+    override fun goBackward() = requestPageTurn(forward = false)
+
+    // Readium computes each turn from the WebView's scroll position at that instant. A tap that lands
+    // mid-animation measures a half-scrolled page, and one that lands while the next resource is still
+    // settling reads as "can't scroll" and jumps a whole chapter; pages passed that way also never
+    // report a settled page, so the chapter left behind keeps an early progress. Run turns one at a
+    // time instead: taps made during a turn are queued and replayed once it settles. Rapid tapping is
+    // how readers catch up to a position (e.g. from another device), so every tap counts and queued
+    // turns skip the slide animation to catch up quickly.
+    private fun requestPageTurn(forward: Boolean) {
+        val step = if (forward) 1 else -1
+        if (pageTurnSettle?.isActive == true) {
+            queuedPageTurns = if (queuedPageTurns == 0 || queuedPageTurns.sign == step) {
+                (queuedPageTurns + step).coerceIn(-MAX_QUEUED_PAGE_TURNS, MAX_QUEUED_PAGE_TURNS)
+            } else {
+                // Reversing direction cancels the turns still waiting in the old direction.
+                0
+            }
+            return
+        }
+        startPageTurn(forward, animated = pageTurnAnimated())
     }
 
-    override fun goBackward() {
-        (navigator as? OverflowableNavigator)?.goBackward(animated = pageTurnAnimated())
+    private fun startPageTurn(forward: Boolean, animated: Boolean) {
+        val nav = navigator as? OverflowableNavigator ?: return
+        // Fallback for turns that produce no page event (e.g. at the very start or end of the book).
+        pageTurnSettle = scope.launch {
+            delay(PAGE_TURN_SETTLE_TIMEOUT_MS)
+            onPageTurnSettled()
+        }
+        if (forward) nav.goForward(animated = animated) else nav.goBackward(animated = animated)
     }
 
-    private fun pageTurnAnimated(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+    private fun onPageTurnSettled() {
+        val settle = pageTurnSettle ?: return
+        pageTurnSettle = null
+        settle.cancel()
+        val queued = queuedPageTurns
+        if (queued == 0) return
+        queuedPageTurns -= queued.sign
+        startPageTurn(forward = queued > 0, animated = false)
+    }
+
+    private fun cancelQueuedPageTurns() {
+        queuedPageTurns = 0
+        pageTurnSettle?.cancel()
+        pageTurnSettle = null
+    }
+
+    private fun pageTurnAnimated(): Boolean = ValueAnimator.areAnimatorsEnabled()
 
     override fun nextChapter() = goToLogicalSectionOffset(+1)
 
@@ -1292,6 +1353,24 @@ private class ReadiumReaderSession(
         scope.launch { navigator?.let { goChecked(it, locator) } }
     }
 
+    // Readium's scrollToLocator anchors on the element's text first and falls back to progression,
+    // so this lands on the same paragraph whatever the other device's screen, font, or layout.
+    override suspend fun portableLocator(): String? = withContext(Dispatchers.Main.immediate) {
+        val nav = navigator ?: return@withContext null
+        val current = lastLocator ?: return@withContext null
+        val visible = runCatching { nav.firstVisibleElementLocator() }.getOrNull()
+            ?.takeIf { it.href.toString() == current.href.toString() }
+            ?: return@withContext current.toJSON().toString()
+        visible.copy(
+            title = current.title,
+            locations = visible.locations.copy(
+                progression = current.locations.progression,
+                totalProgression = current.locations.totalProgression,
+                position = current.locations.position,
+            ),
+        ).toJSON().toString()
+    }
+
     /**
      * Runs a locator jump and handles Readium's Boolean failure signal. A failed jump immediately
      * lifts the transition cover, then confirms a return to the last valid locator. If even that
@@ -1303,6 +1382,8 @@ private class ReadiumReaderSession(
         recoverOnFailure: Boolean = true,
     ): Boolean {
         val fallback = lastLocator
+        // An explicit jump supersedes any page turns still queued from taps.
+        cancelQueuedPageTurns()
         val succeeded = runCatching { nav.go(target, animated = false) }.getOrDefault(false)
         if (succeeded) return true
 
@@ -1459,6 +1540,9 @@ private class ReadiumReaderSession(
 
     private fun Locator.matchesRestoreTarget(target: Locator): Boolean {
         if (href != target.href) return false
+        // A text-anchored target (e.g. a position synced from another device) lands on its
+        // paragraph, whose progression legitimately differs on this screen and layout.
+        if (target.text.highlight != null) return true
         val actual = locations.progression ?: locations.totalProgression
         val expected = target.locations.progression ?: target.locations.totalProgression
         return actual == null || expected == null || kotlin.math.abs(actual - expected) < 0.01
@@ -1804,6 +1888,8 @@ private class ReadiumReaderSession(
     private companion object {
         // Tap-zone boundaries as fractions of the page width.
         const val TAP_LEFT = 0.33f
+        const val MAX_QUEUED_PAGE_TURNS = 50
+        const val PAGE_TURN_SETTLE_TIMEOUT_MS = 900L
         const val TAP_RIGHT = 0.67f
 
         // Menu item ids for the actions we rebuild in the text-selection menu.
@@ -1860,6 +1946,7 @@ private class ReadiumReaderSession(
 
         // Safety cap: reveal a transitioning chapter even if its onPageLoaded never arrives, so a
         // failed/stalled load can't leave the reader stuck behind the transition cover.
+        const val TAG = "ReadiumReaderEngine"
         const val STYLE_REVEAL_TIMEOUT_MS = 3000L
 
         const val CHAPTER_START_FALLBACK_PADDING_DP = 20f

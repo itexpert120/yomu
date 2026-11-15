@@ -16,11 +16,16 @@ data class ReadingTarget(
 
 data class ReadingProgressSnapshot(
     val locatorJson: String,
+    // Layout-independent form of the same position (see ReaderSession.portableLocator), for sync.
+    val portableLocatorJson: String? = null,
     val bookProgress: Double,
     val currentHref: String?,
     val chapterId: String?,
     val chapterProgress: Double?,
+    // Sections that share [chapterId]'s start position and therefore its progress.
+    val sharedChapterIds: List<String> = emptyList(),
     val completedChapterId: String? = null,
+    val completedSharedChapterIds: List<String> = emptyList(),
     val completed: Boolean,
 )
 

@@ -7,13 +7,13 @@ This document defines the first-pass data model for Yomu. It is intentionally im
 Room is live at **schema version 14** (`core/database/YomuDatabase`, schemas exported under `app/schemas`, with additive migrations 1→14 and migration-test coverage). The as-built schema remains deliberately simpler than the relational target described in the rest of this document:
 
 - Built tables: `books`, `chapter_reads`, `chapter_progress`, `reader_settings`, `book_toc`, `reading_days`, `reading_sessions`, `highlights`, and `bookmarks`.
-- Compatibility-only tables: `sync_metadata` and `sync_records` are retained so databases from an experimental version-13 sync build open without data loss; no current feature reads or writes them.
+- Sync tables (v17+): `sync_records` is the sync ledger (one row per logical record: last reconciled payload, HLC, dirty flag, book SHA-256) and `sync_metadata` holds the cursor, clock, device id, pending "continue from" offers and records waiting for their book. See `docs/sync.md`.
 - Reading progress is embedded on the `books` row (`progress`, `totalProgression`, `locatorJson`, `lastOpenedAt`) rather than a separate `BookProgress` table.
 - Library view preferences and app settings (theme mode, OLED toggle, colour source, palette style) live in Preferences DataStore. The colour source (`accent_color`: `wallpaper`, a preset name, or `#ARGB`) and `color_style` drive the whole Material 3 scheme — presets and custom colours are expanded into tonal light/dark schemes with MaterialKolor. With no stored source, Android 12+ defaults to the wallpaper palette (unless the retired "Wallpaper colors" toggle was switched off) and older devices to the Ocean preset.
 - Reader settings: a global default lives in DataStore; per-book overrides live in `reader_settings`. Resolution is `per-book ?: global` (full override, not a field merge).
 - Not built yet: separate `BookFile`/`Author`/`Series`/`Group` tables and their cross-refs, the grouped/multi-layer reader settings model, and an FTS metadata index. Custom themes/fonts are persisted in DataStore.
 
-The "As-built schema (v14)" section below documents what exists today. Everything after it describes the eventual target and remains forward-looking.
+The "As-built schema" section below (now v17) documents what exists today. Everything after it describes the eventual target and remains forward-looking.
 
 ## As-built schema (v14)
 
@@ -60,6 +60,9 @@ Primary key `bookId`; `json` holds the flattened Yomu TOC and nullable `resource
 - `11→12`: adds nullable `book_toc.resourceWeightsJson`; existing TOC JSON remains valid and is enriched lazily.
 - `12→13`: reserves a schema version previously used by development builds; active tables are unchanged.
 - `13→14`: adopts the dormant sync tables from an earlier version-13 development schema as compatibility-only storage, creating them empty when absent; no rows are removed.
+- `14→15`: adds `reading_totals` (lifetime per-book rollup).
+- `15→16`: adds `reading_write_receipts` (idempotency for reading writes).
+- `16→17`: activates sync — `books.syncLocatorJson` (portable locator) and `books.metadataEditedAt`; `reading_sessions.uuid` (unique, backfilled) and `bookSha256` (backfilled from `books`); clears leftover v13 sync rows.
 
 No destructive migrations are used for library data.
 

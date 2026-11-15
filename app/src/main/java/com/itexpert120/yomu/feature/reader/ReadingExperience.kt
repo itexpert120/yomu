@@ -25,6 +25,8 @@ import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import com.itexpert120.yomu.data.stats.StatsRepository
+import com.itexpert120.yomu.data.sync.ProgressOffer
+import com.itexpert120.yomu.data.sync.SyncRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -47,6 +50,7 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 data class WordLookupUiState(
     val word: String,
@@ -88,6 +92,8 @@ data class ReadingExperienceState(
     val searchInProgress: Boolean = false,
     val searchError: String? = null,
     val searchPerformed: Boolean = false,
+    // A newer position synced from another device, offered rather than applied.
+    val syncOffer: SyncOfferUi? = null,
 ) {
     val currentPageBookmarked: Boolean
         get() {
@@ -104,6 +110,9 @@ data class ReadingExperienceState(
             }
         }
 }
+
+/** "Continue from <device> at <percent>%?" */
+data class SyncOfferUi(val device: String?, val percent: Int, val locatorJson: String)
 
 internal sealed interface ReadingExperienceEvent {
     data object ToggleChrome : ReadingExperienceEvent
@@ -125,6 +134,8 @@ internal sealed interface ReadingExperienceAction {
     data object ToggleBookmark : ReadingExperienceAction
     data object DeleteEditingHighlight : ReadingExperienceAction
     data object CloseEditingHighlight : ReadingExperienceAction
+    data object AcceptSyncOffer : ReadingExperienceAction
+    data object DismissSyncOffer : ReadingExperienceAction
 
     data class ApplySettings(val settings: ReaderSettings) : ReadingExperienceAction
     data class Navigate(val target: ReaderNavigation) : ReadingExperienceAction
@@ -151,6 +162,7 @@ class ReadingExperienceFactory @Inject constructor(
     private val bookmarks: BookmarkRepository,
     private val stats: StatsRepository,
     private val readingWrites: ReadingWriteQueue,
+    private val sync: SyncRepository,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
     internal fun create(
@@ -172,6 +184,8 @@ class ReadingExperienceFactory @Inject constructor(
         finalWriteScope = applicationScope,
         recordReadingSession = stats::recordSession,
         readingWrites = readingWrites,
+        syncOffer = sync.progressOffer(bookId),
+        clearSyncOffer = { sync.clearOffer(bookId) },
     )
 }
 
@@ -195,6 +209,8 @@ internal class ReadingExperience(
     private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val progressSaveIntervalMillis: Long = PROGRESS_SAVE_INTERVAL_MS,
     private val readyTimeoutMillis: Long = READY_TIMEOUT_MS,
+    private val syncOffer: Flow<ProgressOffer?> = emptyFlow(),
+    private val clearSyncOffer: suspend () -> Unit = {},
 ) {
     private val lifetimeJob = SupervisorJob(ownerScope.coroutineContext[Job])
     private val scope = CoroutineScope(ownerScope.coroutineContext + lifetimeJob)
@@ -226,6 +242,10 @@ internal class ReadingExperience(
     private var tocTitles: Map<String, String> = emptyMap()
     private var lastChapterTitle: String? = null
     private var session: ReaderSession? = null
+
+    // The engine locator a portable locator was captured for, and that portable locator.
+    private var portableLocator: Pair<String, String>? = null
+    private var portableJob: Job? = null
     private val lookupStack = ArrayDeque<String>()
     private val lookupCache = mutableMapOf<String, DictionaryResult>()
     private data class AnnotationWrite(val message: String, val persist: suspend () -> Unit)
@@ -262,6 +282,12 @@ internal class ReadingExperience(
                 _state.update { it.copy(bookmarks = list) }
             }
         }
+        scope.launch {
+            syncOffer.collect { offer ->
+                val ui = offer?.let { SyncOfferUi(it.device, (it.progress * 100).roundToInt().coerceIn(0, 100), it.locatorJson) }
+                _state.update { it.copy(syncOffer = ui) }
+            }
+        }
         retry()
     }
 
@@ -283,6 +309,11 @@ internal class ReadingExperience(
             ReadingExperienceAction.ToggleBookmark -> toggleBookmark()
             ReadingExperienceAction.DeleteEditingHighlight -> deleteEditingHighlight()
             ReadingExperienceAction.CloseEditingHighlight -> _state.update { it.copy(editingHighlight = null) }
+            ReadingExperienceAction.AcceptSyncOffer -> {
+                _state.value.syncOffer?.let { navigate(ReaderNavigation.Locator(it.locatorJson)) }
+                dismissSyncOffer()
+            }
+            ReadingExperienceAction.DismissSyncOffer -> dismissSyncOffer()
             is ReadingExperienceAction.ApplySettings -> applySettings(action.settings, persist = true)
             is ReadingExperienceAction.Navigate -> navigate(action.target)
             is ReadingExperienceAction.ChangeSearchQuery -> changeSearchQuery(action.query)
@@ -750,7 +781,7 @@ internal class ReadingExperience(
         val chapterChanged = currentChapterId != null && locator.chapterId != currentChapterId
         if (progression != null && opened.renderState.value is ReaderRenderState.Ready) {
             scheduleProgressSave(locator.toProgressSnapshot(progression))
-            if (chapterChanged) scope.launch { persistPendingProgress() }
+            if (chapterChanged) persistPendingProgress()
         }
         currentChapterId = locator.chapterId
     }
@@ -788,7 +819,30 @@ internal class ReadingExperience(
         if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
     }
 
+    private fun dismissSyncOffer() {
+        _state.update { it.copy(syncOffer = null) }
+        finalWriteScope.launch { clearSyncOffer() }
+    }
+
+    /**
+     * Captures the portable form of [locatorJson] shortly after the position settles, so progress
+     * saves can carry it for other devices without a navigator call on every scroll frame.
+     */
+    private fun capturePortableLocator(locatorJson: String) {
+        portableJob?.cancel()
+        portableJob = scope.launch {
+            delay(PORTABLE_CAPTURE_DELAY_MS)
+            val portable = session?.portableLocator() ?: return@launch
+            portableLocator = locatorJson to portable
+        }
+    }
+
     private fun scheduleProgressSave(snapshot: ReadingProgressSnapshot) {
+        capturePortableLocator(snapshot.locatorJson)
+        // Snapshots are coalesced, but only within one chapter: the previous chapter's last position
+        // (often its final page) must be written before the next chapter's replaces it, or that
+        // chapter is left at whatever an earlier periodic save recorded.
+        if (pendingProgress?.chapterId != snapshot.chapterId) persistPendingProgress()
         pendingProgress = snapshot
         if (progressSaveJob?.isActive == true) return
         progressSaveJob = scope.launch {
@@ -800,7 +854,8 @@ internal class ReadingExperience(
     }
 
     private fun persistPendingProgress() {
-        val pending = pendingProgress ?: return
+        val portable = portableLocator?.takeIf { it.first == pendingProgress?.locatorJson }?.second
+        val pending = pendingProgress?.copy(portableLocatorJson = portable) ?: return
         readingWrites.enqueue { books.saveProgress(bookId, pending) }
         pendingProgress = null
     }
@@ -829,7 +884,9 @@ internal class ReadingExperience(
         currentHref = href,
         chapterId = chapterId,
         chapterProgress = chapterProgression,
+        sharedChapterIds = sharedChapterIds,
         completedChapterId = completedChapterId,
+        completedSharedChapterIds = completedSharedChapterIds,
         completed = completed,
     )
 
@@ -848,6 +905,7 @@ internal class ReadingExperience(
         const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()
         const val MAX_SESSION_SECONDS = 24L * 60 * 60
         const val PROGRESS_SAVE_INTERVAL_MS = 4_000L
+        const val PORTABLE_CAPTURE_DELAY_MS = 600L
         const val READY_TIMEOUT_MS = 8_000L
     }
 }

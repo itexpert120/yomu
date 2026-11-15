@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.itexpert120.yomu"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -21,7 +21,15 @@ android {
     }
 
     buildTypes {
+        // Sync backend (backend/convex). Debug builds use the Convex dev deployment, release (and
+        // benchmark, which inherits it) the production one. URLs aren't secrets: access is gated by
+        // the sync phrase and all records are end-to-end encrypted. Empty = sync unavailable.
+        debug {
+            buildConfigField("String", "SYNC_CONVEX_URL", "\"https://industrious-dogfish-192.eu-west-1.convex.cloud\"")
+        }
         release {
+            // Set after `npx convex deploy` creates the production deployment.
+            buildConfigField("String", "SYNC_CONVEX_URL", "\"\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -44,7 +52,7 @@ android {
         compose = true
         buildConfig = true
     }
-    sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")
+    sourceSets["androidTest"].assets.directories.add("$projectDir/schemas")
     lint {
         // OldTargetApi: we deliberately target the latest STABLE SDK (36); 37 is a preview.
         // VectorPath: the app icon / wordmark is a single detailed logo with a long path — expected.
@@ -87,6 +95,18 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.convex.android)
+    constraints {
+        // Convex pulls JNA 5.14, whose x86_64 library isn't 16 KB page-aligned (Play requires it).
+        implementation(libs.jna) { because("16 KB page-size alignment") }
+    }
+    // Sync pairing: QR display (zxing) and an in-app scanner (CameraX + bundled ML Kit, no Play services).
+    implementation(libs.zxing.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.compose)
+    implementation(libs.androidx.camera.mlkit.vision)
+    implementation(libs.mlkit.barcode.scanning)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.readium.shared)
     implementation(libs.readium.streamer)

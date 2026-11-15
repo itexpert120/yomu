@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -60,6 +61,7 @@ import com.itexpert120.yomu.feature.reader.ReaderPreferenceControls
 private enum class SettingsPane(val title: String, val subtitle: String) {
     Appearance("Appearance", "Mode, colour theme, and OLED"),
     Reading("Reading", "Reader defaults and font library"),
+    Sync("Sync", "Sync your reading across devices"),
     About("About", "Privacy, terms, and acknowledgements"),
 }
 
@@ -83,6 +85,8 @@ fun SettingsScreen(
     onOpenFontLibrary: () -> Unit,
     onBack: (() -> Unit)?,
     onOpenAbout: () -> Unit,
+    // Stateful slot (it owns its ViewModel) so this screen stays preview-driven.
+    syncSection: @Composable () -> Unit = {},
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         if (maxWidth.supportsYomuTwoPane()) {
@@ -104,6 +108,7 @@ fun SettingsScreen(
                 onApplyCustomTheme = onApplyCustomTheme,
                 onOpenFontLibrary = onOpenFontLibrary,
                 onBack = onBack,
+                syncSection = syncSection,
             )
         } else {
             PhoneSettingsLayout(
@@ -125,6 +130,7 @@ fun SettingsScreen(
                 onOpenFontLibrary = onOpenFontLibrary,
                 onBack = onBack,
                 onOpenAbout = onOpenAbout,
+                syncSection = syncSection,
             )
         }
     }
@@ -150,6 +156,8 @@ private fun PhoneSettingsLayout(
     onOpenFontLibrary: () -> Unit,
     onBack: (() -> Unit)?,
     onOpenAbout: () -> Unit,
+    // Stateful slot (it owns its ViewModel) so this screen stays preview-driven.
+    syncSection: @Composable () -> Unit = {},
 ) {
     YomuScreenScaffold(
         title = "Settings",
@@ -177,6 +185,7 @@ private fun PhoneSettingsLayout(
                 onApplyCustomTheme = onApplyCustomTheme,
                 onOpenFontLibrary = onOpenFontLibrary,
             )
+            syncSection()
             AboutGroup(onOpenAbout = onOpenAbout)
             VersionFooter()
         }
@@ -202,6 +211,7 @@ private fun TabletSettingsLayout(
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
     onOpenFontLibrary: () -> Unit,
     onBack: (() -> Unit)?,
+    syncSection: @Composable () -> Unit,
 ) {
     var selectedPaneName by rememberSaveable { mutableStateOf(SettingsPane.Appearance.name) }
     val selectedPane = SettingsPane.entries.first { it.name == selectedPaneName }
@@ -266,6 +276,8 @@ private fun TabletSettingsLayout(
                                 onOpenFontLibrary = onOpenFontLibrary,
                             )
 
+                            SettingsPane.Sync -> syncSection()
+
                             SettingsPane.About -> AboutContent()
                         }
                         if (selectedPane != SettingsPane.About) VersionFooter()
@@ -285,6 +297,7 @@ private fun SettingsPaneRow(
     val icon = when (pane) {
         SettingsPane.Appearance -> Icons.Rounded.Palette
         SettingsPane.Reading -> Icons.AutoMirrored.Rounded.MenuBook
+        SettingsPane.Sync -> Icons.Rounded.Sync
         SettingsPane.About -> Icons.Rounded.Info
     }
     YomuSettingRow(
@@ -294,6 +307,7 @@ private fun SettingsPaneRow(
         position = when (pane) {
             SettingsPane.Appearance -> YomuSettingPosition.First
             SettingsPane.Reading -> YomuSettingPosition.Middle
+            SettingsPane.Sync -> YomuSettingPosition.Middle
             SettingsPane.About -> YomuSettingPosition.Last
         },
         onClick = onClick,

@@ -9,6 +9,7 @@ import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.core.model.ThemePreference
 import com.itexpert120.yomu.feature.reader.CustomThemeSheet
 import com.itexpert120.yomu.feature.reader.ReaderDefaultsViewModel
+import com.itexpert120.yomu.feature.sync.SyncSection
 
 @Composable
 fun SettingsRoute(
@@ -49,6 +50,7 @@ fun SettingsRoute(
         onOpenFontLibrary = onOpenFontLibrary,
         onBack = onBack,
         onOpenAbout = onOpenAbout,
+        syncSection = { SyncSection() },
     )
 
     CustomThemeSheet(

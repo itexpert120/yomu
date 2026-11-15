@@ -8,7 +8,7 @@ Yomu is a native Android EPUB reader (Kotlin + Jetpack Compose). The product int
 
 Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Also built: a **reading-statistics** dashboard (hero total, streak/metric tiles, per-book "Time by book" lifetime totals, session history) and **external "Open with"/share** EPUB import. **Hilt, Room, DataStore, Navigation Compose, Coil, MaterialKolor, and Readium are all present and wired.** (Home-screen Glance widgets were removed.)
 
-The only network feature is the dictionary lookup (Free Dictionary API; the reason for the `INTERNET` permission); everything else is offline. Remaining gaps are later-phase roadmap items (e.g. OPDS catalogs, non-EPUB formats like PDF/audiobook, cross-device sync) — see `docs/roadmap.md`. The `docs/` describe the product/design intent and are kept current — each doc has an "Implementation status (current)" note, and `docs/roadmap.md` (Phases 0–12) is the authoritative done-vs-pending source. **Keep this CLAUDE.md in sync with the code as features land.**
+Network features: the dictionary lookup (Free Dictionary API), Google Fonts installs, and **account-less sync** (a 12-word BIP39 phrase → end-to-end-encrypted records on a Convex backend in `backend/convex/`; see `docs/sync.md`). Everything else is offline. Remaining gaps are later-phase roadmap items (e.g. OPDS catalogs, non-EPUB formats like PDF/audiobook) — see `docs/roadmap.md`. The `docs/` describe the product/design intent and are kept current — each doc has an "Implementation status (current)" note, and `docs/roadmap.md` (Phases 0–12) is the authoritative done-vs-pending source. **Keep this CLAUDE.md in sync with the code as features land.**
 
 ## Commands
 
@@ -29,7 +29,7 @@ Use the Gradle wrapper. On this Windows/PowerShell environment use `./gradlew` (
 
 There is no separate "run tests" vs "lint" toolchain beyond Gradle. All external dependency versions live in `gradle/libs.versions.toml` (version catalog) — add dependencies there, referenced as `libs.*`, never inline in `build.gradle.kts`.
 
-Toolchain: AGP 9.3.2, Kotlin 2.4.0, Compose BOM (alpha) 2026.07.01 → material3 1.5.0-alpha25, **Java 17** (+ core-library desugaring), KSP. `compileSdk 37 / minSdk 24 / targetSdk 37`. DI is Hilt (with `hilt { enableAggregatingTask = false }` — a workaround for Kotlin 2.4.0 metadata vs Hilt's javac aggregator); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment.
+Toolchain: AGP 9.3.2, Kotlin 2.4.0, Compose BOM (alpha) 2026.07.01 → material3 1.5.0-alpha25, **Java 17** (+ core-library desugaring), KSP. `compileSdk 37 / minSdk 26 / targetSdk 37` (26 is required by the Convex Android client). DI is Hilt (with `hilt { enableAggregatingTask = false }` — a workaround for Kotlin 2.4.0 metadata vs Hilt's javac aggregator); Room uses KSP with schema export to `app/schemas`. The app theme parent is `Theme.AppCompat.DayNight.NoActionBar` so it can host the Readium navigator Fragment.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ com.itexpert120.yomu
 │   │                            #   picker, responsive YomuWidthClass)
 │   ├── model/                   # Book, ReaderSettings, LibraryPreferences, AccentColor, ThemePreference,
 │   │                            #   CustomReaderTheme, ReadingStats, …
-│   ├── database/                # Room: YomuDatabase (v16) + BookEntity, ChapterReadEntity,
+│   ├── database/                # Room: YomuDatabase (v17) + BookEntity, ChapterReadEntity,
 │   │                            #   ReaderSettingsEntity, BookTocEntity, ReadingDayEntity,
 │   │                            #   ReadingSessionEntity, HighlightEntity, BookmarkEntity,
 │   │                            #   BookDao, HighlightDao, BookmarkDao, migrations
@@ -62,11 +62,13 @@ com.itexpert120.yomu
 │   ├── highlights/              # HighlightRepository + RoomHighlightRepository
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
 │   ├── stats/                   # StatsRepository (reading-time sessions + derived stats/heatmap)
+│   ├── sync/                    # account-less sync: phrase/keys/HLC, ledger snapshotter/applier,
+│   │                            #   SyncEngine, Convex transport, SyncRepository (docs/sync.md)
 │   └── dictionary/              # DictionaryRepository (Free Dictionary API — the only network call;
 │                                #   inflections like "muttered" resolve to their base word)
 ├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; also
 │                                #   kicks off background TOC extraction on insert)
-└── feature/                     # library, bookdetails, bookedit, reader, settings, stats, about
+└── feature/                     # library, bookdetails, bookedit, reader, settings, stats, sync, about
 ```
 Type-safe nav destinations: `Library`, `BookDetails(bookId)`, `EditBook(bookId)`, `Settings`, `Stats`, `ReaderDefaults`, `About`, `Reader(bookId, locator?)`. Bookmarks and in-book search are built **behind the `core/reader` boundary** (search via Readium's `SearchService`, surfaced as `ReaderSession.search`/`applySearchDecorations`; bookmarks are Room-backed and reuse `currentLocator`/`goToLocator`). New reader capabilities should follow the same boundary pattern — the sibling Readium test-app under "Related projects" below has worked references.
 
@@ -137,4 +139,4 @@ This repo uses the single-context domain-doc layout. See `docs/agents/domain.md`
 - `index.html`, `script.js`, `styles.css` at the repo root are an exported IntelliJ inspection report — not application code; ignore them.
 - `docs/roadmap.md` defines implementation phases and acceptance criteria; consult it before starting a new feature area.
 - Code style is enforced with **Spotless + ktlint** (`./gradlew spotlessApply` to format, `spotlessCheck` to verify), configured in the root `build.gradle.kts` with `.editorconfig` (IntelliJ style; `function-naming`/`property-naming` disabled for Compose/design-system PascalCase). Kotlin sources are LF (`.gitattributes`).
-- The version catalog also includes **MaterialKolor** (seed → M3 colour schemes), `androidx.core-splashscreen`, and `kotlinx-serialization-json`. The `INTERNET` permission exists solely for the dictionary lookup; the app is otherwise offline.
+- The version catalog also includes **MaterialKolor** (seed → M3 colour schemes), `androidx.core-splashscreen`, `kotlinx-serialization-json`, and the Convex Android client (`dev.convex:android-convexmobile`) for sync. There is no login: the sync phrase is the only credential, and the server only ever sees ciphertext.

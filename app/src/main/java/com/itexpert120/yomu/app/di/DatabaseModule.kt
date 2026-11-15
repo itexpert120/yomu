@@ -6,6 +6,7 @@ import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.BookDeletionRecovery
 import com.itexpert120.yomu.core.database.BookmarkDao
 import com.itexpert120.yomu.core.database.HighlightDao
+import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.database.YomuDatabase
 import dagger.Module
 import dagger.Provides
@@ -37,6 +38,7 @@ object DatabaseModule {
             YomuDatabase.MIGRATION_13_14,
             YomuDatabase.MIGRATION_14_15,
             YomuDatabase.MIGRATION_15_16,
+            YomuDatabase.MIGRATION_16_17,
         )
         .addCallback(BookDeletionRecovery(context.filesDir))
         .build()
@@ -49,4 +51,7 @@ object DatabaseModule {
 
     @Provides
     fun provideBookmarkDao(database: YomuDatabase): BookmarkDao = database.bookmarkDao()
+
+    @Provides
+    fun provideSyncDao(database: YomuDatabase): SyncDao = database.syncDao()
 }

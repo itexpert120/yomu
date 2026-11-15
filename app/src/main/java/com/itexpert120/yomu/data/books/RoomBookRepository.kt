@@ -132,7 +132,7 @@ class RoomBookRepository @Inject constructor(
         author: String,
         description: String?,
         coverImagePath: String?,
-    ) = dao.updateMetadata(id.value, title, subtitle, author, description, coverImagePath)
+    ) = dao.updateMetadata(id.value, title, subtitle, author, description, coverImagePath, System.currentTimeMillis())
 
     override suspend fun isDuplicate(sha256: String): Boolean = dao.existsByHash(sha256)
 
@@ -184,49 +184,56 @@ class RoomBookRepository @Inject constructor(
                 progress = canonical.toFloat(),
                 totalProgression = canonical,
                 locatorJson = snapshot.locatorJson,
+                syncLocatorJson = snapshot.portableLocatorJson,
                 currentChapterId = snapshot.chapterId,
                 completed = snapshot.completed,
                 lastOpenedAt = now,
             )
             snapshot.completedChapterId?.let { completedChapterId ->
-                dao.setChapterProgress(
-                    id.value,
-                    completedChapterId,
-                    1f,
-                    now,
-                    manuallyRead = false,
-                )
-                dao.insertReadChapters(
-                    listOf(ChapterReadEntity(id.value, completedChapterId)),
-                )
+                (listOf(completedChapterId) + snapshot.completedSharedChapterIds).forEach {
+                    dao.setChapterProgress(id.value, it, 1f, now, manuallyRead = false)
+                    dao.insertReadChapters(listOf(ChapterReadEntity(id.value, it)))
+                }
             }
-            val chapterId = snapshot.chapterId
             val chapterProgress = snapshot.chapterProgress?.coerceIn(0.0, 1.0)?.toFloat()
-            if (chapterId != null && chapterProgress != null) {
-                val oldProgress = dao.getChapterProgress(id.value, chapterId)
-                // Repair the v9 bug where entering a continuation resource marked the active logical
-                // chapter read even though its real end had not been reached. A v10 automatic 100%
-                // row is repairable too; explicit manual read overrides remain authoritative.
-                if (
-                    chapterProgress < 0.999f &&
-                    snapshot.currentHref != null &&
-                    snapshot.currentHref != chapterId.substringBefore('#') &&
-                    oldProgress?.manuallyRead != true
-                ) {
-                    dao.deleteReadChapters(id.value, listOf(chapterId))
-                    dao.setChapterProgress(
-                        id.value,
-                        chapterId,
-                        chapterProgress,
-                        now,
-                        manuallyRead = false,
-                    )
-                }
-                dao.saveHighestChapterProgress(id.value, chapterId, chapterProgress, now)
-                if (chapterProgress >= 0.999f) {
-                    dao.insertReadChapters(listOf(ChapterReadEntity(id.value, chapterId)))
+            val chapterIds = listOfNotNull(snapshot.chapterId) + snapshot.sharedChapterIds
+            if (chapterProgress != null) {
+                chapterIds.forEach { chapterId ->
+                    saveChapterProgress(id, chapterId, chapterProgress, snapshot.currentHref, now)
                 }
             }
+        }
+    }
+
+    private suspend fun saveChapterProgress(
+        id: BookId,
+        chapterId: String,
+        chapterProgress: Float,
+        currentHref: String?,
+        now: Long,
+    ) {
+        val oldProgress = dao.getChapterProgress(id.value, chapterId)
+        // Repair the v9 bug where entering a continuation resource marked the active logical
+        // chapter read even though its real end had not been reached. A v10 automatic 100%
+        // row is repairable too; explicit manual read overrides remain authoritative.
+        if (
+            chapterProgress < 0.999f &&
+            currentHref != null &&
+            currentHref != chapterId.substringBefore('#') &&
+            oldProgress?.manuallyRead != true
+        ) {
+            dao.deleteReadChapters(id.value, listOf(chapterId))
+            dao.setChapterProgress(
+                id.value,
+                chapterId,
+                chapterProgress,
+                now,
+                manuallyRead = false,
+            )
+        }
+        dao.saveHighestChapterProgress(id.value, chapterId, chapterProgress, now)
+        if (chapterProgress >= 0.999f) {
+            dao.insertReadChapters(listOf(ChapterReadEntity(id.value, chapterId)))
         }
     }
 

@@ -1,0 +1,59 @@
+package com.itexpert120.yomu.data.sync
+
+import com.itexpert120.yomu.core.model.CustomFontRef
+import com.itexpert120.yomu.core.model.ReaderSettings
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+
+/**
+ * Converts reader settings to and from their synced form: device-specific fields are dropped, and
+ * a custom font travels as its family name (each device installs and stores its own files).
+ */
+internal object ReaderSettingsSync {
+    /** Screen and display behaviour that belongs to the device, not the reader. */
+    private val DEVICE_FIELDS = setOf("useSystemBrightness", "brightness", "dimLevel", "keepScreenOn")
+    private const val CUSTOM_FONT = "customFont"
+
+    fun toPayload(settings: ReaderSettings): String {
+        val full = SyncJson.encodeToJsonElement(settings).jsonObject
+        val synced = buildJsonObject {
+            full.forEach { (key, value) ->
+                when (key) {
+                    in DEVICE_FIELDS -> Unit
+                    CUSTOM_FONT -> put(key, settings.customFont?.let { JsonPrimitive(it.family) } ?: JsonNull)
+                    else -> put(key, value)
+                }
+            }
+        }
+        return SyncJson.encodeToString(JsonObject.serializer(), synced)
+    }
+
+    /** The family named by a synced payload, if any. */
+    fun customFontFamily(payload: String): String? = runCatching {
+        (SyncJson.parseToJsonElement(payload).jsonObject[CUSTOM_FONT] as? JsonPrimitive)?.contentOrNull
+    }.getOrNull()
+
+    /**
+     * [payload] laid over [local]: synced fields come from the payload, device fields stay local.
+     * The custom font resolves through [installedFont]; an uninstalled family falls back to the
+     * bundled font so the reader never points at a missing file.
+     */
+    fun merge(local: ReaderSettings, payload: String, installedFont: (String) -> CustomFontRef?): ReaderSettings {
+        val remote = SyncJson.parseToJsonElement(payload).jsonObject
+        val base = SyncJson.encodeToJsonElement(local).jsonObject
+        val merged = buildJsonObject {
+            base.forEach { (key, value) -> put(key, value) }
+            remote.forEach { (key, value) ->
+                if (key !in DEVICE_FIELDS && key != CUSTOM_FONT) put(key, value)
+            }
+        }
+        val font = (remote[CUSTOM_FONT] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.let(installedFont)
+        return SyncJson.decodeFromJsonElement<ReaderSettings>(merged).copy(customFont = font)
+    }
+}

@@ -129,11 +129,15 @@ fun ReaderScreen(
     onReadingPaused: () -> Unit,
     onRetrySettings: () -> Unit = {},
     onRetryAnnotations: () -> Unit = {},
+    onAcceptSyncOffer: () -> Unit = {},
+    onDismissSyncOffer: () -> Unit = {},
 ) {
     if (state.experience.settingsError != null) {
         SaveFailureNotice(state.experience.settingsError, onRetrySettings)
-    } else {
+    } else if (state.experience.annotationError != null) {
         SaveFailureNotice(state.experience.annotationError, onRetryAnnotations)
+    } else {
+        SyncOfferNotice(state.experience.syncOffer, onAcceptSyncOffer, onDismissSyncOffer)
     }
     val view = LocalView.current
     val reading = state.experience

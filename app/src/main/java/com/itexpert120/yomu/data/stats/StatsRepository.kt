@@ -46,33 +46,63 @@ class StatsRepository internal constructor(
     suspend fun recordSession(bookId: BookId, startedAtMillis: Long, seconds: Long, operationId: String = UUID.randomUUID().toString()) {
         if (seconds <= 0L) return
         database.withTransaction {
-            if (dao.insertReadingWriteReceipt(ReadingWriteReceipt(operationId)) == -1L) return@withTransaction
-            dao.insertReadingSession(
-                ReadingSessionEntity(
-                    bookId = bookId.value,
-                    startedAt = startedAtMillis,
-                    seconds = seconds,
-                ),
+            insertSessionWithRollups(
+                bookId = bookId.value,
+                bookSha256 = dao.getBook(bookId.value)?.sha256,
+                startedAtMillis = startedAtMillis,
+                seconds = seconds,
+                uuid = operationId,
             )
-            // Bucket by the session's start day (local) so a session that crosses midnight isn't
-            // misattributed to the flush time.
-            val date = Instant.ofEpochMilli(startedAtMillis)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-                .toString()
-            val current = dao.getReadingDaySeconds(date) ?: 0L
-            dao.upsertReadingDay(ReadingDayEntity(date, current + seconds))
-            val lifetime = dao.getReadingTotal(bookId.value)
-            dao.upsertReadingTotal(
-                ReadingTotalEntity(
-                    bookId.value,
-                    (lifetime?.seconds ?: 0L) + seconds,
-                    (lifetime?.sessionCount ?: 0) + 1,
-                    maxOf(lifetime?.longestSeconds ?: 0L, seconds),
-                ),
-            )
-            dao.pruneReadingSessions(MAX_RETAINED_SESSIONS)
         }
+    }
+
+    /**
+     * Folds in a session recorded on another device, exactly once (keyed by its [uuid]). [bookId]
+     * is the local book, or a `sync:<sha256>` placeholder until that book is imported here.
+     */
+    suspend fun applySyncedSession(uuid: String, bookId: String, bookSha256: String, startedAtMillis: Long, seconds: Long) {
+        if (seconds <= 0L) return
+        database.withTransaction {
+            insertSessionWithRollups(bookId, bookSha256, startedAtMillis, seconds, uuid)
+        }
+    }
+
+    /** Must run inside a transaction. The receipt makes a retried or re-synced write a no-op. */
+    private suspend fun insertSessionWithRollups(
+        bookId: String,
+        bookSha256: String?,
+        startedAtMillis: Long,
+        seconds: Long,
+        uuid: String,
+    ) {
+        if (dao.insertReadingWriteReceipt(ReadingWriteReceipt(uuid)) == -1L) return
+        dao.insertReadingSession(
+            ReadingSessionEntity(
+                bookId = bookId,
+                startedAt = startedAtMillis,
+                seconds = seconds,
+                uuid = uuid,
+                bookSha256 = bookSha256,
+            ),
+        )
+        // Bucket by the session's start day (local) so a session that crosses midnight isn't
+        // misattributed to the flush time.
+        val date = Instant.ofEpochMilli(startedAtMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .toString()
+        val current = dao.getReadingDaySeconds(date) ?: 0L
+        dao.upsertReadingDay(ReadingDayEntity(date, current + seconds))
+        val lifetime = dao.getReadingTotal(bookId)
+        dao.upsertReadingTotal(
+            ReadingTotalEntity(
+                bookId,
+                (lifetime?.seconds ?: 0L) + seconds,
+                (lifetime?.sessionCount ?: 0) + 1,
+                maxOf(lifetime?.longestSeconds ?: 0L, seconds),
+            ),
+        )
+        dao.pruneReadingSessions(MAX_RETAINED_SESSIONS)
     }
 
     // Day-derived figures recompute only when reading-day data actually changes (not on every book
