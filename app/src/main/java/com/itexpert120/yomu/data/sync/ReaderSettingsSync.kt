@@ -16,8 +16,20 @@ import kotlinx.serialization.json.jsonObject
  * a custom font travels as its family name (each device installs and stores its own files).
  */
 internal object ReaderSettingsSync {
-    /** Screen and display behaviour that belongs to the device, not the reader. */
-    private val DEVICE_FIELDS = setOf("useSystemBrightness", "brightness", "dimLevel", "keepScreenOn")
+    /**
+     * Fields that belong to the device, not the reader: screen and display behaviour, plus text
+     * size and spacing, which depend on the screen (a tablet wants different values than a phone).
+     */
+    private val DEVICE_FIELDS = setOf(
+        "useSystemBrightness",
+        "brightness",
+        "dimLevel",
+        "keepScreenOn",
+        "fontScale",
+        "lineHeight",
+        "pageMargins",
+        "paragraphSpacing",
+    )
     private const val CUSTOM_FONT = "customFont"
 
     fun toPayload(settings: ReaderSettings): String {
