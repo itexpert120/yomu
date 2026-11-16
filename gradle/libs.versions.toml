@@ -16,7 +16,6 @@ serializationJson = "1.11.0"
 convex = "0.8.0"
 jna = "5.19.1"
 camerax = "1.6.2"
-mlkitBarcode = "17.3.0"
 zxing = "3.5.4"
 readium = "3.3.0"
 desugarJdkLibs = "2.1.5"
@@ -64,8 +63,6 @@ jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-compose = { group = "androidx.camera", name = "camera-compose", version.ref = "camerax" }
-androidx-camera-mlkit-vision = { group = "androidx.camera", name = "camera-mlkit-vision", version.ref = "camerax" }
-mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 readium-shared = { group = "org.readium.kotlin-toolkit", name = "readium-shared", version.ref = "readium" }
 readium-streamer = { group = "org.readium.kotlin-toolkit", name = "readium-streamer", version.ref = "readium" }

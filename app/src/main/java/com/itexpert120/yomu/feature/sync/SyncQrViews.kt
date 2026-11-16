@@ -10,11 +10,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
-import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -49,11 +49,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.DecodeHintType
 import com.google.zxing.EncodeHintType
+import com.google.zxing.PlanarYUVLuminanceSource
+import com.google.zxing.ReaderException
+import com.google.zxing.common.HybridBinarizer
+import com.google.zxing.qrcode.QRCodeReader
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.itexpert120.yomu.core.designsystem.YomuButton
@@ -62,7 +65,9 @@ import com.itexpert120.yomu.core.designsystem.YomuEmptyState
 import com.itexpert120.yomu.core.designsystem.YomuLoadingState
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
+import java.util.concurrent.Executors
 
 /**
  * The sync words as a QR code. Always dark modules on white, whatever the theme, since that is
@@ -109,6 +114,7 @@ internal fun SyncQrScanner(onScanned: (String) -> Unit, modifier: Modifier = Mod
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     var denied by remember { mutableStateOf(false) }
+    var cameraFailed by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         granted = ok
         denied = !ok
@@ -123,18 +129,26 @@ internal fun SyncQrScanner(onScanned: (String) -> Unit, modifier: Modifier = Mod
     }
 
     val showDenied = denied && !granted
+    val showMessage = showDenied || cameraFailed
     Box(
         modifier = modifier
             .fillMaxWidth()
-            // The denied message sizes to its content so large text never clips in the square.
-            .then(if (showDenied) Modifier else Modifier.aspectRatio(1f))
+            // A message sizes to its content so large text never clips in the square.
+            .then(if (showMessage) Modifier else Modifier.aspectRatio(1f))
             .clip(YomuShapeTokens.hero)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         when {
+            cameraFailed -> YomuEmptyState(
+                icon = Icons.Rounded.NoPhotography,
+                title = "Camera unavailable",
+                body = "The camera couldn't start on this device. Type the words instead.",
+                compact = true,
+            )
+
             granted -> {
-                CameraQrPreview(onScanned)
+                CameraQrPreview(onScanned, onUnavailable = { cameraFailed = true })
                 ScanReticle(Modifier.fillMaxSize())
                 Surface(
                     modifier = Modifier
@@ -194,42 +208,88 @@ private fun ScanReticle(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CameraQrPreview(onScanned: (String) -> Unit) {
+private fun CameraQrPreview(onScanned: (String) -> Unit, onUnavailable: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnScanned by rememberUpdatedState(onScanned)
+    val latestOnUnavailable by rememberUpdatedState(onUnavailable)
     var surfaceRequest by remember { mutableStateOf<SurfaceRequest?>(null) }
 
     LaunchedEffect(lifecycleOwner) {
-        val provider = ProcessCameraProvider.awaitInstance(context)
-        val executor = ContextCompat.getMainExecutor(context)
-        val scanner = BarcodeScanning.getClient(
-            BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build(),
-        )
-        val preview = Preview.Builder().build().apply { setSurfaceProvider { surfaceRequest = it } }
-        val analysis = ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-        // Report each different code once; the same code stays in view for many frames.
-        var last: String? = null
-        analysis.setAnalyzer(
-            executor,
-            MlKitAnalyzer(listOf(scanner), ImageAnalysis.COORDINATE_SYSTEM_ORIGINAL, executor) { result ->
-                val value = result.getValue(scanner)?.firstNotNullOfOrNull { it.rawValue }
-                if (value != null && value != last) {
-                    last = value
-                    latestOnScanned(value)
-                }
-            },
-        )
-        provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+        val mainExecutor = ContextCompat.getMainExecutor(context)
+        val decodeExecutor = Executors.newSingleThreadExecutor()
         try {
-            awaitCancellation()
+            val provider = ProcessCameraProvider.awaitInstance(context)
+            val preview = Preview.Builder().build().apply { setSurfaceProvider { surfaceRequest = it } }
+            val analysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+            // Report each different code once; the same code stays in view for many frames.
+            var last: String? = null
+            analysis.setAnalyzer(
+                decodeExecutor,
+                QrFrameAnalyzer { value ->
+                    mainExecutor.execute {
+                        if (value != last) {
+                            last = value
+                            latestOnScanned(value)
+                        }
+                    }
+                },
+            )
+            try {
+                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                awaitCancellation()
+            } finally {
+                provider.unbind(preview, analysis)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // No usable camera (none on the device, in use, or disabled by policy): typing still works.
+            latestOnUnavailable()
         } finally {
-            provider.unbind(preview, analysis)
-            scanner.close()
+            decodeExecutor.shutdown()
         }
     }
 
     surfaceRequest?.let { CameraXViewfinder(surfaceRequest = it, modifier = Modifier.fillMaxSize()) }
+}
+
+/**
+ * Reads QR codes from camera frames with ZXing. Only the luminance plane is needed, and QR
+ * decoding is rotation-independent, so frames are used as they arrive.
+ */
+private class QrFrameAnalyzer(private val onDecoded: (String) -> Unit) : ImageAnalysis.Analyzer {
+    private val decoder = QrLuminanceDecoder()
+    private var luminance = ByteArray(0)
+
+    override fun analyze(image: ImageProxy) {
+        image.use {
+            val plane = it.planes[0]
+            val buffer = plane.buffer
+            val length = buffer.remaining()
+            if (luminance.size < length) luminance = ByteArray(length)
+            buffer.get(luminance, 0, length)
+            decoder.decode(luminance, plane.rowStride, it.width, it.height)?.let(onDecoded)
+        }
+    }
+}
+
+/** Decodes a QR code from an 8-bit luminance image whose rows may be padded to [rowStride]. */
+internal class QrLuminanceDecoder {
+    private val reader = QRCodeReader()
+    private val hints = mapOf(DecodeHintType.TRY_HARDER to true)
+
+    fun decode(luminance: ByteArray, rowStride: Int, width: Int, height: Int): String? {
+        // The row stride is the data width, the image size the crop.
+        val source = PlanarYUVLuminanceSource(luminance, rowStride, height, 0, 0, width, height, false)
+        return try {
+            reader.decode(BinaryBitmap(HybridBinarizer(source)), hints).text
+        } catch (_: ReaderException) {
+            null
+        } finally {
+            reader.reset()
+        }
+    }
 }

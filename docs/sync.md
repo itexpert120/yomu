@@ -10,8 +10,8 @@ Jump in both directions across chapters and layouts). Code: Convex backend (`bac
 transport, repository), `feature/sync/` (Settings → Sync, words + QR sheet, scanner, join sheet),
 and the reader's portable-locator capture + offer prompt. The production Convex deployment exists
 and release builds point at it. Remaining: per-chapter records and the release build's sync have
-not been re-verified on devices since they changed, and QR scanning has only been exercised in
-code, not with a real camera. The Auth0 email/password login that preceded this design was removed.
+not been re-verified on devices since they changed, and QR scanning has been
+exercised on an emulator camera in a minified build, not yet re-checked on a physical device. The Auth0 email/password login that preceded this design was removed.
 
 ## Builds and versions
 
@@ -42,8 +42,9 @@ code, not with a real camera. The Auth0 email/password login that preceded this 
   English list (`assets/bip39_english.txt`, SHA-256
   `2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`) plus a QR code
   (`yomu-sync:v1:<words>`, drawn with ZXing).
-- **Join** on another device by scanning the QR (in-app CameraX + bundled ML Kit scanner, camera
-  permission asked on open; no Play services needed) or typing the words. The BIP39 checksum rejects
+- **Join** on another device by scanning the QR (in-app CameraX preview decoded with ZXing, camera
+  permission asked on open; no Play services or ML Kit: ML Kit's barcode component failed to
+  register in minified builds and crashed the scanner) or typing the words. The BIP39 checksum rejects
   most typos offline; words autocomplete from their first four letters. Joining checks that the
   group exists (`sync:exists`) so a mistyped phrase never silently creates an empty group.
 - The phrase is the account: whoever has it can read and write the data, and there is no
@@ -99,7 +100,8 @@ when that file is imported.
 | `theme/<id>` | Saved custom reader themes. |
 | `font/<family>` | Installed Google Fonts; each device downloads the files itself. |
 
-**Device-specific, never synced:** brightness / system-brightness, extra-dim, keep screen on,
+**Device-specific, never synced:** font size, line height, page margins and paragraph spacing (a
+tablet wants different values than a phone), brightness / system-brightness, extra-dim, keep screen on,
 OLED black, app colour source (wallpaper/preset/custom accent), library grid columns, font file
 paths, TOC/resource-weight caches, and file/cover paths.
 

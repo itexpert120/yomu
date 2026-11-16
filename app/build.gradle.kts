@@ -107,13 +107,12 @@ dependencies {
         // Convex pulls JNA 5.14, whose x86_64 library isn't 16 KB page-aligned (Play requires it).
         implementation(libs.jna) { because("16 KB page-size alignment") }
     }
-    // Sync pairing: QR display (zxing) and an in-app scanner (CameraX + bundled ML Kit, no Play services).
+    // Sync pairing: QR display and decoding (zxing) and an in-app camera scanner (CameraX). No Play
+    // services or ML Kit: its component registration breaks under R8.
     implementation(libs.zxing.core)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.compose)
-    implementation(libs.androidx.camera.mlkit.vision)
-    implementation(libs.mlkit.barcode.scanning)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.readium.shared)
     implementation(libs.readium.streamer)
