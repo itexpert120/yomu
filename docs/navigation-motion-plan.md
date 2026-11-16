@@ -16,8 +16,23 @@ Back is resolved from the innermost active surface outward:
 | 5 | Top-level root (Library) | Leave the task / show Android's back-to-home animation | Android system |
 
 The app must not intercept back in `MainActivity` or with key events. Local handlers stay enabled via
-observable UI state and are composed unconditionally. Predictive back is intentionally disabled for
-now; ordinary back remains available and can be revisited when gesture work resumes.
+observable UI state and are composed unconditionally.
+
+Predictive back is enabled (`android:enableOnBackInvokedCallback="true"`), so every surface follows
+the back swipe and settles back if the swipe is cancelled:
+
+| Surface | What the gesture does | Where |
+| --- | --- | --- |
+| Child route (details, editor, reader, settings sub-screens) | The screen shrinks to 90% with rounded corners and drifts toward the swipe; the previous screen sits underneath, slightly dimmed. It fades only late in the swipe or after commit. | Root `NavHost` pop transitions (`yomuScreenPopEnter/Exit`) + `BackPreviewFrame` |
+| Top-level tab back to Library | The shared-axis handoff is scrubbed by the swipe. | Nested `NavHost` |
+| Library root | Android's back-to-home preview. | System |
+| Phone bottom sheets | Material's built-in sheet preview. | `ModalBottomSheet` |
+| Tablet sheet dialogs, `YomuDialog`, cover viewer | The panel shrinks with the swipe, then plays its normal exit. | `YomuBackPreviewHandler` + `Modifier.yomuBackPreview` |
+| Selection / search | No preview; the mode closes when the gesture commits. | Feature `BackHandler` |
+
+The button and the gesture share one back motion, so the same transition plays timed or scrubbed.
+While the reader hides the system bars, Android itself uses the first edge swipe to reveal them and
+the second to go back.
 
 ## Motion vocabulary
 
@@ -30,8 +45,9 @@ now; ordinary back remains available and can be revisited when gesture work resu
   travel keep this reading as a screen transition rather than a tab carousel. Top-level destinations
   follow the Library → Statistics → Settings order, so moving toward an earlier destination mirrors
   the motion. The adaptive navigation bar/rail stays in the stable scaffold and expands or shrinks
-  with child-route handoffs instead of disappearing before the screen moves. Ordinary back reverses
-  the same motion without tracking gesture progress.
+  with child-route handoffs instead of disappearing before the screen moves. Back between tabs
+  reverses the same motion; back out of a child route uses the card-shrink motion described under
+  "Back behavior".
 - **In-library content:** directional content swap for grid/list and settled empty states; the
   loading-to-content handoff uses a fade-through so the first library frame does not enter from an
   edge after the splash.
@@ -48,7 +64,8 @@ resolve to `None`; layout, focus, and state changes still occur immediately.
 
 1. Keep this state-priority contract and the splash exit animation stable.
 2. Verify ordinary route back on a small device matrix, including a root back-to-home gesture.
-3. Revisit progress-driven previews only when gesture support is intentionally reintroduced.
+3. Progress-driven back previews are in place; re-check them on a tablet (dialog sheets) and on
+   physical devices.
 4. Add shared-element cover→details motion only after the base back contract is verified; it must be
    cancellable and must not delay reader entry.
 
@@ -58,5 +75,7 @@ resolve to `None`; layout, focus, and state changes still occur immediately.
 - Search back closes search before the activity or route is popped.
 - Selection back exits selection without changing route state.
 - Details/editor/reader back pops exactly one route and reverses the destination transition.
-- All screen changes use the same shared-axis horizontal transition; back mirrors its direction.
+- Forward screen changes and tab changes use the shared-axis horizontal transition; back out of a
+  child route shrinks the leaving screen away and follows the gesture.
+- A cancelled back swipe returns every surface to rest with no state change.
 - Reduced motion disables all custom spatial/effect transitions without disabling navigation.

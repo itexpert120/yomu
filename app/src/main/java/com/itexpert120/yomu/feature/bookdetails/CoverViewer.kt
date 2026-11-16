@@ -55,8 +55,11 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.YomuBackPreviewHandler
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.rememberYomuBackPreviewState
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.core.designsystem.yomuBackPreview
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import kotlinx.coroutines.Dispatchers
@@ -120,6 +123,8 @@ internal fun CoverViewerDialog(
                 isAppearanceLightNavigationBars = false
             }
         }
+        val backPreview = rememberYomuBackPreviewState()
+        YomuBackPreviewHandler(backPreview, onBack = close)
         // The scrim fades; the cover and its actions materialize in place on top of it.
         AnimatedVisibility(
             visibleState = visibleState,
@@ -140,7 +145,8 @@ internal fun CoverViewerDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .animateEnterExit(enter = yomuPopupEnter(), exit = yomuPopupExit()),
+                        .animateEnterExit(enter = yomuPopupEnter(), exit = yomuPopupExit())
+                        .yomuBackPreview(backPreview),
                     contentAlignment = Alignment.Center,
                 ) {
                     // Pinch to zoom, drag to pan, double-tap to toggle. Scale is clamped; panning

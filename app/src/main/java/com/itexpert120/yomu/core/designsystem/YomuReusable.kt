@@ -103,6 +103,8 @@ fun YomuBottomSheet(
                 decorFitsSystemWindows = false,
             ),
         ) {
+            val backPreview = rememberYomuBackPreviewState()
+            YomuBackPreviewHandler(backPreview, onBack = dismissPanel)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -126,6 +128,7 @@ fun YomuBottomSheet(
                 ) {
                     Surface(
                         modifier = Modifier
+                            .yomuBackPreview(backPreview)
                             // Do not impose a percentage minimum before the cap: on a landscape tablet
                             // that would make widthIn(max=460.dp) ineffective.
                             .widthIn(min = 280.dp, max = wideMaxWidth)

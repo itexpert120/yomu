@@ -1,7 +1,15 @@
 package com.itexpert120.yomu.app.navigation
 
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -10,9 +18,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -28,6 +40,8 @@ import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
 import com.itexpert120.yomu.core.designsystem.yomuScreenExit
+import com.itexpert120.yomu.core.designsystem.yomuScreenPopEnter
+import com.itexpert120.yomu.core.designsystem.yomuScreenPopExit
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
@@ -83,6 +97,9 @@ fun YomuNavHost(
 
     // Like Mihon, Home owns both the top-level content and its navigation chrome. The root
     // transition therefore moves the whole Home frame—including the bar or rail—to a child screen.
+    val backMotion = remember { BackMotion() }
+    val backTravelDistancePx = with(LocalDensity.current) { YomuMotion.BackPreviewShift.roundToPx() }
+
     NavHost(
         navController = navController,
         startDestination = Home,
@@ -99,6 +116,7 @@ fun YomuNavHost(
             }
         },
         exitTransition = {
+            backMotion.popping = false
             val sameEntry = initialState.id == targetState.id
             val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
             when {
@@ -113,60 +131,75 @@ fun YomuNavHost(
             val sameEntry = initialState.id == targetState.id
             when {
                 sameEntry || !motionEnabled -> EnterTransition.None
-                else -> yomuScreenEnter(
-                    travelDistancePx = screenTravelDistancePx,
-                    forward = physicalDirection(false),
+                else -> yomuScreenPopEnter(
+                    travelDistancePx = backTravelDistancePx,
+                    fromStart = physicalDirection(true),
                 )
             }
         },
         popExitTransition = {
+            backMotion.popping = true
             val sameEntry = initialState.id == targetState.id
             when {
                 sameEntry || !motionEnabled -> ExitTransition.None
-                else -> yomuScreenExit(
-                    travelDistancePx = screenTravelDistancePx,
-                    forward = physicalDirection(false),
+                else -> yomuScreenPopExit(
+                    travelDistancePx = backTravelDistancePx,
+                    towardEnd = physicalDirection(true),
                 )
             }
         },
     ) {
         composable<Home> {
-            TopLevelNavigationShell(
-                appViewModel = appViewModel,
-                onOpenReader = ::navigateToReader,
-                onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
-                onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                onOpenAbout = { navController.navigate(About) },
-            )
+            BackPreviewFrame(backMotion) {
+                TopLevelNavigationShell(
+                    appViewModel = appViewModel,
+                    onOpenReader = ::navigateToReader,
+                    onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
+                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                    onOpenAbout = { navController.navigate(About) },
+                )
+            }
         }
         composable<BookDetails> { entry ->
-            val args = entry.toRoute<BookDetails>()
-            BookDetailsRoute(
-                onBack = navController::popBackStackIfResumed,
-                onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
-                onEdit = { navController.navigate(EditBook(args.bookId)) },
-                onOpenChapter = { locator ->
-                    navigateToReader(Reader(args.bookId, locator), "chapter")
-                },
-            )
+            BackPreviewFrame(backMotion) {
+                val args = entry.toRoute<BookDetails>()
+                BookDetailsRoute(
+                    onBack = navController::popBackStackIfResumed,
+                    onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
+                    onEdit = { navController.navigate(EditBook(args.bookId)) },
+                    onOpenChapter = { locator ->
+                        navigateToReader(Reader(args.bookId, locator), "chapter")
+                    },
+                )
+            }
         }
         composable<EditBook> {
-            EditBookRoute(onBack = navController::popBackStackIfResumed)
+            BackPreviewFrame(backMotion) {
+                EditBookRoute(onBack = navController::popBackStackIfResumed)
+            }
         }
         composable<ReaderDefaults> {
-            ReaderDefaultsRoute(
-                onBack = navController::popBackStackIfResumed,
-                onOpenFontLibrary = { navController.navigate(FontLibrary) },
-            )
+            BackPreviewFrame(backMotion) {
+                ReaderDefaultsRoute(
+                    onBack = navController::popBackStackIfResumed,
+                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                )
+            }
         }
         composable<FontLibrary> {
-            FontLibraryRoute(onBack = navController::popBackStackIfResumed)
+            BackPreviewFrame(backMotion) {
+                FontLibraryRoute(onBack = navController::popBackStackIfResumed)
+            }
         }
         composable<About> {
-            AboutRoute(onBack = navController::popBackStackIfResumed)
+            BackPreviewFrame(backMotion) {
+                AboutRoute(onBack = navController::popBackStackIfResumed)
+            }
         }
         composable<Reader> {
-            ReaderRoute(onBack = navController::popBackStackIfResumed)
+            BackPreviewFrame(backMotion) {
+                ReaderRoute(onBack = navController::popBackStackIfResumed)
+            }
         }
     }
 }
@@ -268,6 +301,46 @@ private fun TopLevelNavigationShell(
                 )
             }
         }
+    }
+}
+
+/** Whether the root host's running transition is a back (pop) rather than a forward handoff. */
+private class BackMotion {
+    var popping = false
+}
+
+/**
+ * The parts of the back motion a transition spec can't express. The leaving screen's corners round
+ * as it shrinks, so the gesture reads as a card lifting away rather than a square page, and the
+ * screen underneath starts slightly dimmed so the two stay distinct when they share a colour.
+ * Forward handoffs are left untouched.
+ */
+@Composable
+private fun AnimatedContentScope.BackPreviewFrame(motion: BackMotion, content: @Composable () -> Unit) {
+    val corner = transition.animateDp(
+        transitionSpec = { tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel) },
+        label = "backPreviewCorner",
+    ) { state -> if (state == EnterExitState.PostExit) YomuMotion.BackPreviewCorner else 0.dp }
+    val dim = transition.animateFloat(
+        transitionSpec = { tween(YomuMotion.ScreenTransitionDurationMillis, easing = LinearEasing) },
+        label = "backPreviewDim",
+    ) { state -> if (state == EnterExitState.PreEnter) YomuMotion.BackPreviewDim else 0f }
+    Box(
+        modifier = Modifier
+            .graphicsLayer {
+                // Read the animated corner first so this block is re-run on every frame of it.
+                val animated = corner.value.toPx()
+                val radius = if (motion.popping) animated else 0f
+                clip = radius > 0f
+                shape = RoundedCornerShape(radius)
+            }
+            .drawWithContent {
+                drawContent()
+                val alpha = dim.value
+                if (motion.popping && alpha > 0f) drawRect(Color.Black, alpha = alpha)
+            },
+    ) {
+        content()
     }
 }
 

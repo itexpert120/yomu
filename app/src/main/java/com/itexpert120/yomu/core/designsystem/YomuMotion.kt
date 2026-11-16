@@ -6,6 +6,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -53,6 +54,14 @@ object YomuMotion {
     val ScreenTransitionDistance = 30.dp
 
     const val PopupScaleFrom = 0.90f
+
+    // Predictive back: how far a surface shrinks over a full swipe, and the corner it takes on.
+    const val BackPreviewScale = 0.90f
+    val BackPreviewCorner = 28.dp
+    const val BackPreviewDim = 0.32f
+
+    // Kept under the margin the shrink opens up, so the leaving screen never slides off-screen.
+    val BackPreviewShift = 12.dp
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
@@ -189,6 +198,47 @@ fun yomuScreenExit(
                 val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
                 if (forward) -travel else travel
             },
+        )
+}
+
+/**
+ * Back out of a child screen. Unlike the forward handoff this is built to be scrubbed by the back
+ * gesture: the leaving screen stays opaque while it shrinks and drifts toward the swipe, so the
+ * screen underneath shows around it, and only fades once the gesture is well under way or has
+ * committed. The screen underneath never fades, so two translucent pages are never stacked.
+ */
+fun yomuScreenPopEnter(travelDistancePx: Int, fromStart: Boolean = true): EnterTransition = if (!yomuAnimationsEnabled()) {
+    EnterTransition.None
+} else {
+    slideInHorizontally(
+        animationSpec = tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel),
+        initialOffsetX = { width ->
+            val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
+            if (fromStart) -travel else travel
+        },
+    )
+}
+
+fun yomuScreenPopExit(travelDistancePx: Int, towardEnd: Boolean = true): ExitTransition = if (!yomuAnimationsEnabled()) {
+    ExitTransition.None
+} else {
+    scaleOut(
+        animationSpec = tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel),
+        targetScale = YomuMotion.BackPreviewScale,
+    ) +
+        slideOutHorizontally(
+            animationSpec = tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel),
+            targetOffsetX = { width ->
+                val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
+                if (towardEnd) travel else -travel
+            },
+        ) +
+        fadeOut(
+            animationSpec = tween(
+                durationMillis = YomuMotion.ScreenTransitionFadeInMillis,
+                delayMillis = YomuMotion.ScreenTransitionFadeOutMillis,
+                easing = LinearEasing,
+            ),
         )
 }
 

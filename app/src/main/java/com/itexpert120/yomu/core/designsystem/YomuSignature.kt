@@ -338,9 +338,10 @@ fun YomuDialog(
     confirmEnabled: Boolean = true,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
+    val backPreview = rememberYomuBackPreviewState()
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = modifier,
+        modifier = modifier.yomuBackPreview(backPreview),
         shape = YomuShapeTokens.hero,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         icon = icon?.let {
@@ -354,6 +355,8 @@ fun YomuDialog(
             }
         },
         title = {
+            // Registered from inside the dialog so it uses the dialog window's back dispatcher.
+            YomuBackPreviewHandler(backPreview, onBack = onDismiss)
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmallEmphasized,
