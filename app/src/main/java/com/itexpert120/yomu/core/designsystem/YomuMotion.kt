@@ -6,6 +6,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
@@ -60,8 +61,18 @@ object YomuMotion {
     val BackPreviewCorner = 28.dp
     const val BackPreviewDim = 0.32f
 
-    // Kept under the margin the shrink opens up, so the leaving screen never slides off-screen.
+    // How far the screen underneath travels in; kept short so it reads as settling, not sliding.
     val BackPreviewShift = 12.dp
+
+    // Back out of a child screen is quicker than the forward handoff, and ends as a flick: the
+    // leaving card's slide is cubic, so it stays inside the margin the shrink opens up for the
+    // first half (a held swipe) and covers most of its travel at the very end. The fade runs over
+    // the middle of the timeline and is finished before the card has gone.
+    const val ScreenPopDurationMillis = 220
+    val BackFlick = Easing { it * it * it }
+    const val BackFlickTravelFraction = 0.30f
+    const val BackFadeStart = 0.35f
+    const val BackFadeSpan = 0.40f
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
@@ -211,7 +222,7 @@ fun yomuScreenPopEnter(travelDistancePx: Int, fromStart: Boolean = true): EnterT
     EnterTransition.None
 } else {
     slideInHorizontally(
-        animationSpec = tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel),
+        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = YomuMotion.EmphasizedDecel),
         initialOffsetX = { width ->
             val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
             if (fromStart) -travel else travel
@@ -219,24 +230,30 @@ fun yomuScreenPopEnter(travelDistancePx: Int, fromStart: Boolean = true): EnterT
     )
 }
 
-fun yomuScreenPopExit(travelDistancePx: Int, towardEnd: Boolean = true): ExitTransition = if (!yomuAnimationsEnabled()) {
+/**
+ * The leaving half of the back motion. The slide accelerates: it barely moves while the swipe is
+ * being held, then throws the card off toward the swipe as the transition completes, and the fade
+ * is over well before the end. Together that makes the release read as a flick, not a dissolve.
+ */
+fun yomuScreenPopExit(towardEnd: Boolean = true): ExitTransition = if (!yomuAnimationsEnabled()) {
     ExitTransition.None
 } else {
+    val duration = YomuMotion.ScreenPopDurationMillis
     scaleOut(
-        animationSpec = tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel),
+        animationSpec = tween(duration, easing = YomuMotion.EmphasizedDecel),
         targetScale = YomuMotion.BackPreviewScale,
     ) +
         slideOutHorizontally(
-            animationSpec = tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel),
+            animationSpec = tween(duration, easing = YomuMotion.BackFlick),
             targetOffsetX = { width ->
-                val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
+                val travel = (width * YomuMotion.BackFlickTravelFraction).toInt()
                 if (towardEnd) travel else -travel
             },
         ) +
         fadeOut(
             animationSpec = tween(
-                durationMillis = YomuMotion.ScreenTransitionFadeInMillis,
-                delayMillis = YomuMotion.ScreenTransitionFadeOutMillis,
+                durationMillis = (duration * YomuMotion.BackFadeSpan).toInt(),
+                delayMillis = (duration * YomuMotion.BackFadeStart).toInt(),
                 easing = LinearEasing,
             ),
         )

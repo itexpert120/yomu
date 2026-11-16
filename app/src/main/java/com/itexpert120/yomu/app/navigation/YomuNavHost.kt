@@ -142,10 +142,7 @@ fun YomuNavHost(
             val sameEntry = initialState.id == targetState.id
             when {
                 sameEntry || !motionEnabled -> ExitTransition.None
-                else -> yomuScreenPopExit(
-                    travelDistancePx = backTravelDistancePx,
-                    towardEnd = physicalDirection(true),
-                )
+                else -> yomuScreenPopExit(towardEnd = physicalDirection(true))
             }
         },
     ) {
@@ -318,11 +315,11 @@ private class BackMotion {
 @Composable
 private fun AnimatedContentScope.BackPreviewFrame(motion: BackMotion, content: @Composable () -> Unit) {
     val corner = transition.animateDp(
-        transitionSpec = { tween(YomuMotion.ScreenTransitionDurationMillis, easing = YomuMotion.EmphasizedDecel) },
+        transitionSpec = { tween(YomuMotion.ScreenPopDurationMillis, easing = YomuMotion.EmphasizedDecel) },
         label = "backPreviewCorner",
     ) { state -> if (state == EnterExitState.PostExit) YomuMotion.BackPreviewCorner else 0.dp }
     val dim = transition.animateFloat(
-        transitionSpec = { tween(YomuMotion.ScreenTransitionDurationMillis, easing = LinearEasing) },
+        transitionSpec = { tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing) },
         label = "backPreviewDim",
     ) { state -> if (state == EnterExitState.PreEnter) YomuMotion.BackPreviewDim else 0f }
     Box(
