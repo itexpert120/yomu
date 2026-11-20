@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -49,6 +50,13 @@ android {
             matchingFallbacks += "release"
             ndk { abiFilters += listOf("x86_64", "x86") }
         }
+        // The Baseline Profile plugin copies release into these for profiling; like `benchmark`,
+        // they must also run on x86 emulators.
+        configureEach {
+            if (name == "nonMinifiedRelease" || name == "benchmarkRelease") {
+                ndk { abiFilters += listOf("x86_64", "x86") }
+            }
+        }
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -89,6 +97,12 @@ hilt {
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigationevent)
+    // Installs the bundled Baseline Profile on sideloaded installs (no Play cloud profiles).
+    implementation(libs.androidx.profileinstaller)
+    // WebView async start-up (reader warm-up); also what Readium uses.
+    implementation(libs.androidx.webkit)
+    baselineProfile(project(":benchmark"))
     implementation(libs.androidx.browser)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)

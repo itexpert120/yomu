@@ -1,5 +1,6 @@
 plugins {
     id("com.android.test")
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -27,6 +28,11 @@ android {
             matchingFallbacks += "release"
         }
     }
+}
+
+// Generate the app's Baseline Profile on the connected device/emulator.
+baselineProfile {
+    useConnectedDevices = true
 }
 
 dependencies {

@@ -4,11 +4,15 @@ import android.animation.ValueAnimator
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Base64
 import android.util.Log
@@ -24,6 +28,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewStartUpConfig
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -45,9 +51,11 @@ import com.itexpert120.yomu.core.web.openWebSearchSheet
 import com.itexpert120.yomu.data.diagnostics.CrashLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
@@ -122,25 +130,145 @@ class ReadiumReaderEngine @Inject constructor(
         ),
     )
 
+    // region Preloading
+
+    /** A parsed book, ready to become a session. Owns [publication] until it is handed over. */
+    private class PreparedPublication(
+        val publication: Publication,
+        val tableOfContents: List<ReadiumTocEntry>,
+        val resourceWeights: List<Int>,
+        val cache: ReaderPublicationCache,
+    )
+
+    private val prepareScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val prepareLock = Any()
+
+    // The one prepared (or still loading) book, keyed by its file.
+    private var prepared: Pair<String, Deferred<PreparedPublication?>>? = null
+
+    @Volatile
+    private var warmedUp = false
+
+    init {
+        // Leaving the app (or memory pressure) gives the prepared book's memory back.
+        context.registerComponentCallbacks(
+            object : ComponentCallbacks2 {
+                override fun onTrimMemory(level: Int) {
+                    if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) releasePrepared()
+                }
+
+                override fun onConfigurationChanged(newConfig: Configuration) = Unit
+
+                @Deprecated("Deprecated in Java")
+                override fun onLowMemory() = releasePrepared()
+            },
+        )
+    }
+
+    override fun prepare(filePath: String, publicationCache: ReaderPublicationCache?) {
+        synchronized(prepareLock) {
+            if (prepared?.first == filePath) return
+            prepared?.second?.let(::discard)
+            prepared = filePath to prepareScope.async { load(filePath, publicationCache) }
+        }
+    }
+
+    override fun releasePrepared() {
+        synchronized(prepareLock) {
+            prepared?.second?.let(::discard)
+            prepared = null
+        }
+    }
+
+    /** Takes the prepared book for [filePath] (possibly still loading); the caller then owns it. */
+    private fun takePrepared(filePath: String): Deferred<PreparedPublication?>? = synchronized(prepareLock) {
+        prepared?.takeIf { it.first == filePath }?.second?.also { prepared = null }
+    }
+
+    /** Cancels a load, or closes its publication if it already finished. */
+    private fun discard(load: Deferred<PreparedPublication?>) {
+        load.cancel()
+        load.invokeOnCompletion { failure ->
+            if (failure == null) prepareScope.launch { runCatching { load.await()?.publication?.close() } }
+        }
+    }
+
+    /**
+     * WebView's first use loads and initialises Chromium (hundreds of ms). This starts it while
+     * the app is idle, off the UI thread where the WebView provider supports it.
+     */
+    @androidx.annotation.OptIn(WebViewCompat.ExperimentalAsyncStartUp::class)
+    override fun warmUp() {
+        if (warmedUp) return
+        warmedUp = true
+        runCatching {
+            val config = WebViewStartUpConfig.Builder(Dispatchers.Default.asExecutor())
+                .setShouldRunUiThreadStartUpTasks(true)
+                .build()
+            WebViewCompat.startUpWebView(context, config) {
+                // Chromium is loaded; the first WebView object still costs a few hundred ms, so
+                // make (and drop) one while the main thread has nothing else to do.
+                Handler(Looper.getMainLooper()).post {
+                    Looper.myQueue().addIdleHandler {
+                        runCatching { WebView(context).destroy() }
+                        false
+                    }
+                }
+            }
+        }.onFailure { warmedUp = false }
+    }
+
+    // endregion
+
     override suspend fun open(request: ReaderOpenRequest): ReaderOpenResult? {
+        val preloaded = takePrepared(request.filePath)?.let { load ->
+            ReaderOpenTrace.mark("reader.publication-prepared")
+            runCatching { load.await() }.getOrNull()
+        }
+        val book = preloaded ?: load(request.filePath, request.publicationCache) ?: return null
+        val publication = book.publication
+        return try {
+            val session = ReadiumReaderSession(
+                context = context,
+                publication = publication,
+                initialLocatorJson = request.initialLocatorJson,
+                initialSettings = request.initialSettings,
+                resourceWeights = book.resourceWeights,
+                mappedTableOfContents = book.tableOfContents,
+                customFontCssCache = customFontCssCache,
+                crashLog = crashLog,
+            )
+            ReaderOpenTrace.mark("reader.session-assembled")
+            ReaderOpenResult(session, book.cache)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            runCatching { publication.close() }
+            throw cancelled
+        } catch (_: Throwable) {
+            runCatching { publication.close() }
+            null
+        }
+    }
+
+    /** Opens and indexes a publication: its contents and resource weights, from the cache if valid. */
+    private suspend fun load(filePath: String, publicationCache: ReaderPublicationCache?): PreparedPublication? {
         ReaderOpenTrace.mark("reader.publication-open")
-        val publication = openPublication(request.filePath) ?: return null
+        val publication = openPublication(filePath) ?: return null
         ReaderOpenTrace.mark("reader.publication-opened")
         return try {
             coroutineScope {
                 val cachedToc = async(Dispatchers.Default) {
-                    request.publicationCache?.toc?.let { cached ->
+                    publicationCache?.toc?.let { cached ->
                         publication.cachedTableOfContents(cached)
                     }
                 }
                 val readingOrderKeys = publication.readingOrder.map { it.normalizedResourceCacheKey() }
-                val cachedWeightsInOrder = request.publicationCache?.validatedWeights(readingOrderKeys)
+                val cachedWeightsInOrder = publicationCache?.validatedWeights(readingOrderKeys)
                 val weights = if (cachedWeightsInOrder != null) {
                     async(Dispatchers.Default) {
                         cachedWeightsInOrder
                     }
                 } else {
-                    async { resourceWeightMap(request.filePath, publication.readingOrder) }
+                    async { resourceWeightMap(filePath, publication.readingOrder) }
                         .let { deferred ->
                             async(Dispatchers.Default) {
                                 val map = deferred.await()
@@ -157,18 +285,7 @@ class ReadiumReaderEngine @Inject constructor(
                     toc = tocItems,
                     resourceWeights = readingOrderKeys.zip(resourceWeights).toMap(),
                 )
-                val session = ReadiumReaderSession(
-                    context = context,
-                    publication = publication,
-                    initialLocatorJson = request.initialLocatorJson,
-                    initialSettings = request.initialSettings,
-                    resourceWeights = resourceWeights,
-                    mappedTableOfContents = tableOfContents,
-                    customFontCssCache = customFontCssCache,
-                    crashLog = crashLog,
-                )
-                ReaderOpenTrace.mark("reader.session-assembled")
-                ReaderOpenResult(session, effectiveCache)
+                PreparedPublication(publication, tableOfContents, resourceWeights, effectiveCache)
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             runCatching { publication.close() }

@@ -114,6 +114,19 @@ data class ReaderSearchResult(
 interface ReaderEngine {
     suspend fun open(request: ReaderOpenRequest): ReaderOpenResult?
 
+    /**
+     * Opens a book's publication ahead of a likely [open] (the resume book, a book whose details
+     * are showing), so that open skips parsing. One book at a time: a newer prepare replaces an
+     * older one, and an [open] of the same file takes the prepared book (or waits for it).
+     */
+    fun prepare(filePath: String, publicationCache: ReaderPublicationCache?) = Unit
+
+    /** Drops a prepared book, e.g. under memory pressure. */
+    fun releasePrepared() = Unit
+
+    /** Starts the rendering engine's one-time start-up early, off the critical path. Main thread. */
+    fun warmUp() = Unit
+
     /** Reads the book's table of contents without starting a reading session. */
     suspend fun tableOfContents(filePath: String): List<ReaderTocItem>?
 }
