@@ -23,7 +23,7 @@ the back swipe and settles back if the swipe is cancelled:
 
 | Surface | What the gesture does | Where |
 | --- | --- | --- |
-| Child route (details, editor, reader, settings sub-screens) | The screen shrinks to 90% with rounded corners and drifts toward the swipe; the previous screen sits underneath, slightly dimmed. It fades only late in the swipe or after commit. | Root `NavHost` pop transitions (`yomuScreenPopEnter/Exit`) + `BackPreviewFrame` |
+| Child route (details, editor, reader, settings sub-screens) | A One UI-style page slide: the screen slides its full width toward the swipe at full size and opaque, casting a soft shadow from its leading edge; the previous screen follows from 30% of the width to the side (parallax), starting slightly dimmed. Both slides are linear in transition progress, so the page stays locked to the back progress. | Root `NavHost` pop transitions (`yomuScreenPopEnter/Exit`) + `BackPreviewFrame` |
 | Top-level tab back to Library | The shared-axis handoff is scrubbed by the swipe. | Nested `NavHost` |
 | Library root | Android's back-to-home preview. | System |
 | Phone bottom sheets | Material's built-in sheet preview. | `ModalBottomSheet` |
@@ -46,7 +46,7 @@ the second to go back.
   follow the Library → Statistics → Settings order, so moving toward an earlier destination mirrors
   the motion. The adaptive navigation bar/rail stays in the stable scaffold and expands or shrinks
   with child-route handoffs instead of disappearing before the screen moves. Back between tabs
-  reverses the same motion; back out of a child route uses the card-shrink motion described under
+  reverses the same motion; back out of a child route uses the parallax page slide described under
   "Back behavior".
 - **In-library content:** directional content swap for grid/list and settled empty states; the
   loading-to-content handoff uses a fade-through so the first library frame does not enter from an

@@ -6,7 +6,6 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
@@ -56,23 +55,21 @@ object YomuMotion {
 
     const val PopupScaleFrom = 0.90f
 
-    // Predictive back: how far a surface shrinks over a full swipe, and the corner it takes on.
+    // Predictive back on dialog-like surfaces (sheets, dialogs, cover viewer): how far they shrink.
     const val BackPreviewScale = 0.90f
-    val BackPreviewCorner = 28.dp
-    const val BackPreviewDim = 0.32f
 
-    // How far the screen underneath travels in; kept short so it reads as settling, not sliding.
-    val BackPreviewShift = 12.dp
+    // Back out of a child screen is a page slide (One UI style): the leaving page travels its full
+    // width at full size, the page underneath follows from [BackParallaxFraction] of the width to
+    // its left (parallax) and starts dimmed so two same-coloured pages stay distinct. Both slides
+    // are linear in transition progress, so while the gesture scrubs them the page stays locked to
+    // the back progress instead of running ahead of the finger.
+    const val ScreenPopDurationMillis = 280
+    const val BackParallaxFraction = 0.30f
+    const val BackPreviewDim = 0.24f
+    val BackEdgeShadowWidth = 32.dp
 
-    // Back out of a child screen is quicker than the forward handoff, and ends as a flick: the
-    // leaving card's slide is cubic, so it stays inside the margin the shrink opens up for the
-    // first half (a held swipe) and covers most of its travel at the very end. The fade runs over
-    // the middle of the timeline and is finished before the card has gone.
-    const val ScreenPopDurationMillis = 220
-    val BackFlick = Easing { it * it * it }
-    const val BackFlickTravelFraction = 0.30f
-    const val BackFadeStart = 0.35f
-    const val BackFadeSpan = 0.40f
+    // Kept faint: it only marks the seam between two pages, it is not a drop shadow.
+    const val BackEdgeShadowAlpha = 0.10f
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
@@ -213,50 +210,33 @@ fun yomuScreenExit(
 }
 
 /**
- * Back out of a child screen. Unlike the forward handoff this is built to be scrubbed by the back
- * gesture: the leaving screen stays opaque while it shrinks and drifts toward the swipe, so the
- * screen underneath shows around it, and only fades once the gesture is well under way or has
- * committed. The screen underneath never fades, so two translucent pages are never stacked.
+ * The page underneath on back: it slides in from [YomuMotion.BackParallaxFraction] of its width
+ * toward the start edge, so it moves slower than the page leaving over it (parallax). Linear, so a
+ * scrubbed back gesture moves both pages in a fixed ratio.
  */
-fun yomuScreenPopEnter(travelDistancePx: Int, fromStart: Boolean = true): EnterTransition = if (!yomuAnimationsEnabled()) {
+fun yomuScreenPopEnter(fromStart: Boolean = true): EnterTransition = if (!yomuAnimationsEnabled()) {
     EnterTransition.None
 } else {
     slideInHorizontally(
-        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = YomuMotion.EmphasizedDecel),
+        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing),
         initialOffsetX = { width ->
-            val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
+            val travel = (width * YomuMotion.BackParallaxFraction).toInt()
             if (fromStart) -travel else travel
         },
     )
 }
 
 /**
- * The leaving half of the back motion. The slide accelerates: it barely moves while the swipe is
- * being held, then throws the card off toward the swipe as the transition completes, and the fade
- * is over well before the end. Together that makes the release read as a flick, not a dissolve.
+ * The page leaving on back: it slides its full width toward the end edge, opaque and at full size,
+ * like a page being pulled off the stack (the edge shadow is drawn by the nav host's frame).
  */
 fun yomuScreenPopExit(towardEnd: Boolean = true): ExitTransition = if (!yomuAnimationsEnabled()) {
     ExitTransition.None
 } else {
-    val duration = YomuMotion.ScreenPopDurationMillis
-    scaleOut(
-        animationSpec = tween(duration, easing = YomuMotion.EmphasizedDecel),
-        targetScale = YomuMotion.BackPreviewScale,
-    ) +
-        slideOutHorizontally(
-            animationSpec = tween(duration, easing = YomuMotion.BackFlick),
-            targetOffsetX = { width ->
-                val travel = (width * YomuMotion.BackFlickTravelFraction).toInt()
-                if (towardEnd) travel else -travel
-            },
-        ) +
-        fadeOut(
-            animationSpec = tween(
-                durationMillis = (duration * YomuMotion.BackFadeSpan).toInt(),
-                delayMillis = (duration * YomuMotion.BackFadeStart).toInt(),
-                easing = LinearEasing,
-            ),
-        )
+    slideOutHorizontally(
+        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing),
+        targetOffsetX = { width -> if (towardEnd) width else -width },
+    )
 }
 
 /**

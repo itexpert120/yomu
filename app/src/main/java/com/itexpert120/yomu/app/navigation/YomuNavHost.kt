@@ -5,11 +5,10 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -18,13 +17,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -98,7 +99,6 @@ fun YomuNavHost(
     // Like Mihon, Home owns both the top-level content and its navigation chrome. The root
     // transition therefore moves the whole Home frame—including the bar or rail—to a child screen.
     val backMotion = remember { BackMotion() }
-    val backTravelDistancePx = with(LocalDensity.current) { YomuMotion.BackPreviewShift.roundToPx() }
 
     NavHost(
         navController = navController,
@@ -131,10 +131,7 @@ fun YomuNavHost(
             val sameEntry = initialState.id == targetState.id
             when {
                 sameEntry || !motionEnabled -> EnterTransition.None
-                else -> yomuScreenPopEnter(
-                    travelDistancePx = backTravelDistancePx,
-                    fromStart = physicalDirection(true),
-                )
+                else -> yomuScreenPopEnter(fromStart = physicalDirection(true))
             }
         },
         popExitTransition = {
@@ -307,29 +304,33 @@ private class BackMotion {
 }
 
 /**
- * The parts of the back motion a transition spec can't express. The leaving screen's corners round
- * as it shrinks, so the gesture reads as a card lifting away rather than a square page, and the
- * screen underneath starts slightly dimmed so the two stay distinct when they share a colour.
- * Forward handoffs are left untouched.
+ * The parts of the back motion a transition spec can't express: the page underneath starts dimmed
+ * and brightens as it slides in, and the page being pulled off casts a soft shadow from its leading
+ * edge onto it, so the seam reads as one page lying on another. Forward handoffs are untouched.
  */
 @Composable
 private fun AnimatedContentScope.BackPreviewFrame(motion: BackMotion, content: @Composable () -> Unit) {
-    val corner = transition.animateDp(
-        transitionSpec = { tween(YomuMotion.ScreenPopDurationMillis, easing = YomuMotion.EmphasizedDecel) },
-        label = "backPreviewCorner",
-    ) { state -> if (state == EnterExitState.PostExit) YomuMotion.BackPreviewCorner else 0.dp }
     val dim = transition.animateFloat(
         transitionSpec = { tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing) },
         label = "backPreviewDim",
     ) { state -> if (state == EnterExitState.PreEnter) YomuMotion.BackPreviewDim else 0f }
+    val leaving = transition.targetState == EnterExitState.PostExit
+    val shadowStart = MaterialTheme.colorScheme.scrim.copy(alpha = 0f)
+    val shadowEnd = MaterialTheme.colorScheme.scrim.copy(alpha = YomuMotion.BackEdgeShadowAlpha)
+    val endToStart = LocalLayoutDirection.current == LayoutDirection.Rtl
     Box(
         modifier = Modifier
-            .graphicsLayer {
-                // Read the animated corner first so this block is re-run on every frame of it.
-                val animated = corner.value.toPx()
-                val radius = if (motion.popping) animated else 0f
-                clip = radius > 0f
-                shape = RoundedCornerShape(radius)
+            .drawBehind {
+                if (!motion.popping || !leaving) return@drawBehind
+                // Drawn just outside the page's leading edge, over the page underneath.
+                val width = YomuMotion.BackEdgeShadowWidth.toPx()
+                val left = if (endToStart) size.width else -width
+                val colors = if (endToStart) listOf(shadowEnd, shadowStart) else listOf(shadowStart, shadowEnd)
+                drawRect(
+                    brush = Brush.horizontalGradient(colors, startX = left, endX = left + width),
+                    topLeft = Offset(left, 0f),
+                    size = Size(width, size.height),
+                )
             }
             .drawWithContent {
                 drawContent()
