@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.core.model.ThemePreference
+import com.itexpert120.yomu.feature.about.DiagnosticsSection
 import com.itexpert120.yomu.feature.reader.CustomThemeSheet
 import com.itexpert120.yomu.feature.reader.ReaderDefaultsViewModel
 import com.itexpert120.yomu.feature.sync.SyncSection
@@ -51,6 +52,7 @@ fun SettingsRoute(
         onBack = onBack,
         onOpenAbout = onOpenAbout,
         syncSection = { SyncSection() },
+        diagnosticsSection = { DiagnosticsSection() },
     )
 
     CustomThemeSheet(

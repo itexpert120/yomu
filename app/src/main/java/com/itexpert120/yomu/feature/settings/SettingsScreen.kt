@@ -92,6 +92,7 @@ fun SettingsScreen(
     onOpenAbout: () -> Unit,
     // Stateful slot (it owns its ViewModel) so this screen stays preview-driven.
     syncSection: @Composable () -> Unit = {},
+    diagnosticsSection: @Composable () -> Unit = {},
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         if (maxWidth.supportsYomuTwoPane()) {
@@ -114,6 +115,7 @@ fun SettingsScreen(
                 onOpenFontLibrary = onOpenFontLibrary,
                 onBack = onBack,
                 syncSection = syncSection,
+                diagnosticsSection = diagnosticsSection,
             )
         } else {
             PhoneSettingsLayout(
@@ -217,6 +219,7 @@ private fun TabletSettingsLayout(
     onOpenFontLibrary: () -> Unit,
     onBack: (() -> Unit)?,
     syncSection: @Composable () -> Unit,
+    diagnosticsSection: @Composable () -> Unit,
 ) {
     var selectedPaneName by rememberSaveable { mutableStateOf(SettingsPane.Appearance.name) }
     val selectedPane = SettingsPane.entries.first { it.name == selectedPaneName }
@@ -298,7 +301,7 @@ private fun TabletSettingsLayout(
 
                                     SettingsPane.Sync -> syncSection()
 
-                                    SettingsPane.About -> AboutContent()
+                                    SettingsPane.About -> AboutContent(diagnosticsSection = diagnosticsSection)
                                 }
                                 if (pane != SettingsPane.About) VersionFooter()
                             }

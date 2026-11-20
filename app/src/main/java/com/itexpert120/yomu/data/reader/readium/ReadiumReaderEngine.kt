@@ -42,6 +42,7 @@ import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.core.web.openWebSearchSheet
+import com.itexpert120.yomu.data.diagnostics.CrashLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +106,7 @@ import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 @Singleton
 class ReadiumReaderEngine @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val crashLog: CrashLog,
 ) : ReaderEngine {
 
     private val customFontCssCache = CustomFontCssCache()
@@ -163,6 +165,7 @@ class ReadiumReaderEngine @Inject constructor(
                     resourceWeights = resourceWeights,
                     mappedTableOfContents = tableOfContents,
                     customFontCssCache = customFontCssCache,
+                    crashLog = crashLog,
                 )
                 ReaderOpenTrace.mark("reader.session-assembled")
                 ReaderOpenResult(session, effectiveCache)
@@ -225,6 +228,7 @@ private class ReadiumReaderSession(
     private val resourceWeights: List<Int>,
     mappedTableOfContents: List<ReadiumTocEntry>,
     private val customFontCssCache: CustomFontCssCache,
+    private val crashLog: CrashLog,
 ) : ReaderSession {
 
     override val title: String = publication.metadata.title ?: "Reading"
@@ -630,6 +634,13 @@ private class ReadiumReaderSession(
         navigator = nav
         hostedFragmentManager = fragmentManager
         hostedFragmentTag = tag
+        // The system kills the WebView renderer freely while the app is backgrounded; rebuild the
+        // navigator at the current position instead of letting Chromium abort the process.
+        nav.childFragmentManager.guardWebViewRenderers {
+            Log.w(TAG, "WebView renderer gone; rebuilding the navigator")
+            crashLog.note("Reader: WebView renderer was killed; rebuilt the page view")
+            scheduleNavigatorRecreation(nav)
+        }
         locatorCollectionJob?.cancel()
         locatorCollectionJob = scope.launch {
             nav.currentLocator.collect { locator ->

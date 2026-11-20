@@ -38,22 +38,25 @@ private val LogoPlate = Color(0xFF050505)
 
 @Composable
 fun AboutRoute(onBack: () -> Unit) {
-    AboutScreen(onBack = onBack)
+    AboutScreen(onBack = onBack, diagnosticsSection = { DiagnosticsSection() })
 }
 
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(
+    onBack: () -> Unit,
+    diagnosticsSection: @Composable () -> Unit = {},
+) {
     YomuScreenScaffold(
         title = "About Open Reader",
         onBack = onBack,
         showScrollEdgeShadow = false,
     ) {
-        AboutContent()
+        AboutContent(diagnosticsSection = diagnosticsSection)
     }
 }
 
 @Composable
-internal fun AboutContent() {
+internal fun AboutContent(diagnosticsSection: @Composable () -> Unit = {}) {
     AboutHero()
 
     AboutSection(title = "About the app") {
@@ -132,6 +135,8 @@ internal fun AboutContent() {
                 "not provide, sell, or distribute any books.",
         )
     }
+
+    diagnosticsSection()
 
     AboutSection(title = "Acknowledgements") {
         ProseCard(
