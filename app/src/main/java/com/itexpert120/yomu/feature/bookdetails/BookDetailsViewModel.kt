@@ -2,6 +2,7 @@ package com.itexpert120.yomu.feature.bookdetails
 
 import android.content.Context
 import androidx.compose.ui.graphics.Color
+import androidx.core.text.HtmlCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -315,7 +316,7 @@ private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     title = title,
     author = author,
     series = series,
-    description = description,
+    description = description?.toPlainDescription(),
     progress = progress,
     remaining = remainingLabel,
     readingTime = formatReadingDuration(readingSeconds),
@@ -349,3 +350,19 @@ private fun formatDate(millis: Long): String? {
     return java.text.SimpleDateFormat("MMM d, yyyy · h:mm a", java.util.Locale.getDefault())
         .format(java.util.Date(millis))
 }
+
+/**
+ * EPUB descriptions are often HTML (`<p><b>…`), sometimes entity-escaped (`&lt;p&gt;`), so render
+ * them as plain text: decode up to twice, while tags are still present.
+ */
+private fun String.toPlainDescription(): String? {
+    var text = this
+    repeat(2) {
+        if (!HTML_TAG.containsMatchIn(text) && !text.contains('&')) return@repeat
+        text = HtmlCompat.fromHtml(text, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
+    }
+    return text.replace(BLANK_LINES, "\n\n").trim().ifBlank { null }
+}
+
+private val HTML_TAG = Regex("</?[a-zA-Z][^>]*>")
+private val BLANK_LINES = Regex("\n{3,}")
