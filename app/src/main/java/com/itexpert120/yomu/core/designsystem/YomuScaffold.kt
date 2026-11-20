@@ -158,7 +158,6 @@ fun YomuScreenScaffold(
                     .then(
                         if (showScrollEdgeShadow) {
                             Modifier.yomuScrollEdgeShadow(
-                                color = MaterialTheme.colorScheme.background,
                                 bottom = scrollState.canScrollForward,
                             )
                         } else {

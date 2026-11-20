@@ -155,7 +155,6 @@ fun YomuBottomSheet(
                                             .then(
                                                 if (showScrollEdgeShadow) {
                                                     Modifier.yomuScrollEdgeShadow(
-                                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
                                                         top = scrollState.canScrollBackward,
                                                         bottom = scrollState.canScrollForward,
                                                     )
@@ -238,7 +237,6 @@ fun YomuBottomSheet(
                                     // Fade content into the panel at whichever edge has more to scroll, so a
                                     // tall sheet doesn't hard-cut under the drag handle or at its bottom.
                                     Modifier.yomuScrollEdgeShadow(
-                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
                                         top = scrollState.canScrollBackward,
                                         bottom = scrollState.canScrollForward,
                                     )

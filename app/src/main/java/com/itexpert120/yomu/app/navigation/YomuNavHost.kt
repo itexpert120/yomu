@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.app.navigation
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
@@ -16,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -35,10 +37,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.NavigationEventTransitionState
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.core.designsystem.yomuBackEasing
 import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
 import com.itexpert120.yomu.core.designsystem.yomuScreenExit
 import com.itexpert120.yomu.core.designsystem.yomuScreenPopEnter
@@ -99,6 +104,15 @@ fun YomuNavHost(
     // Like Mihon, Home owns both the top-level content and its navigation chrome. The root
     // transition therefore moves the whole Home frame—including the bar or rail—to a child screen.
     val backMotion = remember { BackMotion() }
+    // A system back gesture in progress (never a tapped back button): the pop it scrubs tracks the
+    // finger linearly. Public navigation-event state, unlike Transition.isSeeking.
+    val activity = LocalActivity.current
+    LaunchedEffect(activity) {
+        val dispatcher = (activity as? NavigationEventDispatcherOwner)?.navigationEventDispatcher ?: return@LaunchedEffect
+        dispatcher.transitionState.collect { state ->
+            if (state is NavigationEventTransitionState.InProgress) backMotion.gestureDriven = true
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -131,7 +145,9 @@ fun YomuNavHost(
             val sameEntry = initialState.id == targetState.id
             when {
                 sameEntry || !motionEnabled -> EnterTransition.None
-                else -> yomuScreenPopEnter(fromStart = physicalDirection(true))
+                // Home moves its content itself so its navigation bar/rail can stay put.
+                targetState.destination.hasRoute<Home>() -> EnterTransition.None
+                else -> yomuScreenPopEnter(fromStart = physicalDirection(true), gestureDriven = { backMotion.gestureDriven })
             }
         },
         popExitTransition = {
@@ -139,13 +155,22 @@ fun YomuNavHost(
             val sameEntry = initialState.id == targetState.id
             when {
                 sameEntry || !motionEnabled -> ExitTransition.None
-                else -> yomuScreenPopExit(towardEnd = physicalDirection(true))
+                else -> yomuScreenPopExit(towardEnd = physicalDirection(true), gestureDriven = { backMotion.gestureDriven })
             }
         },
     ) {
         composable<Home> {
-            BackPreviewFrame(backMotion) {
+            // Home only ever enters by a pop: its content slides in from the parallax offset on the
+            // shared back curve, while the bar/rail (part of Home) stays fixed.
+            val backOffset = transition.animateFloat(
+                transitionSpec = {
+                    tween(YomuMotion.ScreenPopDurationMillis, easing = yomuBackEasing { backMotion.gestureDriven })
+                },
+                label = "homeBackOffset",
+            ) { state -> if (state == EnterExitState.PreEnter && motionEnabled) 1f else 0f }
+            BackPreviewFrame(backMotion, dim = false) {
                 TopLevelNavigationShell(
+                    contentBackOffset = { backOffset.value },
                     appViewModel = appViewModel,
                     onOpenReader = ::navigateToReader,
                     onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
@@ -205,6 +230,7 @@ private fun TopLevelNavigationShell(
     onOpenDetails: (String) -> Unit,
     onOpenFontLibrary: () -> Unit,
     onOpenAbout: () -> Unit,
+    contentBackOffset: () -> Float = { 0f },
 ) {
     val navController = rememberNavController()
     val currentDestination = navController.currentBackStackEntryAsState().value?.destination
@@ -228,6 +254,7 @@ private fun TopLevelNavigationShell(
         selected = selected,
         onSelected = navController::navigateTopLevel,
         barVisible = !librarySelecting,
+        contentBackOffset = contentBackOffset,
     ) { hostModifier ->
         NavHost(
             navController = navController,
@@ -301,6 +328,9 @@ private fun TopLevelNavigationShell(
 /** Whether the root host's running transition is a back (pop) rather than a forward handoff. */
 private class BackMotion {
     var popping = false
+
+    // True once a predictive-back gesture has scrubbed the running pop; picks the linear easing.
+    var gestureDriven = false
 }
 
 /**
@@ -309,14 +339,23 @@ private class BackMotion {
  * edge onto it, so the seam reads as one page lying on another. Forward handoffs are untouched.
  */
 @Composable
-private fun AnimatedContentScope.BackPreviewFrame(motion: BackMotion, content: @Composable () -> Unit) {
-    val dim = transition.animateFloat(
+private fun AnimatedContentScope.BackPreviewFrame(
+    motion: BackMotion,
+    // Home dims only its content (see contentBackOffset), never its navigation chrome.
+    dim: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val dimAlpha = transition.animateFloat(
         transitionSpec = { tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing) },
         label = "backPreviewDim",
     ) { state -> if (state == EnterExitState.PreEnter) YomuMotion.BackPreviewDim else 0f }
     val leaving = transition.targetState == EnterExitState.PostExit
-    val shadowStart = MaterialTheme.colorScheme.scrim.copy(alpha = 0f)
-    val shadowEnd = MaterialTheme.colorScheme.scrim.copy(alpha = YomuMotion.BackEdgeShadowAlpha)
+    // A gesture-driven pop keeps its linear easing until the transition settles, then the next back
+    // starts out as a (decelerating) button press again.
+    LaunchedEffect(transition) {
+        snapshotFlow { transition.isRunning }.collect { running -> if (!running) motion.gestureDriven = false }
+    }
+    val shadowColor = MaterialTheme.colorScheme.scrim
     val endToStart = LocalLayoutDirection.current == LayoutDirection.Rtl
     Box(
         modifier = Modifier
@@ -325,17 +364,20 @@ private fun AnimatedContentScope.BackPreviewFrame(motion: BackMotion, content: @
                 // Drawn just outside the page's leading edge, over the page underneath.
                 val width = YomuMotion.BackEdgeShadowWidth.toPx()
                 val left = if (endToStart) size.width else -width
-                val colors = if (endToStart) listOf(shadowEnd, shadowStart) else listOf(shadowStart, shadowEnd)
+                val stops = YomuMotion.BackEdgeShadowStops.map { (at, strength) ->
+                    val position = if (endToStart) 1f - at else at
+                    position to shadowColor.copy(alpha = YomuMotion.BackEdgeShadowAlpha * strength)
+                }.sortedBy { it.first }.toTypedArray()
                 drawRect(
-                    brush = Brush.horizontalGradient(colors, startX = left, endX = left + width),
+                    brush = Brush.horizontalGradient(*stops, startX = left, endX = left + width),
                     topLeft = Offset(left, 0f),
                     size = Size(width, size.height),
                 )
             }
             .drawWithContent {
                 drawContent()
-                val alpha = dim.value
-                if (motion.popping && alpha > 0f) drawRect(Color.Black, alpha = alpha)
+                val alpha = dimAlpha.value
+                if (dim && motion.popping && alpha > 0f) drawRect(Color.Black, alpha = alpha)
             },
     ) {
         content()

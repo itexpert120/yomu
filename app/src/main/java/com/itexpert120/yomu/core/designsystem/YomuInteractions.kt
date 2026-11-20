@@ -19,8 +19,10 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -93,24 +95,21 @@ fun Modifier.yomuPressable(
 }
 
 /**
- * A subtle scroll-edge fade drawn over a scrolling surface, so content dissolves into [color] at the
- * top and/or bottom edge instead of hard-cutting under a header or at the panel/screen edge. Keeps the
- * scroll affordance consistent across the app.
+ * A soft scroll-edge fade: content dissolves toward the top and/or bottom edge instead of
+ * hard-cutting under a header or at the panel/screen edge. The content itself is faded with an
+ * alpha mask (it never paints a colour over it), so it works on any background — sheets, tonal
+ * cards, OLED black — and follows an eased curve so it reads as depth, not a band.
  *
- * Pass the surface colour the scroll area sits on ([YomuColors.appBackground] for screens,
- * [YomuColors.panel] for sheets). Gate [top]/[bottom] on the list's `canScrollBackward` /
- * `canScrollForward` so a fade only appears when there is more content in that direction; the fade
- * cross-fades in/out as that changes.
+ * Gate [top]/[bottom] on the list's `canScrollBackward` / `canScrollForward` so a fade only
+ * appears when there is more content in that direction; it cross-fades in/out as that changes.
  *
  * Apply it OUTSIDE (before) a `verticalScroll(...)` modifier, or directly on a `LazyColumn`/
- * `LazyVerticalGrid` modifier, so the gradient stays pinned to the viewport rather than scrolling
- * with the content.
+ * `LazyVerticalGrid` modifier, so the fade stays pinned to the viewport.
  */
 fun Modifier.yomuScrollEdgeShadow(
-    color: Color,
     top: Boolean = false,
     bottom: Boolean = false,
-    height: Dp = 20.dp,
+    height: Dp = 28.dp,
 ): Modifier = composed {
     val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val topState = animateFloatAsState(
@@ -123,7 +122,8 @@ fun Modifier.yomuScrollEdgeShadow(
         animationSpec = if (yomuAnimationsEnabled()) effects else snap(),
         label = "yomuScrollEdgeBottom",
     )
-    drawWithContent {
+    // Offscreen so the DstOut mask erases only this content, not what lies behind it.
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
         // Alphas are read in the draw phase only, so the fade never recomposes the scroll container.
         val topAlpha = topState.value
@@ -132,22 +132,31 @@ fun Modifier.yomuScrollEdgeShadow(
         if (h <= 0f) return@drawWithContent
         if (topAlpha > 0f) {
             drawRect(
-                brush = Brush.verticalGradient(colors = listOf(color, Color.Transparent), startY = 0f, endY = h),
+                brush = Brush.verticalGradient(*edgeFadeStops(topAlpha, atStart = true), startY = 0f, endY = h),
                 size = Size(size.width, h),
-                alpha = topAlpha,
+                blendMode = BlendMode.DstOut,
             )
         }
         if (bottomAlpha > 0f) {
             drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, color),
-                    startY = size.height - h,
-                    endY = size.height,
-                ),
+                brush = Brush.verticalGradient(*edgeFadeStops(bottomAlpha, atStart = false), startY = size.height - h, endY = size.height),
                 topLeft = Offset(0f, size.height - h),
                 size = Size(size.width, h),
-                alpha = bottomAlpha,
+                blendMode = BlendMode.DstOut,
             )
         }
     }
 }
+
+/**
+ * Mask stops for an edge fade: fully erasing ([strength]) at the edge and easing to nothing inward
+ * on a smoothstep curve, so there is no visible line where the fade ends.
+ */
+private fun edgeFadeStops(strength: Float, atStart: Boolean): Array<Pair<Float, Color>> = Array(7) { i ->
+    val t = i / 6f
+    // t = distance from the edge (0) inward (1); erase = 1 at the edge, 0 inside.
+    val inward = 1f - t
+    val erase = inward * inward * (3f - 2f * inward)
+    val position = if (atStart) t else 1f - t
+    position to Color.Black.copy(alpha = erase * strength)
+}.sortedBy { it.first }.toTypedArray()

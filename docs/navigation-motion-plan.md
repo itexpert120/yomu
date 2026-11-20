@@ -23,7 +23,7 @@ the back swipe and settles back if the swipe is cancelled:
 
 | Surface | What the gesture does | Where |
 | --- | --- | --- |
-| Child route (details, editor, reader, settings sub-screens) | A One UI-style page slide: the screen slides its full width toward the swipe at full size and opaque, casting a soft shadow from its leading edge; the previous screen follows from 30% of the width to the side (parallax), starting slightly dimmed. Both slides are linear in transition progress, so the page stays locked to the back progress. | Root `NavHost` pop transitions (`yomuScreenPopEnter/Exit`) + `BackPreviewFrame` |
+| Child route (details, editor, reader, settings sub-screens) | A One UI-style page slide: the screen slides its full width toward the swipe at full size and opaque, casting a soft shadow from its leading edge; the previous screen follows from 30% of the width to the side (parallax), starting slightly dimmed. Both slides are linear while a back gesture drives them (the page stays locked to the finger) and emphasized-decelerate for a tapped back button. Returning to Home, only its content slides; the navigation bar/rail stays static. | Root `NavHost` pop transitions (`yomuScreenPopEnter/Exit`) + `BackPreviewFrame` |
 | Top-level tab back to Library | The shared-axis handoff is scrubbed by the swipe. | Nested `NavHost` |
 | Library root | Android's back-to-home preview. | System |
 | Phone bottom sheets | Material's built-in sheet preview. | `ModalBottomSheet` |

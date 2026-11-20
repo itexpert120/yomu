@@ -6,7 +6,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -60,16 +60,24 @@ object YomuMotion {
 
     // Back out of a child screen is a page slide (One UI style): the leaving page travels its full
     // width at full size, the page underneath follows from [BackParallaxFraction] of the width to
-    // its left (parallax) and starts dimmed so two same-coloured pages stay distinct. Both slides
-    // are linear in transition progress, so while the gesture scrubs them the page stays locked to
-    // the back progress instead of running ahead of the finger.
+    // its left (parallax) and starts dimmed so two same-coloured pages stay distinct. While a back
+    // gesture drives it, both slides are linear in progress so the page stays locked to the finger;
+    // a tapped back button plays the same slide on the emphasized decelerate curve instead.
     const val ScreenPopDurationMillis = 280
     const val BackParallaxFraction = 0.30f
-    const val BackPreviewDim = 0.24f
-    val BackEdgeShadowWidth = 32.dp
 
-    // Kept faint: it only marks the seam between two pages, it is not a drop shadow.
-    const val BackEdgeShadowAlpha = 0.10f
+    const val BackPreviewDim = 0.24f
+
+    // The seam shadow: soft and wide, densest at the page edge and thinning out on an eased
+    // (cubic) falloff, so it reads as depth rather than a band. See BackEdgeShadowStops.
+    val BackEdgeShadowWidth = 56.dp
+    const val BackEdgeShadowAlpha = 0.16f
+
+    /** Fraction of [BackEdgeShadowAlpha] across the shadow, from its outer edge (0) to the page (1). */
+    val BackEdgeShadowStops: List<Pair<Float, Float>> = List(9) { i ->
+        val t = i / 8f
+        t to t * t * t
+    }
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
@@ -210,15 +218,26 @@ fun yomuScreenExit(
 }
 
 /**
- * The page underneath on back: it slides in from [YomuMotion.BackParallaxFraction] of its width
- * toward the start edge, so it moves slower than the page leaving over it (parallax). Linear, so a
- * scrubbed back gesture moves both pages in a fixed ratio.
+ * Back easing: linear while a predictive-back gesture scrubs the transition (so the page tracks the
+ * finger 1:1), emphasized-decelerate when it plays on its own (back button), so a tap feels quick
+ * and settles rather than moving at a constant crawl. [gestureDriven] is read every frame.
  */
-fun yomuScreenPopEnter(fromStart: Boolean = true): EnterTransition = if (!yomuAnimationsEnabled()) {
+private class YomuBackEasing(private val gestureDriven: () -> Boolean) : Easing {
+    override fun transform(fraction: Float): Float = if (gestureDriven()) fraction else YomuMotion.EmphasizedDecel.transform(fraction)
+}
+
+/** The back easing, for surfaces that run their own part of the back motion (see YomuBackEasing). */
+fun yomuBackEasing(gestureDriven: () -> Boolean): Easing = YomuBackEasing(gestureDriven)
+
+/**
+ * The page underneath on back: it slides in from [YomuMotion.BackParallaxFraction] of its width
+ * toward the start edge, so it moves slower than the page leaving over it (parallax).
+ */
+fun yomuScreenPopEnter(fromStart: Boolean = true, gestureDriven: () -> Boolean = { false }): EnterTransition = if (!yomuAnimationsEnabled()) {
     EnterTransition.None
 } else {
     slideInHorizontally(
-        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing),
+        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = YomuBackEasing(gestureDriven)),
         initialOffsetX = { width ->
             val travel = (width * YomuMotion.BackParallaxFraction).toInt()
             if (fromStart) -travel else travel
@@ -230,11 +249,11 @@ fun yomuScreenPopEnter(fromStart: Boolean = true): EnterTransition = if (!yomuAn
  * The page leaving on back: it slides its full width toward the end edge, opaque and at full size,
  * like a page being pulled off the stack (the edge shadow is drawn by the nav host's frame).
  */
-fun yomuScreenPopExit(towardEnd: Boolean = true): ExitTransition = if (!yomuAnimationsEnabled()) {
+fun yomuScreenPopExit(towardEnd: Boolean = true, gestureDriven: () -> Boolean = { false }): ExitTransition = if (!yomuAnimationsEnabled()) {
     ExitTransition.None
 } else {
     slideOutHorizontally(
-        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = LinearEasing),
+        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = YomuBackEasing(gestureDriven)),
         targetOffsetX = { width -> if (towardEnd) width else -width },
     )
 }
