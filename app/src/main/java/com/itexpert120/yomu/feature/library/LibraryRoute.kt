@@ -26,6 +26,9 @@ fun LibraryRoute(
 
     // Selection swaps the navigation bar for a floating toolbar; M3 never shows both at once.
     LaunchedEffect(state.selectionMode) { onSelectionModeChange(state.selectionMode) }
+    LaunchedEffect(state.isLoading, state.continueReading?.id) {
+        if (!state.isLoading) viewModel.onLibraryShown(state.continueReading?.id)
+    }
     DisposableEffect(Unit) { onDispose { onSelectionModeChange(false) } }
 
     // The picker returns one or many EPUBs; the use case copies them immediately, so a temporary
@@ -65,6 +68,14 @@ fun LibraryRoute(
         onMarkSelectedRead = viewModel::onMarkSelectedRead,
         onMarkSelectedUnread = viewModel::onMarkSelectedUnread,
         onRetryImport = viewModel::onRetryImport,
+        onSelectTab = viewModel::onSelectTab,
+        onCreateCollection = viewModel::onCreateCollection,
+        onRenameCollection = viewModel::onRenameCollection,
+        onDeleteCollection = viewModel::onDeleteCollection,
+        onMoveTab = viewModel::onMoveTab,
+        onSetTabHidden = viewModel::onSetTabHidden,
+        onSetSelectedInCollection = viewModel::onSetSelectedInCollection,
+        onSetSelectedStatus = viewModel::onSetSelectedStatus,
         onImport = {
             safLauncher.launch(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).apply {

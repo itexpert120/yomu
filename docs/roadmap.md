@@ -217,7 +217,7 @@ Acceptance criteria:
 - Unsupported settings show clear inactive state.
 - Tablet multi-column reading is comfortable.
 
-**Status: Mostly pending.** Custom themes and bundled fonts are done (custom user-supplied fonts are not). Advanced typography — line/word/letter spacing, text indent, justification, hyphenation, margins, multi-column, dark-mode image inversion — is not yet built.
+**Status: Partial.** Custom themes, bundled fonts, Google Fonts installs, and the core advanced typography (line height, page margins, paragraph spacing, alignment) are done. Word/letter spacing, text indent, hyphenation, multi-column, and dark-mode image inversion are not yet built.
 
 ## Phase 9: Library Management Depth
 
@@ -239,7 +239,7 @@ Acceptance criteria:
 
 - User can manage a large local EPUB collection without feeling like they are managing files manually.
 
-**Status: Partial.** Author grouping, sort/filter, search, and multi-select bulk actions are done. Nested groups, series grouping (intentionally removed for now), bulk group assignment, and optional Room FTS indexing are pending.
+**Status: Partial.** Author grouping, sort/filter, search, multi-select bulk actions, and **collections** are done: library tabs (status shelves + user collections, swipeable, user-orderable, last tab remembered), many-to-many collection membership, manual On hold / Dropped status, and bulk assignment via Organize — all synced. Nested groups, series grouping (intentionally removed for now), and optional Room FTS indexing are pending.
 
 ## Phase 10: Advanced Reading Modes
 

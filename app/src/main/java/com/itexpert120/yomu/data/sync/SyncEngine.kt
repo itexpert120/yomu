@@ -422,7 +422,9 @@ internal class SyncEngine @Inject constructor(
 
         /** Which record kinds each table feeds. */
         private val TABLE_KINDS = mapOf(
-            "books" to setOf(SyncKind.Meta, SyncKind.Progress),
+            "books" to setOf(SyncKind.Meta, SyncKind.Progress, SyncKind.Shelf),
+            "book_collections" to setOf(SyncKind.Shelf),
+            "collections" to setOf(SyncKind.Collection),
             "chapter_reads" to setOf(SyncKind.Chapter),
             "chapter_progress" to setOf(SyncKind.Chapter),
             "bookmarks" to setOf(SyncKind.Bookmark),

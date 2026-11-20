@@ -2,19 +2,26 @@ package com.itexpert120.yomu.feature.bookdetails
 
 import android.content.Context
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.state.ToggleableState
 import androidx.core.text.HtmlCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ReadingState
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.collections.CollectionRepository
+import com.itexpert120.yomu.data.reader.ReaderPreloader
 import com.itexpert120.yomu.data.stats.StatsRepository
+import com.itexpert120.yomu.feature.collections.OrganizeCollection
+import com.itexpert120.yomu.feature.collections.StatusChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -51,12 +58,16 @@ data class BookDetailsUi(
     val readingState: ReadingState,
     val currentChapterId: String? = null,
     val resumeLocatorJson: String? = null,
+    val manualStatus: ManualStatus? = null,
+    val collectionNames: List<String> = emptyList(),
 )
 
 /** Distinguishes the initial Room lookup from a completed lookup whose book is genuinely absent. */
 data class BookDetailsState(
     val loading: Boolean = true,
     val book: BookDetailsUi? = null,
+    val organizeStatus: StatusChoice = StatusChoice.Auto,
+    val organizeCollections: List<OrganizeCollection> = emptyList(),
 )
 
 /** TOC ordering, expressed in the book's own rendering order rather than alphabetically. */
@@ -104,6 +115,8 @@ class BookDetailsViewModel @Inject constructor(
     private val repository: BookRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val statsRepository: StatsRepository,
+    private val collectionRepository: CollectionRepository,
+    private val readerPreloader: ReaderPreloader,
 ) : ViewModel() {
 
     // "bookId" is the property name from the type-safe BookDetails route.
@@ -113,10 +126,18 @@ class BookDetailsViewModel @Inject constructor(
         combine(
             repository.observeBook(BookId(bookId)),
             statsRepository.bookReadingSeconds(BookId(bookId)),
-        ) { book, readingSeconds ->
+            collectionRepository.observeCollections(),
+            collectionRepository.observeCollectionIds(BookId(bookId)),
+        ) { book, readingSeconds, collections, memberOf ->
             BookDetailsState(
                 loading = false,
-                book = book?.toUi(readingSeconds),
+                book = book?.toUi(readingSeconds)?.copy(
+                    collectionNames = collections.filter { it.id in memberOf }.map { it.name },
+                ),
+                organizeStatus = StatusChoice.of(listOf(book?.manualStatus)),
+                organizeCollections = collections.map {
+                    OrganizeCollection(it.id, it.name, if (it.id in memberOf) ToggleableState.On else ToggleableState.Off)
+                },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BookDetailsState())
 
@@ -196,6 +217,12 @@ class BookDetailsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TocUiState())
 
     init {
+        // Read is the likely next tap: open the book (and warm the engine) once the page has settled.
+        viewModelScope.launch {
+            delay(PRELOAD_DELAY_MS)
+            readerPreloader.warmUp()
+            readerPreloader.preload(BookId(bookId))
+        }
         if (cachedToc == null) {
             viewModelScope.launch {
                 val items = withContext(Dispatchers.IO) {
@@ -305,6 +332,22 @@ class BookDetailsViewModel @Inject constructor(
         }
     }
 
+    fun onSetStatus(status: ManualStatus?) {
+        viewModelScope.launch { collectionRepository.setStatus(listOf(BookId(bookId)), status) }
+    }
+
+    fun onSetCollection(collectionId: String, member: Boolean) {
+        viewModelScope.launch { collectionRepository.setMembership(collectionId, listOf(BookId(bookId)), member) }
+    }
+
+    /** Makes a collection and puts this book in it. */
+    fun onCreateCollection(name: String) {
+        viewModelScope.launch {
+            val id = collectionRepository.create(name)
+            collectionRepository.setMembership(id, listOf(BookId(bookId)), member = true)
+        }
+    }
+
     fun remove() {
         viewModelScope.launch { repository.remove(listOf(BookId(bookId))) }
     }
@@ -327,6 +370,7 @@ private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     coverImagePath = coverImagePath,
     coverColors = coverPalette.map { Color(it) },
     readingState = readingState,
+    manualStatus = manualStatus,
     currentChapterId = currentChapterId,
     resumeLocatorJson = locatorJson,
 )
@@ -338,6 +382,8 @@ private fun formatReadingDuration(seconds: Long): String? {
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
     return when {
+        // Past 100 hours the minutes are noise, and they keep the chip narrow on small phones.
+        hours >= 100 -> "${hours}h"
         hours > 0 -> "${hours}h ${minutes}m"
         minutes > 0 -> "${minutes}m"
         else -> "<1m"
@@ -366,3 +412,5 @@ private fun String.toPlainDescription(): String? {
 
 private val HTML_TAG = Regex("</?[a-zA-Z][^>]*>")
 private val BLANK_LINES = Regex("\n{3,}")
+
+private const val PRELOAD_DELAY_MS = 400L

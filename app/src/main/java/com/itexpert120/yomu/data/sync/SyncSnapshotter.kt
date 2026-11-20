@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.data.sync
 
 import com.itexpert120.yomu.core.database.BookEntity
+import com.itexpert120.yomu.core.database.CollectionDao
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.data.fonts.FontRepository
@@ -19,6 +20,7 @@ import javax.inject.Singleton
 @Singleton
 internal class SyncSnapshotter @Inject constructor(
     private val dao: SyncDao,
+    private val collectionDao: CollectionDao,
     private val readerSettings: ReaderSettingsRepository,
     private val appSettings: AppSettingsRepository,
     private val libraryPrefs: LibraryPrefsRepository,
@@ -34,6 +36,11 @@ internal class SyncSnapshotter @Inject constructor(
         SyncKind.Bookmark -> bookmarks()
         SyncKind.Highlight -> highlights()
         SyncKind.BookSettings -> bookSettings()
+        SyncKind.Shelf -> shelves()
+        SyncKind.Collection -> collectionDao.collections().map {
+            val payload = CollectionPayload(it.name, it.position)
+            LocalRecord(SyncKind.Collection, it.id, null, SyncJson.encodeToString(CollectionPayload.serializer(), payload), maxOf(it.createdAt, 1))
+        }
         SyncKind.Session -> sessions()
         SyncKind.Settings -> settings()
         SyncKind.Theme -> readerSettings.customThemes.first().map(::theme)
@@ -123,6 +130,17 @@ internal class SyncSnapshotter @Inject constructor(
             val sha = shaById[row.bookId] ?: return@mapNotNull null
             val settings = readerSettings.decodeOrNull(row.json) ?: return@mapNotNull null
             LocalRecord(SyncKind.BookSettings, sha, sha, ReaderSettingsSync.toPayload(settings), 1)
+        }
+    }
+
+    // A book in no collection and with no manual status has no shelf worth sending.
+    private suspend fun shelves(): List<LocalRecord> {
+        val members = collectionDao.memberships().groupBy({ it.bookId }, { it.collectionId })
+        return dao.books().mapNotNull { book ->
+            val ids = members[book.id].orEmpty().sorted()
+            if (ids.isEmpty() && book.manualStatus == null) return@mapNotNull null
+            val payload = ShelfPayload(ids, book.manualStatus)
+            LocalRecord(SyncKind.Shelf, book.sha256, book.sha256, SyncJson.encodeToString(ShelfPayload.serializer(), payload), maxOf(book.shelfEditedAt, 1))
         }
     }
 

@@ -19,11 +19,15 @@ internal enum class SyncKind(val key: String, val bookBound: Boolean, val neverD
     Highlight("highlight", bookBound = true),
     BookSettings("bookSettings", bookBound = true),
 
+    // A book's collections and manual status, applied as one unit (older builds ignore both kinds).
+    Shelf("shelf", bookBound = true),
+
     // Append-only: a session pruned or removed locally still counts everywhere else.
     Session("session", bookBound = true, neverDeleted = true),
     Settings("settings", bookBound = false),
     Theme("theme", bookBound = false),
     Font("font", bookBound = false),
+    Collection("collection", bookBound = false),
     ;
 
     fun name(id: String) = "$key/$id"
@@ -106,6 +110,13 @@ internal data class LibraryPayload(val sort: String, val group: String, val view
 
 @Serializable
 internal data class FontPayload(val family: String)
+
+@Serializable
+internal data class CollectionPayload(val name: String, val position: Int)
+
+/** [collections] is sorted so identical state always encodes identically. */
+@Serializable
+internal data class ShelfPayload(val collections: List<String>, val status: String?)
 
 /** Ids for the singleton settings records. */
 internal object SettingsId {

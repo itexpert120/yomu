@@ -40,4 +40,8 @@ data class BookEntity(
     val syncLocatorJson: String? = null,
     // When the user last edited title/author/etc.; 0 = untouched import metadata (never synced).
     val metadataEditedAt: Long = 0,
+    // A ManualStatus name (On hold / Dropped), or null to follow reading progress.
+    val manualStatus: String? = null,
+    // When the book's collections or manual status last changed here; 0 = never (dates sync records).
+    val shelfEditedAt: Long = 0,
 )

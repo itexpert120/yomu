@@ -3,6 +3,7 @@ package com.itexpert120.yomu.data.books
 import com.itexpert120.yomu.core.database.BookEntity
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.model.ManualStatus
 import org.json.JSONObject
 import kotlin.math.absoluteValue
 
@@ -32,6 +33,7 @@ internal fun BookEntity.toBook(): Book {
         lastOpenedAt = lastOpenedAt,
         startedAt = startedAt,
         finishedAt = finishedAt,
+        manualStatus = ManualStatus.fromStoredName(manualStatus),
     )
 }
 

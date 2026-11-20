@@ -34,12 +34,15 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,8 +54,11 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -63,7 +69,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -84,7 +93,6 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
-import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
@@ -92,15 +100,17 @@ import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
+import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.feature.collections.ManageTabsSheet
+import com.itexpert120.yomu.feature.collections.OrganizeSheet
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.items as lazyListItems
 
 private enum class LibraryContentMode {
     Loading,
     Empty,
-    EmptySearch,
-    Grid,
-    List,
+    Shelves,
 }
 
 private data class LibraryScrollSample(
@@ -138,11 +148,24 @@ fun LibraryScreen(
     onMarkSelectedRead: () -> Unit = {},
     onMarkSelectedUnread: () -> Unit = {},
     onRetryImport: () -> Unit = {},
+    onSelectTab: (String) -> Unit = {},
+    onCreateCollection: (name: String, addSelected: Boolean) -> Unit = { _, _ -> },
+    onRenameCollection: (id: String, name: String) -> Unit = { _, _ -> },
+    onDeleteCollection: (String) -> Unit = {},
+    onMoveTab: (key: String, up: Boolean) -> Unit = { _, _ -> },
+    onSetTabHidden: (key: String, hidden: Boolean) -> Unit = { _, _ -> },
+    onSetSelectedInCollection: (id: String, member: Boolean) -> Unit = { _, _ -> },
+    onSetSelectedStatus: (ManualStatus?) -> Unit = {},
 ) {
     var showOptionsSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val gridState = rememberLazyGridState()
-    val listState = rememberLazyListState()
+    var showOrganize by remember { mutableStateOf(false) }
+    var showManageCollections by remember { mutableStateOf(false) }
+    // One scroll position per tab, so swiping between tabs doesn't reset where you were.
+    val gridStates = remember { mutableMapOf<String, LazyGridState>() }
+    val listStates = remember { mutableMapOf<String, LazyListState>() }
+    val gridState = gridStates.getOrPut(state.selectedTab) { LazyGridState() }
+    val listState = listStates.getOrPut(state.selectedTab) { LazyListState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val activeColumns = if (isLandscape) state.landscapeGridColumns else state.portraitGridColumns
@@ -153,7 +176,7 @@ fun LibraryScreen(
 
     // Require deliberate travel before reversing the FAB; raw per-frame direction changes make
     // small finger corrections repeatedly restart the label animation.
-    LaunchedEffect(state.viewMode, resumeFabScrollThresholdPx) {
+    LaunchedEffect(state.viewMode, resumeFabScrollThresholdPx, gridState, listState) {
         resumeCollapsed = false
         val positions = when (state.viewMode) {
             LibraryViewMode.ComfortableGrid,
@@ -239,10 +262,15 @@ fun LibraryScreen(
     val contentMode = when {
         state.isLoading -> LibraryContentMode.Loading
         state.totalCount == 0 -> LibraryContentMode.Empty
-        state.searchActive && state.selectableCount == 0 -> LibraryContentMode.EmptySearch
-        state.viewMode != LibraryViewMode.List -> LibraryContentMode.Grid
-        else -> LibraryContentMode.List
+        else -> LibraryContentMode.Shelves
     }
+    // Created once the shelves exist, so it starts on the remembered tab instead of reporting
+    // page 0 as a fresh selection.
+    val selectedIndex = state.tabs.indexOfFirst { it.key == state.selectedTab }.coerceAtLeast(0)
+    val pagerState = key(contentMode == LibraryContentMode.Shelves) {
+        rememberPagerState(initialPage = selectedIndex) { state.tabs.size }
+    }
+    val pagerScope = rememberCoroutineScope()
 
     YomuAppSurface {
         // One width class from the measured width (a navigation rail beside the library is already
@@ -274,6 +302,15 @@ fun LibraryScreen(
                     scrollBehavior = scrollBehavior,
                     contentInset = headerInset,
                 )
+                if (contentMode == LibraryContentMode.Shelves) {
+                    LibraryTabRow(
+                        tabs = state.tabs,
+                        pagerState = pagerState,
+                        onSelect = { index -> pagerScope.launch { pagerState.animateScrollToPage(index) } },
+                        onEditTabs = { showManageCollections = true },
+                        horizontalInset = headerInset - YomuTheme.space.xxs,
+                    )
+                }
                 Box(
                     Modifier
                         .weight(1f)
@@ -282,19 +319,9 @@ fun LibraryScreen(
                     AnimatedContent(
                         targetState = contentMode,
                         transitionSpec = {
-                            if (initialState == LibraryContentMode.Loading) {
-                                // Data resolving behind the splash should settle in place; a
-                                // directional slide makes the first library frame feel late.
-                                yomuFadeThroughEnter() togetherWith yomuFadeThroughExit()
-                            } else {
-                                val forward = when {
-                                    initialState == LibraryContentMode.Grid &&
-                                        targetState == LibraryContentMode.List -> false
-
-                                    else -> true
-                                }
-                                yomuContentSwap(forward = forward)
-                            }
+                            // Data resolving behind the splash should settle in place; a
+                            // directional slide makes the first library frame feel late.
+                            yomuFadeThroughEnter() togetherWith yomuFadeThroughExit()
                         },
                         label = "libraryContent",
                         modifier = Modifier.fillMaxSize(),
@@ -302,41 +329,45 @@ fun LibraryScreen(
                         when (mode) {
                             LibraryContentMode.Loading -> LibraryLoading()
                             LibraryContentMode.Empty -> EmptyLibrary(onImport = onImport)
-                            LibraryContentMode.EmptySearch -> EmptySearchResults(
-                                query = state.searchQuery,
+                            LibraryContentMode.Shelves -> LibraryShelfPager(
+                                state = state,
+                                pagerState = pagerState,
+                                onSelectTab = onSelectTab,
                                 onClearSearch = { onSearchQueryChange("") },
-                            )
-
-                            LibraryContentMode.Grid -> LibraryGrid(
-                                state = gridState,
-                                viewMode = state.viewMode,
-                                columns = activeColumns,
-                                widthClass = widthClass,
-                                contentPadding = PaddingValues(
-                                    start = gridInset,
-                                    end = gridInset,
-                                    top = contentTop,
-                                    bottom = contentBottom,
-                                ),
-                                groups = state.groups,
-                                selectedIds = state.selectedIds,
-                                onBookClick = onCardClick,
-                                onBookLongPress = onCardLongPress,
-                            )
-
-                            LibraryContentMode.List -> LibraryList(
-                                state = listState,
-                                contentPadding = PaddingValues(
-                                    start = listInset,
-                                    end = listInset,
-                                    top = contentTop,
-                                    bottom = contentBottom,
-                                ),
-                                groups = state.groups,
-                                selectedIds = state.selectedIds,
-                                onBookClick = onCardClick,
-                                onBookLongPress = onCardLongPress,
-                            )
+                            ) { page ->
+                                if (state.viewMode != LibraryViewMode.List) {
+                                    LibraryGrid(
+                                        state = gridStates.getOrPut(page.key) { LazyGridState() },
+                                        viewMode = state.viewMode,
+                                        columns = activeColumns,
+                                        widthClass = widthClass,
+                                        contentPadding = PaddingValues(
+                                            start = gridInset,
+                                            end = gridInset,
+                                            top = contentTop,
+                                            bottom = contentBottom,
+                                        ),
+                                        groups = page.groups,
+                                        selectedIds = state.selectedIds,
+                                        onBookClick = onCardClick,
+                                        onBookLongPress = onCardLongPress,
+                                    )
+                                } else {
+                                    LibraryList(
+                                        state = listStates.getOrPut(page.key) { LazyListState() },
+                                        contentPadding = PaddingValues(
+                                            start = listInset,
+                                            end = listInset,
+                                            top = contentTop,
+                                            bottom = contentBottom,
+                                        ),
+                                        groups = page.groups,
+                                        selectedIds = state.selectedIds,
+                                        onBookClick = onCardClick,
+                                        onBookLongPress = onCardLongPress,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -364,6 +395,7 @@ fun LibraryScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 LibrarySelectionToolbar(
+                    onOrganize = { showOrganize = true },
                     onMarkRead = onMarkSelectedRead,
                     onMarkUnread = onMarkSelectedUnread,
                     onDelete = { showDeleteConfirm = true },
@@ -395,6 +427,28 @@ fun LibraryScreen(
                 horizontalMargin = margin,
                 aboveBottomChrome = bottomChromeVisible,
                 modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
+            OrganizeSheet(
+                visible = showOrganize && state.selectionMode,
+                title = if (state.selectedIds.size == 1) "Organize book" else "Organize ${state.selectedIds.size} books",
+                status = state.organizeStatus,
+                collections = state.organizeCollections,
+                onSetStatus = onSetSelectedStatus,
+                onSetCollection = onSetSelectedInCollection,
+                onCreateCollection = { onCreateCollection(it, true) },
+                onDismiss = { showOrganize = false },
+            )
+
+            ManageTabsSheet(
+                visible = showManageCollections,
+                tabs = state.managedTabs,
+                onCreate = { onCreateCollection(it, false) },
+                onRename = onRenameCollection,
+                onDelete = onDeleteCollection,
+                onMove = onMoveTab,
+                onSetHidden = onSetTabHidden,
+                onDismiss = { showManageCollections = false },
             )
 
             ConfirmRemoveDialog(
@@ -543,6 +597,75 @@ private fun EmptySearchResults(
                     emphasis = YomuButtonEmphasis.Secondary,
                 )
             },
+        )
+    }
+}
+
+/**
+ * One page per library tab, swipeable. The pager and the tab row stay in step: swiping settles on
+ * a tab, and choosing a tab scrolls the pager. Each page owns its empty and no-results state.
+ */
+@Composable
+private fun LibraryShelfPager(
+    state: LibraryUiState,
+    pagerState: PagerState,
+    onSelectTab: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    pageContent: @Composable (LibraryPage) -> Unit,
+) {
+    val tabs = state.tabs
+    val selectedIndex = tabs.indexOfFirst { it.key == state.selectedTab }.coerceAtLeast(0)
+    val currentTabs by rememberUpdatedState(tabs)
+    val currentOnSelect by rememberUpdatedState(onSelectTab)
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            currentTabs.getOrNull(page)?.let { currentOnSelect(it.key) }
+        }
+    }
+    // Only for selections that didn't come from the pager, e.g. the open collection was deleted.
+    LaunchedEffect(selectedIndex) {
+        if (!pagerState.isScrollInProgress && pagerState.currentPage != selectedIndex) {
+            pagerState.scrollToPage(selectedIndex)
+        }
+    }
+    HorizontalPager(
+        state = pagerState,
+        key = { tabs.getOrNull(it)?.key ?: it },
+        // Exposed to UiAutomator for the macrobenchmarks / Baseline Profile generator.
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics { testTagsAsResourceId = true }
+            .testTag("library-pager"),
+    ) { index ->
+        val page = state.pages.getOrNull(index) ?: return@HorizontalPager
+        val tab = tabs[index]
+        when {
+            page.bookCount > 0 -> pageContent(page)
+            state.searchActive && state.searchQuery.isNotBlank() -> EmptySearchResults(
+                query = state.searchQuery,
+                onClearSearch = onClearSearch,
+            )
+            else -> EmptyShelf(tab)
+        }
+    }
+}
+
+@Composable
+private fun EmptyShelf(tab: LibraryTab) {
+    val (title, body) = when (tab.key) {
+        LibraryTabKeys.READING -> "Nothing in progress" to "Books you've started reading show up here."
+        LibraryTabKeys.TO_READ -> "Nothing waiting" to "Books you haven't opened yet line up here."
+        LibraryTabKeys.FINISHED -> "No finished books yet" to "Books you finish move here."
+        LibraryTabKeys.ON_HOLD -> "Nothing on hold" to "Set a book to On hold from Organize to park it here."
+        LibraryTabKeys.DROPPED -> "Nothing dropped" to "Books you set to Dropped are kept here."
+        else -> "“${tab.label}” is empty" to "Long-press books in the library, then tap Organize to add them."
+    }
+    CenteredStatePane {
+        YomuEmptyState(
+            icon = if (tab.isCollection) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
+            title = title,
+            body = body,
+            tone = YomuBadgeTone.Neutral,
         )
     }
 }

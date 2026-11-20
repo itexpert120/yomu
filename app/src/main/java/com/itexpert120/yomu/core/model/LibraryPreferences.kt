@@ -28,6 +28,13 @@ data class LibraryPreferences(
     val portraitGridColumns: Int = AUTO_COLUMNS,
     val landscapeGridColumns: Int = AUTO_COLUMNS,
     val coverCrop: Boolean = true,
+    // The library tab that was open last (device-local; not synced).
+    val lastTab: String = "all",
+    // The user's tab order (tab keys); tabs not listed keep their default place after these.
+    // Device-local: older builds would drop it from the synced library settings and echo forever.
+    val tabOrder: List<String> = emptyList(),
+    // Built-in status tabs the user turned off (All can't be hidden). Device-local, like tabOrder.
+    val hiddenTabs: Set<String> = emptySet(),
 ) {
     companion object {
         const val AUTO_COLUMNS = 0

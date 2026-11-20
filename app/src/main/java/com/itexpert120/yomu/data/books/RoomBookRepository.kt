@@ -6,6 +6,7 @@ import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.BookTocEntity
 import com.itexpert120.yomu.core.database.BookmarkDao
 import com.itexpert120.yomu.core.database.ChapterReadEntity
+import com.itexpert120.yomu.core.database.CollectionDao
 import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.Book
@@ -35,6 +36,7 @@ class RoomBookRepository @Inject constructor(
     private val database: YomuDatabase,
     private val highlightDao: HighlightDao,
     private val bookmarkDao: BookmarkDao,
+    private val collectionDao: CollectionDao,
     private val readerEngine: ReaderEngine,
     @ApplicationScope applicationScope: CoroutineScope,
 ) : BookRepository {
@@ -113,6 +115,7 @@ class RoomBookRepository @Inject constructor(
                 dao.deleteAllChapterProgress(keys)
                 dao.deleteReaderSettingsForBooks(keys)
                 dao.deleteTocForBooks(keys)
+                collectionDao.deleteMembershipsForBooks(keys)
                 dao.deleteByIds(keys)
             }
         } catch (failure: Throwable) {

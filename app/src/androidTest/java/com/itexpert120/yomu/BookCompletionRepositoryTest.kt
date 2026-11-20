@@ -38,7 +38,7 @@ class BookCompletionRepositoryTest {
                 )
             }
             val dao = database.bookDao()
-            val repository = RoomBookRepository(dao, database, database.highlightDao(), database.bookmarkDao(), engine, this)
+            val repository = RoomBookRepository(dao, database, database.highlightDao(), database.bookmarkDao(), database.collectionDao(), engine, this)
             repository.markRead(BookId("a"))
             assertEquals(setOf("chapter#one", "chapter#two"), repository.observeReadChapters(BookId("a")).first())
             repository.markUnread(BookId("a"))

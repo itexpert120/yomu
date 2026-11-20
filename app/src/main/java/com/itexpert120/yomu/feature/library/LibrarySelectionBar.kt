@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -22,6 +23,7 @@ import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
  */
 @Composable
 internal fun LibrarySelectionToolbar(
+    onOrganize: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDelete: () -> Unit,
@@ -30,6 +32,7 @@ internal fun LibrarySelectionToolbar(
     YomuFloatingToolbar(
         vibrant = true,
         actions = listOf(
+            YomuToolbarAction(Icons.Rounded.LibraryAdd, "Organize", onOrganize),
             YomuToolbarAction(Icons.Rounded.CheckCircle, "Read", onMarkRead),
             YomuToolbarAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread),
             YomuToolbarAction(Icons.Rounded.Delete, "Remove", onDelete),

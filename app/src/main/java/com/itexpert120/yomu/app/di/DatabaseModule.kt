@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.BookDeletionRecovery
 import com.itexpert120.yomu.core.database.BookmarkDao
+import com.itexpert120.yomu.core.database.CollectionDao
 import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.database.YomuDatabase
@@ -39,6 +40,7 @@ object DatabaseModule {
             YomuDatabase.MIGRATION_14_15,
             YomuDatabase.MIGRATION_15_16,
             YomuDatabase.MIGRATION_16_17,
+            YomuDatabase.MIGRATION_17_18,
         )
         .addCallback(BookDeletionRecovery(context.filesDir))
         .build()
@@ -54,4 +56,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSyncDao(database: YomuDatabase): SyncDao = database.syncDao()
+
+    @Provides
+    fun provideCollectionDao(database: YomuDatabase): CollectionDao = database.collectionDao()
 }

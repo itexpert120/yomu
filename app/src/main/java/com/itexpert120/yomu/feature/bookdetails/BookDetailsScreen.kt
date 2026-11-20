@@ -63,15 +63,20 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Deselect
+import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -163,8 +168,13 @@ import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
+import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ReadingState
+import com.itexpert120.yomu.feature.collections.OrganizeCollection
+import com.itexpert120.yomu.feature.collections.OrganizeSheet
+import com.itexpert120.yomu.feature.collections.StatusChoice
 import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
 import java.io.File
@@ -217,6 +227,11 @@ fun BookDetailsScreen(
     onDeselectAllChapters: () -> Unit,
     onMarkSelectedChapters: (Boolean) -> Unit,
     onMarkPreviousRead: () -> Unit,
+    organizeStatus: StatusChoice = StatusChoice.Auto,
+    organizeCollections: List<OrganizeCollection> = emptyList(),
+    onSetStatus: (ManualStatus?) -> Unit = {},
+    onSetCollection: (id: String, member: Boolean) -> Unit = { _, _ -> },
+    onCreateCollection: (String) -> Unit = {},
 ) {
     val space = YomuTheme.space
     val navBottom =
@@ -226,6 +241,7 @@ fun BookDetailsScreen(
     var showCover by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showTimeline by remember { mutableStateOf(false) }
+    var showOrganize by remember { mutableStateOf(false) }
     val selectableChapterCount = toc.items.count { it.jumpable }
     val allChaptersSelected = selectableChapterCount > 0 &&
         toc.selectedCount == selectableChapterCount
@@ -400,7 +416,9 @@ fun BookDetailsScreen(
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .widthIn(max = YomuReadableMaxWidth)
-                                        .fillMaxWidth(),
+                                        .fillMaxWidth()
+                                        // The list fades into the navigation bar instead of cutting off.
+                                        .yomuScrollEdgeShadow(bottom = listState.canScrollForward),
                                     contentPadding = PaddingValues(bottom = navBottom + space.lg),
                                     verticalArrangement = Arrangement.Top,
                                 ) {
@@ -446,8 +464,6 @@ fun BookDetailsScreen(
                                             bottom = navBottom + FloatingActionClearance,
                                         ),
                                 )
-                                // Single pane only: contained panes end above the navigation bar.
-                                BottomScrim(Modifier.align(Alignment.BottomCenter))
                             }
                         }
                     }
@@ -473,6 +489,7 @@ fun BookDetailsScreen(
                 onEdit = onEdit,
                 onRemove = requestRemove,
                 onTimeline = { showTimeline = true },
+                onOrganize = { showOrganize = true },
                 onExitChapterSelection = onExitChapterSelection,
                 onSelectAllChapters = onSelectAllChapters,
                 onDeselectAllChapters = onDeselectAllChapters,
@@ -542,6 +559,17 @@ fun BookDetailsScreen(
         )
     }
 
+    OrganizeSheet(
+        visible = showOrganize && book != null,
+        title = "Organize book",
+        status = organizeStatus,
+        collections = organizeCollections,
+        onSetStatus = onSetStatus,
+        onSetCollection = onSetCollection,
+        onCreateCollection = onCreateCollection,
+        onDismiss = { showOrganize = false },
+    )
+
     if (book != null) {
         YomuBottomSheet(
             visible = showTimeline,
@@ -566,6 +594,7 @@ private fun BookDetailsTopBar(
     onEdit: () -> Unit,
     onRemove: () -> Unit,
     onTimeline: () -> Unit,
+    onOrganize: () -> Unit,
     onExitChapterSelection: () -> Unit,
     onSelectAllChapters: () -> Unit,
     onDeselectAllChapters: () -> Unit,
@@ -630,12 +659,22 @@ private fun BookDetailsTopBar(
                             // M3 Expressive vertical menu: the destructive action sits in its own
                             // group, separated by the standard group gap.
                             DropdownMenuPopup(expanded = showActions, onDismissRequest = { showActions = false }) {
-                                val groupCount = if (hasTimeline) 2 else 1
-                                if (hasTimeline) {
-                                    DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, groupCount)) {
+                                val groupCount = 2
+                                DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, groupCount)) {
+                                    val itemCount = if (hasTimeline) 2 else 1
+                                    DropdownMenuItem(
+                                        text = { Text("Organize") },
+                                        shape = MenuDefaults.itemShape(0, itemCount).shape,
+                                        leadingIcon = { Icon(Icons.Rounded.LibraryAdd, contentDescription = null) },
+                                        onClick = {
+                                            showActions = false
+                                            onOrganize()
+                                        },
+                                    )
+                                    if (hasTimeline) {
                                         DropdownMenuItem(
                                             text = { Text("Reading timeline") },
-                                            shape = MenuDefaults.itemShape(0, 1).shape,
+                                            shape = MenuDefaults.itemShape(1, itemCount).shape,
                                             leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) },
                                             onClick = {
                                                 showActions = false
@@ -643,8 +682,8 @@ private fun BookDetailsTopBar(
                                             },
                                         )
                                     }
-                                    Spacer(Modifier.height(MenuDefaults.GroupSpacing))
                                 }
+                                Spacer(Modifier.height(MenuDefaults.GroupSpacing))
                                 DropdownMenuGroup(shapes = MenuDefaults.groupShape(groupCount - 1, groupCount)) {
                                     DropdownMenuItem(
                                         text = { Text("Remove book", color = MaterialTheme.colorScheme.error) },
@@ -1034,60 +1073,71 @@ private fun BookIdentityDetails(
             overflow = TextOverflow.Ellipsis,
         )
         book.series?.let { SeriesTag(it) }
-        ReadingStatus(
-            state = book.readingState,
-            readingTime = book.readingTime,
-        )
+        // Status, reading time and collections wrap as whole pills, so a long reading time or many
+        // collections flow onto a new line instead of squeezing the status pill.
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(
+                YomuTheme.space.xxs,
+                if (centered) Alignment.CenterHorizontally else Alignment.Start,
+            ),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            ReadingStatus(state = book.readingState, manualStatus = book.manualStatus)
+            book.readingTime?.let { DetailsTag(icon = Icons.Rounded.Schedule, text = it) }
+            book.collectionNames.forEach { DetailsTag(icon = Icons.Rounded.CollectionsBookmark, text = it) }
+        }
     }
 }
 
 @Composable
 private fun ReadingStatus(
     state: ReadingState,
-    readingTime: String?,
+    manualStatus: ManualStatus?,
 ) {
-    val (containerColor, contentColor) = when (state) {
-        ReadingState.Unread ->
-            MaterialTheme.colorScheme.surfaceContainerHighest to
-                MaterialTheme.colorScheme.onSurfaceVariant
-        ReadingState.Reading ->
-            MaterialTheme.colorScheme.secondaryContainer to
-                MaterialTheme.colorScheme.onSecondaryContainer
-        ReadingState.Finished ->
-            MaterialTheme.colorScheme.primaryContainer to
-                MaterialTheme.colorScheme.onPrimaryContainer
+    val (containerColor, contentColor) = if (manualStatus != null) {
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        when (state) {
+            ReadingState.Unread ->
+                MaterialTheme.colorScheme.surfaceContainerHighest to
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            ReadingState.Reading ->
+                MaterialTheme.colorScheme.secondaryContainer to
+                    MaterialTheme.colorScheme.onSecondaryContainer
+            ReadingState.Finished ->
+                MaterialTheme.colorScheme.primaryContainer to
+                    MaterialTheme.colorScheme.onPrimaryContainer
+        }
     }
     Surface(
         shape = YomuShapeTokens.pill,
         color = containerColor,
         contentColor = contentColor,
     ) {
-        androidx.compose.foundation.layout.FlowRow(
+        Row(
             modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xs),
             horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            // The icon, label and the smaller reading-time text otherwise top-align and look offset.
-            itemVerticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = when (state) {
-                    ReadingState.Unread -> Icons.Rounded.Book
-                    ReadingState.Reading -> Icons.Rounded.PlayArrow
-                    ReadingState.Finished -> Icons.Rounded.CheckCircle
+                imageVector = when (manualStatus) {
+                    ManualStatus.OnHold -> Icons.Rounded.PauseCircle
+                    ManualStatus.Dropped -> Icons.Rounded.DoNotDisturbOn
+                    null -> when (state) {
+                        ReadingState.Unread -> Icons.Rounded.Book
+                        ReadingState.Reading -> Icons.Rounded.PlayArrow
+                        ReadingState.Finished -> Icons.Rounded.CheckCircle
+                    }
                 },
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = state.statusLabel(),
+                text = manualStatus?.label ?: state.statusLabel(),
                 style = MaterialTheme.typography.labelLargeEmphasized,
+                maxLines = 1,
             )
-            if (readingTime != null) {
-                Text(
-                    text = "· $readingTime",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
         }
     }
 }
@@ -1582,20 +1632,6 @@ private fun ChapterSelectionToolbar(
 }
 
 @Composable
-private fun BottomScrim(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.Transparent, MaterialTheme.colorScheme.background),
-                ),
-            ),
-    )
-}
-
-@Composable
 private fun TocEmpty() {
     YomuEmptyState(
         icon = Icons.AutoMirrored.Rounded.MenuBook,
@@ -1630,6 +1666,25 @@ private fun ReadingState.statusLabel(): String = when (this) {
     ReadingState.Unread -> "Not started"
     ReadingState.Reading -> "In progress"
     ReadingState.Finished -> "Finished"
+}
+
+/** A small quiet pill beside the status: reading time, or a collection the book is in. */
+@Composable
+private fun DetailsTag(icon: ImageVector, text: String) {
+    Surface(
+        shape = YomuShapeTokens.pill,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+            modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xs),
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
+            Text(text = text, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
 }
 
 @Composable

@@ -18,6 +18,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingWriteReceipt::class,
         HighlightEntity::class,
         BookmarkEntity::class,
+        CollectionEntity::class,
+        BookCollectionEntity::class,
         SyncMetadataEntity::class,
         SyncLedgerEntity::class,
     ],
@@ -29,9 +31,29 @@ abstract class YomuDatabase : RoomDatabase() {
     abstract fun highlightDao(): HighlightDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun syncDao(): SyncDao
+    abstract fun collectionDao(): CollectionDao
 
     companion object {
-        const val VERSION = 17
+        const val VERSION = 18
+
+        /** v18 adds user collections, book memberships, and a manual reading status per book. */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `collections` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`position` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `book_collections` (`bookId` TEXT NOT NULL, " +
+                        "`collectionId` TEXT NOT NULL, PRIMARY KEY(`bookId`, `collectionId`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_book_collections_collectionId` ON `book_collections` (`collectionId`)",
+                )
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `manualStatus` TEXT")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `shelfEditedAt` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
 
         /**
          * v17 activates sync: books gain a portable (layout-independent) locator and a metadata-edit

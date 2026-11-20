@@ -93,6 +93,8 @@ when that file is imported.
 | `chapter/<sha>\|<chapterId>` | One chapter's read mark and progress (progress, updated time, manual flag); a chapter with neither is a tombstone. One record per chapter, so two devices changing different chapters of the same book both keep their changes. On first contact, pre-sync state merges (read on either side, furthest progress). |
 | `bookmark/<id>`, `highlight/<id>` | One record each (ids are UUIDs); deletions sync as tombstones. |
 | `bookSettings/<sha>` | Per-book reader settings override, minus device-specific fields. |
+| `shelf/<sha>` | The book's collections (sorted ids) and manual status (On hold / Dropped), applied as one unit; a book in no collection and with no status has no record. |
+| `collection/<id>` | A user collection's name and position (ids are UUIDs); deleting one removes its memberships on every device. |
 | `session/<id>` | One reading session (book, start, seconds). Rollups (days, totals) are rebuilt from sessions on each device. |
 | `settings/readerDefaults` | Global reader defaults, minus device-specific fields. |
 | `settings/app` | Theme mode and colour style. |

@@ -37,6 +37,9 @@ class LibraryPrefsRepository @Inject constructor(
                 fallback = LibraryPreferences().landscapeGridColumns,
             ),
             coverCrop = prefs[KeyCoverCrop] ?: true,
+            lastTab = prefs[KeyLastTab] ?: LibraryPreferences().lastTab,
+            tabOrder = prefs[KeyTabOrder]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
+            hiddenTabs = prefs[KeyHiddenTabs]?.split('\n')?.filter { it.isNotBlank() }?.toSet().orEmpty(),
         )
     }
 
@@ -61,6 +64,17 @@ class LibraryPrefsRepository @Inject constructor(
         }
     }
 
+    suspend fun setLastTab(key: String) = edit(KeyLastTab, key)
+
+    suspend fun setTabOrder(keys: List<String>) = edit(KeyTabOrder, keys.joinToString("\n"))
+
+    suspend fun setTabHidden(key: String, hidden: Boolean) {
+        dataStore.edit { prefs ->
+            val current = prefs[KeyHiddenTabs]?.split('\n')?.filter { it.isNotBlank() }?.toSet().orEmpty()
+            prefs[KeyHiddenTabs] = (if (hidden) current + key else current - key).joinToString("\n")
+        }
+    }
+
     suspend fun setCoverCrop(crop: Boolean) {
         dataStore.edit { it[KeyCoverCrop] = crop }
     }
@@ -77,6 +91,9 @@ class LibraryPrefsRepository @Inject constructor(
         val KeyPortraitColumns = intPreferencesKey("library_columns_portrait")
         val KeyLandscapeColumns = intPreferencesKey("library_columns_landscape")
         val KeyCoverCrop = booleanPreferencesKey("library_cover_crop")
+        val KeyLastTab = stringPreferencesKey("library_last_tab")
+        val KeyTabOrder = stringPreferencesKey("library_tab_order")
+        val KeyHiddenTabs = stringPreferencesKey("library_hidden_tabs")
     }
 }
 

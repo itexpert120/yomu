@@ -36,6 +36,8 @@ data class Book(
     // Reading-timeline timestamps (epoch millis); 0 = not started / not finished yet.
     val startedAt: Long = 0L,
     val finishedAt: Long = 0L,
+    // Set by hand (On hold / Dropped); null follows [readingState].
+    val manualStatus: ManualStatus? = null,
 ) {
     val readingState: ReadingState
         get() = when {

@@ -2,6 +2,8 @@ package com.itexpert120.yomu.data.sync
 
 import com.itexpert120.yomu.core.database.BookmarkEntity
 import com.itexpert120.yomu.core.database.ChapterProgressEntity
+import com.itexpert120.yomu.core.database.CollectionDao
+import com.itexpert120.yomu.core.database.CollectionEntity
 import com.itexpert120.yomu.core.database.HighlightEntity
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.database.SyncMetadataEntity
@@ -48,6 +50,7 @@ data class ProgressOffer(
 @Singleton
 internal class SyncApplier @Inject constructor(
     private val dao: SyncDao,
+    private val collectionDao: CollectionDao,
     private val snapshotter: SyncSnapshotter,
     private val readerSettings: ReaderSettingsRepository,
     private val appSettings: AppSettingsRepository,
@@ -144,6 +147,25 @@ internal class SyncApplier @Inject constructor(
                 val merged = ReaderSettingsSync.merge(local, payload, ::installedFont)
                 readerSettings.setForBook(localBook, merged)
                 Applied(ReaderSettingsSync.toPayload(merged))
+            }
+
+            SyncKind.Shelf -> {
+                val localBookId = bookId ?: return Applied(payload)
+                val shelf = payload?.let { SyncJson.decodeFromString(ShelfPayload.serializer(), it) }
+                // An unknown status name (from a newer build) is kept as-is so it round-trips.
+                collectionDao.replaceShelf(localBookId, shelf?.collections.orEmpty(), shelf?.status, editedAt = maxOf(hlc.physical, 1))
+                Applied(payload)
+            }
+
+            SyncKind.Collection -> {
+                if (payload == null) {
+                    collectionDao.deleteCollection(id, editedAt = maxOf(hlc.physical, 1))
+                } else {
+                    val c = SyncJson.decodeFromString(CollectionPayload.serializer(), payload)
+                    val createdAt = collectionDao.collections().firstOrNull { it.id == id }?.createdAt ?: maxOf(hlc.physical, 1)
+                    collectionDao.upsertCollection(CollectionEntity(id, c.name, c.position, createdAt))
+                }
+                Applied(payload)
             }
 
             SyncKind.Session -> {

@@ -61,6 +61,11 @@ fun BookDetailsRoute(
             onDeselectAllChapters = viewModel::onDeselectAllChapters,
             onMarkSelectedChapters = viewModel::onMarkSelectedChapters,
             onMarkPreviousRead = viewModel::onMarkPreviousRead,
+            organizeStatus = state.organizeStatus,
+            organizeCollections = state.organizeCollections,
+            onSetStatus = viewModel::onSetStatus,
+            onSetCollection = viewModel::onSetCollection,
+            onCreateCollection = viewModel::onCreateCollection,
         )
         SnackbarHost(
             hostState = snackbarHostState,

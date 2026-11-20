@@ -4,6 +4,8 @@ import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.bookmarks.RoomBookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.RoomBookRepository
+import com.itexpert120.yomu.data.collections.CollectionRepository
+import com.itexpert120.yomu.data.collections.RoomCollectionRepository
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.highlights.RoomHighlightRepository
 import dagger.Binds
@@ -27,4 +29,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBookmarkRepository(impl: RoomBookmarkRepository): BookmarkRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCollectionRepository(impl: RoomCollectionRepository): CollectionRepository
 }
