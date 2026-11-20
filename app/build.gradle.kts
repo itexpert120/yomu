@@ -65,7 +65,7 @@ android {
         // VectorPath: the app icon / wordmark is a single detailed logo with a long path — expected.
         disable += setOf("OldTargetApi", "VectorPath")
     }
-    compileSdkMinor = 0
+    compileSdkMinor = 1
 }
 
 kotlin {

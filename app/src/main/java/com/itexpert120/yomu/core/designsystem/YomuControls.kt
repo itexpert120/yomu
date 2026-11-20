@@ -27,7 +27,6 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -248,7 +247,7 @@ fun YomuRangeRow(
             ) {
                 Icon(Icons.Rounded.Remove, contentDescription = null)
             }
-            Slider(
+            YomuSlider(
                 value = value.coerceIn(0f, 1f),
                 onValueChange = { onValueChange(it.coerceIn(0f, 1f)) },
                 modifier = Modifier.weight(1f),

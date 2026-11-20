@@ -12,10 +12,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Toc
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.BorderColor
-import androidx.compose.material.icons.rounded.Toc
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,11 +44,9 @@ enum class BrowseTab(val label: String) {
     Highlights("Highlights"),
 }
 
-// The bundled Material icon set has no AutoMirrored Toc symbol, so keep the semantic Toc glyph.
-@Suppress("DEPRECATION")
 private val BrowseTab.icon: ImageVector
     get() = when (this) {
-        BrowseTab.Contents -> Icons.Rounded.Toc
+        BrowseTab.Contents -> Icons.AutoMirrored.Rounded.Toc
         BrowseTab.Bookmarks -> Icons.Rounded.Bookmark
         BrowseTab.Highlights -> Icons.Rounded.BorderColor
     }
@@ -162,7 +160,7 @@ private fun ContentsBody(
         )
 
         entries.isEmpty() -> YomuEmptyState(
-            icon = Icons.Rounded.Toc,
+            icon = Icons.AutoMirrored.Rounded.Toc,
             title = "No table of contents",
             body = "This book doesn't list its chapters.",
             compact = true,

@@ -37,7 +37,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -70,6 +69,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
+import com.itexpert120.yomu.core.designsystem.YomuSlider
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
@@ -651,7 +651,7 @@ internal fun ReaderSlider(
 ) {
     var pending by remember(fraction) { mutableStateOf(fraction.coerceIn(0f, 1f)) }
     val haptics = LocalHapticFeedback.current
-    Slider(
+    YomuSlider(
         value = pending,
         onValueChange = {
             val raw = it.coerceIn(0f, 1f)

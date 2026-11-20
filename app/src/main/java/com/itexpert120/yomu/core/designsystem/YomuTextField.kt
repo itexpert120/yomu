@@ -18,7 +18,6 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.VisualTransformation
 
 /**
  * Labeled Material 3 text field used by editors and forms. By default the IME action moves focus to
@@ -41,8 +40,6 @@ fun YomuTextField(
     isError: Boolean = false,
     keyboardOptions: KeyboardOptions? = null,
     keyboardActions: KeyboardActions? = null,
-    // E.g. PasswordVisualTransformation for secret fields.
-    visualTransformation: VisualTransformation = VisualTransformation.None,
     // Replaces the default clear button (e.g. a show/hide password toggle).
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
@@ -72,7 +69,6 @@ fun YomuTextField(
         },
         supportingText = supportingText?.let { text -> { Text(text) } },
         isError = isError,
-        visualTransformation = visualTransformation,
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = keyboardOptions ?: KeyboardOptions(capitalization = capitalization, imeAction = imeAction),

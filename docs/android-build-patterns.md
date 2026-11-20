@@ -36,7 +36,7 @@ Current module:
 Current stack:
 
 - AGP, Kotlin, KSP, and Hilt plugins declared in the version catalog.
-- Compose enabled in `:app` (Material 3 Expressive alpha BOM 2026.07.01).
+- Compose enabled in `:app` (stable Compose BOM 2026.11.01 → material3 1.5.0, Material 3 Expressive).
 - Readium, Room, Hilt, Coil, DataStore, Navigation Compose, and kotlinx.serialization all wired up via the catalog.
 - Material 3 Expressive is the product foundation; `core/designsystem` wraps native Material components and owns Yomu-specific roles and interaction patterns.
 

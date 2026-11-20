@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,6 +17,7 @@ import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
 import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
+import com.itexpert120.yomu.core.designsystem.YomuSlider
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
 import com.itexpert120.yomu.core.model.GroupMode
@@ -122,7 +122,7 @@ private fun GridColumnsControl(
             )
         }
         YomuSettingContainer {
-            Slider(
+            YomuSlider(
                 value = sliderValue,
                 onValueChange = { position ->
                     val index = position.roundToInt()
