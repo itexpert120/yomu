@@ -458,10 +458,10 @@ Built (`core/model/LibraryPreferences`, persisted in DataStore). Implemented fie
 - `viewMode`: `ComfortableGrid`, `CompactGrid`, `CoverOnlyGrid`, or `List` (`LibraryViewMode`). The legacy persisted `Grid` value maps to `ComfortableGrid`.
 - `portraitGridColumns` and `landscapeGridColumns`: each is 0 = Automatic (adapts to width) or a forced count (2–7). Legacy `library_columns` seeds both orientation-specific keys when they are absent; invalid values are clamped.
 - `coverCrop`: crop vs fit.
-- `groupMode`: None/Author only (`GroupMode`); series/group/status grouping is planned.
+- Grouping (`groupMode`) was removed: library tabs (status shelves + collections) replace it. The old `library_group` DataStore key is left unread; sync still sends `group = "None"` for older app versions.
 - `sortMode`: Recent/Title/Author/Unread (`SortMode`).
 
-Planned (not yet persisted): `sortDirection`, `showArchived`, and richer grouping modes.
+Planned (not yet persisted): `sortDirection`, and `showArchived`.
 
 These can live in DataStore unless per-group persistence becomes relational.
 

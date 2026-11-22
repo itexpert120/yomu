@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -96,17 +98,24 @@ data class TocEntryUi(
     val jumpable: Boolean get() = locatorJson != null
 }
 
-/** TOC section state: loading until extracted, then the (sorted) entries + selection. */
+/**
+ * TOC section state: loading until extracted, then the (sorted) entries + selection. The counts are
+ * computed once with [items] (which can hold thousands of entries) rather than on every read.
+ */
 data class TocUiState(
     val loading: Boolean = true,
     val sort: TocSortMode = TocSortMode.Ascending,
     val selectionMode: Boolean = false,
     val items: List<TocEntryUi> = emptyList(),
-) {
-    val selectedCount: Int get() = items.count { it.selected }
-    val readCount: Int get() = items.count { it.jumpable && it.read }
-    val unreadCount: Int get() = items.count { it.jumpable && !it.read }
-}
+    val selectedCount: Int = 0,
+    // Jumpable (selectable) entries; read + unread.
+    val selectableCount: Int = 0,
+    val readCount: Int = 0,
+    val unreadCount: Int = 0,
+)
+
+/** The book's reading position, as far as the TOC needs it. */
+private data class TocResumePosition(val chapterId: String?, val locatorJson: String?)
 
 @HiltViewModel
 class BookDetailsViewModel @Inject constructor(
@@ -162,9 +171,15 @@ class BookDetailsViewModel @Inject constructor(
         readChapters,
         repository.observeChapterProgress(BookId(bookId)),
     ) { read, progress -> read to progress }
-    private val readingAndBookmarksFlow = combine(readingFlow, bookmarks) { reading, savedBookmarks ->
-        reading to savedBookmarks
+    private val bookmarkedHrefs = bookmarks.map { saved -> saved.mapTo(HashSet()) { it.href } }
+    private val readingAndBookmarksFlow = combine(readingFlow, bookmarkedHrefs) { reading, hrefs ->
+        reading to hrefs
     }
+
+    // Only the reading position matters to the TOC, so stats/collection changes don't rebuild it.
+    private val resumePosition = state
+        .map { TocResumePosition(it.book?.currentChapterId, it.book?.resumeLocatorJson) }
+        .distinctUntilChanged()
 
     private val configFlow = combine(tocLoading, tocSort) { loading, sort -> loading to sort }
 
@@ -173,48 +188,63 @@ class BookDetailsViewModel @Inject constructor(
         tocItems,
         selectionFlow,
         readingAndBookmarksFlow,
-        state,
-    ) { config, items, selection, reading, currentState ->
+        resumePosition,
+    ) { config, items, selection, reading, resume ->
         val (loading, sort) = config
         val (selected, inSelection) = selection
         val (read, progress) = reading.first
-        val savedBookmarks = reading.second
+        val bookmarked = reading.second
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
         val ordered = items.withIndex().toList()
             .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
+        var selectedCount = 0
+        var readCount = 0
+        var unreadCount = 0
+        val entries = ordered.map { (uid, it) ->
+            val storedProgress = progress[it.id]
+            // Logical progress is authoritative once present. The old read table remains a
+            // fallback for pre-v10/manual rows that have not acquired a progress row yet.
+            val isRead = storedProgress?.let { value -> value >= 0.999f } ?: (it.id in read)
+            val isSelected = uid in selected
+            if (isSelected) selectedCount++
+            if (it.locatorJson != null) {
+                if (isRead) readCount++ else unreadCount++
+            }
+            TocEntryUi(
+                uid = uid,
+                chapterId = it.id,
+                title = it.title,
+                locatorJson = if (resume.chapterId == it.id) {
+                    resume.locatorJson ?: it.locatorJson
+                } else {
+                    it.locatorJson
+                },
+                depth = it.depth,
+                read = isRead,
+                selected = isSelected,
+                bookmarked = it.id in bookmarked,
+                percent = if (it.locatorJson == null) {
+                    null
+                } else if (isRead) {
+                    1f
+                } else {
+                    storedProgress?.coerceIn(0f, 1f) ?: 0f
+                },
+            )
+        }
         TocUiState(
             loading = loading,
             sort = sort,
             selectionMode = inSelection,
-            items = ordered.map { (uid, it) ->
-                val storedProgress = progress[it.id]
-                // Logical progress is authoritative once present. The old read table remains a
-                // fallback for pre-v10/manual rows that have not acquired a progress row yet.
-                val isRead = storedProgress?.let { value -> value >= 0.999f } ?: (it.id in read)
-                TocEntryUi(
-                    uid = uid,
-                    chapterId = it.id,
-                    title = it.title,
-                    locatorJson = if (currentState.book?.currentChapterId == it.id) {
-                        currentState.book.resumeLocatorJson ?: it.locatorJson
-                    } else {
-                        it.locatorJson
-                    },
-                    depth = it.depth,
-                    read = isRead,
-                    selected = uid in selected,
-                    bookmarked = savedBookmarks.any { bookmark -> bookmark.href == it.id },
-                    percent = if (it.locatorJson == null) {
-                        null
-                    } else if (isRead) {
-                        1f
-                    } else {
-                        storedProgress?.coerceIn(0f, 1f) ?: 0f
-                    },
-                )
-            },
+            items = entries,
+            selectedCount = selectedCount,
+            selectableCount = readCount + unreadCount,
+            readCount = readCount,
+            unreadCount = unreadCount,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TocUiState())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TocUiState())
 
     init {
         // Read is the likely next tap: open the book (and warm the engine) once the page has settled.
@@ -315,7 +345,7 @@ class BookDetailsViewModel @Inject constructor(
         viewModelScope.launch {
             val name =
                 book.title.ifBlank { "cover" }.take(60).replace(Regex("[^A-Za-z0-9 ._-]"), "_")
-            val ok = saveImageToGallery(context, File(path), "$name.png")
+            val ok = saveImageToGallery(context, File(path), name)
             _messages.emit(if (ok) "Saved to gallery" else "Couldn't save cover")
         }
     }

@@ -102,7 +102,10 @@ class StatsRepository internal constructor(
                 maxOf(lifetime?.longestSeconds ?: 0L, seconds),
             ),
         )
-        dao.pruneReadingSessions(MAX_RETAINED_SESSIONS)
+        // The prune sorts the whole table, so it only runs once the cap is overshot by some slack.
+        if (dao.countReadingSessions() > MAX_RETAINED_SESSIONS + PRUNE_SLACK_SESSIONS) {
+            dao.pruneReadingSessions(MAX_RETAINED_SESSIONS)
+        }
     }
 
     // Day-derived figures recompute only when reading-day data actually changes (not on every book
@@ -253,5 +256,6 @@ class StatsRepository internal constructor(
         const val WORDS_PER_MINUTE = 200
         const val RECENT_LIMIT = 300
         const val MAX_RETAINED_SESSIONS = 10_000
+        const val PRUNE_SLACK_SESSIONS = 500
     }
 }

@@ -217,21 +217,24 @@ private fun CircleAction(icon: ImageVector, description: String, onClick: () -> 
     }
 }
 
-/**
- * Copies [source] into the device's shared Pictures collection via MediaStore. Works without a
- * runtime permission on API 29+; older versions may fail (caught) if storage permission is absent.
- */
 private val galleryExports = CoverExport()
 
+/**
+ * Copies [source] into the device's shared Pictures collection via MediaStore, as [baseName] plus
+ * the extension of the image's actual format (covers are PNG, WebP, or whatever image the user
+ * picked). Works without a runtime permission on API 29+; older versions may fail (caught) if
+ * storage permission is absent.
+ */
 internal suspend fun saveImageToGallery(
     context: Context,
     source: File,
-    displayName: String,
+    baseName: String,
 ): Boolean = withContext(Dispatchers.IO) {
     val resolver = context.contentResolver
+    val format = runCatching { sniffImageFormat(source) }.getOrDefault(GalleryImageFormat.Png)
     val values = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
-        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(MediaStore.Images.Media.DISPLAY_NAME, "$baseName.${format.extension}")
+        put(MediaStore.Images.Media.MIME_TYPE, format.mime)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Open Reader")
             put(MediaStore.Images.Media.IS_PENDING, 1)
@@ -259,4 +262,21 @@ internal suspend fun saveImageToGallery(
         },
         delete = { destination -> resolver.delete(android.net.Uri.parse(destination), null, null) > 0 },
     )
+}
+
+private enum class GalleryImageFormat(val mime: String, val extension: String) {
+    Png("image/png", "png"),
+    Jpeg("image/jpeg", "jpg"),
+    Webp("image/webp", "webp"),
+}
+
+/** Identifies the image by its magic bytes; anything unrecognised is treated as PNG. */
+private fun sniffImageFormat(file: File): GalleryImageFormat {
+    val header = ByteArray(12)
+    val read = file.inputStream().use { it.read(header) }
+    return when {
+        read >= 3 && header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte() && header[2] == 0xFF.toByte() -> GalleryImageFormat.Jpeg
+        read >= 12 && String(header, 0, 4, Charsets.US_ASCII) == "RIFF" && String(header, 8, 4, Charsets.US_ASCII) == "WEBP" -> GalleryImageFormat.Webp
+        else -> GalleryImageFormat.Png
+    }
 }

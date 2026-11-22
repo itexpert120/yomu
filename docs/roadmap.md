@@ -239,7 +239,7 @@ Acceptance criteria:
 
 - User can manage a large local EPUB collection without feeling like they are managing files manually.
 
-**Status: Partial.** Author grouping, sort/filter, search, multi-select bulk actions, and **collections** are done: library tabs (status shelves + user collections, swipeable, user-orderable, last tab remembered), many-to-many collection membership, manual On hold / Dropped status, and bulk assignment via Organize — all synced. Nested groups, series grouping (intentionally removed for now), and optional Room FTS indexing are pending.
+**Status: Partial.** Sort/filter, search, multi-select bulk actions, and **collections** are done: library tabs (status shelves + user collections, swipeable, user-orderable, last tab remembered), many-to-many collection membership, manual On hold / Dropped status, and bulk assignment via Organize — all synced. Author grouping was removed in favour of tabs/collections. Nested groups, series grouping (intentionally removed for now), and optional Room FTS indexing are pending.
 
 ## Phase 10: Advanced Reading Modes
 

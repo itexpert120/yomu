@@ -11,7 +11,6 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ColorStyle
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
-import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.core.model.ThemePreference
@@ -265,7 +264,7 @@ internal class SyncApplier @Inject constructor(
         SettingsId.LIBRARY -> {
             val library = SyncJson.decodeFromString(LibraryPayload.serializer(), payload)
             SortMode.entries.firstOrNull { it.name == library.sort }?.let { libraryPrefs.setSortMode(it) }
-            GroupMode.entries.firstOrNull { it.name == library.group }?.let { libraryPrefs.setGroupMode(it) }
+            // library.group is a retired setting (superseded by library tabs); ignored on apply.
             LibraryViewMode.entries.firstOrNull { it.name == library.view }?.let { libraryPrefs.setViewMode(it) }
             libraryPrefs.setCoverCrop(library.coverCrop)
             Applied(payload)

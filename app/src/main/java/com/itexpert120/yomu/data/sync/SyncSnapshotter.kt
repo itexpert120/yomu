@@ -152,7 +152,7 @@ internal class SyncSnapshotter @Inject constructor(
 
     private suspend fun settings(): List<LocalRecord> {
         val app = AppSettingsPayload(appSettings.themePreference.first().name, appSettings.colorStyle.first().name)
-        val library = libraryPrefs.preferences.first().let { LibraryPayload(it.sortMode.name, it.groupMode.name, it.viewMode.name, it.coverCrop) }
+        val library = libraryPrefs.preferences.first().let { LibraryPayload(it.sortMode.name, LEGACY_GROUP_NONE, it.viewMode.name, it.coverCrop) }
         // Settings carry no edit time; dating them at the epoch means a joining device adopts the
         // group's settings instead of overwriting them with its own.
         return listOf(
@@ -164,3 +164,7 @@ internal class SyncSnapshotter @Inject constructor(
 
     private fun theme(theme: CustomReaderTheme) = LocalRecord(SyncKind.Theme, theme.id, null, SyncJson.encodeToString(CustomReaderTheme.serializer(), theme), 1)
 }
+
+// Group by was retired, but older app versions still require the payload's `group` field to decode
+// library settings, so it is always sent as their "no grouping" value.
+private const val LEGACY_GROUP_NONE = "None"

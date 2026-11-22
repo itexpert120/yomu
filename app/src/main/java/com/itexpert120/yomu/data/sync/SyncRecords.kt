@@ -106,7 +106,10 @@ internal data class SessionPayload(val sha256: String, val startedAt: Long, val 
 internal data class AppSettingsPayload(val theme: String, val colorStyle: String)
 
 @Serializable
-internal data class LibraryPayload(val sort: String, val group: String, val view: String, val coverCrop: Boolean)
+// `group` is no longer used (library grouping was replaced by tabs/collections). It stays on the
+// wire, always "None", because older app versions require it to decode this record; the default
+// lets a future version stop sending it.
+internal data class LibraryPayload(val sort: String, val group: String = "None", val view: String, val coverCrop: Boolean)
 
 @Serializable
 internal data class FontPayload(val family: String)

@@ -419,7 +419,7 @@ Library views:
 - List.
 - Adjustable grid columns.
 - Cover crop/fit.
-- Group by author.
+- ~~Group by author~~ — superseded by library tabs and collections.
 - Group by series.
 - Group by custom group.
 - Nested groups.

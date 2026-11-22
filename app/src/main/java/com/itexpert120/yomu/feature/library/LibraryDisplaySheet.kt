@@ -3,14 +3,26 @@
 package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ViewList
+import androidx.compose.material.icons.rounded.DonutLarge
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Photo
+import androidx.compose.material.icons.rounded.SortByAlpha
+import androidx.compose.material.icons.rounded.ViewComfy
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
@@ -20,7 +32,6 @@ import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuSlider
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
-import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
@@ -31,12 +42,10 @@ import kotlin.math.roundToInt
 internal fun LibraryOptionsSheet(
     visible: Boolean,
     sortMode: SortMode,
-    groupMode: GroupMode,
     viewMode: LibraryViewMode,
     portraitColumns: Int,
     landscapeColumns: Int,
     onSortModeChange: (SortMode) -> Unit,
-    onGroupModeChange: (GroupMode) -> Unit,
     onViewModeChange: (LibraryViewMode) -> Unit,
     onPortraitColumnsChange: (Int) -> Unit,
     onLandscapeColumnsChange: (Int) -> Unit,
@@ -57,20 +66,17 @@ internal fun LibraryOptionsSheet(
                 options = SortMode.entries,
                 selected = sortMode,
                 label = { it.label },
+                icon = SortMode::icon,
+                inlineIconsMinWidth = SortIconsMinWidth,
                 onSelected = onSortModeChange,
-            )
-            ArrangementChoiceGroup(
-                title = "Group by",
-                options = GroupMode.entries,
-                selected = groupMode,
-                label = { it.label },
-                onSelected = onGroupModeChange,
             )
             ArrangementChoiceGroup(
                 title = "Library view",
                 options = LibraryViewMode.entries,
                 selected = viewMode,
                 label = { it.label },
+                icon = LibraryViewMode::icon,
+                inlineIconsMinWidth = ViewIconsMinWidth,
                 onSelected = onViewModeChange,
             )
             GridColumnsControl(
@@ -175,6 +181,8 @@ private fun <T> ArrangementChoiceGroup(
     options: List<T>,
     selected: T,
     label: (T) -> String,
+    icon: (T) -> ImageVector,
+    inlineIconsMinWidth: Dp,
     onSelected: (T) -> Unit,
 ) {
     Column(
@@ -182,11 +190,38 @@ private fun <T> ArrangementChoiceGroup(
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
         YomuSectionLabel(text = title)
-        YomuConnectedChoiceGroup(
-            options = options,
-            selected = selected,
-            label = label,
-            onSelect = onSelected,
-        )
+        // On narrow sheets the icon stacks above the label so the connected buttons keep their
+        // labels unclipped.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            YomuConnectedChoiceGroup(
+                options = options,
+                selected = selected,
+                label = label,
+                icon = icon,
+                iconOnTop = maxWidth < inlineIconsMinWidth,
+                onSelect = onSelected,
+            )
+        }
     }
 }
+
+private val SortMode.icon: ImageVector
+    get() = when (this) {
+        SortMode.Recent -> Icons.Rounded.History
+        SortMode.Title -> Icons.Rounded.SortByAlpha
+        SortMode.Author -> Icons.Rounded.Person
+        SortMode.Unread -> Icons.Rounded.DonutLarge
+    }
+
+private val LibraryViewMode.icon: ImageVector
+    get() = when (this) {
+        LibraryViewMode.ComfortableGrid -> Icons.Rounded.GridView
+        LibraryViewMode.CompactGrid -> Icons.Rounded.ViewComfy
+        LibraryViewMode.CoverOnlyGrid -> Icons.Rounded.Photo
+        LibraryViewMode.List -> Icons.AutoMirrored.Rounded.ViewList
+    }
+
+// Four short labels plus inline icons fit from a typical phone sheet up; the longer view-mode
+// labels ("Comfortable") need the wider tablet dialog.
+private val SortIconsMinWidth = 344.dp
+private val ViewIconsMinWidth = 420.dp

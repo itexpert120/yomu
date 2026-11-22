@@ -225,6 +225,9 @@ interface BookDao {
     )
     fun observeSessionAggregate(): Flow<SessionAggregate>
 
+    @Query("SELECT COUNT(*) FROM reading_sessions")
+    suspend fun countReadingSessions(): Int
+
     @Query(
         "DELETE FROM reading_sessions WHERE id NOT IN " +
             "(SELECT id FROM reading_sessions ORDER BY startedAt DESC LIMIT :limit)",

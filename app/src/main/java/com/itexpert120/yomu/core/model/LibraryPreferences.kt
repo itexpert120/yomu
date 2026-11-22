@@ -8,11 +8,6 @@ enum class SortMode(val label: String) {
     Unread("Unread"),
 }
 
-enum class GroupMode(val label: String) {
-    None("None"),
-    Author("Author"),
-}
-
 enum class LibraryViewMode(val label: String) {
     ComfortableGrid("Comfortable"),
     CompactGrid("Compact"),
@@ -22,7 +17,6 @@ enum class LibraryViewMode(val label: String) {
 
 data class LibraryPreferences(
     val sortMode: SortMode = SortMode.Recent,
-    val groupMode: GroupMode = GroupMode.None,
     val viewMode: LibraryViewMode = LibraryViewMode.ComfortableGrid,
     // 0 = Automatic: columns adapt to the active window. A positive value forces that exact count.
     val portraitGridColumns: Int = AUTO_COLUMNS,

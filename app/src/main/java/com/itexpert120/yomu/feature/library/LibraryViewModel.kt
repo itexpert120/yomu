@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookCollection
 import com.itexpert120.yomu.core.model.BookId
-import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
@@ -22,15 +21,18 @@ import com.itexpert120.yomu.feature.collections.ManagedTab
 import com.itexpert120.yomu.feature.collections.OrganizeCollection
 import com.itexpert120.yomu.feature.collections.StatusChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.IdentityHashMap
 import javax.inject.Inject
 
 /** Transient search state — intentionally not persisted across launches. */
@@ -89,10 +91,17 @@ class LibraryViewModel @Inject constructor(
 
     private val inputs = combine(search, importState, selection, selectedTab, ::LibraryInputs)
 
+    // Projections of the current Book instances, reused while the library data is unchanged so a
+    // keystroke or selection change hands the grid the same LibraryBook instances (cheap skipping).
+    // Only touched from the serial state pipeline below.
+    private var projections = IdentityHashMap<Book, LibraryBook>()
+
     val state: StateFlow<LibraryUiState> =
         combine(data, libraryPrefs.preferences, inputs) { d, prefs, i ->
             buildState(d, prefs, i)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     private var preloadJob: Job? = null
 
@@ -234,7 +243,7 @@ class LibraryViewModel @Inject constructor(
     // The continue-reading hero isn't a selectable grid item, so it's excluded here to keep
     // select-all consistent with totalCount.
     private fun visibleBookIds(): Set<String> = buildSet {
-        state.value.groups.forEach { group -> group.books.forEach { add(it.id) } }
+        state.value.books.forEach { add(it.id) }
     }
 
     fun onImport(uris: List<Uri>) {
@@ -285,7 +294,6 @@ class LibraryViewModel @Inject constructor(
     fun onSearchQueryChange(query: String) = search.update { it.copy(query = query) }
 
     fun onSortModeChange(mode: SortMode) = persist { libraryPrefs.setSortMode(mode) }
-    fun onGroupModeChange(mode: GroupMode) = persist { libraryPrefs.setGroupMode(mode) }
     fun onViewModeChange(mode: LibraryViewMode) = persist { libraryPrefs.setViewMode(mode) }
     fun onPortraitGridColumnsChange(columns: Int) = persist { libraryPrefs.setPortraitGridColumns(columns) }
     fun onLandscapeGridColumnsChange(columns: Int) = persist { libraryPrefs.setLandscapeGridColumns(columns) }
@@ -295,8 +303,17 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { block() }
     }
 
+    private fun project(books: List<Book>): IdentityHashMap<Book, LibraryBook> {
+        val previous = projections
+        val next = IdentityHashMap<Book, LibraryBook>(books.size)
+        books.forEach { book -> next[book] = previous[book] ?: book.toLibraryBook() }
+        projections = next
+        return next
+    }
+
     private fun buildState(data: LibraryData, prefs: LibraryPreferences, inputs: LibraryInputs): LibraryUiState {
         val (books, collectionList, memberships) = data
+        val projected = project(books)
         val search = inputs.search
         val selection = inputs.selection
         // Surface "Continue reading" only when not searching, so the hero doesn't fight the query.
@@ -313,8 +330,10 @@ class LibraryViewModel @Inject constructor(
         val selectedTab = inputs.tab.takeIf { key -> tabs.any { it.key == key } } ?: LibraryTabKeys.ALL
         val searched = books.matching(query).sortedBy(prefs.sortMode)
         val pages = tabs.map { tab ->
-            val tabBooks = searched.filter { it.belongsTo(tab.key, memberships[it.id.value].orEmpty()) }
-            LibraryPage(tab.key, tabBooks.groupedBy(prefs.groupMode), tabBooks.size)
+            val tabBooks = searched.mapNotNull { book ->
+                projected.getValue(book).takeIf { book.belongsTo(tab.key, memberships[book.id.value].orEmpty()) }
+            }
+            LibraryPage(tab.key, tabBooks)
         }
         val current = pages.first { it.key == selectedTab }
         val selectedBooks = books.filter { it.id.value in selection.ids }
@@ -322,10 +341,9 @@ class LibraryViewModel @Inject constructor(
             isLoading = false,
             totalCount = books.size,
             selectableCount = current.bookCount,
-            continueReading = continueBook?.toLibraryBook(),
-            groups = current.groups,
+            continueReading = continueBook?.let { projected.getValue(it) },
+            books = current.books,
             sortMode = prefs.sortMode,
-            groupMode = prefs.groupMode,
             viewMode = prefs.viewMode,
             portraitGridColumns = prefs.portraitGridColumns,
             landscapeGridColumns = prefs.landscapeGridColumns,

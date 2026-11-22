@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -97,7 +96,6 @@ import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
-import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
@@ -132,7 +130,6 @@ fun LibraryScreen(
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSortModeChange: (SortMode) -> Unit,
-    onGroupModeChange: (GroupMode) -> Unit,
     onViewModeChange: (LibraryViewMode) -> Unit,
     onPortraitGridColumnsChange: (Int) -> Unit,
     onLandscapeGridColumnsChange: (Int) -> Unit,
@@ -347,7 +344,7 @@ fun LibraryScreen(
                                             top = contentTop,
                                             bottom = contentBottom,
                                         ),
-                                        groups = page.groups,
+                                        books = page.books,
                                         selectedIds = state.selectedIds,
                                         onBookClick = onCardClick,
                                         onBookLongPress = onCardLongPress,
@@ -361,7 +358,7 @@ fun LibraryScreen(
                                             top = contentTop,
                                             bottom = contentBottom,
                                         ),
-                                        groups = page.groups,
+                                        books = page.books,
                                         selectedIds = state.selectedIds,
                                         onBookClick = onCardClick,
                                         onBookLongPress = onCardLongPress,
@@ -376,12 +373,10 @@ fun LibraryScreen(
             LibraryOptionsSheet(
                 visible = showOptionsSheet,
                 sortMode = state.sortMode,
-                groupMode = state.groupMode,
                 viewMode = state.viewMode,
                 portraitColumns = state.portraitGridColumns,
                 landscapeColumns = state.landscapeGridColumns,
                 onSortModeChange = onSortModeChange,
-                onGroupModeChange = onGroupModeChange,
                 onViewModeChange = onViewModeChange,
                 onPortraitColumnsChange = onPortraitGridColumnsChange,
                 onLandscapeColumnsChange = onLandscapeGridColumnsChange,
@@ -677,7 +672,7 @@ private fun LibraryGrid(
     columns: Int,
     widthClass: YomuWidthClass,
     contentPadding: PaddingValues,
-    groups: List<LibraryGroup>,
+    books: List<LibraryBook>,
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
@@ -709,46 +704,39 @@ private fun LibraryGrid(
         verticalArrangement = Arrangement.spacedBy(if (widthClass.isWide) YomuTheme.space.lg else YomuTheme.space.md),
         horizontalArrangement = Arrangement.spacedBy(gutter),
     ) {
-        groups.forEach { group ->
-            if (group.label.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    GroupSectionHeader(title = group.label)
-                }
-            }
-            items(group.books, key = { it.id }) { book ->
-                // Re-sorting, grouping, or filtering slides covers to their new slots.
-                val itemModifier = Modifier.animateItem(
-                    fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        items(books, key = { it.id }, contentType = { viewMode }) { book ->
+            // Re-sorting or filtering slides covers to their new slots.
+            val itemModifier = Modifier.animateItem(
+                fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            )
+            when (viewMode) {
+                LibraryViewMode.ComfortableGrid -> GridBookCard(
+                    book = book,
+                    onClick = { onBookClick(book) },
+                    onLongPress = { onBookLongPress(book) },
+                    selected = book.id in selectedIds,
+                    modifier = itemModifier,
                 )
-                when (viewMode) {
-                    LibraryViewMode.ComfortableGrid -> GridBookCard(
-                        book = book,
-                        onClick = { onBookClick(book) },
-                        onLongPress = { onBookLongPress(book) },
-                        selected = book.id in selectedIds,
-                        modifier = itemModifier,
-                    )
 
-                    LibraryViewMode.CompactGrid -> CompactGridBookCard(
-                        book = book,
-                        onClick = { onBookClick(book) },
-                        onLongPress = { onBookLongPress(book) },
-                        selected = book.id in selectedIds,
-                        modifier = itemModifier,
-                    )
+                LibraryViewMode.CompactGrid -> CompactGridBookCard(
+                    book = book,
+                    onClick = { onBookClick(book) },
+                    onLongPress = { onBookLongPress(book) },
+                    selected = book.id in selectedIds,
+                    modifier = itemModifier,
+                )
 
-                    LibraryViewMode.CoverOnlyGrid -> CoverOnlyGridBookCard(
-                        book = book,
-                        onClick = { onBookClick(book) },
-                        onLongPress = { onBookLongPress(book) },
-                        selected = book.id in selectedIds,
-                        modifier = itemModifier,
-                    )
+                LibraryViewMode.CoverOnlyGrid -> CoverOnlyGridBookCard(
+                    book = book,
+                    onClick = { onBookClick(book) },
+                    onLongPress = { onBookLongPress(book) },
+                    selected = book.id in selectedIds,
+                    modifier = itemModifier,
+                )
 
-                    LibraryViewMode.List -> Unit
-                }
+                LibraryViewMode.List -> Unit
             }
         }
     }
@@ -758,7 +746,7 @@ private fun LibraryGrid(
 private fun LibraryList(
     state: LazyListState,
     contentPadding: PaddingValues,
-    groups: List<LibraryGroup>,
+    books: List<LibraryBook>,
     selectedIds: Set<String>,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
@@ -771,23 +759,18 @@ private fun LibraryList(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
     ) {
-        groups.forEach { group ->
-            if (group.label.isNotEmpty()) {
-                item { GroupSectionHeader(title = group.label) }
-            }
-            lazyListItems(group.books, key = { it.id }) { book ->
-                BookListRow(
-                    book = book,
-                    onClick = { onBookClick(book) },
-                    onLongPress = { onBookLongPress(book) },
-                    selected = book.id in selectedIds,
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                    ),
-                )
-            }
+        lazyListItems(books, key = { it.id }, contentType = { LibraryBookContentType }) { book ->
+            BookListRow(
+                book = book,
+                onClick = { onBookClick(book) },
+                onLongPress = { onBookLongPress(book) },
+                selected = book.id in selectedIds,
+                modifier = Modifier.animateItem(
+                    fadeInSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                ),
+            )
         }
     }
 }
@@ -825,41 +808,35 @@ private fun LibraryPreview(mode: LibraryViewMode) {
                 totalCount = 6,
                 selectableCount = 6,
                 viewMode = mode,
-                groups = listOf(
-                    LibraryGroup(
-                        "",
-                        List(6) { index ->
-                            LibraryBook(
-                                id = index.toString(),
-                                title = listOf(
-                                    "The Wind in the Willows",
-                                    "A Long Way Home",
-                                    "The Quiet Archive",
-                                    "Letters from the Coast",
-                                    "The Glass Garden",
-                                    "Small Things, Brightly",
-                                )[index],
-                                shortTitle = "Preview book",
-                                author = "Open Reader",
-                                authorLastName = "PRESS",
-                                progress = (index + 1) / 8f,
-                                remaining = "12 min",
-                                coverImagePath = null,
-                                coverColors = listOf(
-                                    Color(0xFF284B63),
-                                    Color(0xFF9B5DE5),
-                                ),
-                                lastOpenedAt = 0L,
-                                series = null,
-                            )
-                        },
-                    ),
-                ),
+                books = List(6) { index ->
+                    LibraryBook(
+                        id = index.toString(),
+                        title = listOf(
+                            "The Wind in the Willows",
+                            "A Long Way Home",
+                            "The Quiet Archive",
+                            "Letters from the Coast",
+                            "The Glass Garden",
+                            "Small Things, Brightly",
+                        )[index],
+                        shortTitle = "Preview book",
+                        author = "Open Reader",
+                        authorLastName = "PRESS",
+                        progress = (index + 1) / 8f,
+                        remaining = "12 min",
+                        coverImagePath = null,
+                        coverColors = listOf(
+                            Color(0xFF284B63),
+                            Color(0xFF9B5DE5),
+                        ),
+                        lastOpenedAt = 0L,
+                        series = null,
+                    )
+                },
             ),
             onSearchToggle = {},
             onSearchQueryChange = {},
             onSortModeChange = {},
-            onGroupModeChange = {},
             onViewModeChange = {},
             onPortraitGridColumnsChange = {},
             onLandscapeGridColumnsChange = {},
@@ -869,3 +846,5 @@ private fun LibraryPreview(mode: LibraryViewMode) {
         )
     }
 }
+
+private const val LibraryBookContentType = "book"

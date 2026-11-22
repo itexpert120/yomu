@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
 import com.itexpert120.yomu.core.designsystem.YomuProgressBar
-import com.itexpert120.yomu.core.designsystem.YomuSectionHeader
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
@@ -235,11 +234,6 @@ fun BookListRow(
             style = MaterialTheme.typography.labelMedium,
         )
     }
-}
-
-@Composable
-fun GroupSectionHeader(title: String, modifier: Modifier = Modifier) {
-    YomuSectionHeader(title = title, modifier = modifier.padding(top = YomuTheme.space.xs))
 }
 
 /**

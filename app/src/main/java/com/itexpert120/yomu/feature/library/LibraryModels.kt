@@ -3,7 +3,6 @@ package com.itexpert120.yomu.feature.library
 import androidx.compose.ui.graphics.Color
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookCollection
-import com.itexpert120.yomu.core.model.GroupMode
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
@@ -12,6 +11,7 @@ import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.feature.collections.ManagedTab
 import com.itexpert120.yomu.feature.collections.OrganizeCollection
 import com.itexpert120.yomu.feature.collections.StatusChoice
+import java.text.Collator
 
 /**
  * Presentation projection of a core [Book] for the library feature. Holds Compose colors and
@@ -47,14 +47,13 @@ fun Book.toLibraryBook(): LibraryBook = LibraryBook(
 
 private fun String.lastNameKey(): String = trim().substringAfterLast(' ').uppercase()
 
-/** An ordered, labeled section of books for the grouped library grid. */
-data class LibraryGroup(val label: String, val books: List<LibraryBook>)
-
 /** A library tab: a reading-status shelf or one of the user's collections. */
 data class LibraryTab(val key: String, val label: String, val count: Int, val isCollection: Boolean = false)
 
-/** The books shown under one tab, already searched, sorted and grouped. */
-data class LibraryPage(val key: String, val groups: List<LibraryGroup>, val bookCount: Int)
+/** The books shown under one tab, already searched and sorted. */
+data class LibraryPage(val key: String, val books: List<LibraryBook>) {
+    val bookCount: Int get() = books.size
+}
 
 object LibraryTabKeys {
     const val ALL = "all"
@@ -78,9 +77,8 @@ data class LibraryUiState(
     // Number of selectable grid items (excludes the continue-reading hero); for "select all".
     val selectableCount: Int = 0,
     val continueReading: LibraryBook? = null,
-    val groups: List<LibraryGroup> = emptyList(),
+    val books: List<LibraryBook> = emptyList(),
     val sortMode: SortMode = SortMode.Recent,
-    val groupMode: GroupMode = GroupMode.None,
     val viewMode: LibraryViewMode = LibraryViewMode.ComfortableGrid,
     val portraitGridColumns: Int = LibraryPreferences.AUTO_COLUMNS,
     val landscapeGridColumns: Int = LibraryPreferences.AUTO_COLUMNS,
@@ -111,18 +109,21 @@ fun List<Book>.matching(query: String): List<Book> {
 
 fun List<Book>.sortedBy(mode: SortMode): List<Book> = when (mode) {
     SortMode.Recent -> sortedByDescending { it.lastOpenedAt }
-    SortMode.Title -> sortedBy { it.title.lowercase() }
-    SortMode.Author -> sortedBy { it.author.lastNameKey().lowercase() }
+    SortMode.Title -> sortedByCollated { it.title }
+    SortMode.Author -> sortedByCollated { it.author.lastNameKey() }
     SortMode.Unread -> sortedBy { it.progress }
 }
 
-/** Ordered grouping. [GroupMode.None] yields a single unlabeled group. */
-fun List<Book>.groupedBy(mode: GroupMode): List<LibraryGroup> = when (mode) {
-    GroupMode.None -> listOf(LibraryGroup("", map { it.toLibraryBook() }))
-    GroupMode.Author -> groupToSections { it.author.lastNameKey() }
+/**
+ * Locale-aware, case-insensitive text sort. Each book's collation key is built once, so the
+ * comparator never re-derives strings.
+ */
+private inline fun List<Book>.sortedByCollated(text: (Book) -> String): List<Book> {
+    val collator = Collator.getInstance().apply { strength = Collator.SECONDARY }
+    return map { collator.getCollationKey(text(it)) to it }
+        .sortedBy { it.first }
+        .map { it.second }
 }
-
-private inline fun List<Book>.groupToSections(key: (Book) -> String): List<LibraryGroup> = groupBy(key).map { (label, books) -> LibraryGroup(label, books.map { it.toLibraryBook() }) }
 
 /**
  * Whether [this] book is shown under the tab [key]. A manual status takes precedence over progress:

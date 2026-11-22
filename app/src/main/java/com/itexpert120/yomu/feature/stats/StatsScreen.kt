@@ -54,7 +54,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
@@ -103,17 +103,17 @@ import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import java.io.File
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.util.Date
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAccessor
 import java.util.Locale
 
 @Composable
 fun StatsRoute(onBack: (() -> Unit)?) {
     val viewModel: StatsViewModel = hiltViewModel()
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     StatsScreen(state = state, onBack = onBack)
 }
 
@@ -686,17 +686,30 @@ private fun formatMinutesRead(seconds: Long): String {
     return if (minutes > 0) "$minutes min" else "<1 min"
 }
 
-private fun formatClock(millis: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
+private val ClockFormat = LocaleDateFormatter("h:mm a")
+private val DayHeaderFormat = LocaleDateFormatter("MMM d, yyyy")
+
+/** A [DateTimeFormatter] built once per default locale instead of once per history row. */
+private class LocaleDateFormatter(private val pattern: String) {
+    @Volatile
+    private var cached: Pair<Locale, DateTimeFormatter>? = null
+
+    fun format(value: TemporalAccessor): String {
+        val locale = Locale.getDefault()
+        val formatter = cached?.takeIf { it.first == locale }?.second
+            ?: DateTimeFormatter.ofPattern(pattern, locale).also { cached = locale to it }
+        return formatter.format(value)
+    }
+}
+
+private fun formatClock(millis: Long): String = ClockFormat.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 
 private fun formatDayHeader(day: LocalDate): String {
     val today = LocalDate.now()
     return when (day) {
         today -> "Today"
         today.minusDays(1) -> "Yesterday"
-        else -> {
-            val date = Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())
-            SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(date)
-        }
+        else -> DayHeaderFormat.format(day)
     }
 }
 

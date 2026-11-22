@@ -98,6 +98,7 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -117,8 +118,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -129,6 +129,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -206,6 +207,8 @@ private val TocTrailingSlotSize = 48.dp
 /** Deeper TOC levels share the last indent so long hierarchies keep a readable line length. */
 private const val TocMaxIndentLevels = 4
 
+private const val TocRowContentType = "tocRow"
+
 @Composable
 fun BookDetailsScreen(
     book: BookDetailsUi?,
@@ -242,9 +245,8 @@ fun BookDetailsScreen(
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showTimeline by remember { mutableStateOf(false) }
     var showOrganize by remember { mutableStateOf(false) }
-    val selectableChapterCount = toc.items.count { it.jumpable }
-    val allChaptersSelected = selectableChapterCount > 0 &&
-        toc.selectedCount == selectableChapterCount
+    val allChaptersSelected = toc.selectableCount > 0 &&
+        toc.selectedCount == toc.selectableCount
     var readButtonCollapsed by remember { mutableStateOf(false) }
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     // Where the book's own title block sits on screen versus what covers it (the app bar in one
@@ -431,8 +433,8 @@ fun BookDetailsScreen(
                                             onCoverClick = {
                                                 if (book.coverImagePath != null) showCover = true
                                             },
-                                            identityModifier = Modifier.onGloballyPositioned {
-                                                identityBottomPx = it.boundsInWindow().bottom
+                                            identityModifier = Modifier.onWindowBounds {
+                                                identityBottomPx = it.bottom.toFloat()
                                             },
                                         )
                                     }
@@ -470,6 +472,17 @@ fun BookDetailsScreen(
                 }
             }
 
+            // Derived so scrolling only recomposes the screen when these flip, not every frame.
+            val listScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
+            val titleVisible by remember(twoPane, listState) {
+                derivedStateOf {
+                    if (twoPane) {
+                        identityBottomPx <= detailsPaneTopPx
+                    } else {
+                        listState.firstVisibleItemIndex > 0 || identityBottomPx <= topBarBottomPx
+                    }
+                }
+            }
             BookDetailsTopBar(
                 title = book?.title.orEmpty(),
                 bookAvailable = book != null,
@@ -479,12 +492,8 @@ fun BookDetailsScreen(
                 allChaptersSelected = allChaptersSelected,
                 // In two panes nothing scrolls beneath the bar (panes start below it), so it stays
                 // flat; the title appears only once the pane's own title has scrolled away.
-                scrolled = book != null && !twoPane && listState.canScrollBackward,
-                titleVisible = if (twoPane) {
-                    identityBottomPx <= detailsPaneTopPx
-                } else {
-                    listState.firstVisibleItemIndex > 0 || identityBottomPx <= topBarBottomPx
-                },
+                scrolled = book != null && !twoPane && listScrolled,
+                titleVisible = titleVisible,
                 onBack = onBack,
                 onEdit = onEdit,
                 onRemove = requestRemove,
@@ -496,7 +505,7 @@ fun BookDetailsScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .onSizeChanged { topBarHeightPx = it.height }
-                    .onGloballyPositioned { topBarBottomPx = it.boundsInWindow().bottom },
+                    .onWindowBounds { topBarBottomPx = it.bottom.toFloat() },
             )
 
             // Primary action floats over the content (hidden while multi-selecting chapters). Two
@@ -809,7 +818,7 @@ private fun TwoPaneDetails(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .onGloballyPositioned { onDetailsPaneTop(it.boundsInWindow().top) },
+                        .onWindowBounds { onDetailsPaneTop(it.top.toFloat()) },
                     shape = YomuShapeTokens.hero,
                     color = paneColor,
                 ) {
@@ -830,8 +839,8 @@ private fun TwoPaneDetails(
                                 coverWidth = if (sideBySide) 132.dp else 160.dp,
                                 stackIdentity = !sideBySide,
                                 contained = true,
-                                identityModifier = Modifier.onGloballyPositioned {
-                                    onIdentityBottom(it.boundsInWindow().bottom)
+                                identityModifier = Modifier.onWindowBounds {
+                                    onIdentityBottom(it.bottom.toFloat())
                                 },
                             )
                         }
@@ -1305,7 +1314,7 @@ private fun LazyListScope.tocSection(
         toc.items.isEmpty() -> item { TocEmpty() }
         // No item key: a book's TOC can legitimately repeat an href, and duplicate keys crash
         // LazyColumn. Positional binding is fine here (sort just rebinds in place).
-        else -> items(toc.items) { entry ->
+        else -> items(toc.items, contentType = { TocRowContentType }) { entry ->
             TocRow(
                 entry = entry,
                 gutter = gutter,
@@ -1845,3 +1854,11 @@ private fun TabletBookDetailsPreview() {
         )
     }
 }
+
+/**
+ * Window bounds for the app-bar title reveal. Throttled (with a trailing update) rather than
+ * reported on every scroll frame like onGloballyPositioned.
+ */
+private fun Modifier.onWindowBounds(onBounds: (IntRect) -> Unit): Modifier = onLayoutRectChanged(throttleMillis = WindowBoundsThrottleMs) { onBounds(it.boundsInWindow) }
+
+private const val WindowBoundsThrottleMs = 32L

@@ -3,9 +3,15 @@ package com.itexpert120.yomu.core.storage
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
+import androidx.core.graphics.scale
+import com.itexpert120.yomu.app.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
@@ -20,13 +26,18 @@ import javax.inject.Singleton
 @Singleton
 class FileStorage @Inject constructor(
     @ApplicationContext private val context: Context,
+    @ApplicationScope scope: CoroutineScope,
 ) {
-    private val epubsDir: File = File(context.filesDir, "epubs").apply { mkdirs() }
-    private val coversDir: File = File(context.filesDir, "covers").apply { mkdirs() }
-    private val fontsDir: File = File(context.filesDir, "fonts").apply { mkdirs() }
+    // Created on first use (always off the main thread), so constructing this during the first
+    // composition does no disk I/O.
+    private val epubsDir: File by lazy { File(context.filesDir, "epubs").apply { mkdirs() } }
+    private val coversDir: File by lazy { File(context.filesDir, "covers").apply { mkdirs() } }
+    private val fontsDir: File by lazy { File(context.filesDir, "fonts").apply { mkdirs() } }
 
-    init {
-        // Deletion residue is reconciled against committed rows when the database opens.
+    // Leftover `.partial` copies from an interrupted import. copyEpub waits for this sweep so it
+    // can never delete a copy that is still being written. Deletion residue is reconciled against
+    // committed rows when the database opens.
+    private val partialSweep: Job = scope.launch(Dispatchers.IO) {
         sequenceOf(epubsDir, coversDir).forEach { directory ->
             directory.listFiles()
                 ?.filter { it.name.endsWith(".partial") }
@@ -52,6 +63,7 @@ class FileStorage @Inject constructor(
 
     /** Copies the EPUB at [uri] into app storage under [bookId], returning its path + sha256. */
     suspend fun copyEpub(bookId: String, uri: Uri): CopiedFile = withContext(Dispatchers.IO) {
+        partialSweep.join()
         val target = File(epubsDir, "$bookId.epub")
         val partial = File(epubsDir, "$bookId.partial")
         val digest = MessageDigest.getInstance("SHA-256")
@@ -82,11 +94,36 @@ class FileStorage @Inject constructor(
         }
     }
 
-    /** Persists [bitmap] as a PNG cover for [bookId], returning the absolute path. */
+    /**
+     * Persists [bitmap] as the cover for [bookId], returning the absolute path. Covers are shown at
+     * most a few hundred dp tall, so they're stored downscaled as lossy WebP (covers imported before
+     * this stay full-size PNGs; readers go by the stored path, not the extension).
+     */
     suspend fun saveCover(bookId: String, bitmap: Bitmap): String = withContext(Dispatchers.IO) {
-        val target = File(coversDir, "$bookId.png")
-        target.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+        val target = File(coversDir, "$bookId.webp")
+        val scaled = if (bitmap.height > MAX_COVER_HEIGHT_PX) {
+            val width = (bitmap.width.toLong() * MAX_COVER_HEIGHT_PX / bitmap.height).toInt().coerceAtLeast(1)
+            bitmap.scale(width, MAX_COVER_HEIGHT_PX, filter = true)
+        } else {
+            bitmap
+        }
+        try {
+            target.outputStream().use { out -> check(scaled.compress(coverFormat(), COVER_QUALITY, out)) { "Couldn't encode cover" } }
+        } catch (failure: Throwable) {
+            target.delete()
+            throw failure
+        } finally {
+            if (scaled !== bitmap) scaled.recycle()
+        }
         target.absolutePath
+    }
+
+    @Suppress("DEPRECATION")
+    private fun coverFormat(): Bitmap.CompressFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Bitmap.CompressFormat.WEBP_LOSSY
+    } else {
+        // Before API 30 plain WEBP is lossy for any quality below 100.
+        Bitmap.CompressFormat.WEBP
     }
 
     /**
@@ -136,5 +173,7 @@ class FileStorage @Inject constructor(
     private companion object {
         const val EPUB_MIME = "application/epub+zip"
         const val MAX_EPUB_BYTES = 500L * 1024 * 1024
+        const val MAX_COVER_HEIGHT_PX = 900
+        const val COVER_QUALITY = 85
     }
 }

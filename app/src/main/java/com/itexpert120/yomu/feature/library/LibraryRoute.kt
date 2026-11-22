@@ -7,9 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * Stateful entry point for the library: binds [LibraryViewModel], owns the SAF import launcher,
@@ -22,7 +22,7 @@ fun LibraryRoute(
     onSelectionModeChange: (Boolean) -> Unit = {},
 ) {
     val viewModel: LibraryViewModel = hiltViewModel()
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Selection swaps the navigation bar for a floating toolbar; M3 never shows both at once.
     LaunchedEffect(state.selectionMode) { onSelectionModeChange(state.selectionMode) }
@@ -53,7 +53,6 @@ fun LibraryRoute(
         onSearchToggle = viewModel::onSearchToggle,
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onSortModeChange = viewModel::onSortModeChange,
-        onGroupModeChange = viewModel::onGroupModeChange,
         onViewModeChange = viewModel::onViewModeChange,
         onPortraitGridColumnsChange = viewModel::onPortraitGridColumnsChange,
         onLandscapeGridColumnsChange = viewModel::onLandscapeGridColumnsChange,
