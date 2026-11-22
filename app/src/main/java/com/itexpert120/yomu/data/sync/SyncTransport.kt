@@ -69,7 +69,13 @@ internal class SyncUpdateRequiredException(cause: Throwable? = null) : Exception
 /** The server is older than this app supports. */
 internal class SyncServerOutdatedException : Exception("Sync server is out of date")
 
-/** The Convex functions in backend/convex/sync.ts. Numbers travel as Double (Convex float64). */
+/**
+ * The sync server, as the engine sees it: a group of encrypted records addressed by a token, kept
+ * last-writer-wins by HLC and numbered by a growing sequence that [pull] pages through. Errors the
+ * engine acts on arrive typed ([SyncGroupGoneException], [SyncUpdateRequiredException],
+ * [SyncServerOutdatedException]); anything else means offline. Production talks to Convex
+ * ([ConvexSyncTransport]); tests use an in-memory server.
+ */
 internal interface SyncTransport {
     /** False when this build has no sync deployment configured. */
     val available: Boolean
@@ -82,12 +88,21 @@ internal interface SyncTransport {
 
     /** Throws [SyncUpdateRequiredException] / [SyncServerOutdatedException] on a version mismatch. */
     suspend fun checkCompatible()
+
+    /** Creates the group for [token]; idempotent. */
     suspend fun create(token: String)
     suspend fun exists(token: String): Boolean
+
+    /** Stores each record unless the server holds a newer one (higher HLC); returns the head seq. */
     suspend fun push(token: String, records: List<WireRecord>): Double
 
-    /** Live: re-emits whenever records after [after] change on the server. */
+    /**
+     * Live: the records changed after seq [after], oldest first and a page at a time; re-emits
+     * whenever that changes. Failures (including a deleted group) arrive as failed results.
+     */
     fun pull(token: String, after: Double): Flow<Result<PullPage>>
+
+    /** Deletes the group and everything in it. */
     suspend fun destroy(token: String)
 
     /** Closes the connection until the next call (the app went to the background). */
@@ -293,7 +308,7 @@ internal class ConvexSyncTransport @Inject constructor(
         private const val WATCHDOG_MAX_MS = 5 * 60_000L
 
         /** Maps the backend's application errors (`unknown_group`, `client_outdated`) to typed ones. */
-        fun Throwable.classify(): Exception? {
+        private fun Throwable.classify(): Exception? {
             val messages = generateSequence(this) { it.cause }.mapNotNull { it.message }.toList()
             return when {
                 messages.any { "unknown_group" in it } -> SyncGroupGoneException(this)

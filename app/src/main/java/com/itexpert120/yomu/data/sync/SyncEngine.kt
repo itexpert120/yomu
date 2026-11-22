@@ -1,18 +1,9 @@
 package com.itexpert120.yomu.data.sync
 
-import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import android.util.Log
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import com.itexpert120.yomu.app.di.ApplicationScope
-import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.database.SyncLedgerEntity
-import com.itexpert120.yomu.core.database.SyncMetadataEntity
-import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.data.sync.crypto.SyncKeys
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -26,10 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -37,7 +26,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+/** The name other devices show for this one in "Continue from <device>". */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+internal annotation class SyncDeviceLabel
 
 data class SyncStatus(
     val phase: Phase = Phase.Off,
@@ -68,13 +63,11 @@ data class SyncStatus(
  */
 @Singleton
 internal class SyncEngine @Inject constructor(
-    private val database: YomuDatabase,
-    private val dao: SyncDao,
-    private val dataStore: DataStore<Preferences>,
-    private val snapshotter: SyncSnapshotter,
-    private val applier: SyncApplier,
+    private val store: SyncStore,
+    private val local: LocalRecords,
+    private val localChanges: LocalChangeSource,
     private val transport: SyncTransport,
-    @ApplicationContext private val context: Context,
+    @SyncDeviceLabel private val deviceLabel: dagger.Lazy<String>,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val mutex = Mutex()
@@ -89,14 +82,6 @@ internal class SyncEngine @Inject constructor(
     private val pushRequests = Channel<Unit>(Channel.CONFLATED)
     private lateinit var clock: HlcClock
     private lateinit var device: String
-
-    /** Shown to other devices in "Continue from <device>": the name the user gave this device. */
-    private val deviceLabel: String by lazy {
-        runCatching { Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?: Build.MODEL
-    }
 
     fun start(keys: SyncKeys) {
         if (job?.isActive == true) return
@@ -132,18 +117,18 @@ internal class SyncEngine @Inject constructor(
         withTimeoutOrNull(timeoutMs) {
             if (tracking) mutex.withLock { SyncKind.entries.forEach { diff(it) } }
             pushRequests.trySend(Unit)
-            while (dao.dirtyCount() > 0) delay(DRAIN_POLL_MILLIS)
+            while (store.dirtyCount() > 0) delay(DRAIN_POLL_MILLIS)
         }
         stop()
     }
 
     /** Forgets everything synced on this device (ledger, cursor, offers). Local data stays. */
-    suspend fun resetLocalState() = mutex.withLock { dao.reset() }
+    suspend fun resetLocalState() = mutex.withLock { store.reset() }
 
     // region Pull
 
     private suspend fun pullLoop(keys: SyncKeys, caughtUp: CompletableDeferred<Unit>) {
-        val cursor = MutableStateFlow(dao.metadata(KEY_CURSOR)?.toDoubleOrNull() ?: 0.0)
+        val cursor = MutableStateFlow(store.metadata(KEY_CURSOR)?.toDoubleOrNull() ?: 0.0)
         // The subscription can end on a connection error; resubscribe from the saved cursor.
         while (true) {
             // A rebuilt connection (new generation) needs its own subscription. Any unexpected
@@ -165,7 +150,7 @@ internal class SyncEngine @Inject constructor(
             .flatMapLatest { after -> transport.pull(keys.token, after).map { after to it } }
             .collect { (after, result) ->
                 val page = result.getOrElse { error ->
-                    when (ConvexSyncTransport.run { error.classify() }) {
+                    when (error) {
                         is SyncGroupGoneException -> groupGone()
                         is SyncUpdateRequiredException -> stopWith(SyncStatus.Phase.UpdateRequired)
                         else -> Unit
@@ -183,7 +168,7 @@ internal class SyncEngine @Inject constructor(
                 val next = mutex.withLock {
                     applyBatch(keys, page.records)
                     val last = page.records.maxOf { it.seq }.coerceAtLeast(after)
-                    dao.putMetadata(SyncMetadataEntity(KEY_CURSOR, last.toString()))
+                    store.putMetadata(KEY_CURSOR, last.toString())
                     saveClock()
                     last
                 }
@@ -226,7 +211,7 @@ internal class SyncEngine @Inject constructor(
     }
 
     private suspend fun applyBatch(keys: SyncKeys, records: List<WireRecord>) {
-        applier.refreshInstalledFonts()
+        local.beforeApply()
         val decoded = records.mapNotNull { record ->
             val envelope = runCatching {
                 SyncJson.decodeFromString(SyncEnvelope.serializer(), keys.open(record.key, record.blob ?: return@mapNotNull null).decodeToString())
@@ -241,21 +226,21 @@ internal class SyncEngine @Inject constructor(
         // Fonts first so settings that use them resolve to installed files.
         for ((envelope, hlc, kind) in decoded.sortedBy { if (it.third == SyncKind.Font) 0 else 1 }) {
             clock.observe(hlc)
-            val existing = dao.ledger(envelope.name)
+            val existing = store.ledger(envelope.name)
             if (existing != null && existing.hlc() >= hlc) continue
             val id = envelope.name.substringAfter('/')
             val applied = runCatching {
-                applier.apply(kind, id, envelope.payload, existing == null, envelope.device, hlc)
+                local.apply(kind, id, envelope.payload, existing == null, envelope.device, hlc)
             }.getOrElse { error ->
                 if (error is CancellationException) throw error
                 Log.w(TAG, "Couldn't apply ${kind.key}", error)
                 continue
             }
             if (applied.awaitingBook && applied.sha256 != null) {
-                dao.putMetadata(SyncMetadataEntity(PENDING_BOOK_PREFIX + applied.sha256, applied.sha256))
+                store.putMetadata(PENDING_BOOK_PREFIX + applied.sha256, applied.sha256)
             }
             val stamp = if (applied.dirty) clock.tick() else hlc
-            dao.upsertLedger(
+            store.upsertLedger(
                 listOf(
                     SyncLedgerEntity(
                         recordKey = envelope.name,
@@ -287,12 +272,8 @@ internal class SyncEngine @Inject constructor(
         }
         tracking = true
         pushRequests.trySend(Unit)
-        val roomChanges = database.invalidationTracker.createFlow(*TABLE_KINDS.keys.toTypedArray(), emitInitialState = false)
-            .map { tables -> tables.flatMap { TABLE_KINDS[it].orEmpty() }.toSet() }
-        // Settings, themes and fonts live in DataStore. The first emission is the current state.
-        val prefChanges = dataStore.data.drop(1).map { setOf(SyncKind.Settings, SyncKind.Theme, SyncKind.Font) }
         val pending = mutableSetOf<SyncKind>()
-        merge(roomChanges, prefChanges)
+        localChanges.changes
             .onEach { kinds -> synchronized(pending) { pending += kinds } }
             .debounce(DEBOUNCE_MILLIS)
             .collect {
@@ -308,23 +289,22 @@ internal class SyncEngine @Inject constructor(
 
     /** Applies records that arrived before their book was on this device. */
     private suspend fun adoptNewBooks() {
-        val pending = dao.metadataWithPrefix(PENDING_BOOK_PREFIX)
+        val pending = store.metadataWithPrefix(PENDING_BOOK_PREFIX)
         if (pending.isEmpty()) return
-        val local = snapshotter.localBooks().entries.associate { (id, sha) -> sha to id }
-        applier.refreshInstalledFonts()
-        pending.forEach { marker ->
-            val bookId = local[marker.value] ?: return@forEach
-            applier.onBookAdded(marker.value, bookId)
-            dao.deleteMetadata(marker.key)
+        val books = store.localBooks().entries.associate { (id, sha) -> sha to id }
+        pending.forEach { (key, sha) ->
+            val bookId = books[sha] ?: return@forEach
+            local.onBookAdded(sha, bookId)
+            store.deleteMetadata(key)
         }
     }
 
     /** Stamps local changes of [kind] (relative to the ledger) and marks them for pushing. */
     private suspend fun diff(kind: SyncKind) {
-        val local = snapshotter.snapshot(kind).associateBy { it.name }
-        val ledger = dao.ledgerOfKind(kind.key).associateBy { it.recordKey }
+        val snapshot = local.snapshot(kind).associateBy { it.name }
+        val ledger = store.ledgerOfKind(kind.key).associateBy { it.recordKey }
         val changed = mutableListOf<SyncLedgerEntity>()
-        for (record in local.values) {
+        for (record in snapshot.values) {
             val row = ledger[record.name]
             val stamp = when {
                 // Pre-sync data is dated by its own timestamp so the genuinely newest copy wins
@@ -336,13 +316,13 @@ internal class SyncEngine @Inject constructor(
             changed += record.toLedger(stamp)
         }
         if (!kind.neverDeleted) {
-            val localShas = if (kind.bookBound) snapshotter.localBooks().values.toSet() else emptySet()
-            val pendingFonts = if (kind == SyncKind.Font) applier.pendingFonts() else emptySet()
+            val localShas = if (kind.bookBound) store.localBooks().values.toSet() else emptySet()
+            val kept = local.keptWithoutLocalCopy(kind)
             for (row in ledger.values) {
-                if (row.deleted || row.recordKey in local) continue
+                if (row.deleted || row.recordKey in snapshot) continue
                 // A book removed from this device keeps its synced data everywhere else.
                 if (kind.bookBound && row.bookSha256 !in localShas) continue
-                if (row.entityId in pendingFonts) continue
+                if (row.entityId in kept) continue
                 val stamp = clock.tick()
                 changed += row.copy(
                     payloadJson = null,
@@ -355,7 +335,7 @@ internal class SyncEngine @Inject constructor(
             }
         }
         if (changed.isNotEmpty()) {
-            dao.upsertLedger(changed)
+            store.upsertLedger(changed)
             saveClock()
         }
     }
@@ -374,7 +354,7 @@ internal class SyncEngine @Inject constructor(
                     Log.w(TAG, "Push failed", error)
                     _status.value = _status.value.copy(phase = SyncStatus.Phase.Offline)
                     delay(RETRY_MILLIS)
-                    applier.retryPendingFonts()
+                    local.retryPending()
                     continue
                 }
                 if (sent == 0) break
@@ -385,14 +365,14 @@ internal class SyncEngine @Inject constructor(
 
     /** Pushes one batch of dirty records; returns how many were sent. */
     private suspend fun pushOnce(keys: SyncKeys): Int {
-        val rows = mutex.withLock { dao.dirty(PUSH_BATCH) }
+        val rows = mutex.withLock { store.dirty(PUSH_BATCH) }
         if (rows.isEmpty()) return 0
         _status.value = _status.value.copy(phase = SyncStatus.Phase.Syncing)
         val wire = rows.map { row ->
             val envelope = SyncEnvelope(
                 name = row.recordKey,
                 payload = row.payloadJson,
-                device = if (row.kind == SyncKind.Progress.key) deviceLabel else null,
+                device = if (row.kind == SyncKind.Progress.key) deviceLabel.get() else null,
             )
             val serverKey = keys.serverKey(row.recordKey)
             val blob = keys.seal(serverKey, SyncJson.encodeToString(SyncEnvelope.serializer(), envelope).encodeToByteArray())
@@ -400,7 +380,7 @@ internal class SyncEngine @Inject constructor(
         }
         transport.push(keys.token, wire)
         mutex.withLock {
-            rows.forEach { dao.markPushed(it.recordKey, it.physicalTime, it.logicalCounter, it.originDeviceId) }
+            rows.forEach { store.markPushed(it.recordKey, it.physicalTime, it.logicalCounter, it.originDeviceId) }
         }
         return rows.size
     }
@@ -408,14 +388,14 @@ internal class SyncEngine @Inject constructor(
     // endregion
 
     private suspend fun loadClock() {
-        device = dao.metadata(KEY_DEVICE) ?: UUID.randomUUID().toString().replace("-", "").take(12).also {
-            dao.putMetadata(SyncMetadataEntity(KEY_DEVICE, it))
+        device = store.metadata(KEY_DEVICE) ?: UUID.randomUUID().toString().replace("-", "").take(12).also {
+            store.putMetadata(KEY_DEVICE, it)
         }
-        clock = HlcClock(device, dao.metadata(KEY_CLOCK)?.let(Hlc::decode))
+        clock = HlcClock(device, store.metadata(KEY_CLOCK)?.let(Hlc::decode))
     }
 
     private suspend fun saveClock() {
-        clock.latest?.let { dao.putMetadata(SyncMetadataEntity(KEY_CLOCK, it.encode())) }
+        clock.latest?.let { store.putMetadata(KEY_CLOCK, it.encode()) }
     }
 
     private fun markUpToDate() {
@@ -448,18 +428,5 @@ internal class SyncEngine @Inject constructor(
         private const val DEBOUNCE_MILLIS = 1_500L
         private const val RETRY_MILLIS = 30_000L
         private const val DRAIN_POLL_MILLIS = 250L
-
-        /** Which record kinds each table feeds. */
-        private val TABLE_KINDS = mapOf(
-            "books" to setOf(SyncKind.Meta, SyncKind.Progress, SyncKind.Shelf),
-            "book_collections" to setOf(SyncKind.Shelf),
-            "collections" to setOf(SyncKind.Collection),
-            "chapter_reads" to setOf(SyncKind.Chapter),
-            "chapter_progress" to setOf(SyncKind.Chapter),
-            "bookmarks" to setOf(SyncKind.Bookmark),
-            "highlights" to setOf(SyncKind.Highlight),
-            "reader_settings" to setOf(SyncKind.BookSettings),
-            "reading_sessions" to setOf(SyncKind.Session),
-        )
     }
 }

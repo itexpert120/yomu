@@ -1,6 +1,8 @@
 package com.itexpert120.yomu.data.sync
 
 import android.content.Context
+import android.os.Build
+import android.provider.Settings
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -11,6 +13,7 @@ import com.itexpert120.yomu.data.sync.crypto.SyncKeys
 import com.itexpert120.yomu.data.sync.crypto.SyncPhrase
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
@@ -206,4 +209,22 @@ class SyncRepository @Inject internal constructor(
 internal abstract class SyncModule {
     @Binds
     abstract fun bindTransport(impl: ConvexSyncTransport): SyncTransport
+
+    @Binds
+    abstract fun bindStore(impl: RoomSyncStore): SyncStore
+
+    @Binds
+    abstract fun bindLocalRecords(impl: RoomLocalRecords): LocalRecords
+
+    @Binds
+    abstract fun bindLocalChanges(impl: RoomLocalChangeSource): LocalChangeSource
+
+    companion object {
+        /** The name the user gave this device, else its model. */
+        @Provides
+        @SyncDeviceLabel
+        fun provideDeviceLabel(@ApplicationContext context: Context): String = runCatching {
+            Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: Build.MODEL
+    }
 }

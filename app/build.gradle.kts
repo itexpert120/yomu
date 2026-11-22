@@ -73,6 +73,8 @@ android {
         // VectorPath: the app icon / wordmark is a single detailed logo with a long path — expected.
         disable += setOf("OldTargetApi", "VectorPath")
     }
+    // Unit tests run code that logs through android.util.Log (e.g. the sync engine).
+    testOptions.unitTests.isReturnDefaultValues = true
     compileSdkMinor = 1
 }
 
@@ -143,6 +145,7 @@ dependencies {
     implementation(libs.swipe)
     implementation(libs.material.kolor)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
