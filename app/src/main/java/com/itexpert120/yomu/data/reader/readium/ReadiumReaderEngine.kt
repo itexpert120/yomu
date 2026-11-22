@@ -50,6 +50,7 @@ import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.core.web.openWebSearchSheet
 import com.itexpert120.yomu.data.diagnostics.CrashLog
+import com.itexpert120.yomu.data.reader.ReadingPosition
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -351,7 +352,7 @@ private class ReadiumReaderSession(
     private val publication: Publication,
     initialLocatorJson: String?,
     initialSettings: ReaderSettings,
-    private val resourceWeights: List<Int>,
+    resourceWeights: List<Int>,
     mappedTableOfContents: List<ReadiumTocEntry>,
     private val customFontJsCache: CustomFontJsCache,
     private val crashLog: CrashLog,
@@ -422,8 +423,6 @@ private class ReadiumReaderSession(
     // initial-locator emissions are ignored during this window so they can't clobber saved progress.
     private var restoring = false
 
-    private var latestVisualPage: VisualPageState? = null
-    private var pendingCompletedChapterId: String? = null
     private var pageTurnSettle: Job? = null
 
     // A queued turn waiting for the next frame; page events in that window must not replay it again.
@@ -439,55 +438,25 @@ private class ReadiumReaderSession(
 
     private val navigatorFactory = EpubNavigatorFactory(publication)
 
-    private data class LogicalSection(
-        val id: String,
-        val title: String,
-        val locator: Locator,
-        val orderIndex: Int,
-        val startProgression: Double,
-    )
-
-    private val logicalSections: List<LogicalSection> = mappedTableOfContents
-        .mapNotNull { entry ->
+    // Section, progress, and completion bookkeeping, fed this navigator's position events.
+    private val position = ReadingPosition(
+        sections = mappedTableOfContents.mapNotNull { entry ->
             val locator = entry.locator ?: return@mapNotNull null
             if (entry.readingOrderIndex < 0) return@mapNotNull null
-            LogicalSection(
+            ReadingPosition.Section(
                 id = entry.item.id,
                 title = entry.item.title,
-                locator = locator,
-                orderIndex = entry.readingOrderIndex,
+                resourceIndex = entry.readingOrderIndex,
                 startProgression = entry.startProgression,
+                target = locator,
             )
-        }
-        .sortedWith(compareBy<LogicalSection> { it.orderIndex }.thenBy { it.startProgression })
-
-    // Fragment links into one resource all resolve to the same start (their anchors' positions
-    // aren't known without the DOM), so only the last of them would ever be "current". Let every
-    // section in such a run share the current one's progress instead of leaving the rest at 0%.
-    private val sectionsSharingStart: Map<String, List<String>> = logicalSections
-        .groupBy { it.orderIndex to it.startProgression }
-        .values
-        .filter { it.size > 1 }
-        .flatMap { group -> group.map { section -> section.id to group.map { it.id }.minus(section.id) } }
-        .toMap()
-
-    // Spine href -> index, built once: locator updates look this up several times per page turn, and
-    // scanning the reading order allocated a URL string per spine item (books can have 1500+).
-    private val readingOrderIndexByHref: Map<String, Int> = HashMap<String, Int>().apply {
-        publication.readingOrder.forEachIndexed { index, link ->
-            // First match wins, as indexOfFirst did.
-            putIfAbsent(link.url().toString(), index)
-        }
-    }
-
-    private fun readingOrderIndexOf(href: String?): Int = href?.let { readingOrderIndexByHref[it] } ?: -1
-
-    private val sectionBoundaries: List<SectionBoundary> =
-        logicalSections.map { SectionBoundary(it.orderIndex, it.startProgression) }
-
-    private val effectiveResourceWeights: List<Int> =
-        resourceWeights.takeIf { it.size == publication.readingOrder.size }
-            ?: List(publication.readingOrder.size) { 1 }
+        },
+        readingOrder = publication.readingOrder.map { it.url().toString() },
+        resourceWeights = resourceWeights,
+        layout = initialSettings.layout,
+        initialHref = initialLocator?.href?.toString(),
+        initialProgression = initialLocator?.locations?.progression,
+    )
 
     // The last published locator and its JSON, so an unchanged locator isn't re-serialised.
     private var lastPublishedLocator: Locator? = null
@@ -532,14 +501,8 @@ private class ReadiumReaderSession(
 
         override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
             onPageTurnSettled()
-            updateCurrentLocator(
-                locator,
-                visualPage = VisualPageState(
-                    href = locator.href.toString(),
-                    pageIndex = pageIndex,
-                    totalPages = totalPages,
-                ),
-            )
+            if (!restoring) position.onPage(locator.href.toString(), pageIndex, totalPages)
+            updateCurrentLocator(locator)
         }
     }
 
@@ -935,35 +898,11 @@ private class ReadiumReaderSession(
         scope.launch { nav.applyDecorations(decorations, SEARCH_GROUP) }
     }
 
-    private data class VisualPageState(
-        val href: String,
-        val pageIndex: Int,
-        val totalPages: Int,
-    )
-
-    private data class ScrollProgressState(
-        val href: String,
-        val progression: Double,
-    )
-
-    private var latestScrollProgress: ScrollProgressState? = null
-
-    private data class ProgressMetrics(
-        val bookProgress: Double,
-        val chapter: LogicalSection?,
-        val chapterProgress: Double?,
-        val chapterIndex: Int,
-        val completed: Boolean,
-    )
-
     private fun updateCurrentLocator(
         locator: Locator,
-        visualPage: VisualPageState? = null,
-        measuredScrollProgress: Double? = null,
         queryScrollProgress: Boolean = true,
     ) {
         if (restoring) return
-        visualPage?.let { latestVisualPage = it }
         val previousHref = lastLocator?.href?.toString()
         val hrefStr = locator.href.toString()
         val resourceChanged = previousHref != null && previousHref != hrefStr
@@ -977,60 +916,29 @@ private class ReadiumReaderSession(
             // explicit navigation helpers. Scroll mode still needs its layout cover for those
             // moves. In paged mode this locator arrives after Readium has already displayed the
             // adjacent spine item; covering it here would make the new chapter appear twice.
-            val previousIndex = readingOrderIndexOf(previousHref)
-            val currentIndex = readingOrderIndexOf(hrefStr)
+            val previousIndex = position.resourceIndexOf(previousHref)
+            val currentIndex = position.resourceIndexOf(hrefStr)
             beginChapterTransition(
                 forward = currentIndex >= previousIndex,
             )
         }
         lastLocator = locator
-        if (latestScrollProgress?.href != hrefStr) latestScrollProgress = null
-        measuredScrollProgress?.let {
-            latestScrollProgress = ScrollProgressState(hrefStr, it.coerceIn(0.0, 1.0))
-        }
         if (currentSettings.layout == ReaderLayout.Scroll && queryScrollProgress) {
             requestScrollProgress(locator)
         }
-        val metrics = progressMetrics(locator, visualPage ?: latestVisualPage)
-        val crossedChapterId = completedSectionOnSequentialCrossing(
-            pendingChapterId = pendingCompletedChapterId,
-            currentChapterId = metrics.chapter?.id,
-            previousHref = previousHref,
-            currentHref = hrefStr,
+        val snapshot = position.onLocator(
+            href = hrefStr,
+            progression = locator.locations.progression,
+            totalProgression = locator.locations.totalProgression,
+            title = locator.title,
         )
-        if (crossedChapterId != null) pendingCompletedChapterId = null
-        val visualPagesLeft = latestVisualPage
-            ?.takeIf {
-                currentSettings.layout == ReaderLayout.Paged &&
-                    it.href == hrefStr &&
-                    it.totalPages > 0
-            }
-            ?.let {
-                val pageIndex = it.pageIndex.coerceIn(0, it.totalPages - 1)
-                (it.totalPages - pageIndex - 1).coerceAtLeast(0)
-            }
         val locatorJson = lastPublishedLocatorJson
             ?.takeIf { locator == lastPublishedLocator }
             ?: locator.toJSON().toString().also {
                 lastPublishedLocator = locator
                 lastPublishedLocatorJson = it
             }
-        val readerLocator = ReaderLocator(
-            locatorJson = locatorJson,
-            totalProgression = locator.locations.totalProgression,
-            chapterTitle = metrics.chapter?.title ?: locator.title,
-            href = hrefStr,
-            chapterProgression = metrics.chapterProgress,
-            hasPreviousChapter = metrics.chapterIndex > 0,
-            hasNextChapter = metrics.chapterIndex in 0 until logicalSections.lastIndex,
-            bookProgress = metrics.bookProgress,
-            chapterPagesLeft = visualPagesLeft,
-            chapterId = metrics.chapter?.id,
-            sharedChapterIds = metrics.chapter?.id?.let { sectionsSharingStart[it] }.orEmpty(),
-            completedChapterId = crossedChapterId,
-            completedSharedChapterIds = crossedChapterId?.let { sectionsSharingStart[it] }.orEmpty(),
-            completed = metrics.completed,
-        )
+        val readerLocator = snapshot.toReaderLocator(locatorJson)
         if (readerLocator != _currentLocator.value) _currentLocator.value = readerLocator
         if (resourceChanged) {
             // Readium publishes the canonical locator after loading the resource. Finalize styling
@@ -1039,40 +947,6 @@ private class ReadiumReaderSession(
         }
     }
 
-    private fun progressMetrics(locator: Locator, visualPage: VisualPageState?): ProgressMetrics {
-        val href = locator.href.toString()
-        val resourceIndex = readingOrderIndexOf(href)
-        if (resourceIndex < 0) {
-            return ProgressMetrics(0.0, null, null, -1, false)
-        }
-        val visualPageProgress = visualPage
-            ?.takeIf { it.href == href && it.totalPages > 0 }
-            ?.let { (it.pageIndex + 1).toDouble() / it.totalPages }
-        val resourceProgress = resolveResourceProgress(
-            locatorProgress = locator.locations.progression,
-            visualPageProgress = visualPageProgress,
-            measuredScrollProgress = latestScrollProgress
-                ?.takeIf { it.href == href }
-                ?.progression,
-            useVisualPageProgress = currentSettings.layout == ReaderLayout.Paged,
-        )
-        val logical = calculateLogicalProgress(
-            resourceIndex = resourceIndex,
-            resourceProgress = resourceProgress,
-            locatorProgress = locator.locations.progression ?: 0.0,
-            resourceWeights = effectiveResourceWeights,
-            sections = sectionBoundaries,
-        )
-        val chapterIndex = logical.sectionIndex
-        val chapter = logicalSections.getOrNull(chapterIndex)
-        return ProgressMetrics(
-            bookProgress = logical.bookProgress,
-            chapter = chapter,
-            chapterProgress = logical.sectionProgress,
-            chapterIndex = chapterIndex,
-            completed = logical.completed,
-        )
-    }
     override fun applySettings(settings: ReaderSettings) {
         if (settings == currentSettings) return
         val previous = currentSettings
@@ -1080,10 +954,8 @@ private class ReadiumReaderSession(
         val criticalStylingChanged =
             publicationPresentationChanged || previous.immersiveChrome != settings.immersiveChrome
         currentSettings = settings
-        if (settings.layout != ReaderLayout.Scroll) {
-            scrollProgressJob?.cancel()
-            latestScrollProgress = null
-        }
+        position.layout = settings.layout
+        if (settings.layout != ReaderLayout.Scroll) scrollProgressJob?.cancel()
         val nav = navigator
         if (nav != null) {
             when {
@@ -1350,7 +1222,7 @@ private class ReadiumReaderSession(
     private fun injectOverscroll() {
         navigator ?: return
         val hrefStr = lastLocator?.href?.toString()
-        val index = readingOrderIndexOf(hrefStr)
+        val index = position.resourceIndexOf(hrefStr)
         val hasPrev = index > 0
         val hasNext = index in 0 until publication.readingOrder.lastIndex
         val enabled = currentSettings.layout == ReaderLayout.Scroll
@@ -1437,9 +1309,7 @@ private class ReadiumReaderSession(
     override fun previousChapter() = goToLogicalSectionOffset(-1)
 
     private fun goToLogicalSectionOffset(delta: Int) {
-        val current = lastLocator ?: return
-        val index = progressMetrics(current, latestVisualPage).chapterIndex
-        val target = logicalSections.getOrNull(index + delta)?.locator ?: return
+        val target = position.sectionTarget(delta) ?: return
         beginChapterTransition(forward = delta > 0)
         scope.launch { navigator?.let { goChecked(it, target) } }
     }
@@ -1448,7 +1318,7 @@ private class ReadiumReaderSession(
     // a chapter reveals the text just before it — the continuous-reading "rubberband" behaviour.
     private fun goToPreviousResourceEnd() {
         val hrefStr = lastLocator?.href?.toString() ?: return
-        val index = readingOrderIndexOf(hrefStr)
+        val index = position.resourceIndexOf(hrefStr)
         val prev = publication.readingOrder.getOrNull(index - 1) ?: return
         val base = publication.locatorFromLink(prev) ?: return
         val target = base.copy(locations = Locator.Locations(progression = 0.999))
@@ -1461,44 +1331,33 @@ private class ReadiumReaderSession(
     // chapter006 in the Yen Press test book); using nextChapter() here would skip its actual text.
     private fun goToNextResourceStart() {
         val hrefStr = lastLocator?.href?.toString() ?: return
-        val index = readingOrderIndexOf(hrefStr)
+        val index = position.resourceIndexOf(hrefStr)
         val next = publication.readingOrder.getOrNull(index + 1) ?: return
         val target = publication.locatorFromLink(next) ?: return
-        val currentSection = lastLocator
-            ?.let { logicalSections.getOrNull(progressMetrics(it, latestVisualPage).chapterIndex) }
-        val targetSection = logicalSections.getOrNull(progressMetrics(target, null).chapterIndex)
-        val completedChapterId = currentSection?.id
-            ?.takeIf { targetSection?.id != it }
+        position.expectSequentialCrossing(target.href.toString())
         beginChapterTransition(forward = true)
         scope.launch {
-            val nav = navigator ?: return@launch
-            pendingCompletedChapterId = completedChapterId
-            if (!goChecked(nav, target)) pendingCompletedChapterId = null
+            val nav = navigator
+            if (nav == null || !goChecked(nav, target)) position.cancelCrossing()
         }
     }
 
     override fun goToProgression(totalProgression: Double) {
         scope.launch {
-            val order = publication.readingOrder
-            val weights = resourceWeights.takeIf { it.size == order.size }
-                ?: List(order.size) { 1 }
-            val weightedTarget = weightedProgressTarget(totalProgression, weights)
-                ?: return@launch
-            val target = order.getOrNull(weightedTarget.resourceIndex)
+            val weightedTarget = position.progressionTarget(totalProgression) ?: return@launch
+            val target = publication.readingOrder.getOrNull(weightedTarget.resourceIndex)
                 ?.let { publication.locatorFromLink(it) }
                 ?.let { locator ->
                     locator.copy(
                         locations = locator.locations.copy(
-                            progression = weightedTarget.resourceProgress,
+                            progression = weightedTarget.progression,
                         ),
                     )
                 } ?: return@launch
             // Cover only when landing on a different resource (a same-resource jump doesn't reload, so
             // onPageLoaded wouldn't fire to lift the cover).
             if (target.href.toString() != lastLocator?.href?.toString()) {
-                val forward = totalProgression >=
-                    (lastLocator?.let { progressMetrics(it, latestVisualPage).bookProgress } ?: 0.0)
-                beginChapterTransition(forward = forward)
+                beginChapterTransition(forward = position.isForward(totalProgression))
             }
             navigator?.let { goChecked(it, target) }
         }
@@ -1509,9 +1368,9 @@ private class ReadiumReaderSession(
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
         // Cover only on a cross-resource jump (same-resource jumps don't reload to lift the cover).
         if (locator.href.toString() != lastLocator?.href?.toString()) {
-            val forward = progressMetrics(locator, null).bookProgress >=
-                (lastLocator?.let { progressMetrics(it, latestVisualPage).bookProgress } ?: 0.0)
-            beginChapterTransition(forward = forward)
+            beginChapterTransition(
+                forward = position.isForward(locator.href.toString(), locator.locations.progression),
+            )
         }
         scope.launch { navigator?.let { goChecked(it, locator) } }
     }
@@ -1692,12 +1551,9 @@ private class ReadiumReaderSession(
             if (navigator !== nav || currentSettings.layout != ReaderLayout.Scroll) return@launch
             val result = runCatching { nav.evaluateJavascript(SCROLL_PROGRESS_JS) }.getOrNull()
             val progression = result?.trim('"')?.toDoubleOrNull() ?: return@launch
-            if (lastLocator?.href?.toString() != href) return@launch
-            updateCurrentLocator(
-                locator = locator,
-                measuredScrollProgress = progression,
-                queryScrollProgress = false,
-            )
+            if (lastLocator?.href?.toString() != href || restoring) return@launch
+            position.onScrollMeasured(href, progression)
+            updateCurrentLocator(locator, queryScrollProgress = false)
         }
     }
 
