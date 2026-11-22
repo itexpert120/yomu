@@ -40,6 +40,8 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_13_14,
             YomuDatabase.MIGRATION_14_15,
             YomuDatabase.MIGRATION_15_16,
+            YomuDatabase.MIGRATION_16_17,
+            YomuDatabase.MIGRATION_17_18,
         ).close()
     }
 
@@ -107,14 +109,17 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_13_14,
             YomuDatabase.MIGRATION_14_15,
             YomuDatabase.MIGRATION_15_16,
+            YomuDatabase.MIGRATION_16_17,
+            YomuDatabase.MIGRATION_17_18,
         ).use { database ->
             database.query("SELECT `title` FROM `books` WHERE `id` = 'book-id'").use {
                 check(it.moveToFirst())
                 check(it.getString(0) == "Preserved book")
             }
-            database.query("SELECT `value` FROM `sync_metadata` WHERE `key` = 'device'").use {
+            // v17 deliberately discards the experimental v13 sync state; the library survives.
+            database.query("SELECT COUNT(*) FROM `sync_metadata`").use {
                 check(it.moveToFirst())
-                check(it.getString(0) == "preserved")
+                check(it.getInt(0) == 0)
             }
         }
     }

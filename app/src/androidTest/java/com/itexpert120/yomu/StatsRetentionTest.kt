@@ -37,12 +37,13 @@ class StatsRetentionTest {
             val repository = StatsRepository(database.bookDao(), database, dates)
             database.withTransaction {
                 repository.recordSession(BookId("old"), 1, 300)
-                repeat(10_000) { repository.recordSession(BookId("new"), it + 2L, 1) }
+                // Past the 10,000-session cap plus its 500-session prune slack, so the prune runs.
+                repeat(10_500) { repository.recordSession(BookId("new"), it + 2L, 1) }
             }
             assertEquals(300L, repository.bookReadingSeconds(BookId("old")).first())
             val stats = repository.stats.first()
-            assertEquals(10_001, stats.sessionCount)
-            assertEquals(10_300L, stats.totalReadingSeconds)
+            assertEquals(10_501, stats.sessionCount)
+            assertEquals(10_800L, stats.totalReadingSeconds)
             assertEquals(300L, stats.longestSessionSeconds)
             assertEquals(1L, stats.averageSessionSeconds)
             assertFalse(stats.historicalSessionDetailIncomplete)

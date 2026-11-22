@@ -30,7 +30,7 @@ class BookCompletionRepositoryTest {
             for (id in listOf("a", "b", "c")) {
                 sql.execSQL(
                     "INSERT INTO books (id,title,author,storagePath,sha256,fileSizeBytes,progress," +
-                        "addedAt,lastOpenedAt,startedAt,finishedAt) VALUES (?, 'Book','Author',?,?,4,0,0,0,0,0)",
+                        "addedAt,lastOpenedAt,startedAt,finishedAt,metadataEditedAt,shelfEditedAt) VALUES (?, 'Book','Author',?,?,4,0,0,0,0,0,0,0)",
                     arrayOf(id, id, id),
                 )
             }

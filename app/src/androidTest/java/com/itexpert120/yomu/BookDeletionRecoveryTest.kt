@@ -27,7 +27,7 @@ class BookDeletionRecoveryTest {
             val db = database.openHelper.writableDatabase
             db.execSQL(
                 "INSERT INTO books (id,title,author,storagePath,sha256,fileSizeBytes,progress," +
-                    "addedAt,lastOpenedAt,startedAt,finishedAt) VALUES ('book','Book','Author',?,'hash',4,0,0,0,0,0)",
+                    "addedAt,lastOpenedAt,startedAt,finishedAt,metadataEditedAt,shelfEditedAt) VALUES ('book','Book','Author',?,'hash',4,0,0,0,0,0,0,0)",
                 arrayOf(epub.absolutePath),
             )
             val files = BookFiles(temporary.root, { null }, CoroutineScope(Dispatchers.IO))
