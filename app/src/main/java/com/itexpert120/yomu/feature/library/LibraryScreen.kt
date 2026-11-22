@@ -99,9 +99,11 @@ import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
+import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.feature.collections.ManageTabsSheet
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
+import com.itexpert120.yomu.feature.collections.icon
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.items as lazyListItems
 
@@ -647,17 +649,17 @@ private fun LibraryShelfPager(
 
 @Composable
 private fun EmptyShelf(tab: LibraryTab) {
-    val (title, body) = when (tab.key) {
-        LibraryTabKeys.READING -> "Nothing in progress" to "Books you've started reading show up here."
-        LibraryTabKeys.TO_READ -> "Nothing waiting" to "Books you haven't opened yet line up here."
-        LibraryTabKeys.FINISHED -> "No finished books yet" to "Books you finish move here."
-        LibraryTabKeys.ON_HOLD -> "Nothing on hold" to "Set a book to On hold from Organize to park it here."
-        LibraryTabKeys.DROPPED -> "Nothing dropped" to "Books you set to Dropped are kept here."
-        else -> "“${tab.label}” is empty" to "Long-press books in the library, then tap Organize to add them."
+    val (title, body) = when (tab.status) {
+        ShelfStatus.Reading -> "Nothing in progress" to "Books you've started reading show up here."
+        ShelfStatus.ToRead -> "Nothing waiting" to "Books you haven't opened yet line up here."
+        ShelfStatus.Finished -> "No finished books yet" to "Books you finish move here."
+        ShelfStatus.OnHold -> "Nothing on hold" to "Set a book to On hold from Organize to park it here."
+        ShelfStatus.Dropped -> "Nothing dropped" to "Books you set to Dropped are kept here."
+        null -> "“${tab.label}” is empty" to "Long-press books in the library, then tap Organize to add them."
     }
     CenteredStatePane {
         YomuEmptyState(
-            icon = if (tab.isCollection) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
+            icon = tab.status?.icon ?: if (tab.isCollection) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
             title = title,
             body = body,
             tone = YomuBadgeTone.Neutral,
@@ -823,7 +825,6 @@ private fun LibraryPreview(mode: LibraryViewMode) {
                         author = "Open Reader",
                         authorLastName = "PRESS",
                         progress = (index + 1) / 8f,
-                        remaining = "12 min",
                         coverImagePath = null,
                         coverColors = listOf(
                             Color(0xFF284B63),

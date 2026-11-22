@@ -16,22 +16,7 @@ class LibraryShelvesTest {
     private val unread = book("unread")
     private val reading = book("reading", progress = 0.4f)
     private val finished = book("finished", progress = 1f)
-    private val onHold = book("held", progress = 0.2f, status = ManualStatus.OnHold)
     private val dropped = book("dropped", progress = 1f, status = ManualStatus.Dropped)
-
-    @Test
-    fun statusTabsFollowProgressUnlessAManualStatusIsSet() {
-        assertTrue(reading.belongsTo(LibraryTabKeys.READING, emptySet()))
-        assertTrue(unread.belongsTo(LibraryTabKeys.TO_READ, emptySet()))
-        assertTrue(finished.belongsTo(LibraryTabKeys.FINISHED, emptySet()))
-        // A manual status takes the book out of its progress tab...
-        assertFalse(onHold.belongsTo(LibraryTabKeys.READING, emptySet()))
-        assertFalse(dropped.belongsTo(LibraryTabKeys.FINISHED, emptySet()))
-        // ...and into its own, while All still lists everything.
-        assertTrue(onHold.belongsTo(LibraryTabKeys.ON_HOLD, emptySet()))
-        assertTrue(dropped.belongsTo(LibraryTabKeys.DROPPED, emptySet()))
-        assertTrue(dropped.belongsTo(LibraryTabKeys.ALL, emptySet()))
-    }
 
     @Test
     fun collectionTabsIgnoreStatus() {

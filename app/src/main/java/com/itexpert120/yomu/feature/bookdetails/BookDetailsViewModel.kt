@@ -10,7 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ManualStatus
-import com.itexpert120.yomu.core.model.ReadingState
+import com.itexpert120.yomu.core.model.ShelfStatus
+import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.collections.CollectionRepository
@@ -47,7 +48,6 @@ data class BookDetailsUi(
     val series: String?,
     val description: String?,
     val progress: Float,
-    val remaining: String,
     // Total time spent reading this book, e.g. "3h 24m"; null when nothing has been read yet.
     val readingTime: String?,
     // Reading-timeline dates, pre-formatted for display; null when the event hasn't happened.
@@ -57,12 +57,14 @@ data class BookDetailsUi(
     val finishedDate: String?,
     val coverImagePath: String?,
     val coverColors: List<Color>,
-    val readingState: ReadingState,
+    val shelfStatus: ShelfStatus,
     val currentChapterId: String? = null,
     val resumeLocatorJson: String? = null,
-    val manualStatus: ManualStatus? = null,
     val collectionNames: List<String> = emptyList(),
-)
+) {
+    /** A started, unfinished book reads "Resume" (whatever its shelf status). */
+    val canResume: Boolean get() = progress > 0f && progress < 1f
+}
 
 /** Distinguishes the initial Room lookup from a completed lookup whose book is genuinely absent. */
 data class BookDetailsState(
@@ -391,7 +393,6 @@ private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     series = series,
     description = description?.toPlainDescription(),
     progress = progress,
-    remaining = remainingLabel,
     readingTime = formatReadingDuration(readingSeconds),
     addedDate = formatDate(addedAt),
     startedDate = formatDate(startedAt),
@@ -399,8 +400,7 @@ private fun Book.toUi(readingSeconds: Long): BookDetailsUi = BookDetailsUi(
     finishedDate = formatDate(finishedAt),
     coverImagePath = coverImagePath,
     coverColors = coverPalette.map { Color(it) },
-    readingState = readingState,
-    manualStatus = manualStatus,
+    shelfStatus = shelfStatus,
     currentChapterId = currentChapterId,
     resumeLocatorJson = locatorJson,
 )

@@ -1,6 +1,6 @@
 package com.itexpert120.yomu.core.model
 
-/** A user-made collection (shelf). A book can belong to any number of them. */
+/** A user-made collection. A book can belong to any number of them. */
 data class BookCollection(
     val id: String,
     val name: String,
@@ -8,12 +8,12 @@ data class BookCollection(
 )
 
 /**
- * A reading status the reader sets by hand. It takes precedence over the automatic
- * [ReadingState] for the library's status tabs; null means "follow progress".
+ * A status the reader sets by hand (stored by [name]). It wins over book progress in
+ * [ShelfStatus.of]; null means "follow progress".
  */
-enum class ManualStatus(val label: String) {
-    OnHold("On hold"),
-    Dropped("Dropped"),
+enum class ManualStatus(val shelfStatus: ShelfStatus) {
+    OnHold(ShelfStatus.OnHold),
+    Dropped(ShelfStatus.Dropped),
     ;
 
     companion object {

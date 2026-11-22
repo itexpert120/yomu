@@ -366,6 +366,7 @@ class LibraryViewModel @Inject constructor(
                     showsOnlyWhenFilled = isOptionalTab(tab.key),
                     hideable = isHideableTab(tab.key),
                     hidden = tab.key in prefs.hiddenTabs,
+                    status = tab.status,
                 )
             },
             organizeStatus = StatusChoice.of(selectedBooks.map { it.manualStatus }),

@@ -66,14 +66,12 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Deselect
-import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveDone
 import androidx.compose.material.icons.rounded.Schedule
@@ -172,10 +170,11 @@ import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.ManualStatus
-import com.itexpert120.yomu.core.model.ReadingState
+import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.feature.collections.OrganizeCollection
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
 import com.itexpert120.yomu.feature.collections.StatusChoice
+import com.itexpert120.yomu.feature.collections.icon
 import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
 import java.io.File
@@ -518,7 +517,7 @@ fun BookDetailsScreen(
                     modifier = Modifier.align(Alignment.BottomEnd),
                 ) {
                     FloatingReadButton(
-                        reading = book.readingState == ReadingState.Reading,
+                        reading = book.canResume,
                         collapsed = readButtonCollapsed,
                         onClick = onRead,
                         modifier = Modifier
@@ -854,7 +853,7 @@ private fun TwoPaneDetails(
                     }
                 }
                 DockedReadButton(
-                    reading = book.readingState == ReadingState.Reading,
+                    reading = book.canResume,
                     enabled = !toc.selectionMode,
                     onClick = onRead,
                 )
@@ -1010,26 +1009,11 @@ private fun BookHeader(
                         .padding(horizontal = gutter),
                     verticalArrangement = Arrangement.spacedBy(space.xs),
                 ) {
-                    androidx.compose.foundation.layout.FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(space.xxs),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = progressLabel,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleMediumEmphasized,
-                        )
-                        // remaining can be the same "N% read" text as the headline above.
-                        if (book.remaining != progressLabel) {
-                            Text(
-                                text = book.remaining,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelMedium,
-                                textAlign = TextAlign.End,
-                            )
-                        }
-                    }
+                    Text(
+                        text = progressLabel,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleMediumEmphasized,
+                    )
                     DetailProgress(book.progress)
                 }
             }
@@ -1092,7 +1076,7 @@ private fun BookIdentityDetails(
             verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            ReadingStatus(state = book.readingState, manualStatus = book.manualStatus)
+            ShelfStatusChip(book.shelfStatus)
             book.readingTime?.let { DetailsTag(icon = Icons.Rounded.Schedule, text = it) }
             book.collectionNames.forEach { DetailsTag(icon = Icons.Rounded.CollectionsBookmark, text = it) }
         }
@@ -1100,24 +1084,20 @@ private fun BookIdentityDetails(
 }
 
 @Composable
-private fun ReadingStatus(
-    state: ReadingState,
-    manualStatus: ManualStatus?,
-) {
-    val (containerColor, contentColor) = if (manualStatus != null) {
-        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-    } else {
-        when (state) {
-            ReadingState.Unread ->
-                MaterialTheme.colorScheme.surfaceContainerHighest to
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            ReadingState.Reading ->
-                MaterialTheme.colorScheme.secondaryContainer to
-                    MaterialTheme.colorScheme.onSecondaryContainer
-            ReadingState.Finished ->
-                MaterialTheme.colorScheme.primaryContainer to
-                    MaterialTheme.colorScheme.onPrimaryContainer
-        }
+private fun ShelfStatusChip(status: ShelfStatus) {
+    val (containerColor, contentColor) = when (status) {
+        ShelfStatus.ToRead ->
+            MaterialTheme.colorScheme.surfaceContainerHighest to
+                MaterialTheme.colorScheme.onSurfaceVariant
+        ShelfStatus.Reading ->
+            MaterialTheme.colorScheme.secondaryContainer to
+                MaterialTheme.colorScheme.onSecondaryContainer
+        ShelfStatus.Finished ->
+            MaterialTheme.colorScheme.primaryContainer to
+                MaterialTheme.colorScheme.onPrimaryContainer
+        ShelfStatus.OnHold, ShelfStatus.Dropped ->
+            MaterialTheme.colorScheme.tertiaryContainer to
+                MaterialTheme.colorScheme.onTertiaryContainer
     }
     Surface(
         shape = YomuShapeTokens.pill,
@@ -1130,20 +1110,12 @@ private fun ReadingStatus(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = when (manualStatus) {
-                    ManualStatus.OnHold -> Icons.Rounded.PauseCircle
-                    ManualStatus.Dropped -> Icons.Rounded.DoNotDisturbOn
-                    null -> when (state) {
-                        ReadingState.Unread -> Icons.Rounded.Book
-                        ReadingState.Reading -> Icons.Rounded.PlayArrow
-                        ReadingState.Finished -> Icons.Rounded.CheckCircle
-                    }
-                },
+                imageVector = status.icon,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = manualStatus?.label ?: state.statusLabel(),
+                text = status.label,
                 style = MaterialTheme.typography.labelLargeEmphasized,
                 maxLines = 1,
             )
@@ -1671,12 +1643,6 @@ private fun TocLoading() {
     }
 }
 
-private fun ReadingState.statusLabel(): String = when (this) {
-    ReadingState.Unread -> "Not started"
-    ReadingState.Reading -> "In progress"
-    ReadingState.Finished -> "Finished"
-}
-
 /** A small quiet pill beside the status: reading time, or a collection the book is in. */
 @Composable
 private fun DetailsTag(icon: ImageVector, text: String) {
@@ -1808,7 +1774,6 @@ private fun TabletBookDetailsPreview() {
                 series = "Preview collection",
                 description = "A quiet sample description for validating the tablet two-pane layout.",
                 progress = 0.42f,
-                remaining = "4h 12m remaining",
                 readingTime = "2h 18m",
                 addedDate = "14 Jul 2026",
                 startedDate = "15 Jul 2026",
@@ -1816,7 +1781,7 @@ private fun TabletBookDetailsPreview() {
                 finishedDate = null,
                 coverImagePath = null,
                 coverColors = listOf(Color(0xFF284B63), Color(0xFF9B5DE5)),
-                readingState = ReadingState.Reading,
+                shelfStatus = ShelfStatus.Reading,
             ),
             bookLoaded = true,
             toc = TocUiState(

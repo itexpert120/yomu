@@ -11,10 +11,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoMode
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CollectionsBookmark
-import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -46,6 +44,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.ManualStatus
+import com.itexpert120.yomu.core.model.ShelfStatus
 
 /** One collection in the Organize sheet: whether all, some, or none of the books are in it. */
 data class OrganizeCollection(val id: String, val name: String, val state: ToggleableState)
@@ -53,8 +52,8 @@ data class OrganizeCollection(val id: String, val name: String, val state: Toggl
 /** The status choice for the books being organized; [Mixed] when they disagree (none is checked). */
 enum class StatusChoice(val label: String, val status: ManualStatus?) {
     Auto("Auto", null),
-    OnHold(ManualStatus.OnHold.label, ManualStatus.OnHold),
-    Dropped(ManualStatus.Dropped.label, ManualStatus.Dropped),
+    OnHold(ShelfStatus.OnHold.label, ManualStatus.OnHold),
+    Dropped(ShelfStatus.Dropped.label, ManualStatus.Dropped),
     Mixed("Mixed", null),
     ;
 
@@ -74,7 +73,7 @@ enum class StatusChoice(val label: String, val status: ManualStatus?) {
 }
 
 /**
- * Puts one or more books on shelves: a manual status (Auto follows reading progress) and a
+ * Organizes one or more books: a manual status (Auto follows reading progress) and a
  * checklist of collections, with an inline field to make a new one (which the books then join).
  */
 @Composable
@@ -96,13 +95,7 @@ fun OrganizeSheet(
                 options = StatusChoice.Options,
                 selected = status,
                 label = { it.label },
-                icon = {
-                    when (it) {
-                        StatusChoice.OnHold -> Icons.Rounded.PauseCircle
-                        StatusChoice.Dropped -> Icons.Rounded.DoNotDisturbOn
-                        StatusChoice.Auto, StatusChoice.Mixed -> Icons.Rounded.AutoMode
-                    }
-                },
+                icon = { it.status?.shelfStatus?.icon ?: Icons.Rounded.AutoMode },
                 onSelect = { onSetStatus(it.status) },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -168,7 +161,7 @@ fun ManageTabsSheet(
                     onClick = tab.collectionId?.let { id -> { editing = id } },
                     leadingContent = {
                         Icon(
-                            imageVector = if (tab.collectionId != null) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
+                            imageVector = tab.status?.icon ?: if (tab.collectionId != null) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -225,6 +218,7 @@ data class ManagedTab(
     val showsOnlyWhenFilled: Boolean,
     val hideable: Boolean = false,
     val hidden: Boolean = false,
+    val status: ShelfStatus? = null,
 )
 
 private fun bookCount(count: Int) = if (count == 1) "1 book" else "$count books"

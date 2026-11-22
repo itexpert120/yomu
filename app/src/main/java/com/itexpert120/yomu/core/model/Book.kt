@@ -4,10 +4,6 @@ package com.itexpert120.yomu.core.model
 @JvmInline
 value class BookId(val value: String)
 
-enum class ReadingState { Unread, Reading, Finished }
-
-fun isBookCompleted(progress: Float): Boolean = progress >= 1f
-
 /**
  * Domain model for a book in the library. Kept free of Compose/Android types so it backs a Room
  * entity directly. [coverImagePath] points at an extracted cover file when available; otherwise
@@ -25,7 +21,6 @@ data class Book(
     val coverImagePath: String? = null,
     val coverPalette: List<Long> = emptyList(),
     val progress: Float = 0f,
-    val remainingLabel: String = "Unread",
     // Current reading position: the resource href being read and how far through it (0..1).
     val currentHref: String? = null,
     val currentChapterProgress: Float? = null,
@@ -36,13 +31,6 @@ data class Book(
     // Reading-timeline timestamps (epoch millis); 0 = not started / not finished yet.
     val startedAt: Long = 0L,
     val finishedAt: Long = 0L,
-    // Set by hand (On hold / Dropped); null follows [readingState].
+    // Set by hand (On hold / Dropped); null follows progress. See [shelfStatus].
     val manualStatus: ManualStatus? = null,
-) {
-    val readingState: ReadingState
-        get() = when {
-            isBookCompleted(progress) -> ReadingState.Finished
-            progress > 0f -> ReadingState.Reading
-            else -> ReadingState.Unread
-        }
-}
+)

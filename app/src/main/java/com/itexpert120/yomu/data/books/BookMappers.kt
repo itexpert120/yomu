@@ -22,7 +22,6 @@ internal fun BookEntity.toBook(): Book {
         coverImagePath = coverImagePath,
         coverPalette = paletteFor(id),
         progress = progress,
-        remainingLabel = remainingLabelFor(progress),
         currentHref = locator?.optString("href")?.takeIf { it.isNotEmpty() },
         currentChapterProgress = locations?.let {
             if (it.has("progression")) it.optDouble("progression").toFloat() else null
@@ -61,12 +60,6 @@ internal fun ImportedBook.toEntity(): BookEntity = BookEntity(
     startedAt = 0L,
     finishedAt = 0L,
 )
-
-private fun remainingLabelFor(progress: Float): String = when {
-    progress >= 1f -> "Finished"
-    progress > 0f -> "${(progress * 100).toInt()}% read"
-    else -> "Unread"
-}
 
 /** Deterministic gradient used as the cover fallback when no extracted cover exists. */
 private fun paletteFor(seed: String): List<Long> {
