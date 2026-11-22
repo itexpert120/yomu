@@ -28,6 +28,8 @@ data class ReaderOpenRequest(
     val initialLocatorJson: String?,
     val initialSettings: ReaderSettings,
     val publicationCache: ReaderPublicationCache? = null,
+    // Selections this returns true for are phrases, for which the selection menu hides "Look up".
+    val isLookupPhrase: (String) -> Boolean = { false },
 )
 
 /** Result of opening a publication, including cache data generated for a cache miss or repair. */
@@ -39,11 +41,19 @@ data class ReaderOpenResult(
 /** Atomic presentation state for the navigator. */
 sealed interface ReaderRenderState {
     data object Opening : ReaderRenderState
-    data object Failed : ReaderRenderState
 
     data class Transitioning(val forward: Boolean) : ReaderRenderState
 
     data class Ready(val href: String?) : ReaderRenderState
+}
+
+/** An action picked from the text-selection menu, with the selected text and its position. */
+data class ReaderSelection(
+    val action: Action,
+    val text: String,
+    val locatorJson: String,
+) {
+    enum class Action { Copy, Highlight, LookUp, SearchWeb, ReadAloud, Share }
 }
 
 /** Yomu-owned reading position (wraps the engine's native locator JSON). */
@@ -155,22 +165,16 @@ interface ReaderSession : ReaderNavigator {
     val centerTaps: SharedFlow<Unit>
 
     /**
-     * Emits the selected text when the user taps "Look up" in the native text-selection menu. The
-     * engine finishes the selection action mode itself, so callers don't need to clear anything.
+     * Emits an action the user picked from the text-selection menu, with the selection. The engine
+     * finishes the selection action mode itself; what each action does is up to the caller.
      */
-    val lookUpRequests: SharedFlow<String>
+    val selections: SharedFlow<ReaderSelection>
 
     /**
      * Emits a footnote's content (HTML) when the user taps a footnote reference, so the UI can show
      * it in a popup instead of the engine jumping to the note at the bottom of the resource.
      */
     val footnotes: SharedFlow<String>
-
-    /**
-     * Emits a [ReaderHighlightDraft] when the user taps "Highlight" in the text-selection menu. The
-     * engine finishes the selection action mode itself; the app decides colour + persistence.
-     */
-    val highlightRequests: SharedFlow<ReaderHighlightDraft>
 
     /** Emits the id of an on-page highlight the user tapped, so the UI can edit/delete it. */
     val highlightTaps: SharedFlow<String>
@@ -179,27 +183,14 @@ interface ReaderSession : ReaderNavigator {
     fun applySettings(settings: ReaderSettings)
 
     /**
-     * Re-asserts the immersive-mode layout without a full [applySettings] pass (no preference
-     * resubmission/reflow). The Readium page fragment can set a stray native top-padding on its
-     * WebView's parent view when its Fragment/WebView is reattached (e.g. after the Activity backgrounds
-     * and resumes) — this padding sits outside CSS and outside window insets entirely, so it survives
-     * even when the window's own edge-to-edge/inset state is completely correct. Call on foreground
-     * resume to clear it.
-     */
-    fun refreshImmersiveLayout()
-
-    /**
      * Verifies that the hosted navigator is still rendering [currentLocator] after the app returns
      * to the foreground. A stale position is restored; a blank/unrecoverable navigator is rebuilt.
      */
     fun onForegroundResumed()
 
-    // Navigation, driven by the custom chrome (tap zones, slider arrows, progress slider).
-    fun goForward()
-    fun goBackward()
+    // Chapter navigation, driven by the custom chrome. Page turns are the engine's own tap zones.
     fun nextChapter()
     fun previousChapter()
-    fun goToProgression(totalProgression: Double)
 
     /** Jumps to a specific locator (e.g. a TOC entry's stored position). */
     fun goToLocator(locatorJson: String)
@@ -228,9 +219,6 @@ interface ReaderSession : ReaderNavigator {
 
     /** Clears the on-page search underlines. */
     fun clearSearch()
-
-    /** Speaks reader-owned text, reusing the session's lazily initialized TTS engine. */
-    fun speak(text: String)
 
     fun close()
 }

@@ -1,19 +1,13 @@
 package com.itexpert120.yomu.data.reader.readium
 
 import android.animation.ValueAnimator
-import android.content.ActivityNotFoundException
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentCallbacks2
 import android.content.Context
-import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
 import android.util.Base64
 import android.util.Log
 import android.view.ActionMode
@@ -24,7 +18,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.webkit.WebView
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.FragmentFactory
@@ -37,7 +30,6 @@ import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
-import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
@@ -45,9 +37,9 @@ import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
+import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
-import com.itexpert120.yomu.core.web.openWebSearchSheet
 import com.itexpert120.yomu.data.diagnostics.CrashLog
 import com.itexpert120.yomu.data.reader.ReadingPosition
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -239,6 +231,7 @@ class ReadiumReaderEngine @Inject constructor(
                 resourceWeights = book.resourceWeights,
                 mappedTableOfContents = book.tableOfContents,
                 customFontJsCache = customFontJsCache,
+                isLookupPhrase = request.isLookupPhrase,
                 crashLog = crashLog,
             )
             ReaderOpenTrace.mark("reader.session-assembled")
@@ -351,6 +344,7 @@ private class ReadiumReaderSession(
     resourceWeights: List<Int>,
     mappedTableOfContents: List<ReadiumTocEntry>,
     private val customFontJsCache: CustomFontJsCache,
+    private val isLookupPhrase: (String) -> Boolean,
     private val crashLog: CrashLog,
 ) : ReaderSession {
 
@@ -370,15 +364,11 @@ private class ReadiumReaderSession(
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
-    private val _lookUpRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    override val lookUpRequests: SharedFlow<String> = _lookUpRequests.asSharedFlow()
+    private val _selections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 1)
+    override val selections: SharedFlow<ReaderSelection> = _selections.asSharedFlow()
 
     private val _footnotes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val footnotes: SharedFlow<String> = _footnotes.asSharedFlow()
-
-    private val _highlightRequests = MutableSharedFlow<ReaderHighlightDraft>(extraBufferCapacity = 1)
-    override val highlightRequests: SharedFlow<ReaderHighlightDraft> =
-        _highlightRequests.asSharedFlow()
 
     private val _highlightTaps = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val highlightTaps: SharedFlow<String> = _highlightTaps.asSharedFlow()
@@ -427,10 +417,6 @@ private class ReadiumReaderSession(
 
     // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
     private var currentSettings: ReaderSettings = initialSettings
-
-    // Lazily-created TTS for the "Read aloud" selection action; reused across taps, shut down on close.
-    private var tts: TextToSpeech? = null
-    private var pendingSpeak: String? = null
 
     private val navigatorFactory = EpubNavigatorFactory(publication)
 
@@ -569,9 +555,8 @@ private class ReadiumReaderSession(
 
                 // Customize the text-selection menu. Readium replaces the WebView's native menu with
                 // this callback entirely (it drops Chromium's Copy/Share/Read-aloud), so we rebuild
-                // the standard actions ourselves — Copy, Read aloud (TTS), Share — and slot "Look up"
-                // in. "Look up" hands the selected text to the dictionary flow; this also replaces the
-                // old floating look-up bar.
+                // the standard actions ourselves — Copy, Read aloud, Share — and slot "Look up" in.
+                // Each pick is emitted as a ReaderSelection; the reading experience acts on it.
                 selectionActionModeCallback = object : ActionMode.Callback {
                     // "Look up" is single-word only (the dictionary has no phrases); hidden while the
                     // selection spans several words. Cached because reading the selection is async.
@@ -596,7 +581,7 @@ private class ReadiumReaderSession(
                         scope.launch {
                             val text = (navigator as? SelectableNavigator)?.currentSelection()
                                 ?.locator?.text?.highlight
-                            val multiWord = text.isMultiWord()
+                            val multiWord = text != null && isLookupPhrase(text)
                             if (multiWord != multiWordSelection) {
                                 multiWordSelection = multiWord
                                 mode?.invalidate()
@@ -623,25 +608,17 @@ private class ReadiumReaderSession(
                             val locator = selection?.locator
                             val text = locator?.text?.highlight?.trim()
                             if (!text.isNullOrBlank()) {
-                                when (id) {
-                                    MENU_COPY -> copySelection(text)
-                                    MENU_SPEAK -> speak(text)
-                                    MENU_SHARE -> shareSelection(text)
-                                    // Hidden for phrases, but a menu that hasn't re-prepared yet can
-                                    // still fire it: the dictionary only knows words, so use the web.
-                                    MENU_LOOK_UP -> if (text.isMultiWord()) {
-                                        searchWeb("${text.trim { !it.isLetterOrDigit() }} meaning")
-                                    } else {
-                                        _lookUpRequests.tryEmit(text)
-                                    }
-                                    MENU_SEARCH_WEB -> searchWeb(text)
-                                    MENU_HIGHLIGHT -> _highlightRequests.tryEmit(
-                                        ReaderHighlightDraft(
-                                            locatorJson = locator.toJSON().toString(),
-                                            text = text,
-                                        ),
-                                    )
+                                val action = when (id) {
+                                    MENU_COPY -> ReaderSelection.Action.Copy
+                                    MENU_SPEAK -> ReaderSelection.Action.ReadAloud
+                                    MENU_SHARE -> ReaderSelection.Action.Share
+                                    MENU_LOOK_UP -> ReaderSelection.Action.LookUp
+                                    MENU_SEARCH_WEB -> ReaderSelection.Action.SearchWeb
+                                    else -> ReaderSelection.Action.Highlight
                                 }
+                                _selections.tryEmit(
+                                    ReaderSelection(action, text, locator.toJSON().toString()),
+                                )
                             }
                             mode?.finish()
                         }
@@ -976,10 +953,6 @@ private class ReadiumReaderSession(
         paragraphSpacing != other.paragraphSpacing ||
         textAlign != other.textAlign
 
-    override fun refreshImmersiveLayout() {
-        clearImmersiveScrollTopPadding()
-    }
-
     override fun onForegroundResumed() {
         clearImmersiveScrollTopPadding()
         val nav = navigator ?: return
@@ -1211,10 +1184,6 @@ private class ReadiumReaderSession(
         injectJs(js)
     }
 
-    override fun goForward() = presentation.requestTurn(forward = true)
-
-    override fun goBackward() = presentation.requestTurn(forward = false)
-
     override fun nextChapter() = goToLogicalSectionOffset(+1)
 
     override fun previousChapter() = goToLogicalSectionOffset(-1)
@@ -1250,27 +1219,6 @@ private class ReadiumReaderSession(
         scope.launch {
             val nav = navigator
             if (nav == null || !goChecked(nav, target)) position.cancelCrossing()
-        }
-    }
-
-    override fun goToProgression(totalProgression: Double) {
-        scope.launch {
-            val weightedTarget = position.progressionTarget(totalProgression) ?: return@launch
-            val target = publication.readingOrder.getOrNull(weightedTarget.resourceIndex)
-                ?.let { publication.locatorFromLink(it) }
-                ?.let { locator ->
-                    locator.copy(
-                        locations = locator.locations.copy(
-                            progression = weightedTarget.progression,
-                        ),
-                    )
-                } ?: return@launch
-            // Cover only when landing on a different resource (a same-resource jump doesn't reload, so
-            // onPageLoaded wouldn't fire to lift the cover).
-            if (target.href.toString() != lastLocator?.href?.toString()) {
-                presentation.cover(forward = position.isForward(totalProgression))
-            }
-            navigator?.let { goChecked(it, target) }
         }
     }
 
@@ -1441,8 +1389,6 @@ private class ReadiumReaderSession(
         scope.cancel()
         runCatching { searchIterator?.close() }
         searchIterator = null
-        tts?.shutdown()
-        tts = null
         runCatching { publication.close() }
     }
 
@@ -1469,60 +1415,6 @@ private class ReadiumReaderSession(
         val actual = locations.progression ?: locations.totalProgression
         val expected = target.locations.progression ?: target.locations.totalProgression
         return actual == null || expected == null || kotlin.math.abs(actual - expected) < 0.01
-    }
-
-    override fun speak(text: String) {
-        val existing = tts
-        if (existing != null) {
-            existing.speak(text, TextToSpeech.QUEUE_FLUSH, null, "yomu-reader")
-            return
-        }
-        // First use: TTS init is async, so remember the text and speak once the engine is ready.
-        pendingSpeak = text
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                pendingSpeak?.let {
-                    tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "yomu-reader")
-                }
-            }
-            pendingSpeak = null
-        }
-    }
-
-    private fun copySelection(text: String) {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        clipboard?.setPrimaryClip(ClipData.newPlainText("Selection", text))
-    }
-
-    private fun shareSelection(text: String) {
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-        }
-        val chooser = Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(chooser) }
-    }
-
-    private fun String?.isMultiWord(): Boolean = this?.trim()?.contains(Regex("\\s")) == true
-
-    private fun searchWeb(text: String) {
-        // Prefer the bottom-sheet tab, which needs the hosting Activity; fall back to full screen.
-        navigator?.activity?.let {
-            it.openWebSearchSheet(text)
-            return
-        }
-        val uri = Uri.parse("https://www.google.com/search").buildUpon()
-            .appendQueryParameter("q", text)
-            .build()
-        val customTab = CustomTabsIntent.Builder()
-            .setShowTitle(true)
-            .build()
-            .also { it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-        try {
-            customTab.launchUrl(context, uri)
-        } catch (_: ActivityNotFoundException) {
-            // The device has no activity capable of handling web links.
-        }
     }
 
     // Builds the injected JS for the scroll-mode rubberband chapter gesture. Idempotent per document

@@ -11,13 +11,3 @@ data class ReaderHighlight(
     val colorArgb: Int,
     val createdAt: Long,
 )
-
-/**
- * A pending highlight, emitted by the engine when the user taps "Highlight" on a text selection.
- * Carries just the selection's locator (serialized) and the selected text; the colour, id and
- * persistence are decided by the app layer.
- */
-data class ReaderHighlightDraft(
-    val locatorJson: String,
-    val text: String,
-)

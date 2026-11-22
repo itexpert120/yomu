@@ -27,9 +27,6 @@ internal class ReadingPosition<T>(
         val target: T,
     )
 
-    /** A resource and the progression within it that a whole-book progression maps to. */
-    data class ResourceTarget(val resourceIndex: Int, val progression: Double)
-
     private val sections: List<Section<T>> =
         sections.sortedWith(compareBy<Section<T>> { it.resourceIndex }.thenBy { it.startProgression })
 
@@ -145,15 +142,8 @@ internal class ReadingPosition<T>(
         return sections.getOrNull(index + delta)?.target
     }
 
-    /** Where a whole-book progression lands, weighted by resource length. */
-    fun progressionTarget(totalProgression: Double): ResourceTarget? = weightedProgressTarget(totalProgression, weights)
-        ?.let { ResourceTarget(it.resourceIndex, it.resourceProgress) }
-
     /** Whether [progression] of resource [href] is at or after the current position. */
     fun isForward(href: String, progression: Double?): Boolean = metrics(href, progression, null).bookProgress >= currentBookProgress()
-
-    /** Whether whole-book [totalProgression] is at or after the current position. */
-    fun isForward(totalProgression: Double): Boolean = totalProgression >= currentBookProgress()
 
     private fun currentBookProgress(): Double = currentHref?.let { metrics(it, currentProgression, page).bookProgress } ?: 0.0
 
@@ -223,35 +213,6 @@ private data class LogicalProgress(
     val sectionProgress: Double?,
     val completed: Boolean,
 )
-
-private data class WeightedProgressTarget(
-    val resourceIndex: Int,
-    val resourceProgress: Double,
-)
-
-private fun weightedProgressTarget(
-    totalProgression: Double,
-    resourceWeights: List<Int>,
-): WeightedProgressTarget? {
-    if (resourceWeights.isEmpty()) return null
-    val weights = resourceWeights.map { it.coerceAtLeast(1).toDouble() }
-    if (totalProgression >= 1.0) {
-        return WeightedProgressTarget(weights.lastIndex, 1.0)
-    }
-    val coordinate = totalProgression.coerceIn(0.0, 1.0) * weights.sum()
-    var prefix = 0.0
-    weights.forEachIndexed { index, weight ->
-        val end = prefix + weight
-        if (coordinate < end || index == weights.lastIndex) {
-            return WeightedProgressTarget(
-                resourceIndex = index,
-                resourceProgress = ((coordinate - prefix) / weight).coerceIn(0.0, 1.0),
-            )
-        }
-        prefix = end
-    }
-    return null
-}
 
 /** Position-weighted progress through the book and its logical sections. */
 private fun calculateLogicalProgress(

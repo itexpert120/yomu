@@ -334,10 +334,9 @@ fun ReaderScreen(
     // Non-immersive keeps the page inset below the bars (their height reserved). The chrome always
     // stays shown while loading or when immersive is off (title/Back/footer visible).
     val immersive = reading.settings.immersiveChrome
-    // A chapter transition keeps the chrome as it was; only the initial open (or a failure) forces
-    // it visible. Treating transitions as "not ready" flashed the immersive top bar every chapter.
-    val chromeForcedByLoad = reading.renderState is ReaderRenderState.Opening ||
-        reading.renderState is ReaderRenderState.Failed
+    // A chapter transition keeps the chrome as it was; only the initial open forces it visible.
+    // Treating transitions as "not ready" flashed the immersive top bar every chapter.
+    val chromeForcedByLoad = reading.renderState is ReaderRenderState.Opening
     val readerSurfacesAvailable = reading.renderState !is ReaderRenderState.Opening
     val chromeShown = chromeForcedByLoad || !immersive || state.chapterControlsVisible
     val topInset = when {

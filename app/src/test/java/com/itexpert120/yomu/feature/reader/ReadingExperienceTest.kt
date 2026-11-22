@@ -8,13 +8,13 @@ import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
-import com.itexpert120.yomu.core.reader.ReaderHighlightDraft
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
+import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
@@ -238,9 +238,11 @@ class ReadingExperienceTest {
     fun lookupHistoryAndPronunciationStayBookScoped() = runBlocking {
         val lookedUp = mutableListOf<String>()
         val session = FakeReaderSession()
+        val readAloud = FakeReadAloud()
         val experience = createExperience(
             engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
             scope = this,
+            readAloud = readAloud,
             lookupWord = { word ->
                 lookedUp += word
                 DictionaryResult.NotFound
@@ -249,8 +251,8 @@ class ReadingExperienceTest {
 
         try {
             experience.start()
-            awaitCondition { session.lookUpEvents.subscriptionCount.value > 0 }
-            session.lookUpEvents.emit("Hello!")
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.LookUp, "Hello!", "{hello}"))
             awaitCondition { experience.state.value.lookup?.loading == false }
 
             assertEquals("hello", experience.state.value.lookup?.word)
@@ -266,10 +268,71 @@ class ReadingExperienceTest {
             experience.dispatch(ReadingExperienceAction.Pronounce(" hello "))
 
             assertEquals(listOf("hello", "world"), lookedUp)
-            assertEquals(listOf("hello"), session.spoken)
+            assertEquals(listOf("hello"), readAloud.spoken)
         } finally {
             experience.close()
         }
+    }
+
+    @Test
+    fun selectionActionsGoToTheirOutletsAndPhrasesLookUpOnTheWeb() = runBlocking {
+        val lookedUp = mutableListOf<String>()
+        val session = FakeReaderSession()
+        val outlet = FakeSelectionOutlet()
+        val engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache()))
+        val experience = createExperience(
+            engine = engine,
+            scope = this,
+            selectionOutlet = outlet,
+            lookupWord = { word ->
+                lookedUp += word
+                DictionaryResult.NotFound
+            },
+        )
+
+        try {
+            experience.start()
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
+            fun select(action: ReaderSelection.Action, text: String) = session.selectionEvents.tryEmit(ReaderSelection(action, text, "{at}"))
+            select(ReaderSelection.Action.LookUp, "“the world of fog,”")
+            select(ReaderSelection.Action.Copy, "copied")
+            select(ReaderSelection.Action.Share, "shared")
+            select(ReaderSelection.Action.SearchWeb, "searched")
+            awaitCondition { outlet.searched.size == 2 }
+
+            assertEquals(listOf("the world of fog meaning", "searched"), outlet.searched)
+            assertEquals(listOf("copied"), outlet.copied)
+            assertEquals(listOf("shared"), outlet.shared)
+            assertTrue(lookedUp.isEmpty())
+            assertEquals(null, experience.state.value.lookup)
+            // The engine hides "Look up" for exactly what the experience treats as a phrase.
+            val isPhrase = engine.requests.single().isLookupPhrase
+            assertTrue(isPhrase("two words"))
+            assertFalse(isPhrase("Dantès’s"))
+        } finally {
+            experience.close()
+        }
+    }
+
+    @Test
+    fun readAloudFromTheMenuAndThePronounceButtonShareOneAdapter() = runBlocking {
+        val session = FakeReaderSession()
+        val readAloud = FakeReadAloud()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            scope = this,
+            readAloud = readAloud,
+        )
+
+        experience.start()
+        awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
+        session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.ReadAloud, "Call it", "{at}"))
+        experience.dispatch(ReadingExperienceAction.Pronounce(" fog "))
+        awaitCondition { readAloud.spoken.size == 2 }
+        experience.close()
+
+        assertEquals(setOf("Call it", "fog"), readAloud.spoken.toSet())
+        assertTrue(readAloud.shutDown)
     }
 
     @Test
@@ -294,7 +357,7 @@ class ReadingExperienceTest {
 
         try {
             experience.start()
-            awaitCondition { session.highlightRequestEvents.subscriptionCount.value > 0 }
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
             awaitCondition { session.appliedHighlights == listOf(existing) }
 
             session.highlightTapEvents.emit("existing")
@@ -303,11 +366,11 @@ class ReadingExperienceTest {
             awaitCondition { highlights.updatedColors == listOf("existing" to 7) }
 
             highlights.failNextAdd = true
-            session.highlightRequestEvents.emit(ReaderHighlightDraft("{failed}", "first"))
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.Highlight, "first", "{failed}"))
             awaitCondition { experience.state.value.annotationError != null }
             experience.dispatch(ReadingExperienceAction.RetryAnnotations)
             awaitCondition { highlights.addedTexts == listOf("first") }
-            session.highlightRequestEvents.emit(ReaderHighlightDraft("{saved}", "second"))
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.Highlight, "second", "{saved}"))
             awaitCondition { highlights.addedTexts == listOf("first", "second") }
 
             session.currentLocator.value = locator()
@@ -503,9 +566,9 @@ class ReadingExperienceTest {
         }
         try {
             experience.start()
-            awaitCondition { session.highlightRequestEvents.subscriptionCount.value > 0 }
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
             highlights.failAddAcknowledgement = true
-            session.highlightRequestEvents.emit(ReaderHighlightDraft("{uncertain}", "once"))
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.Highlight, "once", "{uncertain}"))
             retryFailure()
             assertEquals(listOf("once"), highlights.addedTexts)
             val id = highlights.items.value.single().id
@@ -618,6 +681,8 @@ class ReadingExperienceTest {
         persistSettings: suspend (ReaderSettings) -> Unit = {},
         resetSettings: suspend () -> Unit = {},
         lookupWord: suspend (String) -> DictionaryResult = { DictionaryResult.NotFound },
+        selectionOutlet: SelectionOutlet = FakeSelectionOutlet(),
+        readAloud: ReadAloud = FakeReadAloud(),
         nowMillis: () -> Long = { 0L },
         elapsedMillis: () -> Long = nowMillis,
         progressSaveIntervalMillis: Long = 0L,
@@ -632,6 +697,8 @@ class ReadingExperienceTest {
         persistSettings = persistSettings,
         resetSettings = resetSettings,
         lookupWord = lookupWord,
+        selectionOutlet = selectionOutlet,
+        readAloud = readAloud,
         engine = engine,
         books = books,
         highlights = highlights,
@@ -695,12 +762,10 @@ class ReadingExperienceTest {
         override val renderState = MutableStateFlow<ReaderRenderState>(ReaderRenderState.Opening)
         val centerTapEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
         override val centerTaps: SharedFlow<Unit> = centerTapEvents
-        val lookUpEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
-        override val lookUpRequests: SharedFlow<String> = lookUpEvents
+        val selectionEvents = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 8)
+        override val selections: SharedFlow<ReaderSelection> = selectionEvents
         val footnoteEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
         override val footnotes: SharedFlow<String> = footnoteEvents
-        val highlightRequestEvents = MutableSharedFlow<ReaderHighlightDraft>(extraBufferCapacity = 8)
-        override val highlightRequests: SharedFlow<ReaderHighlightDraft> = highlightRequestEvents
         val highlightTapEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
         override val highlightTaps: SharedFlow<String> = highlightTapEvents
         override val fragmentFactory = FragmentFactory()
@@ -708,7 +773,6 @@ class ReadingExperienceTest {
         val appliedSettings = mutableListOf<ReaderSettings>()
         val visitedLocators = mutableListOf<String>()
         val searchQueries = mutableListOf<String>()
-        val spoken = mutableListOf<String>()
         var appliedHighlights = emptyList<ReaderHighlight>()
         var searchResults = emptyList<ReaderSearchResult>()
         var searchDecorations = emptyList<ReaderSearchResult>()
@@ -725,13 +789,7 @@ class ReadingExperienceTest {
             appliedSettings += settings
         }
 
-        override fun refreshImmersiveLayout() = Unit
-
         override fun onForegroundResumed() = Unit
-
-        override fun goForward() = Unit
-
-        override fun goBackward() = Unit
 
         override fun nextChapter() {
             nextChapterCalls++
@@ -740,8 +798,6 @@ class ReadingExperienceTest {
         override fun previousChapter() {
             previousChapterCalls++
         }
-
-        override fun goToProgression(totalProgression: Double) = Unit
 
         override fun goToLocator(locatorJson: String) {
             visitedLocators += locatorJson
@@ -766,12 +822,39 @@ class ReadingExperienceTest {
             clearSearchCalls++
         }
 
+        override fun close() {
+            closed = true
+        }
+    }
+
+    private class FakeSelectionOutlet : SelectionOutlet {
+        val copied = mutableListOf<String>()
+        val shared = mutableListOf<String>()
+        val searched = mutableListOf<String>()
+
+        override fun copy(text: String) {
+            copied += text
+        }
+
+        override fun share(text: String) {
+            shared += text
+        }
+
+        override fun searchWeb(query: String) {
+            searched += query
+        }
+    }
+
+    private class FakeReadAloud : ReadAloud {
+        val spoken = mutableListOf<String>()
+        var shutDown = false
+
         override fun speak(text: String) {
             spoken += text
         }
 
-        override fun close() {
-            closed = true
+        override fun shutdown() {
+            shutDown = true
         }
     }
 

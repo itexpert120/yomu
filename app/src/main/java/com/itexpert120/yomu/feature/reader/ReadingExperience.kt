@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.feature.reader
 
+import android.content.Context
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -14,6 +15,7 @@ import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
+import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
@@ -21,12 +23,14 @@ import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
+import com.itexpert120.yomu.data.dictionary.LookupTerm
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import com.itexpert120.yomu.data.stats.StatsRepository
 import com.itexpert120.yomu.data.sync.ProgressOffer
 import com.itexpert120.yomu.data.sync.SyncRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -163,6 +167,8 @@ class ReadingExperienceFactory @Inject constructor(
     private val stats: StatsRepository,
     private val readingWrites: ReadingWriteQueue,
     private val sync: SyncRepository,
+    private val selectionOutlet: AndroidSelectionOutlet,
+    @ApplicationContext private val context: Context,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
     internal fun create(
@@ -176,6 +182,8 @@ class ReadingExperienceFactory @Inject constructor(
         persistSettings = { settings.setForBook(bookId, it) },
         resetSettings = { settings.clearForBook(bookId) },
         lookupWord = { dictionary.lookup(it) },
+        selectionOutlet = selectionOutlet,
+        readAloud = AndroidReadAloud(context),
         engine = engine,
         books = books,
         highlights = highlights,
@@ -197,6 +205,8 @@ internal class ReadingExperience(
     private val persistSettings: suspend (ReaderSettings) -> Unit,
     private val resetSettings: suspend () -> Unit,
     private val lookupWord: suspend (String) -> DictionaryResult,
+    private val selectionOutlet: SelectionOutlet,
+    private val readAloud: ReadAloud,
     private val engine: ReaderEngine,
     private val books: BookRepository,
     private val highlights: HighlightRepository,
@@ -317,7 +327,7 @@ internal class ReadingExperience(
             is ReadingExperienceAction.ApplySettings -> applySettings(action.settings, persist = true)
             is ReadingExperienceAction.Navigate -> navigate(action.target)
             is ReadingExperienceAction.ChangeSearchQuery -> changeSearchQuery(action.query)
-            is ReadingExperienceAction.LookUpWord -> lookUp(action.text, action.resetHistory)
+            is ReadingExperienceAction.LookUpWord -> lookUpWord(action.text, action.resetHistory)
             is ReadingExperienceAction.Pronounce -> speak(action.text)
             is ReadingExperienceAction.DeleteBookmark -> deleteBookmark(action.id)
             is ReadingExperienceAction.DeleteHighlight -> deleteHighlight(action.id)
@@ -334,6 +344,7 @@ internal class ReadingExperience(
         openGeneration++
         searchGeneration++
         lifetimeJob.cancel()
+        readAloud.shutdown()
         session?.close()
         session = null
         _state.update { it.copy(navigator = null) }
@@ -377,6 +388,7 @@ internal class ReadingExperience(
                             initialLocatorJson = initialLocatorJson ?: it.locatorJson,
                             initialSettings = initialSettings,
                             publicationCache = it.publicationCache,
+                            isLookupPhrase = { text -> LookupTerm.of(text) is LookupTerm.Phrase },
                         ),
                     )
                 }
@@ -432,11 +444,6 @@ internal class ReadingExperience(
 
                 launch {
                     opened.renderState.collect { renderState ->
-                        if (renderState is ReaderRenderState.Failed) {
-                            endTrace()
-                            failActiveSession(opened)
-                            return@collect
-                        }
                         if (renderState is ReaderRenderState.Ready) {
                             ReaderOpenTrace.mark("reader.ready")
                             endTrace()
@@ -486,28 +493,11 @@ internal class ReadingExperience(
                     opened.centerTaps.collect { _events.tryEmit(ReadingExperienceEvent.ToggleChrome) }
                 }
                 launch {
-                    opened.lookUpRequests.collect { lookUp(it, resetHistory = true) }
+                    opened.selections.collect(::onSelection)
                 }
                 launch {
                     opened.footnotes.collect { html ->
                         _state.update { it.copy(footnoteHtml = html) }
-                    }
-                }
-                launch {
-                    opened.highlightRequests.collect { draft ->
-                        mutateAnnotation("Highlight wasn't saved.") {
-                            val existing = highlights.observeForBook(bookId).first().any {
-                                it.locatorJson == draft.locatorJson && it.text == draft.text
-                            }
-                            if (!existing) {
-                                highlights.add(
-                                    bookId,
-                                    draft.locatorJson,
-                                    draft.text,
-                                    DEFAULT_HIGHLIGHT_ARGB,
-                                )
-                            }
-                        }
                     }
                 }
                 launch {
@@ -517,6 +507,31 @@ internal class ReadingExperience(
                             _state.update { it.copy(editingHighlight = target) }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    private fun onSelection(selection: ReaderSelection) {
+        val text = selection.text
+        when (selection.action) {
+            ReaderSelection.Action.Copy -> selectionOutlet.copy(text)
+            ReaderSelection.Action.Share -> selectionOutlet.share(text)
+            ReaderSelection.Action.SearchWeb -> selectionOutlet.searchWeb(text)
+            ReaderSelection.Action.ReadAloud -> speak(text)
+            // The menu hides "Look up" for phrases, but one that hasn't re-prepared yet can still
+            // fire it: the dictionary only knows words, so a phrase goes to the web instead.
+            ReaderSelection.Action.LookUp -> when (val term = LookupTerm.of(text)) {
+                is LookupTerm.Phrase -> selectionOutlet.searchWeb("${term.text} meaning")
+                is LookupTerm.Word -> lookUp(term, resetHistory = true)
+                null -> Unit
+            }
+            ReaderSelection.Action.Highlight -> mutateAnnotation("Highlight wasn't saved.") {
+                val existing = highlights.observeForBook(bookId).first().any {
+                    it.locatorJson == selection.locatorJson && it.text == text
+                }
+                if (!existing) {
+                    highlights.add(bookId, selection.locatorJson, text, DEFAULT_HIGHLIGHT_ARGB)
                 }
             }
         }
@@ -603,8 +618,18 @@ internal class ReadingExperience(
         }
     }
 
-    private fun lookUp(rawText: String, resetHistory: Boolean) {
-        val word = sanitizeWord(rawText) ?: return
+    // Text from the look-up sheet (a definition's word, a synonym chip): a phrase looks up its first word.
+    private fun lookUpWord(rawText: String, resetHistory: Boolean) {
+        val term = when (val parsed = LookupTerm.of(rawText)) {
+            is LookupTerm.Phrase -> parsed.firstWord
+            is LookupTerm.Word -> parsed
+            null -> null
+        } ?: return
+        lookUp(term, resetHistory)
+    }
+
+    private fun lookUp(term: LookupTerm.Word, resetHistory: Boolean) {
+        val word = term.word
         if (resetHistory) lookupStack.clear()
         if (!resetHistory && lookupStack.lastOrNull() == word) return
         lookupStack.addLast(word)
@@ -657,7 +682,7 @@ internal class ReadingExperience(
     }
 
     private fun speak(rawText: String) {
-        rawText.trim().takeIf { it.isNotEmpty() }?.let { session?.speak(it) }
+        rawText.trim().takeIf { it.isNotEmpty() }?.let(readAloud::speak)
     }
 
     private fun toggleBookmark() {
@@ -889,17 +914,6 @@ internal class ReadingExperience(
         completedSharedChapterIds = completedSharedChapterIds,
         completed = completed,
     )
-
-    private fun sanitizeWord(raw: String): String? = raw.trim()
-        .split(Regex("\\s+"))
-        .firstOrNull()
-        ?.lowercase()
-        // Books use typographic apostrophes ("couldn’t"); normalise them so they aren't dropped.
-        ?.replace('’', '\'')
-        ?.replace('‘', '\'')
-        ?.filter { it.isLetter() || it == '-' || it == '\'' }
-        ?.trim('-', '\'')
-        ?.takeIf { it.isNotBlank() }
 
     private companion object {
         const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()

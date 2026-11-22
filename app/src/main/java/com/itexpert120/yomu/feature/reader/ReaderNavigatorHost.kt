@@ -72,7 +72,9 @@ fun ReaderNavigatorHost(
     )
 
     DisposableEffect(navigator) {
+        ReaderHostActivity.attach(activity)
         onDispose {
+            ReaderHostActivity.detach(activity)
             fragmentManager.findFragmentByTag(tag)?.let { fragment ->
                 fragmentManager.beginTransaction().remove(fragment).commitAllowingStateLoss()
             }

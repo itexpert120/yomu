@@ -30,26 +30,6 @@ class ReadingPositionTest {
     ) = ReadingPosition(yenPressSections, yenPressHrefs, weights, layout)
 
     @Test
-    fun weightedSeekMapsIntoTheCorrectResource() {
-        val position = ReadingPosition(emptyList<ReadingPosition.Section<String>>(), listOf("a", "b"), listOf(1, 3), ReaderLayout.Paged)
-
-        val target = position.progressionTarget(0.5)!!
-
-        assertEquals(1, target.resourceIndex)
-        assertEquals(1.0 / 3.0, target.progression, 0.0001)
-    }
-
-    @Test
-    fun weightedSeekAtEndTargetsTheEndOfTheLastResource() {
-        val position = ReadingPosition(emptyList<ReadingPosition.Section<String>>(), listOf("a", "b"), listOf(2, 5), ReaderLayout.Paged)
-
-        val target = position.progressionTarget(1.0)!!
-
-        assertEquals(1, target.resourceIndex)
-        assertEquals(1.0, target.progression, 0.0001)
-    }
-
-    @Test
     fun scrollModeIgnoresSingleVisualPageCompletion() {
         val position = ReadingPosition(listOf(section("only", 0)), listOf("a"), listOf(1), ReaderLayout.Scroll)
         position.onPage("a", pageIndex = 0, totalPages = 1)
@@ -249,6 +229,5 @@ class ReadingPositionTest {
         assertNull(position.sectionTarget(100))
         assertTrue(position.isForward("r13.xhtml", 0.0))
         assertFalse(position.isForward("r9.xhtml", 0.0))
-        assertTrue(position.isForward(0.9))
     }
 }

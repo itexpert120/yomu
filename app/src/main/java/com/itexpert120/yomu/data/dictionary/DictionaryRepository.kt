@@ -26,8 +26,8 @@ class DictionaryRepository @Inject constructor() {
     suspend fun lookup(word: String, language: String = "en"): DictionaryResult {
         var direct = fetch(word, language)
         // Possessives ("Dantès's") have no entries of their own; retry without the "'s".
-        val bare = word.trim().removeSuffix("'s")
-        if (direct is DictionaryResult.NotFound && bare.length < word.trim().length && bare.isNotEmpty()) {
+        val bare = (LookupTerm.of(word) as? LookupTerm.Word)?.withoutPossessive
+        if (direct is DictionaryResult.NotFound && bare != null) {
             direct = fetch(bare, language)
         }
         val found = direct as? DictionaryResult.Found ?: return direct
