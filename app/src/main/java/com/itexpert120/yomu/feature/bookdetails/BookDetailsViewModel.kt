@@ -2,7 +2,6 @@ package com.itexpert120.yomu.feature.bookdetails
 
 import android.content.Context
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.state.ToggleableState
 import androidx.core.text.HtmlCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -15,11 +14,11 @@ import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
-import com.itexpert120.yomu.data.collections.CollectionRepository
+import com.itexpert120.yomu.data.collections.LibraryCatalog
+import com.itexpert120.yomu.data.collections.Organize
+import com.itexpert120.yomu.data.collections.StatusChoice
 import com.itexpert120.yomu.data.reader.ReaderPreloader
 import com.itexpert120.yomu.data.stats.StatsRepository
-import com.itexpert120.yomu.feature.collections.OrganizeCollection
-import com.itexpert120.yomu.feature.collections.StatusChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -71,8 +70,7 @@ data class BookDetailsUi(
 data class BookDetailsState(
     val loading: Boolean = true,
     val book: BookDetailsUi? = null,
-    val organizeStatus: StatusChoice = StatusChoice.Auto,
-    val organizeCollections: List<OrganizeCollection> = emptyList(),
+    val organize: Organize = Organize(StatusChoice.Auto, emptyList()),
 )
 
 /** TOC ordering, expressed in the book's own rendering order rather than alphabetically. */
@@ -127,7 +125,7 @@ class BookDetailsViewModel @Inject constructor(
     private val repository: BookRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val statsRepository: StatsRepository,
-    private val collectionRepository: CollectionRepository,
+    private val catalog: LibraryCatalog,
     private val readerPreloader: ReaderPreloader,
 ) : ViewModel() {
 
@@ -136,22 +134,18 @@ class BookDetailsViewModel @Inject constructor(
 
     val state: StateFlow<BookDetailsState> =
         combine(
-            repository.observeBook(BookId(bookId)),
+            catalog.observe(),
             statsRepository.bookReadingSeconds(BookId(bookId)),
-            collectionRepository.observeCollections(),
-            collectionRepository.observeCollectionIds(BookId(bookId)),
-        ) { book, readingSeconds, collections, memberOf ->
+        ) { catalog, readingSeconds ->
+            val entry = catalog.entry(BookId(bookId))
             BookDetailsState(
                 loading = false,
-                book = book?.toUi(readingSeconds)?.copy(
-                    collectionNames = collections.filter { it.id in memberOf }.map { it.name },
+                book = entry?.book?.toUi(readingSeconds)?.copy(
+                    collectionNames = catalog.collections.filter { it.id in entry.collectionIds }.map { it.name },
                 ),
-                organizeStatus = StatusChoice.of(listOf(book?.manualStatus)),
-                organizeCollections = collections.map {
-                    OrganizeCollection(it.id, it.name, if (it.id in memberOf) ToggleableState.On else ToggleableState.Off)
-                },
+                organize = catalog.organize(listOf(BookId(bookId))),
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BookDetailsState())
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BookDetailsState())
 
     // One-shot user messages (e.g. gallery-save result), surfaced as a transient notice.
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -365,19 +359,16 @@ class BookDetailsViewModel @Inject constructor(
     }
 
     fun onSetStatus(status: ManualStatus?) {
-        viewModelScope.launch { collectionRepository.setStatus(listOf(BookId(bookId)), status) }
+        viewModelScope.launch { catalog.setManualStatus(listOf(BookId(bookId)), status) }
     }
 
     fun onSetCollection(collectionId: String, member: Boolean) {
-        viewModelScope.launch { collectionRepository.setMembership(collectionId, listOf(BookId(bookId)), member) }
+        viewModelScope.launch { catalog.setMembership(collectionId, listOf(BookId(bookId)), member) }
     }
 
     /** Makes a collection and puts this book in it. */
     fun onCreateCollection(name: String) {
-        viewModelScope.launch {
-            val id = collectionRepository.create(name)
-            collectionRepository.setMembership(id, listOf(BookId(bookId)), member = true)
-        }
+        viewModelScope.launch { catalog.createCollection(name, add = listOf(BookId(bookId))) }
     }
 
     fun remove() {

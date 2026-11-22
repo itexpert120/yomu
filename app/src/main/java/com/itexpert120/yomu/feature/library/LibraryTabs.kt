@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.data.collections.LibraryTab
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -58,7 +59,7 @@ private data class TabSpan(val left: Float, val width: Float) {
 }
 
 /**
- * The library's shelves as a scrolling strip of pill tabs. The selection pill is drawn from the
+ * The library tabs as a scrolling strip of pill tabs. The selection pill is drawn from the
  * pager's live position, so it slides 1:1 with a swipe, and each label blends toward the selected
  * colour by how close the pager is to it. Both are read in the draw phase, so a swipe never
  * recomposes the strip. The strip scrolls to keep the pill centred, and ends with the
@@ -145,7 +146,7 @@ internal fun LibraryTabRow(
         tabs.forEachIndexed { index, tab ->
             // 1 on the selected tab, falling to 0 a whole page away.
             val closeness = { (1f - abs(position() - index)).coerceIn(0f, 1f) }
-            ShelfTab(
+            LibraryTabPill(
                 tab = tab,
                 selected = pagerState.currentPage == index,
                 labelColor = { lerp(unselectedColor, selectedColor, closeness()) },
@@ -174,7 +175,7 @@ private fun List<TabSpan?>.interpolate(position: Float): TabSpan? {
 }
 
 @Composable
-private fun ShelfTab(
+private fun LibraryTabPill(
     tab: LibraryTab,
     selected: Boolean,
     labelColor: ColorProducer,

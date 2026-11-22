@@ -171,9 +171,9 @@ import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
-import com.itexpert120.yomu.feature.collections.OrganizeCollection
+import com.itexpert120.yomu.data.collections.Organize
+import com.itexpert120.yomu.data.collections.StatusChoice
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
-import com.itexpert120.yomu.feature.collections.StatusChoice
 import com.itexpert120.yomu.feature.collections.icon
 import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
@@ -229,8 +229,7 @@ fun BookDetailsScreen(
     onDeselectAllChapters: () -> Unit,
     onMarkSelectedChapters: (Boolean) -> Unit,
     onMarkPreviousRead: () -> Unit,
-    organizeStatus: StatusChoice = StatusChoice.Auto,
-    organizeCollections: List<OrganizeCollection> = emptyList(),
+    organize: Organize = Organize(StatusChoice.Auto, emptyList()),
     onSetStatus: (ManualStatus?) -> Unit = {},
     onSetCollection: (id: String, member: Boolean) -> Unit = { _, _ -> },
     onCreateCollection: (String) -> Unit = {},
@@ -570,8 +569,8 @@ fun BookDetailsScreen(
     OrganizeSheet(
         visible = showOrganize && book != null,
         title = "Organize book",
-        status = organizeStatus,
-        collections = organizeCollections,
+        status = organize.status,
+        collections = organize.collections,
         onSetStatus = onSetStatus,
         onSetCollection = onSetCollection,
         onCreateCollection = onCreateCollection,

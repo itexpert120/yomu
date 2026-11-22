@@ -101,6 +101,7 @@ import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.data.collections.LibraryTab
 import com.itexpert120.yomu.feature.collections.ManageTabsSheet
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
 import com.itexpert120.yomu.feature.collections.icon
@@ -110,7 +111,7 @@ import androidx.compose.foundation.lazy.items as lazyListItems
 private enum class LibraryContentMode {
     Loading,
     Empty,
-    Shelves,
+    Tabs,
 }
 
 private data class LibraryScrollSample(
@@ -261,12 +262,12 @@ fun LibraryScreen(
     val contentMode = when {
         state.isLoading -> LibraryContentMode.Loading
         state.totalCount == 0 -> LibraryContentMode.Empty
-        else -> LibraryContentMode.Shelves
+        else -> LibraryContentMode.Tabs
     }
     // Created once the shelves exist, so it starts on the remembered tab instead of reporting
     // page 0 as a fresh selection.
     val selectedIndex = state.tabs.indexOfFirst { it.key == state.selectedTab }.coerceAtLeast(0)
-    val pagerState = key(contentMode == LibraryContentMode.Shelves) {
+    val pagerState = key(contentMode == LibraryContentMode.Tabs) {
         rememberPagerState(initialPage = selectedIndex) { state.tabs.size }
     }
     val pagerScope = rememberCoroutineScope()
@@ -301,7 +302,7 @@ fun LibraryScreen(
                     scrollBehavior = scrollBehavior,
                     contentInset = headerInset,
                 )
-                if (contentMode == LibraryContentMode.Shelves) {
+                if (contentMode == LibraryContentMode.Tabs) {
                     LibraryTabRow(
                         tabs = state.tabs,
                         pagerState = pagerState,
@@ -328,7 +329,7 @@ fun LibraryScreen(
                         when (mode) {
                             LibraryContentMode.Loading -> LibraryLoading()
                             LibraryContentMode.Empty -> EmptyLibrary(onImport = onImport)
-                            LibraryContentMode.Shelves -> LibraryShelfPager(
+                            LibraryContentMode.Tabs -> LibraryTabPager(
                                 state = state,
                                 pagerState = pagerState,
                                 onSelectTab = onSelectTab,
@@ -429,8 +430,8 @@ fun LibraryScreen(
             OrganizeSheet(
                 visible = showOrganize && state.selectionMode,
                 title = if (state.selectedIds.size == 1) "Organize book" else "Organize ${state.selectedIds.size} books",
-                status = state.organizeStatus,
-                collections = state.organizeCollections,
+                status = state.organize.status,
+                collections = state.organize.collections,
                 onSetStatus = onSetSelectedStatus,
                 onSetCollection = onSetSelectedInCollection,
                 onCreateCollection = { onCreateCollection(it, true) },
@@ -439,7 +440,8 @@ fun LibraryScreen(
 
             ManageTabsSheet(
                 visible = showManageCollections,
-                tabs = state.managedTabs,
+                tabs = state.allTabs,
+                hiddenKeys = state.hiddenTabs,
                 onCreate = { onCreateCollection(it, false) },
                 onRename = onRenameCollection,
                 onDelete = onDeleteCollection,
@@ -603,7 +605,7 @@ private fun EmptySearchResults(
  * a tab, and choosing a tab scrolls the pager. Each page owns its empty and no-results state.
  */
 @Composable
-private fun LibraryShelfPager(
+private fun LibraryTabPager(
     state: LibraryUiState,
     pagerState: PagerState,
     onSelectTab: (String) -> Unit,
@@ -642,13 +644,13 @@ private fun LibraryShelfPager(
                 query = state.searchQuery,
                 onClearSearch = onClearSearch,
             )
-            else -> EmptyShelf(tab)
+            else -> EmptyTab(tab)
         }
     }
 }
 
 @Composable
-private fun EmptyShelf(tab: LibraryTab) {
+private fun EmptyTab(tab: LibraryTab) {
     val (title, body) = when (tab.status) {
         ShelfStatus.Reading -> "Nothing in progress" to "Books you've started reading show up here."
         ShelfStatus.ToRead -> "Nothing waiting" to "Books you haven't opened yet line up here."

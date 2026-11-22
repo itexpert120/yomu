@@ -158,7 +158,7 @@ internal class FakeSyncWorld {
             return books
         }
 
-        override suspend fun replaceShelf(bookId: String, collectionIds: Collection<String>, status: String?, editedAt: Long) {
+        override suspend fun replaceCollectionsAndStatus(bookId: String, collectionIds: Collection<String>, status: String?, editedAt: Long) {
             this@FakeSyncWorld.memberships.removeAll { it.bookId == bookId }
             this@FakeSyncWorld.memberships += collectionIds.map { BookCollectionEntity(bookId, it) }
             val book = this@FakeSyncWorld.books.getValue(bookId)

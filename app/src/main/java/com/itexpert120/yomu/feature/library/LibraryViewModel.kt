@@ -1,25 +1,23 @@
 package com.itexpert120.yomu.feature.library
 
 import android.net.Uri
-import androidx.compose.ui.state.ToggleableState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.Book
-import com.itexpert120.yomu.core.model.BookCollection
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.data.books.BookRepository
-import com.itexpert120.yomu.data.collections.CollectionRepository
+import com.itexpert120.yomu.data.collections.Catalog
+import com.itexpert120.yomu.data.collections.LibraryCatalog
+import com.itexpert120.yomu.data.collections.LibraryTabKeys
+import com.itexpert120.yomu.data.collections.isHideableTab
 import com.itexpert120.yomu.data.reader.ReaderPreloader
 import com.itexpert120.yomu.data.settings.LibraryPrefsRepository
 import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportSummary
-import com.itexpert120.yomu.feature.collections.ManagedTab
-import com.itexpert120.yomu.feature.collections.OrganizeCollection
-import com.itexpert120.yomu.feature.collections.StatusChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,13 +46,6 @@ private data class ImportState(
 /** Transient multi-select state. */
 private data class SelectionState(val active: Boolean = false, val ids: Set<String> = emptySet())
 
-/** Everything the library shows, straight from storage. */
-private data class LibraryData(
-    val books: List<Book>,
-    val collections: List<BookCollection>,
-    val memberships: Map<String, Set<String>>,
-)
-
 /** Transient screen inputs. */
 private data class LibraryInputs(
     val search: SearchState,
@@ -66,7 +57,7 @@ private data class LibraryInputs(
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val repository: BookRepository,
-    private val collections: CollectionRepository,
+    private val catalog: LibraryCatalog,
     private val libraryPrefs: LibraryPrefsRepository,
     private val importBooks: ImportBooksUseCase,
     private val readerPreloader: ReaderPreloader,
@@ -82,13 +73,6 @@ class LibraryViewModel @Inject constructor(
     private val pendingTab = MutableStateFlow<String?>(null)
     private val selectedTab = combine(libraryPrefs.preferences, pendingTab) { prefs, pending -> pending ?: prefs.lastTab }
 
-    private val data = combine(
-        repository.observeBooks(),
-        collections.observeCollections(),
-        collections.observeMemberships(),
-        ::LibraryData,
-    )
-
     private val inputs = combine(search, importState, selection, selectedTab, ::LibraryInputs)
 
     // Projections of the current Book instances, reused while the library data is unchanged so a
@@ -97,7 +81,7 @@ class LibraryViewModel @Inject constructor(
     private var projections = IdentityHashMap<Book, LibraryBook>()
 
     val state: StateFlow<LibraryUiState> =
-        combine(data, libraryPrefs.preferences, inputs) { d, prefs, i ->
+        combine(catalog.observe(), libraryPrefs.preferences, inputs) { d, prefs, i ->
             buildState(d, prefs, i)
         }
             .flowOn(Dispatchers.Default)
@@ -131,17 +115,14 @@ class LibraryViewModel @Inject constructor(
 
     fun onCreateCollection(name: String, addSelected: Boolean = false) {
         val ids = if (addSelected) selectedBookIds() else emptyList()
-        launchSafely {
-            val id = collections.create(name)
-            if (ids.isNotEmpty()) collections.setMembership(id, ids, member = true)
-        }
+        launchSafely { catalog.createCollection(name, add = ids) }
     }
 
-    fun onRenameCollection(id: String, name: String) = launchSafely { collections.rename(id, name) }
+    fun onRenameCollection(id: String, name: String) = launchSafely { catalog.renameCollection(id, name) }
 
     fun onDeleteCollection(id: String) {
         if (state.value.selectedTab == LibraryTabKeys.collection(id)) onSelectTab(LibraryTabKeys.ALL)
-        launchSafely { collections.delete(id) }
+        launchSafely { catalog.deleteCollection(id) }
     }
 
     fun onSetTabHidden(key: String, hidden: Boolean) {
@@ -151,7 +132,7 @@ class LibraryViewModel @Inject constructor(
 
     /** Moves any tab (status or collection) one place; the whole order is then remembered. */
     fun onMoveTab(key: String, up: Boolean) {
-        val order = state.value.managedTabs.map { it.key }.toMutableList()
+        val order = state.value.allTabs.map { it.key }.toMutableList()
         val from = order.indexOf(key)
         val to = if (up) from - 1 else from + 1
         if (from < 0 || to !in order.indices) return
@@ -161,12 +142,12 @@ class LibraryViewModel @Inject constructor(
 
     fun onSetSelectedInCollection(collectionId: String, member: Boolean) {
         val ids = selectedBookIds()
-        launchSafely { collections.setMembership(collectionId, ids, member) }
+        launchSafely { catalog.setMembership(collectionId, ids, member) }
     }
 
     fun onSetSelectedStatus(status: ManualStatus?) {
         val ids = selectedBookIds()
-        launchSafely { collections.setStatus(ids, status) }
+        launchSafely { catalog.setManualStatus(ids, status) }
     }
 
     private fun selectedBookIds() = selection.value.ids.map { BookId(it) }
@@ -311,35 +292,27 @@ class LibraryViewModel @Inject constructor(
         return next
     }
 
-    private fun buildState(data: LibraryData, prefs: LibraryPreferences, inputs: LibraryInputs): LibraryUiState {
-        val (books, collectionList, memberships) = data
-        val projected = project(books)
+    private fun buildState(catalog: Catalog, prefs: LibraryPreferences, inputs: LibraryInputs): LibraryUiState {
+        val entries = catalog.entries
+        val projected = project(entries.map { it.book })
         val search = inputs.search
         val selection = inputs.selection
         // Surface "Continue reading" only when not searching, so the hero doesn't fight the query.
         val query = if (search.active) search.query else ""
         val continueBook = if (query.isBlank()) {
-            books.filter { it.lastOpenedAt > 0L }.maxByOrNull { it.lastOpenedAt }
+            entries.asSequence().map { it.book }.filter { it.lastOpenedAt > 0L }.maxByOrNull { it.lastOpenedAt }
         } else {
             null
         }
-        // Counts are computed once here and reused for both the strip and the tab editor.
-        val allTabs = allLibraryTabs(books, collectionList, memberships, prefs.tabOrder)
-        val tabs = visibleLibraryTabs(allTabs, inputs.tab, prefs.hiddenTabs)
-        // A deleted collection (here or on a synced device) falls back to All.
-        val selectedTab = inputs.tab.takeIf { key -> tabs.any { it.key == key } } ?: LibraryTabKeys.ALL
-        val searched = books.matching(query).sortedBy(prefs.sortMode)
-        val pages = tabs.map { tab ->
-            val tabBooks = searched.mapNotNull { book ->
-                projected.getValue(book).takeIf { book.belongsTo(tab.key, memberships[book.id.value].orEmpty()) }
-            }
-            LibraryPage(tab.key, tabBooks)
+        val tabs = catalog.tabs(prefs.tabOrder, prefs.hiddenTabs, inputs.tab)
+        val searched = entries.matching(query).sortedBy(prefs.sortMode)
+        val pages = tabs.visible.map { tab ->
+            LibraryPage(tab.key, searched.mapNotNull { entry -> projected.getValue(entry.book).takeIf { entry.belongsTo(tab.key) } })
         }
-        val current = pages.first { it.key == selectedTab }
-        val selectedBooks = books.filter { it.id.value in selection.ids }
+        val current = pages.first { it.key == tabs.selected }
         return LibraryUiState(
             isLoading = false,
-            totalCount = books.size,
+            totalCount = entries.size,
             selectableCount = current.bookCount,
             continueReading = continueBook?.let { projected.getValue(it) },
             books = current.books,
@@ -354,31 +327,12 @@ class LibraryViewModel @Inject constructor(
             canRetryImport = inputs.import.retryUris.isNotEmpty(),
             selectionMode = selection.active,
             selectedIds = selection.ids,
-            tabs = tabs,
-            selectedTab = selectedTab,
+            tabs = tabs.visible,
+            selectedTab = tabs.selected,
             pages = pages,
-            managedTabs = allTabs.map { tab ->
-                ManagedTab(
-                    key = tab.key,
-                    label = tab.label,
-                    count = tab.count,
-                    collectionId = LibraryTabKeys.collectionId(tab.key),
-                    showsOnlyWhenFilled = isOptionalTab(tab.key),
-                    hideable = isHideableTab(tab.key),
-                    hidden = tab.key in prefs.hiddenTabs,
-                    status = tab.status,
-                )
-            },
-            organizeStatus = StatusChoice.of(selectedBooks.map { it.manualStatus }),
-            organizeCollections = collectionList.map { c ->
-                val inIt = selectedBooks.count { c.id in memberships[it.id.value].orEmpty() }
-                val state = when {
-                    inIt == 0 -> ToggleableState.Off
-                    inIt == selectedBooks.size -> ToggleableState.On
-                    else -> ToggleableState.Indeterminate
-                }
-                OrganizeCollection(c.id, c.name, state)
-            },
+            allTabs = tabs.all,
+            hiddenTabs = prefs.hiddenTabs,
+            organize = catalog.organize(selection.ids.map { BookId(it) }),
         )
     }
 }

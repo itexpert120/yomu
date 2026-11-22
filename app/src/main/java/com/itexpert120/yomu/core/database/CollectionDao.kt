@@ -61,8 +61,9 @@ interface CollectionDao {
     @Query("UPDATE books SET manualStatus = :status, shelfEditedAt = :editedAt WHERE id IN (:bookIds)")
     suspend fun setManualStatus(bookIds: List<String>, status: String?, editedAt: Long)
 
+    // shelfEditedAt is the stored name of a book's collections-and-status edit time.
     @Query("UPDATE books SET shelfEditedAt = :editedAt WHERE id IN (:bookIds)")
-    suspend fun touchShelf(bookIds: List<String>, editedAt: Long)
+    suspend fun touchCollectionEdits(bookIds: List<String>, editedAt: Long)
 
     /** Removes a collection and every membership in it; returns the books that were in it. */
     @Transaction
@@ -70,23 +71,13 @@ interface CollectionDao {
         val books = bookIdsIn(id)
         deleteMembershipsOf(id)
         deleteCollectionRow(id)
-        if (books.isNotEmpty()) touchShelf(books, editedAt)
+        if (books.isNotEmpty()) touchCollectionEdits(books, editedAt)
         return books
     }
 
+    /** Replaces one book's collections and manual status at once (sync applies them as a unit). */
     @Transaction
-    suspend fun setMembership(collectionId: String, bookIds: List<String>, member: Boolean, editedAt: Long) {
-        if (member) {
-            insertMemberships(bookIds.map { BookCollectionEntity(it, collectionId) })
-        } else {
-            deleteMemberships(collectionId, bookIds)
-        }
-        touchShelf(bookIds, editedAt)
-    }
-
-    /** Replaces one book's collections and status at once (sync applies a book's shelf as a unit). */
-    @Transaction
-    suspend fun replaceShelf(bookId: String, collectionIds: Collection<String>, status: String?, editedAt: Long) {
+    suspend fun replaceCollectionsAndStatus(bookId: String, collectionIds: Collection<String>, status: String?, editedAt: Long) {
         deleteMembershipsForBooks(listOf(bookId))
         insertMemberships(collectionIds.map { BookCollectionEntity(bookId, it) })
         setManualStatus(listOf(bookId), status, editedAt)

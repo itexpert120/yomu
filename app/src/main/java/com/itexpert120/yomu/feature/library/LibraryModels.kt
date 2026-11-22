@@ -2,15 +2,14 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.compose.ui.graphics.Color
 import com.itexpert120.yomu.core.model.Book
-import com.itexpert120.yomu.core.model.BookCollection
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
-import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
-import com.itexpert120.yomu.core.model.shelfStatus
-import com.itexpert120.yomu.feature.collections.ManagedTab
-import com.itexpert120.yomu.feature.collections.OrganizeCollection
-import com.itexpert120.yomu.feature.collections.StatusChoice
+import com.itexpert120.yomu.data.collections.CatalogEntry
+import com.itexpert120.yomu.data.collections.LibraryTab
+import com.itexpert120.yomu.data.collections.LibraryTabKeys
+import com.itexpert120.yomu.data.collections.Organize
+import com.itexpert120.yomu.data.collections.StatusChoice
 import java.text.Collator
 
 /**
@@ -45,36 +44,9 @@ fun Book.toLibraryBook(): LibraryBook = LibraryBook(
 
 private fun String.lastNameKey(): String = trim().substringAfterLast(' ').uppercase()
 
-/** A library tab: All, a shelf status ([status]) or one of the user's collections. */
-data class LibraryTab(
-    val key: String,
-    val label: String,
-    val count: Int,
-    val isCollection: Boolean = false,
-    val status: ShelfStatus? = null,
-)
-
 /** The books shown under one tab, already searched and sorted. */
 data class LibraryPage(val key: String, val books: List<LibraryBook>) {
     val bookCount: Int get() = books.size
-}
-
-object LibraryTabKeys {
-    const val ALL = "all"
-    const val READING = "reading"
-    const val TO_READ = "toRead"
-    const val FINISHED = "finished"
-    const val ON_HOLD = "onHold"
-    const val DROPPED = "dropped"
-    private const val COLLECTION_PREFIX = "c:"
-
-    fun collection(id: String) = COLLECTION_PREFIX + id
-
-    /** The shelf status a tab key shows, or null for All and collection tabs. */
-    fun status(key: String): ShelfStatus? = StatusTabs.firstOrNull { it.first == key }?.second
-
-    /** The collection id a tab key refers to, or null for a status tab. */
-    fun collectionId(key: String): String? = if (key.startsWith(COLLECTION_PREFIX)) key.substring(COLLECTION_PREFIX.length) else null
 }
 
 data class LibraryUiState(
@@ -99,100 +71,38 @@ data class LibraryUiState(
     val tabs: List<LibraryTab> = emptyList(),
     val selectedTab: String = LibraryTabKeys.ALL,
     val pages: List<LibraryPage> = emptyList(),
-    val managedTabs: List<ManagedTab> = emptyList(),
+    // Every tab in order, shown or not, plus the hidden ones: the Library tabs sheet.
+    val allTabs: List<LibraryTab> = emptyList(),
+    val hiddenTabs: Set<String> = emptySet(),
     // The Organize sheet's view of the current selection.
-    val organizeStatus: StatusChoice = StatusChoice.Auto,
-    val organizeCollections: List<OrganizeCollection> = emptyList(),
+    val organize: Organize = Organize(StatusChoice.Auto, emptyList()),
 )
 
 // region Pure query logic
 
-fun List<Book>.matching(query: String): List<Book> {
+fun List<CatalogEntry>.matching(query: String): List<CatalogEntry> {
     if (query.isBlank()) return this
     return filter {
-        it.title.contains(query, ignoreCase = true) || it.author.contains(query, ignoreCase = true)
+        it.book.title.contains(query, ignoreCase = true) || it.book.author.contains(query, ignoreCase = true)
     }
 }
 
-fun List<Book>.sortedBy(mode: SortMode): List<Book> = when (mode) {
-    SortMode.Recent -> sortedByDescending { it.lastOpenedAt }
-    SortMode.Title -> sortedByCollated { it.title }
-    SortMode.Author -> sortedByCollated { it.author.lastNameKey() }
-    SortMode.Unread -> sortedBy { it.progress }
+fun List<CatalogEntry>.sortedBy(mode: SortMode): List<CatalogEntry> = when (mode) {
+    SortMode.Recent -> sortedByDescending { it.book.lastOpenedAt }
+    SortMode.Title -> sortedByCollated { it.book.title }
+    SortMode.Author -> sortedByCollated { it.book.author.lastNameKey() }
+    SortMode.Unread -> sortedBy { it.book.progress }
 }
 
 /**
  * Locale-aware, case-insensitive text sort. Each book's collation key is built once, so the
  * comparator never re-derives strings.
  */
-private inline fun List<Book>.sortedByCollated(text: (Book) -> String): List<Book> {
+private inline fun List<CatalogEntry>.sortedByCollated(text: (CatalogEntry) -> String): List<CatalogEntry> {
     val collator = Collator.getInstance().apply { strength = Collator.SECONDARY }
     return map { collator.getCollationKey(text(it)) to it }
         .sortedBy { it.first }
         .map { it.second }
 }
-
-/** Whether [this] book is shown under the tab [key]: its shelf status, or a collection it is in. */
-fun Book.belongsTo(key: String, collectionIds: Set<String>): Boolean {
-    if (key == LibraryTabKeys.ALL) return true
-    LibraryTabKeys.status(key)?.let { return shelfStatus == it }
-    return LibraryTabKeys.collectionId(key)?.let { it in collectionIds } ?: false
-}
-
-/** The built-in tabs (All, then each shelf status), in their default order. */
-val StatusTabs: List<Pair<String, ShelfStatus?>> = listOf(
-    LibraryTabKeys.ALL to null,
-    LibraryTabKeys.READING to ShelfStatus.Reading,
-    LibraryTabKeys.TO_READ to ShelfStatus.ToRead,
-    LibraryTabKeys.FINISHED to ShelfStatus.Finished,
-    LibraryTabKeys.ON_HOLD to ShelfStatus.OnHold,
-    LibraryTabKeys.DROPPED to ShelfStatus.Dropped,
-)
-
-/** On hold / Dropped only show while they hold a book. */
-fun isOptionalTab(key: String) = key == LibraryTabKeys.ON_HOLD || key == LibraryTabKeys.DROPPED
-
-/**
- * Every tab, shown or not, in the user's [order]: the status tabs then collections by default, with
- * tabs the order doesn't mention (a new collection) keeping their default place after it.
- */
-fun allLibraryTabs(
-    books: List<Book>,
-    collections: List<BookCollection>,
-    memberships: Map<String, Set<String>>,
-    order: List<String>,
-): List<LibraryTab> {
-    fun count(key: String) = books.count { it.belongsTo(key, memberships[it.id.value].orEmpty()) }
-    val defaults = StatusTabs.map { (key, status) -> LibraryTab(key, status?.label ?: "All", count(key), status = status) } +
-        collections.map { c ->
-            val key = LibraryTabKeys.collection(c.id)
-            LibraryTab(key, c.name, count(key), isCollection = true)
-        }
-    val rank = order.withIndex().associate { (index, key) -> key to index }
-    return defaults.withIndex()
-        .sortedWith(compareBy({ rank[it.value.key] ?: (order.size + it.index) }, { it.index }))
-        .map { it.value }
-}
-
-/** Status tabs the user may turn off; All always stays. */
-fun isHideableTab(key: String) = key != LibraryTabKeys.ALL && StatusTabs.any { it.first == key }
-
-/**
- * The tabs the strip shows: minus status tabs the user hid, and On hold / Dropped only while they
- * hold a book or are open (so emptying one doesn't yank it away mid-use).
- */
-fun visibleLibraryTabs(all: List<LibraryTab>, selectedKey: String, hidden: Set<String>): List<LibraryTab> = all.filter { tab ->
-    val hiddenByUser = isHideableTab(tab.key) && tab.key in hidden
-    !hiddenByUser && (!isOptionalTab(tab.key) || tab.count > 0 || tab.key == selectedKey)
-}
-
-fun libraryTabs(
-    books: List<Book>,
-    collections: List<BookCollection>,
-    memberships: Map<String, Set<String>>,
-    selectedKey: String,
-    order: List<String> = emptyList(),
-    hidden: Set<String> = emptySet(),
-): List<LibraryTab> = visibleLibraryTabs(allLibraryTabs(books, collections, memberships, order), selectedKey, hidden)
 
 // endregion

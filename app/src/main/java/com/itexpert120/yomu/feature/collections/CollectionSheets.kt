@@ -44,33 +44,10 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.ManualStatus
-import com.itexpert120.yomu.core.model.ShelfStatus
-
-/** One collection in the Organize sheet: whether all, some, or none of the books are in it. */
-data class OrganizeCollection(val id: String, val name: String, val state: ToggleableState)
-
-/** The status choice for the books being organized; [Mixed] when they disagree (none is checked). */
-enum class StatusChoice(val label: String, val status: ManualStatus?) {
-    Auto("Auto", null),
-    OnHold(ShelfStatus.OnHold.label, ManualStatus.OnHold),
-    Dropped(ShelfStatus.Dropped.label, ManualStatus.Dropped),
-    Mixed("Mixed", null),
-    ;
-
-    companion object {
-        val Options = listOf(Auto, OnHold, Dropped)
-
-        fun of(statuses: Collection<ManualStatus?>): StatusChoice {
-            val distinct = statuses.toSet()
-            if (distinct.size > 1) return Mixed
-            return when (distinct.singleOrNull()) {
-                ManualStatus.OnHold -> OnHold
-                ManualStatus.Dropped -> Dropped
-                null -> Auto
-            }
-        }
-    }
-}
+import com.itexpert120.yomu.data.collections.LibraryTab
+import com.itexpert120.yomu.data.collections.Membership
+import com.itexpert120.yomu.data.collections.OrganizeCollection
+import com.itexpert120.yomu.data.collections.StatusChoice
 
 /**
  * Organizes one or more books: a manual status (Auto follows reading progress) and a
@@ -108,15 +85,15 @@ fun OrganizeSheet(
         Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs)) {
             YomuSectionLabel("Collections")
             collections.forEachIndexed { index, collection ->
-                val member = collection.state != ToggleableState.On
+                val all = collection.membership == Membership.All
                 YomuSettingRow(
                     title = collection.name,
                     position = yomuSettingPosition(index, collections.size),
                     role = Role.Checkbox,
-                    selected = collection.state == ToggleableState.On,
-                    onClick = { onSetCollection(collection.id, member) },
+                    selected = all,
+                    onClick = { onSetCollection(collection.id, !all) },
                 ) {
-                    TriStateCheckbox(state = collection.state, onClick = null)
+                    TriStateCheckbox(state = collection.membership.toggleableState(), onClick = null)
                 }
             }
         }
@@ -131,7 +108,8 @@ fun OrganizeSheet(
 @Composable
 fun ManageTabsSheet(
     visible: Boolean,
-    tabs: List<ManagedTab>,
+    tabs: List<LibraryTab>,
+    hiddenKeys: Set<String>,
     onCreate: (String) -> Unit,
     onRename: (id: String, name: String) -> Unit,
     onDelete: (id: String) -> Unit,
@@ -148,8 +126,9 @@ fun ManageTabsSheet(
         )
         Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs)) {
             tabs.forEachIndexed { index, tab ->
+                val hidden = tab.key in hiddenKeys
                 val subtitle = when {
-                    tab.hidden -> "Hidden"
+                    hidden -> "Hidden"
                     tab.collectionId != null -> "${bookCount(tab.count)} · tap to rename"
                     tab.showsOnlyWhenFilled -> "${bookCount(tab.count)} · shown when it has books"
                     else -> bookCount(tab.count)
@@ -170,7 +149,7 @@ fun ManageTabsSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (tab.hideable) {
                             YomuTogglePill(
-                                checked = !tab.hidden,
+                                checked = !hidden,
                                 onCheckedChange = { show -> onSetHidden(tab.key, !show) },
                                 modifier = Modifier
                                     .padding(end = YomuTheme.space.xxs)
@@ -209,17 +188,11 @@ fun ManageTabsSheet(
     }
 }
 
-/** A row in [ManageTabsSheet]; [collectionId] is set for user collections (which can be edited). */
-data class ManagedTab(
-    val key: String,
-    val label: String,
-    val count: Int,
-    val collectionId: String?,
-    val showsOnlyWhenFilled: Boolean,
-    val hideable: Boolean = false,
-    val hidden: Boolean = false,
-    val status: ShelfStatus? = null,
-)
+private fun Membership.toggleableState() = when (this) {
+    Membership.None -> ToggleableState.Off
+    Membership.Some -> ToggleableState.Indeterminate
+    Membership.All -> ToggleableState.On
+}
 
 private fun bookCount(count: Int) = if (count == 1) "1 book" else "$count books"
 

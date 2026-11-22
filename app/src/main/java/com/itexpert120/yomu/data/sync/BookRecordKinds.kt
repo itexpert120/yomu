@@ -270,7 +270,7 @@ internal class BookCollectionsKind @Inject constructor(private val dao: SyncDao,
     override suspend fun apply(id: String, payload: ShelfPayload?, ctx: ApplyContext): Applied {
         val bookId = ctx.bookId ?: return stored(payload)
         // An unknown status name (from a newer build) is kept as-is so it round-trips.
-        collectionDao.replaceShelf(bookId, payload?.collections.orEmpty(), payload?.status, editedAt = maxOf(ctx.hlc.physical, 1))
+        collectionDao.replaceCollectionsAndStatus(bookId, payload?.collections.orEmpty(), payload?.status, editedAt = maxOf(ctx.hlc.physical, 1))
         return stored(payload)
     }
 }
