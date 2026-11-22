@@ -2,6 +2,7 @@ package com.itexpert120.yomu.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ColorStyle
 import com.itexpert120.yomu.core.model.ThemePreference
@@ -26,8 +27,26 @@ data class AppAppearance(
 )
 
 /**
+ * The concrete theme mode: the saved preference under the system dark setting, with OLED applying
+ * only once the result is dark. The one place light/dark/OLED is decided (app shell and Settings).
+ */
+fun AppAppearance.resolveThemeMode(systemDark: Boolean): YomuThemeMode {
+    val dark = when (themePreference) {
+        ThemePreference.System -> systemDark
+        ThemePreference.Light -> false
+        ThemePreference.Dark -> true
+    }
+    return when {
+        !dark -> YomuThemeMode.Light
+        oledDark -> YomuThemeMode.Oled
+        else -> YomuThemeMode.Dark
+    }
+}
+
+/**
  * Holds app-shell theme state, persisted through [AppSettingsRepository]. The concrete
- * light/dark/OLED resolution happens in [YomuApp] where the system dark setting is observable.
+ * light/dark/OLED resolution ([resolveThemeMode]) happens in composition, where the system dark
+ * setting is observable.
  */
 @HiltViewModel
 class AppViewModel @Inject constructor(

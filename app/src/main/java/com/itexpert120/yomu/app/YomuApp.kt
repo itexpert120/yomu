@@ -49,16 +49,8 @@ fun YomuApp(
     val readingWriteError by appViewModel.readingWriteError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val dark = when (preference) {
-        ThemePreference.System -> systemDark
-        ThemePreference.Light -> false
-        ThemePreference.Dark -> true
-    }
-    val resolved = when {
-        !dark -> YomuThemeMode.Light
-        oledDark -> YomuThemeMode.Oled
-        else -> YomuThemeMode.Dark
-    }
+    val resolved = appearance.resolveThemeMode(systemDark)
+    val dark = resolved != YomuThemeMode.Light
     LaunchedEffect(resolved) { onResolvedThemeChange(resolved) }
     LaunchedEffect(preference, oledDark, dark) { onSplashThemeChange(preference, oledDark && dark) }
     LaunchedEffect(externalError) {

@@ -6,7 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itexpert120.yomu.app.AppViewModel
-import com.itexpert120.yomu.core.model.ThemePreference
+import com.itexpert120.yomu.app.resolveThemeMode
+import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.feature.about.DiagnosticsSection
 import com.itexpert120.yomu.feature.reader.CustomThemeSheet
 import com.itexpert120.yomu.feature.reader.ReaderDefaultsViewModel
@@ -24,13 +25,8 @@ fun SettingsRoute(
     val readerDefaults by readerDefaultsViewModel.state.collectAsStateWithLifecycle()
     val preference = appearance.themePreference
     val oledDark = appearance.oledDark
-    val systemDark = isSystemInDarkTheme()
     // The OLED toggle only has an effect when the resolved theme is dark.
-    val darkActive = when (preference) {
-        ThemePreference.System -> systemDark
-        ThemePreference.Light -> false
-        ThemePreference.Dark -> true
-    }
+    val darkActive = appearance.resolveThemeMode(isSystemInDarkTheme()) != YomuThemeMode.Light
 
     SettingsScreen(
         selectedTheme = preference,

@@ -22,12 +22,10 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -42,8 +40,6 @@ import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
-import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
-import com.itexpert120.yomu.core.designsystem.yomuScreenExit
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
@@ -87,15 +83,9 @@ fun YomuNavHost(
         }
     }
 
-    val motionEnabled = yomuAnimationsEnabled()
-    val layoutDirection = LocalLayoutDirection.current
-    val screenTravelDistancePx = with(LocalDensity.current) {
-        YomuMotion.ScreenTransitionDistance.roundToPx()
-    }
-    fun physicalDirection(forward: Boolean): Boolean = when (layoutDirection) {
-        LayoutDirection.Ltr -> forward
-        LayoutDirection.Rtl -> !forward
-    }
+    val transitions = rememberYomuScreenTransitions()
+    val motionEnabled = transitions.motionEnabled
+    val layoutDirection = transitions.layoutDirection
 
     // Like Mihon, Home owns both the top-level content and its navigation chrome. The root
     // transition therefore moves the whole Home frame—including the bar or rail—to a child screen.
@@ -120,28 +110,10 @@ fun YomuNavHost(
         navController = navController,
         startDestination = Home,
         modifier = modifier,
-        enterTransition = {
-            val sameEntry = initialState.id == targetState.id
-            val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
-            when {
-                sameEntry || !motionEnabled -> EnterTransition.None
-                else -> yomuScreenEnter(
-                    travelDistancePx = screenTravelDistancePx,
-                    forward = physicalDirection(forward),
-                )
-            }
-        },
+        enterTransition = transitions.enter,
         exitTransition = {
             backMotion.predictive = false
-            val sameEntry = initialState.id == targetState.id
-            val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
-            when {
-                sameEntry || !motionEnabled -> ExitTransition.None
-                else -> yomuScreenExit(
-                    travelDistancePx = screenTravelDistancePx,
-                    forward = physicalDirection(forward),
-                )
-            }
+            transitions.exit(this)
         },
         // A back tap plays the same Material back as a released gesture, from rest (see BackPreviewFrame).
         popEnterTransition = { EnterTransition.None },
@@ -241,15 +213,7 @@ private fun TopLevelNavigationShell(
         currentDestination?.hasRoute<Settings>() == true -> YomuTopLevelDestination.Settings
         else -> YomuTopLevelDestination.Library
     }
-    val motionEnabled = yomuAnimationsEnabled()
-    val layoutDirection = LocalLayoutDirection.current
-    val screenTravelDistancePx = with(LocalDensity.current) {
-        YomuMotion.ScreenTransitionDistance.roundToPx()
-    }
-    fun physicalDirection(forward: Boolean): Boolean = when (layoutDirection) {
-        LayoutDirection.Ltr -> forward
-        LayoutDirection.Rtl -> !forward
-    }
+    val transitions = rememberYomuScreenTransitions()
 
     var librarySelecting by remember { mutableStateOf(false) }
     YomuTopLevelNavigation(
@@ -261,48 +225,10 @@ private fun TopLevelNavigationShell(
             navController = navController,
             startDestination = Library,
             modifier = hostModifier,
-            enterTransition = {
-                val sameEntry = initialState.id == targetState.id
-                val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
-                when {
-                    sameEntry || !motionEnabled -> EnterTransition.None
-                    else -> yomuScreenEnter(
-                        travelDistancePx = screenTravelDistancePx,
-                        forward = physicalDirection(forward),
-                    )
-                }
-            },
-            exitTransition = {
-                val sameEntry = initialState.id == targetState.id
-                val forward = initialState.destination.isForwardTransitionTo(targetState.destination)
-                when {
-                    sameEntry || !motionEnabled -> ExitTransition.None
-                    else -> yomuScreenExit(
-                        travelDistancePx = screenTravelDistancePx,
-                        forward = physicalDirection(forward),
-                    )
-                }
-            },
-            popEnterTransition = {
-                val sameEntry = initialState.id == targetState.id
-                when {
-                    sameEntry || !motionEnabled -> EnterTransition.None
-                    else -> yomuScreenEnter(
-                        travelDistancePx = screenTravelDistancePx,
-                        forward = physicalDirection(false),
-                    )
-                }
-            },
-            popExitTransition = {
-                val sameEntry = initialState.id == targetState.id
-                when {
-                    sameEntry || !motionEnabled -> ExitTransition.None
-                    else -> yomuScreenExit(
-                        travelDistancePx = screenTravelDistancePx,
-                        forward = physicalDirection(false),
-                    )
-                }
-            },
+            enterTransition = transitions.enter,
+            exitTransition = transitions.exit,
+            popEnterTransition = transitions.popEnter,
+            popExitTransition = transitions.popExit,
         ) {
             composable<Library> {
                 LibraryRoute(
@@ -431,24 +357,6 @@ private fun AnimatedContentScope.BackPreviewFrame(
     ) {
         content()
     }
-}
-
-/** Top-level destinations have a stable left-to-right order for directional screen changes. */
-private fun NavDestination.isForwardTransitionTo(target: NavDestination): Boolean {
-    val fromIndex = topLevelIndex()
-    val targetIndex = target.topLevelIndex()
-    return if (fromIndex != null && targetIndex != null) {
-        targetIndex > fromIndex
-    } else {
-        true
-    }
-}
-
-private fun NavDestination.topLevelIndex(): Int? = when {
-    hasRoute<Library>() -> 0
-    hasRoute<Stats>() -> 1
-    hasRoute<Settings>() -> 2
-    else -> null
 }
 
 private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination) {
