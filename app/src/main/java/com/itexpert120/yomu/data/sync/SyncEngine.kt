@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -81,6 +82,10 @@ internal class SyncEngine @Inject constructor(
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
     private var job: Job? = null
+
+    // Set once the local-change tracker has loaded the clock and done its first diff.
+    @Volatile
+    private var tracking = false
     private val pushRequests = Channel<Unit>(Channel.CONFLATED)
     private lateinit var clock: HlcClock
     private lateinit var device: String
@@ -112,12 +117,24 @@ internal class SyncEngine @Inject constructor(
         job?.cancel()
         job?.join()
         job = null
+        tracking = false
         if (!keepStatus) _status.value = SyncStatus()
     }
 
-    /** Pushes pending changes now (e.g. when the app goes to the background). */
-    fun flush() {
-        if (job?.isActive == true) pushRequests.trySend(Unit)
+    /**
+     * The app went to the background: stage local changes that are still inside the change debounce
+     * (typically the reading position just saved by the reader), push them while the process is
+     * still allowed to run, then stop. [timeoutMs] bounds the wait so an offline device stops anyway;
+     * whatever didn't go out stays dirty and is pushed on the next start.
+     */
+    suspend fun pause(timeoutMs: Long) {
+        if (job?.isActive != true) return
+        withTimeoutOrNull(timeoutMs) {
+            if (tracking) mutex.withLock { SyncKind.entries.forEach { diff(it) } }
+            pushRequests.trySend(Unit)
+            while (dao.dirtyCount() > 0) delay(DRAIN_POLL_MILLIS)
+        }
+        stop()
     }
 
     /** Forgets everything synced on this device (ledger, cursor, offers). Local data stays. */
@@ -125,46 +142,56 @@ internal class SyncEngine @Inject constructor(
 
     // region Pull
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun pullLoop(keys: SyncKeys, caughtUp: CompletableDeferred<Unit>) {
         val cursor = MutableStateFlow(dao.metadata(KEY_CURSOR)?.toDoubleOrNull() ?: 0.0)
         // The subscription can end on a connection error; resubscribe from the saved cursor.
         while (true) {
-            // A rebuilt connection (new generation) needs its own subscription.
-            combine(cursor, transport.generation) { after, _ -> after }
-                .flatMapLatest { after -> transport.pull(keys.token, after).map { after to it } }
-                .collect { (after, result) ->
-                    val page = result.getOrElse { error ->
-                        when (ConvexSyncTransport.run { error.classify() }) {
-                            is SyncGroupGoneException -> groupGone()
-                            is SyncUpdateRequiredException -> stopWith(SyncStatus.Phase.UpdateRequired)
-                            else -> Unit
-                        }
-                        Log.w(TAG, "Pull failed", error)
-                        _status.value = _status.value.copy(phase = SyncStatus.Phase.Offline)
-                        return@collect
-                    }
-                    if (page.records.isEmpty()) {
-                        caughtUp.complete(Unit)
-                        markUpToDate()
-                        return@collect
-                    }
-                    _status.value = _status.value.copy(phase = SyncStatus.Phase.Syncing)
-                    val next = mutex.withLock {
-                        applyBatch(keys, page.records)
-                        val last = page.records.maxOf { it.seq }.coerceAtLeast(after)
-                        dao.putMetadata(SyncMetadataEntity(KEY_CURSOR, last.toString()))
-                        saveClock()
-                        last
-                    }
-                    // A short page means this device has everything; the subscription stays open for more.
-                    if (page.records.size < PULL_PAGE) caughtUp.complete(Unit)
-                    cursor.value = next
-                    if (caughtUp.isCompleted) markUpToDate()
-                }
+            // A rebuilt connection (new generation) needs its own subscription. Any unexpected
+            // transport error retries like the push loop does instead of killing the sync job.
+            try {
+                pullOnce(keys, cursor, caughtUp)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Log.w(TAG, "Pull subscription failed", error)
+            }
             _status.value = _status.value.copy(phase = SyncStatus.Phase.Offline)
             delay(RETRY_MILLIS)
         }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun pullOnce(keys: SyncKeys, cursor: MutableStateFlow<Double>, caughtUp: CompletableDeferred<Unit>) {
+        combine(cursor, transport.generation) { after, _ -> after }
+            .flatMapLatest { after -> transport.pull(keys.token, after).map { after to it } }
+            .collect { (after, result) ->
+                val page = result.getOrElse { error ->
+                    when (ConvexSyncTransport.run { error.classify() }) {
+                        is SyncGroupGoneException -> groupGone()
+                        is SyncUpdateRequiredException -> stopWith(SyncStatus.Phase.UpdateRequired)
+                        else -> Unit
+                    }
+                    Log.w(TAG, "Pull failed", error)
+                    _status.value = _status.value.copy(phase = SyncStatus.Phase.Offline)
+                    return@collect
+                }
+                if (page.records.isEmpty()) {
+                    caughtUp.complete(Unit)
+                    markUpToDate()
+                    return@collect
+                }
+                _status.value = _status.value.copy(phase = SyncStatus.Phase.Syncing)
+                val next = mutex.withLock {
+                    applyBatch(keys, page.records)
+                    val last = page.records.maxOf { it.seq }.coerceAtLeast(after)
+                    dao.putMetadata(SyncMetadataEntity(KEY_CURSOR, last.toString()))
+                    saveClock()
+                    last
+                }
+                // A short page means this device has everything; the subscription stays open for more.
+                if (page.records.size < PULL_PAGE) caughtUp.complete(Unit)
+                cursor.value = next
+                if (caughtUp.isCompleted) markUpToDate()
+            }
     }
 
     /** Checks protocol versions before syncing, retrying while offline. False on a version mismatch. */
@@ -258,6 +285,7 @@ internal class SyncEngine @Inject constructor(
             adoptNewBooks()
             SyncKind.entries.forEach { diff(it) }
         }
+        tracking = true
         pushRequests.trySend(Unit)
         val roomChanges = database.invalidationTracker.createFlow(*TABLE_KINDS.keys.toTypedArray(), emitInitialState = false)
             .map { tables -> tables.flatMap { TABLE_KINDS[it].orEmpty() }.toSet() }
@@ -419,6 +447,7 @@ internal class SyncEngine @Inject constructor(
         private const val PUSH_BATCH = 200
         private const val DEBOUNCE_MILLIS = 1_500L
         private const val RETRY_MILLIS = 30_000L
+        private const val DRAIN_POLL_MILLIS = 250L
 
         /** Which record kinds each table feeds. */
         private val TABLE_KINDS = mapOf(

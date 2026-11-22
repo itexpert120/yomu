@@ -1,6 +1,9 @@
 package com.itexpert120.yomu.data.sync
 
 import android.content.Context
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.model.BookId
@@ -13,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
@@ -66,11 +70,40 @@ class SyncRepository @Inject internal constructor(
         }
     }
 
-    /** Resumes syncing at app start if a phrase is stored. */
+    private var pauseJob: Job? = null
+
+    /**
+     * Syncs while the app is in the foreground, if a phrase is stored. Call once, on the main thread,
+     * at app start. In the background the process is soon frozen by the system, so a live
+     * connection there only burns battery on reconnect attempts: pending changes are pushed when the
+     * app leaves the foreground, then the connection closes until it comes back.
+     */
     fun start() {
         if (!available) return
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) = resume()
+
+                override fun onStop(owner: LifecycleOwner) = pause()
+            },
+        )
+    }
+
+    private fun resume() {
+        pauseJob?.cancel()
+        pauseJob = null
         scope.launch {
             lifecycle.withLock { secrets.read()?.let { engine.start(SyncKeys(it)) } }
+        }
+    }
+
+    private fun pause() {
+        pauseJob?.cancel()
+        pauseJob = scope.launch {
+            lifecycle.withLock {
+                engine.pause(timeoutMs = BACKGROUND_DRAIN_MS)
+                transport.disconnect()
+            }
         }
     }
 
@@ -162,6 +195,9 @@ class SyncRepository @Inject internal constructor(
 
     private companion object {
         const val WORDLIST = "bip39_english.txt"
+
+        // Long enough to push a reading position over a slow link; short enough to beat the freezer.
+        const val BACKGROUND_DRAIN_MS = 10_000L
     }
 }
 

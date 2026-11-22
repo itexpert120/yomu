@@ -12,6 +12,7 @@ import dev.convex.android.MobileConvexClient
 import dev.convex.android.QuerySubscriber
 import dev.convex.android.WebSocketState
 import dev.convex.android.WebSocketStateSubscriber
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -88,6 +89,9 @@ internal interface SyncTransport {
     /** Live: re-emits whenever records after [after] change on the server. */
     fun pull(token: String, after: Double): Flow<Result<PullPage>>
     suspend fun destroy(token: String)
+
+    /** Closes the connection until the next call (the app went to the background). */
+    fun disconnect()
 }
 
 /**
@@ -180,6 +184,11 @@ internal class ConvexSyncTransport @Inject constructor(
         },
     )
 
+    override fun disconnect() {
+        disarmWatchdog()
+        reconnect("app in background")
+    }
+
     /** Drops the current client so the next call builds a fresh one. */
     private fun reconnect(reason: String) {
         val stale = synchronized(lock) { current.also { current = null } } ?: return
@@ -213,20 +222,31 @@ internal class ConvexSyncTransport @Inject constructor(
     }
 
     override fun pull(token: String, after: Double): Flow<Result<PullPage>> = callbackFlow {
-        val subscription = client.subscribe(
-            "sync:pull",
-            args(token, "after" to JsonPrimitive(after)),
-            object : QuerySubscriber {
-                override fun onUpdate(value: String) {
-                    trySend(runCatching { decode(PullPage.serializer(), value) })
-                }
+        // `subscribe` suspends until the socket is up. If the watchdog/network callback closes this
+        // client meanwhile, it throws "channel closed" — report it as a failed page rather than
+        // letting it escape the sync job (where it would crash the app from a background thread).
+        val subscription = try {
+            client.subscribe(
+                "sync:pull",
+                args(token, "after" to JsonPrimitive(after)),
+                object : QuerySubscriber {
+                    override fun onUpdate(value: String) {
+                        trySend(runCatching { decode(PullPage.serializer(), value) })
+                    }
 
-                override fun onError(message: String, value: String?) {
-                    val error = IOException(value ?: message)
-                    trySend(Result.failure(error.classify() ?: error))
-                }
-            },
-        )
+                    override fun onError(message: String, value: String?) {
+                        val error = IOException(value ?: message)
+                        trySend(Result.failure(error.classify() ?: error))
+                    }
+                },
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            trySend(Result.failure(error.classify() ?: error))
+            close()
+            return@callbackFlow
+        }
         // The client may already have been rebuilt (and this one closed) by the time this ends.
         awaitClose { runCatching { subscription.cancel() } }
     }
