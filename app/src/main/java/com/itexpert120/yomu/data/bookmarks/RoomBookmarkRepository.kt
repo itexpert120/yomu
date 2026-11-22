@@ -2,7 +2,10 @@ package com.itexpert120.yomu.data.bookmarks
 
 import com.itexpert120.yomu.core.database.BookmarkDao
 import com.itexpert120.yomu.core.database.BookmarkEntity
+import com.itexpert120.yomu.core.database.anchor
+import com.itexpert120.yomu.core.database.toBookmarkEntity
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,39 +20,32 @@ class RoomBookmarkRepository @Inject constructor(
 
     override fun observeForBook(bookId: BookId): Flow<List<ReaderBookmark>> = dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
 
-    override suspend fun toggle(
+    override suspend fun setBookmarked(
         bookId: BookId,
-        locatorJson: String,
-        href: String?,
+        at: BookmarkAnchor,
         chapterTitle: String?,
-        progression: Double?,
-    ): Boolean {
-        val entity = BookmarkEntity(
+        bookmarked: Boolean,
+    ) {
+        val bookmark = at.toBookmarkEntity(
             id = UUID.randomUUID().toString(),
             bookId = bookId.value,
-            locatorJson = locatorJson,
-            href = href,
             chapterTitle = chapterTitle,
-            // -1 is an explicit "unknown whole-book position" sentinel. Identity then falls back
-            // to the exact locator JSON instead of incorrectly treating it as the start of the book.
-            progression = progression ?: UNKNOWN_PROGRESSION,
             createdAt = System.currentTimeMillis(),
         )
-        return dao.toggle(entity)
+        dao.setBookmarked(bookmark, bookmarked)
     }
 
     override suspend fun delete(id: String) = dao.deleteById(id)
 
-    private fun BookmarkEntity.toModel() = ReaderBookmark(
-        id = id,
-        locatorJson = locatorJson,
-        href = href,
-        chapterTitle = chapterTitle,
-        progression = progression.takeIf { it >= 0 },
-        createdAt = createdAt,
-    )
-
-    private companion object {
-        const val UNKNOWN_PROGRESSION = -1.0
+    private fun BookmarkEntity.toModel(): ReaderBookmark {
+        val anchor = anchor
+        return ReaderBookmark(
+            id = id,
+            locatorJson = anchor.locatorJson,
+            href = anchor.anchor,
+            chapterTitle = chapterTitle,
+            progression = anchor.progression,
+            createdAt = createdAt,
+        )
     }
 }

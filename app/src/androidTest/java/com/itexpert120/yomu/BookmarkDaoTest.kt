@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -33,19 +32,21 @@ class BookmarkDaoTest {
     }
 
     @Test
-    fun mixedKnownAndUnknownPositionToggleMatchesIndicator() = runBlocking {
+    fun mixedKnownAndUnknownPositionMatchesIndicator() = runBlocking {
         val dao = database.bookmarkDao()
         val bookmark = BookmarkEntity("one", "book", "same", "c#a", "A", -1.0, 1L)
-        assertTrue(dao.toggle(bookmark))
-        assertFalse(dao.toggle(bookmark.copy(id = "two", progression = 0.4)))
+        dao.setBookmarked(bookmark, bookmarked = true)
+        dao.setBookmarked(bookmark.copy(id = "two", progression = 0.4), bookmarked = true)
+        assertEquals(listOf("one"), dao.observeForBook("book").first().map { it.id })
+        dao.setBookmarked(bookmark.copy(id = "two", progression = 0.4), bookmarked = false)
         assertTrue(dao.observeForBook("book").first().isEmpty())
-        assertTrue(dao.toggle(bookmark.copy(progression = 0.4)))
-        assertTrue(dao.toggle(bookmark.copy(id = "two", href = "c#b", progression = 0.401)))
+        dao.setBookmarked(bookmark.copy(progression = 0.4), bookmarked = true)
+        dao.setBookmarked(bookmark.copy(id = "two", href = "c#b", progression = 0.401), bookmarked = true)
         assertEquals(2, dao.observeForBook("book").first().size)
     }
 
     @Test
-    fun toggleIsAtomicAndUnknownProgressUsesExactLocator() = runBlocking {
+    fun setBookmarkedIsIdempotentAndUnknownProgressUsesExactLocator() = runBlocking {
         val dao = database.bookmarkDao()
         val bookmark = BookmarkEntity(
             id = "bookmark-1",
@@ -57,9 +58,11 @@ class BookmarkDaoTest {
             createdAt = 1L,
         )
 
-        assertTrue(dao.toggle(bookmark))
+        dao.setBookmarked(bookmark, bookmarked = true)
+        dao.setBookmarked(bookmark.copy(id = "bookmark-2"), bookmarked = true)
         assertEquals(1, dao.observeForBook("book-1").first().size)
-        assertFalse(dao.toggle(bookmark.copy(id = "bookmark-2")))
+        dao.setBookmarked(bookmark.copy(id = "bookmark-2"), bookmarked = false)
+        dao.setBookmarked(bookmark.copy(id = "bookmark-2"), bookmarked = false)
         assertTrue(dao.observeForBook("book-1").first().isEmpty())
     }
 }

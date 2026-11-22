@@ -12,6 +12,7 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.shelfStatus
+import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.collections.CollectionRepository
@@ -302,12 +303,11 @@ class BookDetailsViewModel @Inject constructor(
                 bookmarkRepository.delete(existing.id)
             } else {
                 val locatorJson = entry.locatorJson ?: return@launch
-                bookmarkRepository.toggle(
+                bookmarkRepository.setBookmarked(
                     bookId = BookId(bookId),
-                    locatorJson = locatorJson,
-                    href = entry.chapterId,
+                    at = BookmarkAnchor(anchor = entry.chapterId, locatorJson = locatorJson, progression = null),
                     chapterTitle = entry.title,
-                    progression = null,
+                    bookmarked = true,
                 )
             }
         }

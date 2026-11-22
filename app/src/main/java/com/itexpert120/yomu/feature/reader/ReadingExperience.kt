@@ -4,7 +4,6 @@ import android.content.Context
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
-import com.itexpert120.yomu.core.reader.BookmarkIdentity
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
@@ -18,6 +17,8 @@ import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.core.reader.at
+import com.itexpert120.yomu.core.reader.bookmarkAnchor
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
@@ -100,19 +101,7 @@ data class ReadingExperienceState(
     val syncOffer: SyncOfferUi? = null,
 ) {
     val currentPageBookmarked: Boolean
-        get() {
-            val current = locator ?: return false
-            return bookmarks.any { bookmark ->
-                BookmarkIdentity.samePosition(
-                    bookmark.href,
-                    bookmark.locatorJson,
-                    bookmark.progression,
-                    current.chapterId ?: current.href,
-                    current.locatorJson,
-                    current.totalProgression,
-                )
-            }
-        }
+        get() = locator?.let { bookmarks.at(it.bookmarkAnchor()).isNotEmpty() } ?: false
 }
 
 /** "Continue from <device> at <percent>%?" */
@@ -687,30 +676,10 @@ internal class ReadingExperience(
 
     private fun toggleBookmark() {
         val locator = _state.value.locator ?: return
-        val desired = !_state.value.currentPageBookmarked
+        val bookmarked = !_state.value.currentPageBookmarked
         val chapterTitle = locator.chapterTitle ?: _state.value.chapterTitle
         mutateAnnotation("Bookmark change wasn't saved.") {
-            val existing = bookmarks.observeForBook(bookId).first().filter {
-                BookmarkIdentity.samePosition(
-                    it.href,
-                    it.locatorJson,
-                    it.progression,
-                    locator.chapterId ?: locator.href,
-                    locator.locatorJson,
-                    locator.totalProgression,
-                )
-            }
-            if (desired && existing.isEmpty()) {
-                bookmarks.toggle(
-                    bookId,
-                    locator.locatorJson,
-                    locator.chapterId ?: locator.href,
-                    chapterTitle,
-                    locator.totalProgression,
-                )
-            } else if (!desired) {
-                existing.forEach { bookmarks.delete(it.id) }
-            }
+            bookmarks.setBookmarked(bookId, locator.bookmarkAnchor(), chapterTitle, bookmarked)
         }
     }
 

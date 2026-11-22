@@ -5,6 +5,7 @@ import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
@@ -17,6 +18,7 @@ import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSelection
 import com.itexpert120.yomu.core.reader.ReaderSession
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.core.reader.at
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ImportedBook
@@ -376,7 +378,7 @@ class ReadingExperienceTest {
             session.currentLocator.value = locator()
             awaitCondition { experience.state.value.locator != null }
             experience.dispatch(ReadingExperienceAction.ToggleBookmark)
-            awaitCondition { bookmarks.toggleCount == 1 }
+            awaitCondition { bookmarks.addCount == 1 }
             awaitCondition { experience.state.value.currentPageBookmarked }
 
             experience.dispatch(ReadingExperienceAction.DeleteBookmark("bookmark-1"))
@@ -590,7 +592,8 @@ class ReadingExperienceTest {
             bookmarks.failToggleAcknowledgement = true
             experience.dispatch(ReadingExperienceAction.ToggleBookmark)
             retryFailure()
-            assertEquals(1, bookmarks.toggleCount)
+            assertEquals(2, bookmarks.setCount)
+            assertEquals(1, bookmarks.addCount)
             awaitCondition { experience.state.value.currentPageBookmarked }
             bookmarks.failNextDelete = true
             experience.dispatch(ReadingExperienceAction.DeleteBookmark("bookmark-1"))
@@ -923,33 +926,36 @@ class ReadingExperienceTest {
         var failNextDelete = false
         private val items = MutableStateFlow<List<ReaderBookmark>>(emptyList())
         val deletedIds = mutableListOf<String>()
-        var toggleCount = 0
+        var setCount = 0
+        var addCount = 0
 
         override fun observeForBook(bookId: BookId): Flow<List<ReaderBookmark>> = items
 
-        override suspend fun toggle(
+        override suspend fun setBookmarked(
             bookId: BookId,
-            locatorJson: String,
-            href: String?,
+            at: BookmarkAnchor,
             chapterTitle: String?,
-            progression: Double?,
-        ): Boolean {
-            toggleCount++
-            items.value = listOf(
-                ReaderBookmark(
-                    id = "bookmark-1",
-                    locatorJson = locatorJson,
-                    href = href,
+            bookmarked: Boolean,
+        ) {
+            setCount++
+            if (bookmarked && items.value.at(at).isEmpty()) {
+                addCount++
+                items.value += ReaderBookmark(
+                    id = "bookmark-$addCount",
+                    locatorJson = at.locatorJson,
+                    href = at.anchor,
                     chapterTitle = chapterTitle,
-                    progression = progression,
+                    progression = at.progression,
                     createdAt = 1L,
-                ),
-            )
+                )
+            } else if (!bookmarked) {
+                val matches = items.value.at(at)
+                items.value -= matches.toSet()
+            }
             if (failToggleAcknowledgement) {
                 failToggleAcknowledgement = false
                 error("acknowledgement lost")
             }
-            return true
         }
 
         override suspend fun delete(id: String) {

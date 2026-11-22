@@ -5,7 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import com.itexpert120.yomu.core.reader.BookmarkIdentity
+import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -27,38 +27,44 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks WHERE bookId = :bookId ORDER BY createdAt, id")
     suspend fun positionsForBook(bookId: String): List<BookmarkEntity>
 
-    suspend fun findAt(
-        bookId: String,
-        href: String?,
-        progression: Double,
-        locatorJson: String,
-    ): BookmarkEntity? = positionsForBook(bookId).firstOrNull {
-        BookmarkIdentity.samePosition(
-            href,
-            locatorJson,
-            progression.takeIf { value -> value >= 0 },
-            it.href,
-            it.locatorJson,
-            it.progression.takeIf { value -> value >= 0 },
-        )
-    }
+    suspend fun bookmarksAt(bookId: String, at: BookmarkAnchor): List<BookmarkEntity> = positionsForBook(bookId).filter { it.anchor.matches(at) }
 
+    /**
+     * Idempotent: bookmarking adds [bookmark] only when nothing is already at its anchor; unbookmarking
+     * removes every bookmark at that anchor (including legacy duplicates).
+     */
     @Transaction
-    suspend fun toggle(bookmark: BookmarkEntity): Boolean {
-        val existing = findAt(
-            bookmark.bookId,
-            bookmark.href,
-            bookmark.progression,
-            bookmark.locatorJson,
-        )
-        return if (existing != null) {
-            deleteById(existing.id)
-            false
+    suspend fun setBookmarked(bookmark: BookmarkEntity, bookmarked: Boolean) {
+        val existing = bookmarksAt(bookmark.bookId, bookmark.anchor)
+        if (bookmarked) {
+            if (existing.isEmpty()) insert(bookmark)
         } else {
-            insert(bookmark) != -1L
+            existing.forEach { deleteById(it.id) }
         }
     }
 
     @Query("DELETE FROM bookmarks WHERE bookId IN (:bookIds)")
     suspend fun deleteForBooks(bookIds: List<String>)
 }
+
+// The column is non-null, so an unknown whole-book position is stored as this sentinel. It is only
+// encoded and decoded here; everything above the database sees a null progression.
+private const val UNKNOWN_PROGRESSION = -1.0
+
+val BookmarkEntity.anchor: BookmarkAnchor
+    get() = BookmarkAnchor(href, locatorJson, progression.takeIf { it >= 0 })
+
+fun BookmarkAnchor.toBookmarkEntity(
+    id: String,
+    bookId: String,
+    chapterTitle: String?,
+    createdAt: Long,
+): BookmarkEntity = BookmarkEntity(
+    id = id,
+    bookId = bookId,
+    locatorJson = locatorJson,
+    href = anchor,
+    chapterTitle = chapterTitle,
+    progression = progression ?: UNKNOWN_PROGRESSION,
+    createdAt = createdAt,
+)
