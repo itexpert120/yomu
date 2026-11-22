@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.app.navigation
 
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
@@ -17,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -116,6 +118,7 @@ fun YomuNavHost(
             backMotion.predictive = false
             backMotion.tapPop = false
             backMotion.gestureInFlight = false
+            if (initialState.id != targetState.id) backMotion.opening = true
             transitions.pushExit(this)
         },
         // A back tap plays the same Material back as a released gesture, from rest (see BackPreviewFrame).
@@ -200,6 +203,12 @@ fun YomuNavHost(
             }
         }
     }
+
+    val visibleEntries by navController.visibleEntries.collectAsStateWithLifecycle()
+    LaunchedEffect(visibleEntries.size) {
+        if (visibleEntries.size <= 1) backMotion.opening = false
+    }
+    backMotion.popSettled = { if (navController.previousBackStackEntry != null) navController.popBackStack() }
 }
 
 @Composable
@@ -282,6 +291,12 @@ private class BackMotion {
     // A back tap / back key (no gesture): the same Material back, committing from rest.
     var tapPop = false
 
+    // A forward move is still animating; a back gesture can't be previewed until it settles.
+    var opening by mutableStateOf(false)
+
+    // Pops the top page; called once a back gesture taken during [opening] has been released.
+    var popSettled: () -> Unit = {}
+
     // From a gesture's first event until its pop finishes (the leaving page goes) or its cancel
     // settles back to rest.
     var gestureInFlight = false
@@ -314,6 +329,22 @@ private fun AnimatedContentScope.BackPreviewFrame(
     // The leaving page is removed once its pop has played out.
     DisposableEffect(Unit) {
         onDispose { if (motion.released) motion.gestureInFlight = false }
+    }
+    // A back gesture begun while a page is still opening can't be previewed: NavHost would seek a
+    // transition that is already running toward that page, which leaves the page frozen under the
+    // finger and then cuts. The page takes those gestures itself (its handler is registered after
+    // NavHost's, so it wins) and pops once it has settled, so the back plays as it does for a tap.
+    // It stays enabled until its gesture ends: disabling a handler mid-gesture completes the gesture.
+    var earlyBack by remember { mutableStateOf(false) }
+    PredictiveBackHandler(enabled = motion.opening || earlyBack) { progress ->
+        earlyBack = true
+        try {
+            progress.collect { }
+            snapshotFlow { motion.opening }.first { !it }
+            motion.popSettled()
+        } finally {
+            earlyBack = false
+        }
     }
     val density = LocalDensity.current
     val cornerPx = with(density) { YomuMotion.PredictiveBackCorner.toPx() }
