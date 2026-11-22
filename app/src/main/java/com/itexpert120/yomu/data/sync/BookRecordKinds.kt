@@ -7,6 +7,7 @@ import com.itexpert120.yomu.core.database.CollectionDao
 import com.itexpert120.yomu.core.database.HighlightEntity
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.data.books.ChapterReadState
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.StatsRepository
 import kotlinx.coroutines.flow.first
@@ -136,15 +137,17 @@ internal class ChapterKind @Inject constructor(private val dao: SyncDao, private
             return Applied(null)
         }
         val local = if (ctx.firstContact) chapterFor(bookId, chapterId) else null
-        val result = local?.mergedWith(payload) ?: payload
+        val merged = local?.mergedWith(payload) ?: payload
+        // Store the read flag by the same rule Book Details and Statistics read it with.
+        val result = merged.copy(read = ChapterReadState.isRead(merged.read, merged.progress))
         dao.applyChapter(
             bookId,
             chapterId,
             read = result.read,
             progress = result.progress?.let { ChapterProgressEntity(bookId, chapterId, it, result.updatedAt, result.manual) },
         )
-        val merged = encode(result)
-        return Applied(merged, dirty = merged != encode(payload))
+        val encoded = encode(result)
+        return Applied(encoded, dirty = encoded != encode(payload))
     }
 
     /** One chapter's current state on this device, or null if it has none. */

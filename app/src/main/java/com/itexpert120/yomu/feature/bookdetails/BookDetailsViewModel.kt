@@ -14,6 +14,7 @@ import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.books.ChapterReading
 import com.itexpert120.yomu.data.collections.LibraryCatalog
 import com.itexpert120.yomu.data.collections.Organize
 import com.itexpert120.yomu.data.collections.StatusChoice
@@ -126,6 +127,7 @@ class BookDetailsViewModel @Inject constructor(
     private val bookmarkRepository: BookmarkRepository,
     private val statsRepository: StatsRepository,
     private val catalog: LibraryCatalog,
+    private val chapterReading: ChapterReading,
     private val readerPreloader: ReaderPreloader,
 ) : ViewModel() {
 
@@ -159,17 +161,12 @@ class BookDetailsViewModel @Inject constructor(
     private val tocSort = MutableStateFlow(TocSortMode.Ascending)
     private val selectedUids = MutableStateFlow<Set<Int>>(emptySet())
     private val selectionMode = MutableStateFlow(false)
-    private val readChapters = repository.observeReadChapters(BookId(bookId))
     private val bookmarks = bookmarkRepository.observeForBook(BookId(bookId))
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val selectionFlow = combine(selectedUids, selectionMode) { uids, mode -> uids to mode }
-    private val readingFlow = combine(
-        readChapters,
-        repository.observeChapterProgress(BookId(bookId)),
-    ) { read, progress -> read to progress }
     private val bookmarkedHrefs = bookmarks.map { saved -> saved.mapTo(HashSet()) { it.href } }
-    private val readingAndBookmarksFlow = combine(readingFlow, bookmarkedHrefs) { reading, hrefs ->
+    private val readingAndBookmarksFlow = combine(chapterReading.observe(BookId(bookId)), bookmarkedHrefs) { reading, hrefs ->
         reading to hrefs
     }
 
@@ -189,8 +186,7 @@ class BookDetailsViewModel @Inject constructor(
     ) { config, items, selection, reading, resume ->
         val (loading, sort) = config
         val (selected, inSelection) = selection
-        val (read, progress) = reading.first
-        val bookmarked = reading.second
+        val (chapters, bookmarked) = reading
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
         val ordered = items.withIndex().toList()
             .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
@@ -198,10 +194,7 @@ class BookDetailsViewModel @Inject constructor(
         var readCount = 0
         var unreadCount = 0
         val entries = ordered.map { (uid, it) ->
-            val storedProgress = progress[it.id]
-            // Logical progress is authoritative once present. The old read table remains a
-            // fallback for pre-v10/manual rows that have not acquired a progress row yet.
-            val isRead = storedProgress?.let { value -> value >= 0.999f } ?: (it.id in read)
+            val isRead = chapters.isRead(it.id)
             val isSelected = uid in selected
             if (isSelected) selectedCount++
             if (it.locatorJson != null) {
@@ -220,13 +213,7 @@ class BookDetailsViewModel @Inject constructor(
                 read = isRead,
                 selected = isSelected,
                 bookmarked = it.id in bookmarked,
-                percent = if (it.locatorJson == null) {
-                    null
-                } else if (isRead) {
-                    1f
-                } else {
-                    storedProgress?.coerceIn(0f, 1f) ?: 0f
-                },
+                percent = if (it.locatorJson == null) null else chapters.percent(it.id),
             )
         }
         TocUiState(
@@ -311,27 +298,23 @@ class BookDetailsViewModel @Inject constructor(
         val hrefs = selectedUids.value
             .mapNotNull { tocItems.value.getOrNull(it)?.id }
             .distinct()
-        viewModelScope.launch { repository.setChaptersRead(BookId(bookId), hrefs, read) }
+        viewModelScope.launch { chapterReading.mark(BookId(bookId), hrefs, read) }
         onExitChapterSelection()
     }
 
     /** Per-row quick toggle of a single chapter's read state. */
     fun onSetChapterRead(uid: Int, read: Boolean) {
         val href = tocItems.value.getOrNull(uid)?.id ?: return
-        viewModelScope.launch { repository.setChaptersRead(BookId(bookId), listOf(href), read) }
+        viewModelScope.launch { chapterReading.mark(BookId(bookId), listOf(href), read) }
     }
 
     /** Marks every chapter up to and including the last-selected one (in reading order) as read. */
     fun onMarkPreviousRead() {
         val upTo = selectedUids.value.maxOrNull() ?: return
-        val hrefs = tocItems.value.take(upTo + 1)
-            .mapNotNull { if (it.locatorJson != null) it.id else null }
-            .distinct()
-        viewModelScope.launch { repository.setChaptersRead(BookId(bookId), hrefs, read = true) }
+        val toc = tocItems.value
+        viewModelScope.launch { chapterReading.markThrough(BookId(bookId), toc, upTo) }
         onExitChapterSelection()
     }
-
-    private fun allChapterHrefs(): List<String> = tocItems.value.mapNotNull { if (it.locatorJson != null) it.id else null }.distinct()
 
     // endregion
 

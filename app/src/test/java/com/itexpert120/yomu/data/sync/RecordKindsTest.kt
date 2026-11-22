@@ -150,6 +150,18 @@ class RecordKindsTest {
     }
 
     @Test
+    fun aChapterAtItsEndIsStoredReadByTheSharedRule() = runBlocking {
+        bothHaveBook()
+        val kind = b.kinds.byKey("chapter")!!
+        val incoming = SyncJson.encodeToString(ChapterPayload.serializer(), ChapterPayload(read = false, progress = 1f, updatedAt = 50, manual = false))
+        val record = ChapterRecordId.of("sha", "ch")
+
+        val applied = b.kinds.apply(kind, record, incoming, firstContact = false, device = null, hlc = hlc)
+        assertTrue(ChapterReadEntity("b1", "ch") in b.chapterReads)
+        assertEquals(SyncJson.encodeToString(ChapterPayload.serializer(), ChapterPayload(read = true, progress = 1f, updatedAt = 50, manual = false)), applied.ledgerPayload)
+    }
+
+    @Test
     fun bookmark() {
         bothHaveBook()
         a.bookmarks["bm1"] = BookmarkEntity("bm1", "a1", "{}", "ch1.xhtml", "One", 0.25, 7)

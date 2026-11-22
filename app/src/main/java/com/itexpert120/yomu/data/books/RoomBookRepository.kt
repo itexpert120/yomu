@@ -5,7 +5,6 @@ import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.database.BookDao
 import com.itexpert120.yomu.core.database.BookTocEntity
 import com.itexpert120.yomu.core.database.BookmarkDao
-import com.itexpert120.yomu.core.database.ChapterReadEntity
 import com.itexpert120.yomu.core.database.CollectionDao
 import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.YomuDatabase
@@ -37,6 +36,7 @@ class RoomBookRepository @Inject constructor(
     private val highlightDao: HighlightDao,
     private val bookmarkDao: BookmarkDao,
     private val collectionDao: CollectionDao,
+    private val chapterReading: ChapterReading,
     private val readerEngine: ReaderEngine,
     @ApplicationScope applicationScope: CoroutineScope,
 ) : BookRepository {
@@ -73,7 +73,7 @@ class RoomBookRepository @Inject constructor(
             chapters.forEach { (id, chapterIds) ->
                 check(dao.getBook(id.value) != null) { "Book no longer exists" }
                 dao.markRead(id.value, System.currentTimeMillis())
-                setChaptersRead(id, chapterIds, true)
+                chapterReading.mark(id, chapterIds, read = true)
             }
         }
     }
@@ -192,51 +192,7 @@ class RoomBookRepository @Inject constructor(
                 completed = snapshot.completed,
                 lastOpenedAt = now,
             )
-            snapshot.completedChapterId?.let { completedChapterId ->
-                (listOf(completedChapterId) + snapshot.completedSharedChapterIds).forEach {
-                    dao.setChapterProgress(id.value, it, 1f, now, manuallyRead = false)
-                    dao.insertReadChapters(listOf(ChapterReadEntity(id.value, it)))
-                }
-            }
-            val chapterProgress = snapshot.chapterProgress?.coerceIn(0.0, 1.0)?.toFloat()
-            val chapterIds = listOfNotNull(snapshot.chapterId) + snapshot.sharedChapterIds
-            if (chapterProgress != null) {
-                chapterIds.forEach { chapterId ->
-                    saveChapterProgress(id, chapterId, chapterProgress, snapshot.currentHref, now)
-                }
-            }
-        }
-    }
-
-    private suspend fun saveChapterProgress(
-        id: BookId,
-        chapterId: String,
-        chapterProgress: Float,
-        currentHref: String?,
-        now: Long,
-    ) {
-        val oldProgress = dao.getChapterProgress(id.value, chapterId)
-        // Repair the v9 bug where entering a continuation resource marked the active logical
-        // chapter read even though its real end had not been reached. A v10 automatic 100%
-        // row is repairable too; explicit manual read overrides remain authoritative.
-        if (
-            chapterProgress < 0.999f &&
-            currentHref != null &&
-            currentHref != chapterId.substringBefore('#') &&
-            oldProgress?.manuallyRead != true
-        ) {
-            dao.deleteReadChapters(id.value, listOf(chapterId))
-            dao.setChapterProgress(
-                id.value,
-                chapterId,
-                chapterProgress,
-                now,
-                manuallyRead = false,
-            )
-        }
-        dao.saveHighestChapterProgress(id.value, chapterId, chapterProgress, now)
-        if (chapterProgress >= 0.999f) {
-            dao.insertReadChapters(listOf(ChapterReadEntity(id.value, chapterId)))
+            chapterReading.recordPosition(id, snapshot, now)
         }
     }
 
@@ -313,28 +269,6 @@ class RoomBookRepository @Inject constructor(
         }
         if (persisted && bookId !in deletedBookIds) publicationCacheMemory[bookId] = cache
         return persisted
-    }
-
-    override fun observeReadChapters(id: BookId): Flow<Set<String>> = dao.observeReadChapters(id.value).map { it.toSet() }
-
-    override fun observeChapterProgress(id: BookId): Flow<Map<String, Float>> = dao.observeChapterProgress(id.value).map { rows -> rows.associate { it.chapterId to it.progress } }
-
-    override suspend fun setChaptersRead(id: BookId, chapterIds: List<String>, read: Boolean) {
-        if (chapterIds.isEmpty()) return
-        database.withTransaction {
-            val now = System.currentTimeMillis()
-            if (read) {
-                dao.insertReadChapters(chapterIds.map { ChapterReadEntity(id.value, it) })
-                chapterIds.forEach {
-                    dao.setChapterProgress(id.value, it, 1f, now, manuallyRead = true)
-                }
-            } else {
-                dao.deleteReadChapters(id.value, chapterIds)
-                chapterIds.forEach {
-                    dao.setChapterProgress(id.value, it, 0f, now, manuallyRead = false)
-                }
-            }
-        }
     }
 
     private companion object {

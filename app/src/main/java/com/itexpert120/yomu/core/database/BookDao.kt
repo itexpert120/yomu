@@ -199,8 +199,11 @@ interface BookDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertReadingDay(entity: ReadingDayEntity)
 
-    @Query("SELECT COUNT(*) FROM chapter_reads")
-    fun observeChapterReadCount(): Flow<Int>
+    @Query("SELECT * FROM chapter_reads")
+    fun observeAllReadChapters(): Flow<List<ChapterReadEntity>>
+
+    @Query("SELECT * FROM chapter_progress")
+    fun observeAllChapterProgress(): Flow<List<ChapterProgressEntity>>
 
     @Insert
     suspend fun insertReadingSession(entity: ReadingSessionEntity)

@@ -13,6 +13,7 @@ import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
 import com.itexpert120.yomu.core.model.ShelfStatus
+import com.itexpert120.yomu.data.books.ChapterReading
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,8 +38,14 @@ class StatsRepository internal constructor(
     private val dao: BookDao,
     private val database: YomuDatabase,
     dates: Flow<LocalDate>,
+    chaptersRead: Flow<Int> = ChapterReading(dao, database).observeReadCount(),
 ) {
-    @Inject constructor(dao: BookDao, database: YomuDatabase, calendar: ReadingCalendar) : this(dao, database, calendar.dates)
+    @Inject constructor(
+        dao: BookDao,
+        database: YomuDatabase,
+        calendar: ReadingCalendar,
+        chapterReading: ChapterReading,
+    ) : this(dao, database, calendar.dates, chapterReading.observeReadCount())
 
     /** Total time spent reading a single book (seconds), as a live flow. */
     fun bookReadingSeconds(bookId: BookId): Flow<Long> = dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
@@ -146,7 +153,7 @@ class StatsRepository internal constructor(
     val stats: Flow<ReadingStats> = combine(
         dao.observeBooks(),
         dayStats,
-        dao.observeChapterReadCount(),
+        chaptersRead,
         sessionStats,
     ) { books, day, chaptersRead, session ->
         ReadingStats(

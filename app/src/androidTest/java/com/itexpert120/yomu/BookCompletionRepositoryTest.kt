@@ -8,6 +8,7 @@ import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.data.books.ChapterReading
 import com.itexpert120.yomu.data.books.RoomBookRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -38,15 +39,19 @@ class BookCompletionRepositoryTest {
                 )
             }
             val dao = database.bookDao()
-            val repository = RoomBookRepository(dao, database, database.highlightDao(), database.bookmarkDao(), database.collectionDao(), engine, this)
+            val chapters = ChapterReading(dao, database)
+            val repository = RoomBookRepository(dao, database, database.highlightDao(), database.bookmarkDao(), database.collectionDao(), chapters, engine, this)
             repository.markRead(BookId("a"))
-            assertEquals(setOf("chapter#one", "chapter#two"), repository.observeReadChapters(BookId("a")).first())
+            val read = chapters.observe(BookId("a")).first()
+            assertTrue(read.isRead("chapter#one") && read.isRead("chapter#two"))
+            assertEquals(2, read.readCount)
             repository.markUnread(BookId("a"))
-            assertTrue(repository.observeChapterProgress(BookId("a")).first().isEmpty())
+            assertEquals(0, chapters.observe(BookId("a")).first().readCount)
+            assertTrue(dao.observeChapterProgress("a").first().isEmpty())
             sql.execSQL("CREATE TRIGGER fail_completion BEFORE UPDATE ON books WHEN NEW.id = 'b' BEGIN SELECT RAISE(ABORT, 'injected'); END")
             assertTrue(runCatching { repository.markRead(listOf(BookId("a"), BookId("b"))) }.isFailure)
             assertEquals(0f, dao.getBook("a")!!.progress)
-            assertTrue(repository.observeReadChapters(BookId("a")).first().isEmpty())
+            assertEquals(0, chapters.observe(BookId("a")).first().readCount)
         } finally {
             database.close()
         }

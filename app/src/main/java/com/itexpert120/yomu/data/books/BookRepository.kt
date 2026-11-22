@@ -89,13 +89,4 @@ interface BookRepository {
      * callers can render instantly without a loading flash; fall back to [tableOfContents] on null.
      */
     fun cachedTableOfContents(id: BookId): List<ReaderTocItem>?
-
-    /** Set of chapter ids the user has marked read for [id]. */
-    fun observeReadChapters(id: BookId): Flow<Set<String>>
-
-    /** Highest percentage reached for every logical TOC section in [id]. */
-    fun observeChapterProgress(id: BookId): Flow<Map<String, Float>>
-
-    /** Marks [chapterIds] read or unread for [id]. */
-    suspend fun setChaptersRead(id: BookId, chapterIds: List<String>, read: Boolean)
 }

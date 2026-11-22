@@ -1025,16 +1025,6 @@ class ReadingExperienceTest {
         }
 
         override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = null
-
-        override fun observeReadChapters(id: BookId): Flow<Set<String>> = MutableStateFlow(emptySet())
-
-        override fun observeChapterProgress(id: BookId): Flow<Map<String, Float>> = MutableStateFlow(emptyMap())
-
-        override suspend fun setChaptersRead(
-            id: BookId,
-            chapterIds: List<String>,
-            read: Boolean,
-        ) = Unit
     }
 
     private companion object {
