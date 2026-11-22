@@ -2,9 +2,9 @@ package com.itexpert120.yomu.feature.settings
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.core.model.ThemePreference
 import com.itexpert120.yomu.feature.about.DiagnosticsSection
@@ -19,9 +19,9 @@ fun SettingsRoute(
     onOpenFontLibrary: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
-    val appearance by appViewModel.appearance.collectAsState()
+    val appearance by appViewModel.appearance.collectAsStateWithLifecycle()
     val readerDefaultsViewModel: ReaderDefaultsViewModel = hiltViewModel()
-    val readerDefaults by readerDefaultsViewModel.state.collectAsState()
+    val readerDefaults by readerDefaultsViewModel.state.collectAsStateWithLifecycle()
     val preference = appearance.themePreference
     val oledDark = appearance.oledDark
     val systemDark = isSystemInDarkTheme()
