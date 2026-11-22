@@ -53,7 +53,7 @@ internal class FakeSyncWorld {
     val kinds = RecordKinds(
         setOf(
             MetaKind(syncDao),
-            ProgressKind(syncDao, store),
+            ProgressKind(syncDao, SyncState(store)),
             ChapterKind(syncDao, store),
             BookmarkKind(syncDao, store),
             HighlightKind(syncDao, store),
@@ -61,7 +61,7 @@ internal class FakeSyncWorld {
             BookCollectionsKind(syncDao, collectionDao),
             SettingsKind(appSettings, libraryPrefs, readerSettings, fonts),
             ThemeKind(readerSettings),
-            FontKind(fonts, store),
+            FontKind(fonts, SyncState(store)),
             CollectionKind(collectionDao),
         ),
         store,

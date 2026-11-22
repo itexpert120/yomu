@@ -50,7 +50,7 @@ data class ProgressOffer(
 
 /** A book's reading position and read/unread state. */
 @Singleton
-internal class ProgressKind @Inject constructor(private val dao: SyncDao, private val store: SyncStore) : RecordKind<ProgressPayload> {
+internal class ProgressKind @Inject constructor(private val dao: SyncDao, private val state: SyncState) : RecordKind<ProgressPayload> {
     override val key = "progress"
     override val bookBound = true
 
@@ -79,11 +79,10 @@ internal class ProgressKind @Inject constructor(private val dao: SyncDao, privat
                 remote.startedAt,
                 remote.finishedAt,
             )
-            store.deleteMetadata(OFFER_PREFIX + id)
+            state.clearOffer(id)
             return stored(remote)
         }
-        val offer = ProgressOffer(id, remote.locator, remote.progress, ctx.device, ctx.hlc.encode())
-        store.putMetadata(OFFER_PREFIX + id, SyncJson.encodeToString(ProgressOffer.serializer(), offer))
+        state.putOffer(ProgressOffer(id, remote.locator, remote.progress, ctx.device, ctx.hlc.encode()))
         // The ledger keeps this device's position; reading on here will then be the newest change.
         return Applied(local.payload)
     }
@@ -101,10 +100,6 @@ internal class ProgressKind @Inject constructor(private val dao: SyncDao, privat
             finishedAt = book.finishedAt,
         )
         return record(book.sha256, book.sha256, payload, maxOf(book.lastOpenedAt, book.finishedAt))
-    }
-
-    companion object {
-        const val OFFER_PREFIX = "offer/"
     }
 }
 

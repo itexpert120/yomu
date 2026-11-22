@@ -7,7 +7,6 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.itexpert120.yomu.app.di.ApplicationScope
-import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.data.sync.crypto.SyncKeys
 import com.itexpert120.yomu.data.sync.crypto.SyncPhrase
@@ -25,7 +24,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,7 +52,8 @@ class SyncRepository @Inject internal constructor(
     private val engine: SyncEngine,
     private val secrets: SyncSecretStore,
     private val transport: SyncTransport,
-    private val dao: SyncDao,
+    private val store: SyncStore,
+    private val state: SyncState,
 ) {
     private val lifecycle = Mutex()
 
@@ -157,17 +156,13 @@ class SyncRepository @Inject internal constructor(
 
     /** A newer position from another device for this book, if one is waiting. */
     fun progressOffer(bookId: BookId): Flow<ProgressOffer?> = flow {
-        val sha = dao.shaForBook(bookId.value) ?: return@flow emit(null)
-        emitAll(
-            dao.observeMetadataWithPrefix(ProgressKind.OFFER_PREFIX + sha).map { rows ->
-                rows.firstOrNull()?.let { runCatching { SyncJson.decodeFromString(ProgressOffer.serializer(), it.value) }.getOrNull() }
-            },
-        )
+        val sha = store.shaForBook(bookId.value) ?: return@flow emit(null)
+        emitAll(state.offer(sha))
     }
 
     /** Forgets the offer, whether it was taken (the reader jumped) or dismissed. */
     suspend fun clearOffer(bookId: BookId) {
-        dao.shaForBook(bookId.value)?.let { dao.deleteMetadata(ProgressKind.OFFER_PREFIX + it) }
+        store.shaForBook(bookId.value)?.let { state.clearOffer(it) }
     }
 
     private suspend fun turnOff(keepStatus: Boolean) = lifecycle.withLock {

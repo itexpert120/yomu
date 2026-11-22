@@ -24,7 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Qualifier
 import javax.inject.Singleton
@@ -64,6 +63,7 @@ data class SyncStatus(
 @Singleton
 internal class SyncEngine @Inject constructor(
     private val store: SyncStore,
+    private val state: SyncState,
     private val kinds: RecordKinds,
     private val localChanges: LocalChangeSource,
     private val transport: SyncTransport,
@@ -128,7 +128,7 @@ internal class SyncEngine @Inject constructor(
     // region Pull
 
     private suspend fun pullLoop(keys: SyncKeys, caughtUp: CompletableDeferred<Unit>) {
-        val cursor = MutableStateFlow(store.metadata(KEY_CURSOR)?.toDoubleOrNull() ?: 0.0)
+        val cursor = MutableStateFlow(state.cursor())
         // The subscription can end on a connection error; resubscribe from the saved cursor.
         while (true) {
             // A rebuilt connection (new generation) needs its own subscription. Any unexpected
@@ -168,7 +168,7 @@ internal class SyncEngine @Inject constructor(
                 val next = mutex.withLock {
                     applyBatch(keys, page.records)
                     val last = page.records.maxOf { it.seq }.coerceAtLeast(after)
-                    store.putMetadata(KEY_CURSOR, last.toString())
+                    state.setCursor(last)
                     saveClock()
                     last
                 }
@@ -234,9 +234,7 @@ internal class SyncEngine @Inject constructor(
                 Log.w(TAG, "Couldn't apply ${kind.key}", error)
                 continue
             }
-            if (applied.awaitingBook && applied.sha256 != null) {
-                store.putMetadata(PENDING_BOOK_PREFIX + applied.sha256, applied.sha256)
-            }
+            if (applied.awaitingBook && applied.sha256 != null) state.markAwaitingBook(applied.sha256)
             val stamp = if (applied.dirty) clock.tick() else hlc
             store.upsertLedger(
                 listOf(
@@ -287,13 +285,13 @@ internal class SyncEngine @Inject constructor(
 
     /** Applies records that arrived before their book was on this device. */
     private suspend fun adoptNewBooks() {
-        val pending = store.metadataWithPrefix(PENDING_BOOK_PREFIX)
-        if (pending.isEmpty()) return
+        val awaiting = state.awaitingBooks()
+        if (awaiting.isEmpty()) return
         val books = store.localBooks().entries.associate { (id, sha) -> sha to id }
-        pending.forEach { (key, sha) ->
+        awaiting.forEach { sha ->
             val bookId = books[sha] ?: return@forEach
             kinds.onBookAdded(sha, bookId)
-            store.deleteMetadata(key)
+            state.clearAwaitingBook(sha)
         }
     }
 
@@ -384,14 +382,12 @@ internal class SyncEngine @Inject constructor(
     // endregion
 
     private suspend fun loadClock() {
-        device = store.metadata(KEY_DEVICE) ?: UUID.randomUUID().toString().replace("-", "").take(12).also {
-            store.putMetadata(KEY_DEVICE, it)
-        }
-        clock = HlcClock(device, store.metadata(KEY_CLOCK)?.let(Hlc::decode))
+        device = state.device()
+        clock = HlcClock(device, state.clock())
     }
 
     private suspend fun saveClock() {
-        clock.latest?.let { store.putMetadata(KEY_CLOCK, it.encode()) }
+        clock.latest?.let { state.saveClock(it) }
     }
 
     private fun markUpToDate() {
@@ -415,10 +411,6 @@ internal class SyncEngine @Inject constructor(
 
     companion object {
         private const val TAG = "SyncEngine"
-        private const val KEY_CURSOR = "cursor"
-        private const val KEY_CLOCK = "clock"
-        private const val KEY_DEVICE = "device"
-        private const val PENDING_BOOK_PREFIX = "pendingBook/"
         private const val PULL_PAGE = 500
         private const val PUSH_BATCH = 200
         private const val DEBOUNCE_MILLIS = 1_500L

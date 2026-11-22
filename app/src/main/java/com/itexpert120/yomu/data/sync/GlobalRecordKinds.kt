@@ -92,7 +92,7 @@ internal class ThemeKind @Inject constructor(private val readerSettings: ReaderS
  * counts as installed, so a failed install never reads as a removal.
  */
 @Singleton
-internal class FontKind @Inject constructor(private val fonts: SyncFonts, private val store: SyncStore) : RecordKind<FontPayload> {
+internal class FontKind @Inject constructor(private val fonts: SyncFonts, private val state: SyncState) : RecordKind<FontPayload> {
     override val key = "font"
     override val bookBound = false
     override val watchesPreferences = true
@@ -102,31 +102,27 @@ internal class FontKind @Inject constructor(private val fonts: SyncFonts, privat
     override val payload = FontPayload.serializer()
 
     override suspend fun snapshot(): List<LocalRecord> {
-        val families = fonts.installed().keys + store.metadataWithPrefix(PENDING_PREFIX).values
+        val families = fonts.installed().keys + state.pendingFonts()
         return families.map { record(it, null, FontPayload(it), 1) }
     }
 
     override suspend fun apply(id: String, payload: FontPayload?, ctx: ApplyContext): Applied {
         if (payload == null) {
-            store.deleteMetadata(PENDING_PREFIX + id)
+            state.clearFontPending(id)
             fonts.remove(id)
         } else if (id !in fonts.installed()) {
-            store.putMetadata(PENDING_PREFIX + id, id)
+            state.markFontPending(id)
             install(id)
         }
         return stored(payload)
     }
 
     override suspend fun retryPending() {
-        store.metadataWithPrefix(PENDING_PREFIX).values.forEach { install(it) }
+        state.pendingFonts().forEach { install(it) }
     }
 
     private suspend fun install(family: String) {
-        if (family in fonts.installed() || fonts.install(family)) store.deleteMetadata(PENDING_PREFIX + family)
-    }
-
-    private companion object {
-        const val PENDING_PREFIX = "fontPending/"
+        if (family in fonts.installed() || fonts.install(family)) state.clearFontPending(family)
     }
 }
 

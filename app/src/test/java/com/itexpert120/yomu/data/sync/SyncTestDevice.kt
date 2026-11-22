@@ -19,7 +19,7 @@ internal class SyncTestDevice(label: String, deviceId: String, transport: SyncTr
     private val changes = TestLocalChangeSource()
     private val kinds = TestKind.entries.associateWith { MapKind(it, changes) }
     private val registry = RecordKinds(kinds.values.toSet(), store)
-    val engine = SyncEngine(store, registry, changes, transport, { label }, scope)
+    val engine = SyncEngine(store, SyncState(store), registry, changes, transport, { label }, scope)
 
     init {
         // A fixed device id keeps HLC tie-breaks deterministic.
