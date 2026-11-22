@@ -20,28 +20,13 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuNavigationBar
 import com.itexpert120.yomu.core.designsystem.YomuNavigationBarItem
 import com.itexpert120.yomu.core.designsystem.YomuNavigationRail
 import com.itexpert120.yomu.core.designsystem.YomuNavigationRailItem
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
-
-/** The back-motion parallax and dim for the content under a leaving page, minus the app chrome. */
-private fun Modifier.backParallax(offset: () -> Float, rtl: Boolean): Modifier = graphicsLayer {
-    val travel = offset() * YomuMotion.BackParallaxFraction * size.width
-    translationX = if (rtl) travel else -travel
-}.drawWithContent {
-    drawContent()
-    val dim = offset() * YomuMotion.BackPreviewDim
-    if (dim > 0f) drawRect(Color.Black, alpha = dim)
-}
 
 internal enum class YomuTopLevelDestination(
     val label: String,
@@ -60,12 +45,8 @@ internal fun YomuTopLevelNavigation(
     onSelected: (YomuTopLevelDestination) -> Unit,
     modifier: Modifier = Modifier,
     barVisible: Boolean = true,
-    // 0..1, read in the draw phase: how far back the content still is in a back motion (1 = fully
-    // offset). Only the content moves and dims; the bar/rail stays put, as fixed app chrome.
-    contentBackOffset: () -> Float = { 0f },
     content: @Composable (Modifier) -> Unit,
 ) {
-    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val wide = YomuWidthClass.fromWidth(maxWidth).isWide
         if (wide) {
@@ -84,8 +65,7 @@ internal fun YomuTopLevelNavigation(
                 content(
                     Modifier
                         .weight(1f)
-                        .fillMaxHeight()
-                        .backParallax(contentBackOffset, rtl),
+                        .fillMaxHeight(),
                 )
             }
         } else {
@@ -93,8 +73,7 @@ internal fun YomuTopLevelNavigation(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        .backParallax(contentBackOffset, rtl),
+                        .fillMaxWidth(),
                 ) {
                     content(Modifier.fillMaxSize())
                 }

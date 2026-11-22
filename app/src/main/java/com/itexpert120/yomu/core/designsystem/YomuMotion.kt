@@ -6,7 +6,6 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -58,26 +57,14 @@ object YomuMotion {
     // Predictive back on dialog-like surfaces (sheets, dialogs, cover viewer): how far they shrink.
     const val BackPreviewScale = 0.90f
 
-    // Back out of a child screen is a page slide (One UI style): the leaving page travels its full
-    // width at full size, the page underneath follows from [BackParallaxFraction] of the width to
-    // its left (parallax) and starts dimmed so two same-coloured pages stay distinct. While a back
-    // gesture drives it, both slides are linear in progress so the page stays locked to the finger;
-    // a tapped back button plays the same slide on the emphasized decelerate curve instead.
-    const val ScreenPopDurationMillis = 280
-    const val BackParallaxFraction = 0.30f
-
-    const val BackPreviewDim = 0.24f
-
-    // The seam shadow: soft and wide, densest at the page edge and thinning out on an eased
-    // (cubic) falloff, so it reads as depth rather than a band. See BackEdgeShadowStops.
-    val BackEdgeShadowWidth = 56.dp
-    const val BackEdgeShadowAlpha = 0.16f
-
-    /** Fraction of [BackEdgeShadowAlpha] across the shadow, from its outer edge (0) to the page (1). */
-    val BackEdgeShadowStops: List<Pair<Float, Float>> = List(9) { i ->
-        val t = i / 8f
-        t to t * t * t
-    }
+    // Back out of a child screen is Material's predictive back, as in Google's apps, for gestures
+    // and back taps alike: the top page shrinks toward 90%, rounds its corners and drifts toward
+    // the far side by width/20 minus this margin, over the page underneath, which waits shrunk,
+    // offset and darkened, then glides in as the top page fades away (see YomuNavHost).
+    const val PredictiveBackMillis = 450
+    val PredictiveBackCorner = 32.dp
+    val PredictiveBackEdgeMargin = 8.dp
+    const val PredictiveBackScrim = 0.4f
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
@@ -215,47 +202,6 @@ fun yomuScreenExit(
                 if (forward) -travel else travel
             },
         )
-}
-
-/**
- * Back easing: linear while a predictive-back gesture scrubs the transition (so the page tracks the
- * finger 1:1), emphasized-decelerate when it plays on its own (back button), so a tap feels quick
- * and settles rather than moving at a constant crawl. [gestureDriven] is read every frame.
- */
-private class YomuBackEasing(private val gestureDriven: () -> Boolean) : Easing {
-    override fun transform(fraction: Float): Float = if (gestureDriven()) fraction else YomuMotion.EmphasizedDecel.transform(fraction)
-}
-
-/** The back easing, for surfaces that run their own part of the back motion (see YomuBackEasing). */
-fun yomuBackEasing(gestureDriven: () -> Boolean): Easing = YomuBackEasing(gestureDriven)
-
-/**
- * The page underneath on back: it slides in from [YomuMotion.BackParallaxFraction] of its width
- * toward the start edge, so it moves slower than the page leaving over it (parallax).
- */
-fun yomuScreenPopEnter(fromStart: Boolean = true, gestureDriven: () -> Boolean = { false }): EnterTransition = if (!yomuAnimationsEnabled()) {
-    EnterTransition.None
-} else {
-    slideInHorizontally(
-        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = YomuBackEasing(gestureDriven)),
-        initialOffsetX = { width ->
-            val travel = (width * YomuMotion.BackParallaxFraction).toInt()
-            if (fromStart) -travel else travel
-        },
-    )
-}
-
-/**
- * The page leaving on back: it slides its full width toward the end edge, opaque and at full size,
- * like a page being pulled off the stack (the edge shadow is drawn by the nav host's frame).
- */
-fun yomuScreenPopExit(towardEnd: Boolean = true, gestureDriven: () -> Boolean = { false }): ExitTransition = if (!yomuAnimationsEnabled()) {
-    ExitTransition.None
-} else {
-    slideOutHorizontally(
-        animationSpec = tween(YomuMotion.ScreenPopDurationMillis, easing = YomuBackEasing(gestureDriven)),
-        targetOffsetX = { width -> if (towardEnd) width else -width },
-    )
 }
 
 /**
