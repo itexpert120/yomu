@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,8 +44,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
@@ -80,6 +84,7 @@ import com.itexpert120.yomu.core.reader.ReaderNavigator
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 // Intentionally colours the system bars to the reading theme via the (now-deprecated) window
 // setters — the only way to keep the bars seamless with the page without a system scrim.
@@ -150,8 +155,14 @@ fun ReaderScreen(
     val reading = state.experience
     val readyMarker = (reading.renderState as? ReaderRenderState.Ready)?.takeUnless { reading.loading }
     val navigator: ReaderNavigator? = reading.navigator
-    var brightnessPreview by remember { mutableStateOf<Float?>(null) }
-    var dimPreview by remember { mutableStateOf<Float?>(null) }
+    // Brightness / extra-dim slider values. The drag values change every frame, so they are read only
+    // in effects and the draw phase — a drag never recomposes the screen. The committed values bridge
+    // the gap between release and the settings write-back so the sheet doesn't snap back meanwhile.
+    var brightnessDrag by remember { mutableStateOf<Float?>(null) }
+    var dimDrag by remember { mutableStateOf<Float?>(null) }
+    var brightnessCommitted by remember { mutableStateOf<Float?>(null) }
+    var dimCommitted by remember { mutableStateOf<Float?>(null) }
+    val currentSettings by rememberUpdatedState(reading.settings)
 
     // Keep the display awake while reading, per the user's setting; released when leaving the reader.
     DisposableEffect(reading.settings.keepScreenOn) {
@@ -246,48 +257,50 @@ fun ReaderScreen(
     LaunchedEffect(
         reading.settings.useSystemBrightness,
         reading.settings.brightness,
-        brightnessPreview,
+        brightnessCommitted,
     ) {
-        val preview = brightnessPreview
+        val committed = brightnessCommitted
         if (reading.settings.useSystemBrightness) {
-            brightnessPreview = null
-        } else if (preview != null && kotlin.math.abs(preview - reading.settings.brightness) < 0.001f) {
-            brightnessPreview = null
+            brightnessCommitted = null
+        } else if (committed != null && kotlin.math.abs(committed - reading.settings.brightness) < 0.001f) {
+            brightnessCommitted = null
         }
     }
 
-    LaunchedEffect(reading.settings.dimLevel, dimPreview) {
-        val preview = dimPreview
-        if (preview != null && kotlin.math.abs(preview - reading.settings.dimLevel) < 0.001f) {
-            dimPreview = null
+    LaunchedEffect(reading.settings.dimLevel, dimCommitted) {
+        val committed = dimCommitted
+        if (committed != null && kotlin.math.abs(committed - reading.settings.dimLevel) < 0.001f) {
+            dimCommitted = null
         }
     }
 
-    val effectiveBrightness = brightnessPreview ?: reading.settings.brightness
-    val effectiveDim = (dimPreview ?: reading.settings.dimLevel).coerceIn(0f, 1f)
-    val sheetState = if (brightnessPreview != null || dimPreview != null) {
-        state.copy(
-            experience = reading.copy(
-                settings = reading.settings.copy(
-                    brightness = effectiveBrightness,
-                    dimLevel = effectiveDim,
-                ),
-            ),
-        )
-    } else {
-        state
+    val sheetSettings = remember(reading.settings, brightnessCommitted, dimCommitted) {
+        if (brightnessCommitted == null && dimCommitted == null) {
+            reading.settings
+        } else {
+            reading.settings.copy(
+                brightness = brightnessCommitted ?: reading.settings.brightness,
+                dimLevel = (dimCommitted ?: reading.settings.dimLevel).coerceIn(0f, 1f),
+            )
+        }
     }
 
     // Drive the window screen brightness: defer to the system level, or pin it to the reader setting.
-    LaunchedEffect(reading.settings.useSystemBrightness, effectiveBrightness) {
+    // Collected from snapshot state so a slider drag updates the window without recomposing.
+    LaunchedEffect(view) {
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
-        val lp = window.attributes
-        lp.screenBrightness = if (reading.settings.useSystemBrightness) {
-            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-        } else {
-            effectiveBrightness.coerceIn(0f, 1f)
+        snapshotFlow {
+            val settings = currentSettings
+            if (settings.useSystemBrightness) {
+                WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            } else {
+                (brightnessDrag ?: brightnessCommitted ?: settings.brightness).coerceIn(0f, 1f)
+            }
+        }.collect { brightness ->
+            val lp = window.attributes
+            lp.screenBrightness = brightness
+            window.attributes = lp
         }
-        window.attributes = lp
     }
 
     val density = LocalDensity.current
@@ -489,6 +502,7 @@ fun ReaderScreen(
                             settings = reading.settings,
                             onContentHeight = { footerPx = it },
                             showDeviceStatus = !systemBarsShown,
+                            deviceStatusActive = chromeShown,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .graphicsLayer {
@@ -500,15 +514,17 @@ fun ReaderScreen(
 
                     // Extra-dim scrim over the whole reading surface (content + chrome) for going darker
                     // than the device minimum. Decorative only — no pointerInput, so taps pass through.
-                    if (effectiveDim > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .background(
-                                    Color.Black.copy(alpha = effectiveDim * ReaderSettings.MAX_DIM_ALPHA),
-                                ),
-                        )
-                    }
+                    // The level is read while drawing, so dragging the slider only redraws this layer.
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                val dim = (dimDrag ?: dimCommitted ?: currentSettings.dimLevel).coerceIn(0f, 1f)
+                                if (dim > 0f) {
+                                    drawRect(Color.Black.copy(alpha = dim * ReaderSettings.MAX_DIM_ALPHA))
+                                }
+                            },
+                    )
 
                     // Bottom navigation bar, toggled by a centre tap. Keep it above the passive footer
                     // so both chrome surfaces remain visible when immersive controls are revealed.
@@ -523,9 +539,11 @@ fun ReaderScreen(
                         onDisplay = onOpenSheet,
                     )
 
-                    ReaderControlsSheet(
+                    ReaderControlsSheetWithDimPreview(
                         visible = state.sheetVisible,
-                        state = sheetState,
+                        state = state,
+                        settings = sheetSettings,
+                        dimDrag = { dimDrag },
                         onDismiss = onCloseSheet,
                         onSelectChapter = onSelectChapter,
                         onNextChapter = onNextChapter,
@@ -535,24 +553,26 @@ fun ReaderScreen(
                         onOpenCustomTheme = onOpenCustomTheme,
                         onApplyCustomTheme = onApplyCustomTheme,
                         onPreviewBrightness = { brightness ->
-                            brightnessPreview = brightness.coerceIn(0f, 1f)
+                            brightnessDrag = brightness.coerceIn(0f, 1f)
                         },
                         onCommitBrightness = { brightness ->
                             val value = brightness.coerceIn(0f, 1f)
-                            brightnessPreview = value
-                            onUpdateSettings(reading.settings.copy(brightness = value))
+                            brightnessCommitted = value
+                            brightnessDrag = null
+                            onUpdateSettings(currentSettings.copy(brightness = value))
                         },
-                        onPreviewDim = { dim -> dimPreview = dim.coerceIn(0f, 1f) },
+                        onPreviewDim = { dim -> dimDrag = dim.coerceIn(0f, 1f) },
                         onCommitDim = { dim ->
                             val value = dim.coerceIn(0f, 1f)
-                            dimPreview = value
-                            onUpdateSettings(reading.settings.copy(dimLevel = value))
+                            dimCommitted = value
+                            dimDrag = null
+                            onUpdateSettings(currentSettings.copy(dimLevel = value))
                         },
                     )
 
                     CustomThemeSheet(
                         visible = state.customSheetVisible,
-                        settings = sheetState.experience.settings,
+                        settings = sheetSettings,
                         customThemes = state.customThemes,
                         onDismiss = onCloseCustomTheme,
                         onUpdateSettings = onUpdateSettings,
@@ -614,6 +634,60 @@ fun ReaderScreen(
             else -> openingContent(Modifier.align(Alignment.Center), mutedOnBackground)
         }
     }
+}
+
+/**
+ * The controls sheet, fed the live extra-dim drag value at the precision its "N%" chip shows: it
+ * recomposes when that whole percent changes rather than on every drag frame, and the screen above
+ * it not at all. Brightness needs no live value here — the slider tracks its own drag position.
+ */
+@Composable
+private fun ReaderControlsSheetWithDimPreview(
+    visible: Boolean,
+    state: ReaderUiState,
+    settings: ReaderSettings,
+    dimDrag: () -> Float?,
+    onDismiss: () -> Unit,
+    onSelectChapter: (String) -> Unit,
+    onNextChapter: () -> Unit,
+    onPreviousChapter: () -> Unit,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    onResetSettings: () -> Unit,
+    onOpenCustomTheme: () -> Unit,
+    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+    onPreviewBrightness: (Float) -> Unit,
+    onCommitBrightness: (Float) -> Unit,
+    onPreviewDim: (Float) -> Unit,
+    onCommitDim: (Float) -> Unit,
+) {
+    val dimPercent by remember { computedStateOf { dimDrag()?.let { (it * 100).roundToInt() } } }
+    val percent = dimPercent
+    val sheetState = remember(state, settings, percent) {
+        // The exact value (not the rounded percent) so the slider, which re-seeds from it, doesn't jump.
+        val liveDim = if (percent != null) Snapshot.withoutReadObservation { dimDrag() } else null
+        val sheetSettings = if (liveDim != null) settings.copy(dimLevel = liveDim) else settings
+        if (sheetSettings === state.experience.settings) {
+            state
+        } else {
+            state.copy(experience = state.experience.copy(settings = sheetSettings))
+        }
+    }
+    ReaderControlsSheet(
+        visible = visible,
+        state = sheetState,
+        onDismiss = onDismiss,
+        onSelectChapter = onSelectChapter,
+        onNextChapter = onNextChapter,
+        onPreviousChapter = onPreviousChapter,
+        onUpdateSettings = onUpdateSettings,
+        onResetSettings = onResetSettings,
+        onOpenCustomTheme = onOpenCustomTheme,
+        onApplyCustomTheme = onApplyCustomTheme,
+        onPreviewBrightness = onPreviewBrightness,
+        onCommitBrightness = onCommitBrightness,
+        onPreviewDim = onPreviewDim,
+        onCommitDim = onCommitDim,
+    )
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {

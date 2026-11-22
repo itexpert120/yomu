@@ -17,6 +17,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Base64
 import android.util.Log
 import android.view.ActionMode
+import android.view.Choreographer
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -106,6 +107,7 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sign
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
@@ -117,7 +119,7 @@ class ReadiumReaderEngine @Inject constructor(
     private val crashLog: CrashLog,
 ) : ReaderEngine {
 
-    private val customFontCssCache = CustomFontCssCache()
+    private val customFontJsCache = CustomFontJsCache()
 
     private val httpClient = DefaultHttpClient()
     private val assetRetriever = AssetRetriever(context.contentResolver, httpClient)
@@ -235,7 +237,7 @@ class ReadiumReaderEngine @Inject constructor(
                 initialSettings = request.initialSettings,
                 resourceWeights = book.resourceWeights,
                 mappedTableOfContents = book.tableOfContents,
-                customFontCssCache = customFontCssCache,
+                customFontJsCache = customFontJsCache,
                 crashLog = crashLog,
             )
             ReaderOpenTrace.mark("reader.session-assembled")
@@ -316,8 +318,11 @@ class ReadiumReaderEngine @Inject constructor(
     }
 }
 
-/** Process-lifetime cache for one active custom font; bounded to avoid pinning large font blobs. */
-private class CustomFontCssCache {
+/**
+ * Process-lifetime cache of the injection script for one active custom font; bounded to avoid
+ * pinning large font blobs.
+ */
+private class CustomFontJsCache {
     private var key: String? = null
     private var css: String? = null
 
@@ -344,7 +349,7 @@ private class ReadiumReaderSession(
     initialSettings: ReaderSettings,
     private val resourceWeights: List<Int>,
     mappedTableOfContents: List<ReadiumTocEntry>,
-    private val customFontCssCache: CustomFontCssCache,
+    private val customFontJsCache: CustomFontJsCache,
     private val crashLog: CrashLog,
 ) : ReaderSession {
 
@@ -360,11 +365,12 @@ private class ReadiumReaderSession(
     override val renderState: StateFlow<ReaderRenderState> = renderGate.state
     private var revealWatchdog: Job? = null
 
-    // Cached @font-face CSS (base64 data URLs) for the active custom font, keyed by its family+paths so
-    // the (largish) base64 is built once per font rather than per chapter. Readium can only serve
-    // fonts from bundled assets, so custom fonts are embedded inline instead.
+    // Cached injection script carrying the active custom font's @font-face CSS (base64 data URLs),
+    // keyed by its family+paths so the (multi-MB) script is built once per font, off the main thread,
+    // rather than per chapter. Readium can only serve fonts from bundled assets, so custom fonts are
+    // embedded inline instead.
     private var customFontKey: String? = null
-    private var customFontCss: String? = null
+    private var customFontJs: String? = null
 
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
@@ -415,6 +421,9 @@ private class ReadiumReaderSession(
     private var latestVisualPage: VisualPageState? = null
     private var pendingCompletedChapterId: String? = null
     private var pageTurnSettle: Job? = null
+
+    // A queued turn waiting for the next frame; page events in that window must not replay it again.
+    private var pageTurnReplay: Job? = null
     private var queuedPageTurns = 0
 
     // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
@@ -457,6 +466,28 @@ private class ReadiumReaderSession(
         .filter { it.size > 1 }
         .flatMap { group -> group.map { section -> section.id to group.map { it.id }.minus(section.id) } }
         .toMap()
+
+    // Spine href -> index, built once: locator updates look this up several times per page turn, and
+    // scanning the reading order allocated a URL string per spine item (books can have 1500+).
+    private val readingOrderIndexByHref: Map<String, Int> = HashMap<String, Int>().apply {
+        publication.readingOrder.forEachIndexed { index, link ->
+            // First match wins, as indexOfFirst did.
+            putIfAbsent(link.url().toString(), index)
+        }
+    }
+
+    private fun readingOrderIndexOf(href: String?): Int = href?.let { readingOrderIndexByHref[it] } ?: -1
+
+    private val sectionBoundaries: List<SectionBoundary> =
+        logicalSections.map { SectionBoundary(it.orderIndex, it.startProgression) }
+
+    private val effectiveResourceWeights: List<Int> =
+        resourceWeights.takeIf { it.size == publication.readingOrder.size }
+            ?: List(publication.readingOrder.size) { 1 }
+
+    // The last published locator and its JSON, so an unchanged locator isn't re-serialised.
+    private var lastPublishedLocator: Locator? = null
+    private var lastPublishedLocatorJson: String? = null
 
     private val listener = object : EpubNavigatorFragment.Listener {
         override fun onExternalLinkActivated(url: AbsoluteUrl) {
@@ -511,8 +542,7 @@ private class ReadiumReaderSession(
     private fun shouldPreloadBundledFont(family: String): Boolean = currentSettings.customFont == null && currentSettings.font.cssFamily == family
 
     private suspend fun criticalBootstrapJs(): String {
-        val customFontCss = currentSettings.customFont?.let { ensureCustomFontCss(it) }
-        val fontMutation = customFontCss?.let(::customFontInjectJs) ?: CUSTOM_FONT_CLEAR_JS
+        val fontMutation = currentSettings.customFont?.let { ensureCustomFontJs(it) } ?: CUSTOM_FONT_CLEAR_JS
         return listOf(
             viewportFitJs(
                 enabled = currentSettings.immersiveChrome && currentSettings.layout == ReaderLayout.Scroll,
@@ -943,9 +973,8 @@ private class ReadiumReaderSession(
             // explicit navigation helpers. Scroll mode still needs its layout cover for those
             // moves. In paged mode this locator arrives after Readium has already displayed the
             // adjacent spine item; covering it here would make the new chapter appear twice.
-            val order = publication.readingOrder
-            val previousIndex = order.indexOfFirst { it.url().toString() == previousHref }
-            val currentIndex = order.indexOfFirst { it.url().toString() == hrefStr }
+            val previousIndex = readingOrderIndexOf(previousHref)
+            val currentIndex = readingOrderIndexOf(hrefStr)
             beginChapterTransition(
                 forward = currentIndex >= previousIndex,
             )
@@ -958,8 +987,6 @@ private class ReadiumReaderSession(
         if (currentSettings.layout == ReaderLayout.Scroll && queryScrollProgress) {
             requestScrollProgress(locator)
         }
-        val order = publication.readingOrder
-        val index = order.indexOfFirst { it.url().toString() == hrefStr }
         val metrics = progressMetrics(locator, visualPage ?: latestVisualPage)
         val crossedChapterId = completedSectionOnSequentialCrossing(
             pendingChapterId = pendingCompletedChapterId,
@@ -978,8 +1005,14 @@ private class ReadiumReaderSession(
                 val pageIndex = it.pageIndex.coerceIn(0, it.totalPages - 1)
                 (it.totalPages - pageIndex - 1).coerceAtLeast(0)
             }
-        _currentLocator.value = ReaderLocator(
-            locatorJson = locator.toJSON().toString(),
+        val locatorJson = lastPublishedLocatorJson
+            ?.takeIf { locator == lastPublishedLocator }
+            ?: locator.toJSON().toString().also {
+                lastPublishedLocator = locator
+                lastPublishedLocatorJson = it
+            }
+        val readerLocator = ReaderLocator(
+            locatorJson = locatorJson,
             totalProgression = locator.locations.totalProgression,
             chapterTitle = metrics.chapter?.title ?: locator.title,
             href = hrefStr,
@@ -994,6 +1027,7 @@ private class ReadiumReaderSession(
             completedSharedChapterIds = crossedChapterId?.let { sectionsSharingStart[it] }.orEmpty(),
             completed = metrics.completed,
         )
+        if (readerLocator != _currentLocator.value) _currentLocator.value = readerLocator
         if (resourceChanged) {
             // Readium publishes the canonical locator after loading the resource. Finalize styling
             // here exactly once so the new chapter is not reflowed by two competing bootstraps.
@@ -1002,10 +1036,9 @@ private class ReadiumReaderSession(
     }
 
     private fun progressMetrics(locator: Locator, visualPage: VisualPageState?): ProgressMetrics {
-        val order = publication.readingOrder
         val href = locator.href.toString()
-        val resourceIndex = order.indexOfFirst { it.url().toString() == href }
-        if (resourceIndex < 0 || order.isEmpty()) {
+        val resourceIndex = readingOrderIndexOf(href)
+        if (resourceIndex < 0) {
             return ProgressMetrics(0.0, null, null, -1, false)
         }
         val visualPageProgress = visualPage
@@ -1019,14 +1052,12 @@ private class ReadiumReaderSession(
                 ?.progression,
             useVisualPageProgress = currentSettings.layout == ReaderLayout.Paged,
         )
-        val weights = resourceWeights.takeIf { it.size == order.size }
-            ?: List(order.size) { 1 }
         val logical = calculateLogicalProgress(
             resourceIndex = resourceIndex,
             resourceProgress = resourceProgress,
             locatorProgress = locator.locations.progression ?: 0.0,
-            resourceWeights = weights,
-            sections = logicalSections.map { SectionBoundary(it.orderIndex, it.startProgression) },
+            resourceWeights = effectiveResourceWeights,
+            sections = sectionBoundaries,
         )
         val chapterIndex = logical.sectionIndex
         val chapter = logicalSections.getOrNull(chapterIndex)
@@ -1099,27 +1130,24 @@ private class ReadiumReaderSession(
         val ref = currentSettings.customFont
         if (ref == null) {
             customFontKey = null
-            customFontCss = null
+            customFontJs = null
             evalWithRetry(CUSTOM_FONT_CLEAR_JS)
             return
         }
-        val css = ensureCustomFontCss(ref) ?: return
-        evalWithRetry(customFontInjectJs(css))
+        val js = ensureCustomFontJs(ref) ?: return
+        evalWithRetry(js)
     }
 
-    private suspend fun ensureCustomFontCss(ref: CustomFontRef): String? {
-        val key = buildCustomFontCacheKey(ref)
-        if (key == customFontKey && customFontCss != null) return customFontCss
-        customFontCssCache.get(key)?.let {
-            customFontKey = key
-            customFontCss = it
-            return it
-        }
-        val css = withContext(Dispatchers.IO) { buildFontFaceCss(ref) }
+    private suspend fun ensureCustomFontJs(ref: CustomFontRef): String? {
+        // The key stats the font files, so it is built off the main thread too.
+        val key = withContext(Dispatchers.IO) { buildCustomFontCacheKey(ref) }
+        if (key == customFontKey) customFontJs?.let { return it }
+        val js = customFontJsCache.get(key)
+            ?: withContext(Dispatchers.IO) { buildFontFaceCss(ref)?.let(::customFontInjectJs) }
+                ?.also { customFontJsCache.put(key, it) }
         customFontKey = key
-        customFontCss = css
-        css?.let { customFontCssCache.put(key, it) }
-        return css
+        customFontJs = js
+        return js
     }
 
     private fun buildCustomFontCacheKey(ref: CustomFontRef): String = buildString {
@@ -1156,14 +1184,14 @@ private class ReadiumReaderSession(
         return sb.toString()
     }
 
-    private fun customFontInjectJs(css: String): String = """
-        (function() {
-          var id = 'yomu-custom-font';
-          var s = document.getElementById(id);
-          if (!s) { s = document.createElement('style'); s.id = id; (document.head || document.documentElement).appendChild(s); }
-          s.textContent = "$css";
-        })();
-    """.trimIndent()
+    // Concatenated rather than a trimIndent() template: the CSS payload can be megabytes long.
+    private fun customFontInjectJs(css: String): String = buildString(
+        CUSTOM_FONT_INJECT_JS_PREFIX.length + css.length + CUSTOM_FONT_INJECT_JS_SUFFIX.length,
+    ) {
+        append(CUSTOM_FONT_INJECT_JS_PREFIX)
+        append(css)
+        append(CUSTOM_FONT_INJECT_JS_SUFFIX)
+    }
 
     // Readium's evaluateJavascript targets only the currently-visible reflowable page fragment and
     // silently returns Kotlin null when that fragment isn't current yet (a race against page load).
@@ -1318,11 +1346,9 @@ private class ReadiumReaderSession(
     private fun injectOverscroll() {
         navigator ?: return
         val hrefStr = lastLocator?.href?.toString()
-        val order = publication.readingOrder
-        val index =
-            if (hrefStr != null) order.indexOfFirst { it.url().toString() == hrefStr } else -1
+        val index = readingOrderIndexOf(hrefStr)
         val hasPrev = index > 0
-        val hasNext = index in 0 until order.lastIndex
+        val hasNext = index in 0 until publication.readingOrder.lastIndex
         val enabled = currentSettings.layout == ReaderLayout.Scroll
         val js = overscrollJs(enabled, hasPrev, hasNext, currentSettings, rubberbandTopOffsetPx())
         injectJs(js)
@@ -1366,17 +1392,36 @@ private class ReadiumReaderSession(
     }
 
     private fun onPageTurnSettled() {
+        if (pageTurnReplay?.isActive == true) return
         val settle = pageTurnSettle ?: return
         pageTurnSettle = null
         settle.cancel()
         val queued = queuedPageTurns
         if (queued == 0) return
         queuedPageTurns -= queued.sign
-        startPageTurn(forward = queued > 0, animated = false)
+        // One follow-up tap (typically back, then forward again) keeps the slide: replaying it as an
+        // instant jump from a page that was still settling read as a jerk. Only a backlog of several
+        // taps skips the animation to catch up. Start on the next frame so the pager has settled.
+        val animated = abs(queued) == 1 && pageTurnAnimated()
+        pageTurnReplay = scope.launch {
+            awaitNextFrame()
+            pageTurnReplay = null
+            startPageTurn(forward = queued > 0, animated = animated)
+        }
+        // Taps during the one-frame wait keep queueing behind this turn.
+        pageTurnSettle = pageTurnReplay
+    }
+
+    private suspend fun awaitNextFrame() = suspendCancellableCoroutine { continuation ->
+        val callback = Choreographer.FrameCallback { continuation.resume(Unit) }
+        Choreographer.getInstance().postFrameCallback(callback)
+        continuation.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
     }
 
     private fun cancelQueuedPageTurns() {
         queuedPageTurns = 0
+        pageTurnReplay?.cancel()
+        pageTurnReplay = null
         pageTurnSettle?.cancel()
         pageTurnSettle = null
     }
@@ -1399,9 +1444,8 @@ private class ReadiumReaderSession(
     // a chapter reveals the text just before it — the continuous-reading "rubberband" behaviour.
     private fun goToPreviousResourceEnd() {
         val hrefStr = lastLocator?.href?.toString() ?: return
-        val order = publication.readingOrder
-        val index = order.indexOfFirst { it.url().toString() == hrefStr }
-        val prev = order.getOrNull(index - 1) ?: return
+        val index = readingOrderIndexOf(hrefStr)
+        val prev = publication.readingOrder.getOrNull(index - 1) ?: return
         val base = publication.locatorFromLink(prev) ?: return
         val target = base.copy(locations = Locator.Locations(progression = 0.999))
         beginChapterTransition(forward = false)
@@ -1413,9 +1457,8 @@ private class ReadiumReaderSession(
     // chapter006 in the Yen Press test book); using nextChapter() here would skip its actual text.
     private fun goToNextResourceStart() {
         val hrefStr = lastLocator?.href?.toString() ?: return
-        val order = publication.readingOrder
-        val index = order.indexOfFirst { it.url().toString() == hrefStr }
-        val next = order.getOrNull(index + 1) ?: return
+        val index = readingOrderIndexOf(hrefStr)
+        val next = publication.readingOrder.getOrNull(index + 1) ?: return
         val target = publication.locatorFromLink(next) ?: return
         val currentSection = lastLocator
             ?.let { logicalSections.getOrNull(progressMetrics(it, latestVisualPage).chapterIndex) }
@@ -2049,6 +2092,16 @@ private class ReadiumReaderSession(
         // onExternalLinkActivated).
         const val NEXT_CHAPTER_URL = "yomu://next-chapter"
         const val PREV_CHAPTER_URL = "yomu://prev-chapter"
+
+        // Installs the custom-font @font-face CSS spliced between these two halves.
+        const val CUSTOM_FONT_INJECT_JS_PREFIX =
+            "(function() {\n" +
+                "  var id = 'yomu-custom-font';\n" +
+                "  var s = document.getElementById(id);\n" +
+                "  if (!s) { s = document.createElement('style'); s.id = id; " +
+                "(document.head || document.documentElement).appendChild(s); }\n" +
+                "  s.textContent = \""
+        const val CUSTOM_FONT_INJECT_JS_SUFFIX = "\";\n})();"
 
         // Removes the injected custom-font @font-face when switching back to a bundled font.
         val CUSTOM_FONT_CLEAR_JS =

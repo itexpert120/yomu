@@ -48,7 +48,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,6 +60,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
@@ -68,6 +70,7 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -192,13 +195,14 @@ internal fun ReaderFooter(
     modifier: Modifier = Modifier,
     // False while the system status bar is showing (reader menu open): it already has both.
     showDeviceStatus: Boolean = true,
+    // False while the footer is faded out (immersive chrome hidden): the clock and battery keep
+    // their last value instead of ticking and listening for nobody.
+    deviceStatusActive: Boolean = true,
 ) {
     val bg = Color(settings.backgroundArgb)
     val showBattery = settings.footerShowBattery && showDeviceStatus
     val showClock = settings.footerShowClock && showDeviceStatus
     val muted = Color(settings.colorPalette.secondaryTextArgb)
-    val time = rememberClock()
-    val battery = rememberBattery()
     Column(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -215,16 +219,11 @@ internal fun ReaderFooter(
             ) {
                 // Battery on the left: a horizontal bar whose fill tracks the level.
                 if (showBattery) {
-                    BatteryIndicator(
-                        level = battery.level,
-                        charging = battery.charging,
-                        color = muted,
-                        background = bg,
-                    )
+                    FooterBattery(color = muted, background = bg, active = deviceStatusActive)
                 }
                 if (showClock) {
                     if (showBattery) Spacer(Modifier.width(14.dp))
-                    Text(text = time, color = muted, style = YomuTheme.type.mono)
+                    FooterClock(color = muted, active = deviceStatusActive)
                 }
                 val chapterRemainingLabel = when (settings.layout) {
                     ReaderLayout.Paged -> chapterPagesLeft?.let {
@@ -332,19 +331,31 @@ private fun ReaderActionBar(
     }
 }
 
-/** Wall-clock string, refreshed every 20s so the minute flip is prompt. */
+/**
+ * Wall clock, refreshed on each minute boundary while [active] and the app is started. Owning its
+ * state here keeps a tick from recomposing the rest of the footer.
+ */
 @Composable
-private fun rememberClock(): String {
+private fun FooterClock(color: Color, active: Boolean) {
     val format = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
     var time by remember { mutableStateOf(format.format(Date())) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            time = format.format(Date())
-            delay(20_000)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(active, lifecycleOwner) {
+        if (!active) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                time = format.format(Date(now))
+                // A small margin past the boundary so the next format lands on the new minute.
+                delay(MinuteMillis - now % MinuteMillis + ClockTickMarginMillis)
+            }
         }
     }
-    return time
+    Text(text = time, color = color, style = YomuTheme.type.mono)
 }
+
+private const val MinuteMillis = 60_000L
+private const val ClockTickMarginMillis = 50L
 
 /** Horizontal battery icon: an outlined shell with a level-proportional fill + terminal nub. While
  *  charging, a bolt is cut into the icon (drawn in the page colour over the fill). */
@@ -388,18 +399,37 @@ private fun BatteryIndicator(level: Int, charging: Boolean, color: Color, backgr
 
 private data class BatteryStatus(val level: Int, val charging: Boolean)
 
+/** Battery level, listened to only while [active] and the app is started. */
 @Composable
-private fun rememberBattery(): BatteryStatus {
+private fun FooterBattery(color: Color, background: Color, active: Boolean) {
     val context = LocalContext.current
-    return produceState(initialValue = readBattery(context), context) {
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: Context?, intent: Intent?) {
-                value = batteryFrom(intent) ?: value
+    var battery by remember(context) { mutableStateOf(readBattery(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(context, active, lifecycleOwner) {
+        if (!active) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(c: Context?, intent: Intent?) {
+                    battery = batteryFrom(intent) ?: battery
+                }
+            }
+            // Registering returns the sticky broadcast, so the level is current again straight away
+            // after a spell in the background.
+            batteryFrom(context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED)))
+                ?.let { battery = it }
+            try {
+                awaitCancellation()
+            } finally {
+                runCatching { context.unregisterReceiver(receiver) }
             }
         }
-        context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        awaitDispose { runCatching { context.unregisterReceiver(receiver) } }
-    }.value
+    }
+    BatteryIndicator(
+        level = battery.level,
+        charging = battery.charging,
+        color = color,
+        background = background,
+    )
 }
 
 private fun readBattery(context: Context): BatteryStatus {
