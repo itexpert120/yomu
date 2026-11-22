@@ -56,8 +56,9 @@ internal object ReaderSettingsSync {
      * The custom font resolves through [installedFont]; an uninstalled family falls back to the
      * bundled font so the reader never points at a missing file.
      */
-    fun merge(local: ReaderSettings, payload: String, installedFont: (String) -> CustomFontRef?): ReaderSettings {
-        val remote = SyncJson.parseToJsonElement(payload).jsonObject
+    fun merge(local: ReaderSettings, payload: String, installedFont: (String) -> CustomFontRef?): ReaderSettings = merge(local, SyncJson.parseToJsonElement(payload).jsonObject, installedFont)
+
+    fun merge(local: ReaderSettings, remote: JsonObject, installedFont: (String) -> CustomFontRef?): ReaderSettings {
         val base = SyncJson.encodeToJsonElement(local).jsonObject
         val merged = buildJsonObject {
             base.forEach { (key, value) -> put(key, value) }

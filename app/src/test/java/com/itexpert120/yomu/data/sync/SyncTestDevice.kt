@@ -3,21 +3,33 @@ package com.itexpert120.yomu.data.sync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.serialization.builtins.serializer
+
+/** A record kind used by engine tests; payloads are plain strings. */
+internal enum class TestKind(val key: String, val bookBound: Boolean) {
+    Note("note", bookBound = false),
+
+    /** Book-bound; the record id is the book's hash. */
+    BookNote("bookNote", bookBound = true),
+}
 
 /** One device in a sync test: its own store, local data and engine, on a shared server. */
 internal class SyncTestDevice(label: String, deviceId: String, transport: SyncTransport, scope: CoroutineScope) {
     val store = InMemorySyncStore()
     private val changes = TestLocalChangeSource()
-    private val local = MapLocalRecords(changes)
-    val engine = SyncEngine(store, local, changes, transport, { label }, scope)
+    private val kinds = TestKind.entries.associateWith { MapKind(it, changes) }
+    private val registry = RecordKinds(kinds.values.toSet(), store)
+    val engine = SyncEngine(store, registry, changes, transport, { label }, scope)
 
     init {
         // A fixed device id keeps HLC tie-breaks deterministic.
         store.seedMetadata("device", deviceId)
     }
 
+    /** A book arriving on this device, like an import invalidating the books table. */
     fun addBook(sha256: String) {
         store.books["book-$sha256"] = sha256
+        TestKind.entries.filter { it.bookBound }.forEach { changes.changed(it.key) }
     }
 
     fun removeBook(sha256: String) {
@@ -25,47 +37,45 @@ internal class SyncTestDevice(label: String, deviceId: String, transport: SyncTr
     }
 
     /** A local edit; [timeHint] dates it as pre-sync data. */
-    fun put(kind: SyncKind, id: String, payload: String, timeHint: Long = 1) = local.put(kind, id, payload, timeHint)
+    fun put(kind: TestKind, id: String, value: String, timeHint: Long = 1) = kinds.getValue(kind).put(id, value, timeHint)
 
-    fun delete(kind: SyncKind, id: String) = local.delete(kind, id)
+    fun delete(kind: TestKind, id: String) = kinds.getValue(kind).delete(id)
 
-    fun value(kind: SyncKind, id: String): String? = local.value(kind, id)
+    fun value(kind: TestKind, id: String): String? = kinds.getValue(kind).value(id)
 }
 
 internal class TestLocalChangeSource : LocalChangeSource {
-    private val flow = MutableSharedFlow<Set<SyncKind>>(extraBufferCapacity = 64)
-    override val changes: Flow<Set<SyncKind>> = flow
+    private val flow = MutableSharedFlow<Set<String>>(extraBufferCapacity = 64)
+    override val changes: Flow<Set<String>> = flow
 
-    fun changed(kind: SyncKind) {
-        flow.tryEmit(setOf(kind))
+    fun changed(key: String) {
+        flow.tryEmit(setOf(key))
     }
 }
 
-/** Local data as plain records; book-bound ids are the book's hash. Every write reports a change. */
-private class MapLocalRecords(private val changes: TestLocalChangeSource) : LocalRecords {
+/** Local data as a map of plain records. Every write reports a change, as Room would. */
+private class MapKind(private val spec: TestKind, private val changes: TestLocalChangeSource) : RecordKind<String> {
     private val records = mutableMapOf<String, LocalRecord>()
+    override val key = spec.key
+    override val bookBound = spec.bookBound
+    override val payload = String.serializer()
 
-    fun put(kind: SyncKind, id: String, payload: String, timeHint: Long) {
-        records[kind.name(id)] = LocalRecord(kind, id, if (kind.bookBound) id else null, payload, timeHint)
-        changes.changed(kind)
+    fun put(id: String, value: String, timeHint: Long) {
+        records[id] = record(id, if (bookBound) id else null, value, timeHint)
+        changes.changed(key)
     }
 
-    fun delete(kind: SyncKind, id: String) {
-        records.remove(kind.name(id))
-        changes.changed(kind)
+    fun delete(id: String) {
+        records.remove(id)
+        changes.changed(key)
     }
 
-    fun value(kind: SyncKind, id: String) = records[kind.name(id)]?.payload
+    fun value(id: String) = records[id]?.let { SyncJson.decodeFromString(payload, it.payload) }
 
-    override suspend fun snapshot(kind: SyncKind) = records.values.filter { it.kind == kind }
+    override suspend fun snapshot() = records.values.toList()
 
-    override suspend fun apply(kind: SyncKind, id: String, payload: String?, firstContact: Boolean, device: String?, hlc: Hlc): Applied {
-        if (payload == null) delete(kind, id) else put(kind, id, payload, 1)
-        return Applied(payload, sha256 = if (kind.bookBound) id else null)
+    override suspend fun apply(id: String, payload: String?, ctx: ApplyContext): Applied {
+        if (payload == null) delete(id) else put(id, payload, 1)
+        return stored(payload)
     }
-
-    override suspend fun onBookAdded(sha256: String, bookId: String) = Unit
-    override suspend fun beforeApply() = Unit
-    override suspend fun keptWithoutLocalCopy(kind: SyncKind) = emptySet<String>()
-    override suspend fun retryPending() = Unit
 }

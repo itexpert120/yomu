@@ -4,48 +4,18 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * Record kinds. A logical record name is `<kind>/<id>`; book-bound kinds use the EPUB's SHA-256 (or
- * the item's UUID with the hash inside the payload) so books match across devices.
+ * A record as derived from this device's current state; [kind] is the [RecordKind.key] and the
+ * record's name is `<kind>/<entityId>`. Book-bound records carry the EPUB's [sha256] so books
+ * match across devices. [timeHint] dates pre-sync data (see SyncEngine).
  */
-internal enum class SyncKind(val key: String, val bookBound: Boolean, val neverDeleted: Boolean = false) {
-    // Never deleted: an unedited or unopened book simply has no record to send.
-    Meta("meta", bookBound = true, neverDeleted = true),
-    Progress("progress", bookBound = true, neverDeleted = true),
-
-    // One record per chapter (`<sha>|<chapterId>`), so devices changing different chapters of the
-    // same book never overwrite each other.
-    Chapter("chapter", bookBound = true),
-    Bookmark("bookmark", bookBound = true),
-    Highlight("highlight", bookBound = true),
-    BookSettings("bookSettings", bookBound = true),
-
-    // A book's collections and manual status, applied as one unit (older builds ignore both kinds).
-    Shelf("shelf", bookBound = true),
-
-    // Append-only: a session pruned or removed locally still counts everywhere else.
-    Session("session", bookBound = true, neverDeleted = true),
-    Settings("settings", bookBound = false),
-    Theme("theme", bookBound = false),
-    Font("font", bookBound = false),
-    Collection("collection", bookBound = false),
-    ;
-
-    fun name(id: String) = "$key/$id"
-
-    companion object {
-        fun of(name: String): SyncKind? = name.substringBefore('/').let { k -> entries.firstOrNull { it.key == k } }
-    }
-}
-
-/** A record as derived from this device's current state. [timeHint] dates pre-sync data (see SyncEngine). */
 internal data class LocalRecord(
-    val kind: SyncKind,
+    val kind: String,
     val entityId: String,
     val sha256: String?,
     val payload: String,
     val timeHint: Long,
 ) {
-    val name: String get() = kind.name(entityId)
+    val name: String get() = "$kind/$entityId"
 }
 
 /** Plaintext inside each encrypted blob. [payload] null = deleted. [device] labels progress offers. */

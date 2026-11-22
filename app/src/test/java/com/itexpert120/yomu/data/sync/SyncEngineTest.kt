@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.builtins.serializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -35,19 +36,20 @@ class SyncEngineTest {
     private fun serverPayload(name: String): String? {
         val serverKey = keys.serverKey(name)
         val blob = checkNotNull(server.record(keys.token, serverKey)?.blob) { "$name was never pushed" }
-        return SyncJson.decodeFromString(SyncEnvelope.serializer(), keys.open(serverKey, blob).decodeToString()).payload
+        val payload = SyncJson.decodeFromString(SyncEnvelope.serializer(), keys.open(serverKey, blob).decodeToString()).payload
+        return payload?.let { SyncJson.decodeFromString(String.serializer(), it) }
     }
 
     @Test
     fun devicesConverge() = runTest {
         val a = device("A")
         val b = device("B")
-        a.put(SyncKind.Theme, "t1", "a-theme")
-        b.put(SyncKind.Collection, "c1", "b-collection")
+        a.put(TestKind.Note, "t1", "a-theme")
+        b.put(TestKind.Note, "c1", "b-collection")
         startAll(a, b)
 
-        assertEquals("a-theme", b.value(SyncKind.Theme, "t1"))
-        assertEquals("b-collection", a.value(SyncKind.Collection, "c1"))
+        assertEquals("a-theme", b.value(TestKind.Note, "t1"))
+        assertEquals("b-collection", a.value(TestKind.Note, "c1"))
         assertEquals(SyncStatus.Phase.UpToDate, a.engine.status.value.phase)
         assertEquals(SyncStatus.Phase.UpToDate, b.engine.status.value.phase)
     }
@@ -56,58 +58,58 @@ class SyncEngineTest {
     fun laterEditWins() = runTest {
         val a = device("A")
         val b = device("B")
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         startAll(a, b)
-        assertEquals("v1", b.value(SyncKind.Theme, "t"))
+        assertEquals("v1", b.value(TestKind.Note, "t"))
 
-        b.put(SyncKind.Theme, "t", "v2")
+        b.put(TestKind.Note, "t", "v2")
         settle()
-        assertEquals("v2", a.value(SyncKind.Theme, "t"))
+        assertEquals("v2", a.value(TestKind.Note, "t"))
 
-        a.put(SyncKind.Theme, "t", "v3")
+        a.put(TestKind.Note, "t", "v3")
         settle()
-        assertEquals("v3", a.value(SyncKind.Theme, "t"))
-        assertEquals("v3", b.value(SyncKind.Theme, "t"))
+        assertEquals("v3", a.value(TestKind.Note, "t"))
+        assertEquals("v3", b.value(TestKind.Note, "t"))
     }
 
     @Test
     fun concurrentEditsSettleOnTheHigherStamp() = runTest {
         val a = device("A")
         val b = device("B")
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         startAll(a, b)
         server.online = false
-        a.put(SyncKind.Theme, "t", "from-a")
-        b.put(SyncKind.Theme, "t", "from-b")
+        a.put(TestKind.Note, "t", "from-a")
+        b.put(TestKind.Note, "t", "from-b")
         settle()
-        val stampA = a.store.ledgerRows.getValue("theme/t").let { Hlc(it.physicalTime, it.logicalCounter.toInt(), it.originDeviceId) }
-        val stampB = b.store.ledgerRows.getValue("theme/t").let { Hlc(it.physicalTime, it.logicalCounter.toInt(), it.originDeviceId) }
+        val stampA = a.store.ledgerRows.getValue("note/t").let { Hlc(it.physicalTime, it.logicalCounter.toInt(), it.originDeviceId) }
+        val stampB = b.store.ledgerRows.getValue("note/t").let { Hlc(it.physicalTime, it.logicalCounter.toInt(), it.originDeviceId) }
         server.online = true
         advanceTimeBy(31_000)
         settle()
 
         val winner = if (stampA > stampB) "from-a" else "from-b"
-        assertEquals(winner, a.value(SyncKind.Theme, "t"))
-        assertEquals(winner, b.value(SyncKind.Theme, "t"))
+        assertEquals(winner, a.value(TestKind.Note, "t"))
+        assertEquals(winner, b.value(TestKind.Note, "t"))
     }
 
     @Test
     fun newestPreSyncCopyWinsOnFirstContact() = runTest {
         val a = device("A")
         val b = device("B")
-        a.put(SyncKind.Theme, "t", "older", timeHint = 100)
-        b.put(SyncKind.Theme, "t", "newer", timeHint = 200)
+        a.put(TestKind.Note, "t", "older", timeHint = 100)
+        b.put(TestKind.Note, "t", "newer", timeHint = 200)
         startAll(a, b)
 
-        assertEquals("newer", a.value(SyncKind.Theme, "t"))
-        assertEquals("newer", b.value(SyncKind.Theme, "t"))
+        assertEquals("newer", a.value(TestKind.Note, "t"))
+        assertEquals("newer", b.value(TestKind.Note, "t"))
     }
 
     @Test
     fun applyingARecordDoesNotEchoItBack() = runTest {
         val a = device("A")
         val b = device("B")
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         startAll(a, b)
         val head = server.head(keys.token)
         settle()
@@ -115,21 +117,21 @@ class SyncEngineTest {
 
         assertEquals(head, server.head(keys.token), 0.0)
         assertEquals(0, b.store.dirtyCount())
-        assertFalse(b.store.ledgerRows.getValue("theme/t").dirty)
+        assertFalse(b.store.ledgerRows.getValue("note/t").dirty)
     }
 
     @Test
     fun localDeleteSendsATombstone() = runTest {
         val a = device("A")
         val b = device("B")
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         startAll(a, b)
-        assertEquals("v1", b.value(SyncKind.Theme, "t"))
+        assertEquals("v1", b.value(TestKind.Note, "t"))
 
-        a.delete(SyncKind.Theme, "t")
+        a.delete(TestKind.Note, "t")
         settle()
-        assertNull(serverPayload("theme/t"))
-        assertNull(b.value(SyncKind.Theme, "t"))
+        assertNull(serverPayload("note/t"))
+        assertNull(b.value(TestKind.Note, "t"))
     }
 
     @Test
@@ -138,16 +140,32 @@ class SyncEngineTest {
         val b = device("B")
         a.addBook("sha")
         b.addBook("sha")
-        a.put(SyncKind.Bookmark, "sha", "mark")
+        a.put(TestKind.BookNote, "sha", "mark")
         startAll(a, b)
-        assertEquals("mark", b.value(SyncKind.Bookmark, "sha"))
+        assertEquals("mark", b.value(TestKind.BookNote, "sha"))
 
         a.removeBook("sha")
-        a.delete(SyncKind.Bookmark, "sha")
+        a.delete(TestKind.BookNote, "sha")
         settle()
-        assertEquals("mark", serverPayload("bookmark/sha"))
-        assertEquals("mark", b.value(SyncKind.Bookmark, "sha"))
-        assertFalse(a.store.ledgerRows.getValue("bookmark/sha").deleted)
+        assertEquals("mark", serverPayload("bookNote/sha"))
+        assertEquals("mark", b.value(TestKind.BookNote, "sha"))
+        assertFalse(a.store.ledgerRows.getValue("bookNote/sha").deleted)
+    }
+
+    @Test
+    fun recordForABookNotHereWaitsForTheBook() = runTest {
+        val a = device("A")
+        val b = device("B")
+        a.addBook("sha")
+        a.put(TestKind.BookNote, "sha", "mark")
+        startAll(a, b)
+        assertNull(b.value(TestKind.BookNote, "sha"))
+
+        b.addBook("sha")
+        settle()
+        assertEquals("mark", b.value(TestKind.BookNote, "sha"))
+        assertEquals(0, b.store.dirtyCount())
+        assertEquals(emptyMap<String, String>(), b.store.metadataWithPrefix("pendingBook/"))
     }
 
     @Test
@@ -174,7 +192,7 @@ class SyncEngineTest {
         val a = device("A")
         startAll(a)
         server.minClientProtocol = SyncProtocol.VERSION + 1
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         settle()
         assertEquals(SyncStatus.Phase.UpdateRequired, a.engine.status.value.phase)
     }
@@ -195,14 +213,14 @@ class SyncEngineTest {
         val b = device("B")
         startAll(a, b)
         // Still inside the change debounce: only pause() can get it out before stopping.
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         a.engine.pause(timeoutMs = 10_000)
 
         assertEquals(SyncStatus.Phase.Off, a.engine.status.value.phase)
         assertEquals(0, a.store.dirtyCount())
-        assertEquals("v1", serverPayload("theme/t"))
+        assertEquals("v1", serverPayload("note/t"))
         settle()
-        assertEquals("v1", b.value(SyncKind.Theme, "t"))
+        assertEquals("v1", b.value(TestKind.Note, "t"))
     }
 
     @Test
@@ -210,7 +228,7 @@ class SyncEngineTest {
         val a = device("A")
         startAll(a)
         server.online = false
-        a.put(SyncKind.Theme, "t", "v1")
+        a.put(TestKind.Note, "t", "v1")
         a.engine.pause(timeoutMs = 10_000)
 
         assertEquals(SyncStatus.Phase.Off, a.engine.status.value.phase)
@@ -220,6 +238,6 @@ class SyncEngineTest {
         a.engine.start(keys)
         settle()
         assertEquals(0, a.store.dirtyCount())
-        assertEquals("v1", serverPayload("theme/t"))
+        assertEquals("v1", serverPayload("note/t"))
     }
 }

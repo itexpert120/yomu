@@ -23,11 +23,9 @@ class SyncWireGoldenTest {
 
     @Test
     fun recordNames() {
-        assertEquals(
-            listOf("meta", "progress", "chapter", "bookmark", "highlight", "bookSettings", "shelf", "session", "settings", "theme", "font", "collection"),
-            SyncKind.entries.map { it.key },
-        )
-        assertEquals("chapter/abc|OEBPS/ch1.xhtml", SyncKind.Chapter.name(ChapterRecordId.of("abc", "OEBPS/ch1.xhtml")))
+        // Kind keys are pinned where the kinds are built: RecordKindsTest.
+        assertEquals("abc|OEBPS/ch1.xhtml", ChapterRecordId.of("abc", "OEBPS/ch1.xhtml"))
+        assertEquals("progress/abc", LocalRecord("progress", "abc", "abc", "{}", 1).name)
         assertEquals(listOf("app", "library", "readerDefaults"), listOf(SettingsId.APP, SettingsId.LIBRARY, SettingsId.READER_DEFAULTS))
     }
 

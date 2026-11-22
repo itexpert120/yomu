@@ -64,7 +64,7 @@ data class SyncStatus(
 @Singleton
 internal class SyncEngine @Inject constructor(
     private val store: SyncStore,
-    private val local: LocalRecords,
+    private val kinds: RecordKinds,
     private val localChanges: LocalChangeSource,
     private val transport: SyncTransport,
     @SyncDeviceLabel private val deviceLabel: dagger.Lazy<String>,
@@ -115,7 +115,7 @@ internal class SyncEngine @Inject constructor(
     suspend fun pause(timeoutMs: Long) {
         if (job?.isActive != true) return
         withTimeoutOrNull(timeoutMs) {
-            if (tracking) mutex.withLock { SyncKind.entries.forEach { diff(it) } }
+            if (tracking) mutex.withLock { kinds.all.forEach { diff(it) } }
             pushRequests.trySend(Unit)
             while (store.dirtyCount() > 0) delay(DRAIN_POLL_MILLIS)
         }
@@ -211,7 +211,6 @@ internal class SyncEngine @Inject constructor(
     }
 
     private suspend fun applyBatch(keys: SyncKeys, records: List<WireRecord>) {
-        local.beforeApply()
         val decoded = records.mapNotNull { record ->
             val envelope = runCatching {
                 SyncJson.decodeFromString(SyncEnvelope.serializer(), keys.open(record.key, record.blob ?: return@mapNotNull null).decodeToString())
@@ -220,17 +219,16 @@ internal class SyncEngine @Inject constructor(
                 return@mapNotNull null
             }
             val hlc = Hlc.decode(record.hlc) ?: return@mapNotNull null
-            val kind = SyncKind.of(envelope.name) ?: return@mapNotNull null
+            val kind = kinds.of(envelope.name) ?: return@mapNotNull null
             Triple(envelope, hlc, kind)
         }
-        // Fonts first so settings that use them resolve to installed files.
-        for ((envelope, hlc, kind) in decoded.sortedBy { if (it.third == SyncKind.Font) 0 else 1 }) {
+        for ((envelope, hlc, kind) in decoded.sortedBy { it.third.applyOrder }) {
             clock.observe(hlc)
             val existing = store.ledger(envelope.name)
             if (existing != null && existing.hlc() >= hlc) continue
             val id = envelope.name.substringAfter('/')
             val applied = runCatching {
-                local.apply(kind, id, envelope.payload, existing == null, envelope.device, hlc)
+                kinds.apply(kind, id, envelope.payload, existing == null, envelope.device, hlc)
             }.getOrElse { error ->
                 if (error is CancellationException) throw error
                 Log.w(TAG, "Couldn't apply ${kind.key}", error)
@@ -268,20 +266,20 @@ internal class SyncEngine @Inject constructor(
     private suspend fun trackLoop() {
         mutex.withLock {
             adoptNewBooks()
-            SyncKind.entries.forEach { diff(it) }
+            kinds.all.forEach { diff(it) }
         }
         tracking = true
         pushRequests.trySend(Unit)
-        val pending = mutableSetOf<SyncKind>()
+        val pending = mutableSetOf<String>()
         localChanges.changes
-            .onEach { kinds -> synchronized(pending) { pending += kinds } }
+            .onEach { keys -> synchronized(pending) { pending += keys } }
             .debounce(DEBOUNCE_MILLIS)
             .collect {
-                val kinds = synchronized(pending) { pending.toSet().also { pending.clear() } }
-                if (kinds.isEmpty()) return@collect
+                val changed = synchronized(pending) { pending.toSet().also { pending.clear() } }.mapNotNull(kinds::byKey)
+                if (changed.isEmpty()) return@collect
                 mutex.withLock {
-                    if (SyncKind.Progress in kinds) adoptNewBooks()
-                    kinds.forEach { diff(it) }
+                    if (changed.any { it.bookBound }) adoptNewBooks()
+                    changed.forEach { diff(it) }
                 }
                 pushRequests.trySend(Unit)
             }
@@ -294,14 +292,14 @@ internal class SyncEngine @Inject constructor(
         val books = store.localBooks().entries.associate { (id, sha) -> sha to id }
         pending.forEach { (key, sha) ->
             val bookId = books[sha] ?: return@forEach
-            local.onBookAdded(sha, bookId)
+            kinds.onBookAdded(sha, bookId)
             store.deleteMetadata(key)
         }
     }
 
     /** Stamps local changes of [kind] (relative to the ledger) and marks them for pushing. */
-    private suspend fun diff(kind: SyncKind) {
-        val snapshot = local.snapshot(kind).associateBy { it.name }
+    private suspend fun diff(kind: RecordKind<*>) {
+        val snapshot = kind.snapshot().associateBy { it.name }
         val ledger = store.ledgerOfKind(kind.key).associateBy { it.recordKey }
         val changed = mutableListOf<SyncLedgerEntity>()
         for (record in snapshot.values) {
@@ -317,12 +315,10 @@ internal class SyncEngine @Inject constructor(
         }
         if (!kind.neverDeleted) {
             val localShas = if (kind.bookBound) store.localBooks().values.toSet() else emptySet()
-            val kept = local.keptWithoutLocalCopy(kind)
             for (row in ledger.values) {
                 if (row.deleted || row.recordKey in snapshot) continue
                 // A book removed from this device keeps its synced data everywhere else.
                 if (kind.bookBound && row.bookSha256 !in localShas) continue
-                if (row.entityId in kept) continue
                 val stamp = clock.tick()
                 changed += row.copy(
                     payloadJson = null,
@@ -354,7 +350,7 @@ internal class SyncEngine @Inject constructor(
                     Log.w(TAG, "Push failed", error)
                     _status.value = _status.value.copy(phase = SyncStatus.Phase.Offline)
                     delay(RETRY_MILLIS)
-                    local.retryPending()
+                    kinds.retryPending()
                     continue
                 }
                 if (sent == 0) break
@@ -372,7 +368,7 @@ internal class SyncEngine @Inject constructor(
             val envelope = SyncEnvelope(
                 name = row.recordKey,
                 payload = row.payloadJson,
-                device = if (row.kind == SyncKind.Progress.key) deviceLabel.get() else null,
+                device = if (kinds.byKey(row.kind)?.carriesDeviceLabel == true) deviceLabel.get() else null,
             )
             val serverKey = keys.serverKey(row.recordKey)
             val blob = keys.seal(serverKey, SyncJson.encodeToString(SyncEnvelope.serializer(), envelope).encodeToByteArray())
@@ -405,7 +401,7 @@ internal class SyncEngine @Inject constructor(
     private fun LocalRecord.toLedger(stamp: Hlc) = SyncLedgerEntity(
         recordKey = name,
         bookSha256 = sha256,
-        kind = kind.key,
+        kind = kind,
         entityId = entityId,
         payloadJson = payload,
         deleted = false,

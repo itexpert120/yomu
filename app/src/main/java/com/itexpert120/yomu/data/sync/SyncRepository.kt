@@ -17,6 +17,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -158,7 +159,7 @@ class SyncRepository @Inject internal constructor(
     fun progressOffer(bookId: BookId): Flow<ProgressOffer?> = flow {
         val sha = dao.shaForBook(bookId.value) ?: return@flow emit(null)
         emitAll(
-            dao.observeMetadataWithPrefix(SyncApplier.OFFER_PREFIX + sha).map { rows ->
+            dao.observeMetadataWithPrefix(ProgressKind.OFFER_PREFIX + sha).map { rows ->
                 rows.firstOrNull()?.let { runCatching { SyncJson.decodeFromString(ProgressOffer.serializer(), it.value) }.getOrNull() }
             },
         )
@@ -166,7 +167,7 @@ class SyncRepository @Inject internal constructor(
 
     /** Forgets the offer, whether it was taken (the reader jumped) or dismissed. */
     suspend fun clearOffer(bookId: BookId) {
-        dao.shaForBook(bookId.value)?.let { dao.deleteMetadata(SyncApplier.OFFER_PREFIX + it) }
+        dao.shaForBook(bookId.value)?.let { dao.deleteMetadata(ProgressKind.OFFER_PREFIX + it) }
     }
 
     private suspend fun turnOff(keepStatus: Boolean) = lifecycle.withLock {
@@ -214,7 +215,55 @@ internal abstract class SyncModule {
     abstract fun bindStore(impl: RoomSyncStore): SyncStore
 
     @Binds
-    abstract fun bindLocalRecords(impl: RoomLocalRecords): LocalRecords
+    abstract fun bindFonts(impl: RepositorySyncFonts): SyncFonts
+
+    @Binds
+    @IntoSet
+    abstract fun bindMetaKind(kind: MetaKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindProgressKind(kind: ProgressKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindChapterKind(kind: ChapterKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindBookmarkKind(kind: BookmarkKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindHighlightKind(kind: HighlightKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindBookSettingsKind(kind: BookSettingsKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindBookCollectionsKind(kind: BookCollectionsKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindSessionKind(kind: SessionKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindSettingsKind(kind: SettingsKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindThemeKind(kind: ThemeKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindFontKind(kind: FontKind): RecordKind<*>
+
+    @Binds
+    @IntoSet
+    abstract fun bindCollectionKind(kind: CollectionKind): RecordKind<*>
 
     @Binds
     abstract fun bindLocalChanges(impl: RoomLocalChangeSource): LocalChangeSource

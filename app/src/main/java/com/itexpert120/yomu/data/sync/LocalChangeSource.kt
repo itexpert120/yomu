@@ -12,37 +12,26 @@ import javax.inject.Singleton
 
 /** Tells the sync engine which record kinds may have changed locally since it last looked. */
 internal interface LocalChangeSource {
-    /** Emits after each local write; never emits the current state on collection. */
-    val changes: Flow<Set<SyncKind>>
+    /** [RecordKind.key]s, emitted after each local write; never the current state on collection. */
+    val changes: Flow<Set<String>>
 }
 
-/** Room table invalidations plus any DataStore write (settings, themes and fonts live there). */
+/** Room invalidations of each kind's [RecordKind.watchedTables], plus any DataStore write. */
 @Singleton
 internal class RoomLocalChangeSource @Inject constructor(
     private val database: YomuDatabase,
     private val dataStore: DataStore<Preferences>,
+    private val kinds: RecordKinds,
 ) : LocalChangeSource {
-    override val changes: Flow<Set<SyncKind>>
+    override val changes: Flow<Set<String>>
         get() {
-            val roomChanges = database.invalidationTracker.createFlow(*TABLE_KINDS.keys.toTypedArray(), emitInitialState = false)
-                .map { tables -> tables.flatMap { TABLE_KINDS[it].orEmpty() }.toSet() }
+            val byTable = kinds.all.flatMap { kind -> kind.watchedTables.map { it to kind.key } }
+                .groupBy({ it.first }, { it.second })
+            val roomChanges = database.invalidationTracker.createFlow(*byTable.keys.toTypedArray(), emitInitialState = false)
+                .map { tables -> tables.flatMap { byTable[it].orEmpty() }.toSet() }
+            val prefKinds = kinds.all.filter { it.watchesPreferences }.mapTo(HashSet()) { it.key }
             // The first emission is the current state.
-            val prefChanges = dataStore.data.drop(1).map { setOf(SyncKind.Settings, SyncKind.Theme, SyncKind.Font) }
+            val prefChanges = dataStore.data.drop(1).map { prefKinds }
             return merge(roomChanges, prefChanges)
         }
-
-    private companion object {
-        /** Which record kinds each table feeds. */
-        val TABLE_KINDS = mapOf(
-            "books" to setOf(SyncKind.Meta, SyncKind.Progress, SyncKind.Shelf),
-            "book_collections" to setOf(SyncKind.Shelf),
-            "collections" to setOf(SyncKind.Collection),
-            "chapter_reads" to setOf(SyncKind.Chapter),
-            "chapter_progress" to setOf(SyncKind.Chapter),
-            "bookmarks" to setOf(SyncKind.Bookmark),
-            "highlights" to setOf(SyncKind.Highlight),
-            "reader_settings" to setOf(SyncKind.BookSettings),
-            "reading_sessions" to setOf(SyncKind.Session),
-        )
-    }
 }
