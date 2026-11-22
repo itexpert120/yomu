@@ -34,6 +34,7 @@ internal class SettingsKind @Inject constructor(
     override val watchesPreferences = true
     override val payload = JsonObject.serializer()
 
+    // The payloads below carry exactly APP_FIELDS and LIBRARY_FIELDS (SyncedFieldsTest checks).
     override suspend fun snapshot(): List<LocalRecord> {
         val app = AppSettingsPayload(appSettings.themePreference.first().name, appSettings.colorStyle.first().name)
         val library = libraryPrefs.preferences.first().let { LibraryPayload(sort = it.sortMode.name, view = it.viewMode.name, coverCrop = it.coverCrop) }
@@ -68,6 +69,21 @@ internal class SettingsKind @Inject constructor(
             }
         }
         return stored(payload)
+    }
+
+    companion object {
+        /** AppSettingsRepository's settings; the accent and pure-black dark follow each screen. */
+        val APP_FIELDS = SyncedFields(
+            synced = mapOf("themePreference" to "theme", "colorStyle" to "colorStyle"),
+            deviceLocal = setOf("oledDark", "accentSelection"),
+        )
+
+        /** LibraryPreferences; columns and tabs are per device. */
+        val LIBRARY_FIELDS = SyncedFields(
+            synced = mapOf("sortMode" to "sort", "viewMode" to "view", "coverCrop" to "coverCrop"),
+            deviceLocal = setOf("portraitGridColumns", "landscapeGridColumns", "lastTab", "tabOrder", "hiddenTabs"),
+            legacy = setOf("group"),
+        )
     }
 }
 

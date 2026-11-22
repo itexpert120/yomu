@@ -12,32 +12,51 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 
 /**
- * Converts reader settings to and from their synced form: device-specific fields are dropped, and
- * a custom font travels as its family name (each device installs and stores its own files).
+ * Converts reader settings (the reading defaults and per-book overrides) to and from their synced
+ * form: only [fields] travel, and a custom font travels as its family name (each device installs
+ * and stores its own files).
  */
 internal object ReaderSettingsSync {
-    /**
-     * Fields that belong to the device, not the reader: screen and display behaviour, plus text
-     * size and spacing, which depend on the screen (a tablet wants different values than a phone).
-     */
-    private val DEVICE_FIELDS = setOf(
-        "useSystemBrightness",
-        "brightness",
-        "dimLevel",
-        "keepScreenOn",
-        "fontScale",
-        "lineHeight",
-        "pageMargins",
-        "paragraphSpacing",
-    )
     private const val CUSTOM_FONT = "customFont"
+
+    val fields = SyncedFields(
+        synced = setOf(
+            "layout",
+            "theme",
+            "customBackground",
+            "customText",
+            "font",
+            CUSTOM_FONT,
+            "textAlign",
+            "tapNavigation",
+            "showFooter",
+            "footerShowBattery",
+            "footerShowClock",
+            "footerShowProgress",
+            "footerShowPagesLeft",
+            "showScrollbar",
+            "immersiveChrome",
+        ),
+        // Screen and display behaviour, plus text size and spacing, which depend on the screen (a
+        // tablet wants different values than a phone).
+        deviceLocal = setOf(
+            "useSystemBrightness",
+            "brightness",
+            "dimLevel",
+            "keepScreenOn",
+            "fontScale",
+            "lineHeight",
+            "pageMargins",
+            "paragraphSpacing",
+        ),
+    )
 
     fun toPayload(settings: ReaderSettings): String {
         val full = SyncJson.encodeToJsonElement(settings).jsonObject
         val synced = buildJsonObject {
             full.forEach { (key, value) ->
                 when (key) {
-                    in DEVICE_FIELDS -> Unit
+                    !in fields -> Unit
                     CUSTOM_FONT -> put(key, settings.customFont?.let { JsonPrimitive(it.family) } ?: JsonNull)
                     else -> put(key, value)
                 }
@@ -63,7 +82,7 @@ internal object ReaderSettingsSync {
         val merged = buildJsonObject {
             base.forEach { (key, value) -> put(key, value) }
             remote.forEach { (key, value) ->
-                if (key !in DEVICE_FIELDS && key != CUSTOM_FONT) put(key, value)
+                if (key in fields && key != CUSTOM_FONT) put(key, value)
             }
         }
         val font = (remote[CUSTOM_FONT] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.let(installedFont)
