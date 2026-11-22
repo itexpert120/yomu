@@ -233,6 +233,10 @@ private fun TopLevelNavigationShell(
             exitTransition = transitions.exit,
             popEnterTransition = transitions.popEnter,
             popExitTransition = transitions.popExit,
+            // A back gesture between tabs scrubs the same slide a back tap plays; Navigation's
+            // default would shrink the tab unclipped inside the shell instead.
+            predictivePopEnterTransition = { transitions.popEnter(this) },
+            predictivePopExitTransition = { transitions.popExit(this) },
         ) {
             composable<Library> {
                 LibraryRoute(
