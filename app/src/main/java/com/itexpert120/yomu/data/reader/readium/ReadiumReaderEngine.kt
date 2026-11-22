@@ -43,7 +43,6 @@ import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
-import com.itexpert120.yomu.core.reader.ReaderRenderGate
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSession
@@ -78,7 +77,6 @@ import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.HyperlinkNavigator
-import org.readium.r2.navigator.OverflowableNavigator
 import org.readium.r2.navigator.SelectableNavigator
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -108,9 +106,7 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
-import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sign
 import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.TextAlign as ReadiumTextAlign
 
@@ -364,12 +360,6 @@ private class ReadiumReaderSession(
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
-    // The page remains covered until its target resource and all layout-affecting styling are ready.
-    private val renderGate = ReaderRenderGate()
-    private val _renderState = renderGate.state
-    override val renderState: StateFlow<ReaderRenderState> = renderGate.state
-    private var revealWatchdog: Job? = null
-
     // Cached injection script carrying the active custom font's @font-face CSS (base64 data URLs),
     // keyed by its family+paths so the (multi-MB) script is built once per font, off the main thread,
     // rather than per chapter. Readium can only serve fonts from bundled assets, so custom fonts are
@@ -403,11 +393,23 @@ private class ReadiumReaderSession(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var navigator: EpubNavigatorFragment? = null
+    private var surface: NavigatorSurface? = null
+
+    // The page remains covered until its target resource and all layout-affecting styling are ready.
+    private val presentation = PagePresentation(
+        scope = scope,
+        currentHref = { lastLocator?.href?.toString() },
+        // Page turns slide horizontally (Readium's animated pagination) unless the system has
+        // animations turned off. Readium defaults to an instant jump, which read as a hard cut.
+        animationsEnabled = ValueAnimator::areAnimatorsEnabled,
+        onRevealStalled = { generation ->
+            Log.w(TAG, "Chapter reveal timed out (generation $generation); revealing as is")
+        },
+    )
+    override val renderState: StateFlow<ReaderRenderState> = presentation.renderState
     private var locatorCollectionJob: Job? = null
     private var scrollProgressJob: Job? = null
     private var restorationJob: Job? = null
-    private var styleJob: Job? = null
-    private val renderGeneration: Long get() = renderGate.generation
     private var restorationGeneration = 0L
     private var hostedFragmentManager: FragmentManager? = null
     private var hostedFragmentTag: String? = null
@@ -422,12 +424,6 @@ private class ReadiumReaderSession(
     // True while restoring [lastLocator] into a freshly re-hosted fragment; the fragment's transient
     // initial-locator emissions are ignored during this window so they can't clobber saved progress.
     private var restoring = false
-
-    private var pageTurnSettle: Job? = null
-
-    // A queued turn waiting for the next frame; page events in that window must not replay it again.
-    private var pageTurnReplay: Job? = null
-    private var queuedPageTurns = 0
 
     // Latest settings, read by the tap handler (e.g. for the center-tap-opens-sheet toggle).
     private var currentSettings: ReaderSettings = initialSettings
@@ -494,13 +490,13 @@ private class ReadiumReaderSession(
             // Initial opening has no prior resource transition to finalize. Chapter changes are
             // finalized from updateCurrentLocator instead: Readium invokes this callback before it
             // publishes the new locator, and starting both passes can mutate the WebView twice.
-            if (_renderState.value is ReaderRenderState.Opening) {
-                scheduleCriticalStyling()
+            if (renderState.value is ReaderRenderState.Opening) {
+                presentation.revealWhenReady()
             }
         }
 
         override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
-            onPageTurnSettled()
+            presentation.onTurnSettled()
             if (!restoring) position.onPage(locator.href.toString(), pageIndex, totalPages)
             updateCurrentLocator(locator)
         }
@@ -520,34 +516,30 @@ private class ReadiumReaderSession(
         ).joinToString("\n")
     }
 
-    private fun scheduleCriticalStyling() {
-        styleJob?.cancel()
-        val generation = renderGeneration
-        val expectedHref = lastLocator?.href?.toString()
-        val expectedNavigator = navigator ?: return
-        styleJob = scope.launch {
-            ReaderOpenTrace.mark("reader.critical-bootstrap-start")
-            applyScrollbars(currentSettings)
-            // All layout-affecting mutations go through one idempotent bootstrap. This prevents
-            // locator, settings, and page-loaded callbacks from racing one another on first paint.
-            val ready = renderGate.reveal(
-                generation,
-                expectedHref,
-                isCurrent = { navigator === expectedNavigator && expectedHref == lastLocator?.href?.toString() },
-                style = {
-                    val styled = evalWithRetry(criticalBootstrapJs())
-                    if (styled) clearImmersiveScrollTopPadding()
-                    styled
-                },
-                content = { awaitRenderableContent(expectedNavigator) },
-                preDraw = { awaitNextPreDraw(expectedNavigator) },
-            )
-            if (!ready) return@launch
-            revealWatchdog?.cancel()
-            ReaderOpenTrace.mark("reader.pre-draw")
-            ReaderOpenTrace.mark("reader.final-reveal")
-            // Gesture work is deliberately after the first stable frame.
-            injectOverscroll()
+    /** The hosted Readium navigator as [PagePresentation]'s page surface. */
+    private inner class NavigatorSurface(val nav: EpubNavigatorFragment) : PageSurface {
+        override fun prepareStyling() = applyScrollbars(currentSettings)
+
+        override suspend fun applyCriticalStyle(): Boolean {
+            val styled = evalWithRetry(criticalBootstrapJs())
+            if (styled) clearImmersiveScrollTopPadding()
+            return styled
+        }
+
+        override suspend fun hasContent(): Boolean = awaitRenderableContent(nav)
+
+        override suspend fun awaitPreDraw(): Boolean = awaitNextPreDraw(nav)
+
+        override fun onRevealed() = injectOverscroll()
+
+        override fun turn(forward: Boolean, animated: Boolean) {
+            if (forward) nav.goForward(animated = animated) else nav.goBackward(animated = animated)
+        }
+
+        override suspend fun awaitFrame() = suspendCancellableCoroutine { continuation ->
+            val callback = Choreographer.FrameCallback { continuation.resume(Unit) }
+            Choreographer.getInstance().postFrameCallback(callback)
+            continuation.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
         }
     }
 
@@ -738,7 +730,7 @@ private class ReadiumReaderSession(
         ReaderOpenTrace.mark("reader.fragment-attached")
         val rehost = navigator != null
         if (rehost) {
-            beginChapterTransition()
+            presentation.cover()
         }
         val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
         restorationGeneration++
@@ -746,6 +738,10 @@ private class ReadiumReaderSession(
         restorationJob = null
         restoring = false
         navigator = nav
+        if (surface?.nav !== nav) {
+            surface = NavigatorSurface(nav)
+            presentation.attach(surface!!)
+        }
         hostedFragmentManager = fragmentManager
         hostedFragmentTag = tag
         // The system kills the WebView renderer freely while the app is backgrounded; rebuild the
@@ -766,7 +762,7 @@ private class ReadiumReaderSession(
         // not navigate, it only lets the single bootstrap wait for the actual page.
         scope.launch {
             nav.currentLocator.first()
-            if (_renderState.value !is ReaderRenderState.Ready) scheduleCriticalStyling()
+            if (renderState.value !is ReaderRenderState.Ready) presentation.revealWhenReady()
         }
         // Tap zones: in PAGED mode the left/right thirds turn pages and the centre toggles the
         // controls bar. In SCROLL mode there are no page-turn zones, so a tap *anywhere* toggles the
@@ -779,11 +775,11 @@ private class ReadiumReaderSession(
                 val paged = currentSettings.layout == ReaderLayout.Paged
                 if (currentSettings.tapNavigation && paged) {
                     if (x <= TAP_LEFT) {
-                        goBackward()
+                        presentation.requestTurn(forward = false)
                         return true
                     }
                     if (x >= TAP_RIGHT) {
-                        goForward()
+                        presentation.requestTurn(forward = true)
                         return true
                     }
                 }
@@ -906,7 +902,7 @@ private class ReadiumReaderSession(
         val previousHref = lastLocator?.href?.toString()
         val hrefStr = locator.href.toString()
         val resourceChanged = previousHref != null && previousHref != hrefStr
-        val transitionAlreadyStarted = _renderState.value is ReaderRenderState.Transitioning
+        val transitionAlreadyStarted = renderState.value is ReaderRenderState.Transitioning
         if (
             resourceChanged &&
             !transitionAlreadyStarted &&
@@ -918,9 +914,7 @@ private class ReadiumReaderSession(
             // adjacent spine item; covering it here would make the new chapter appear twice.
             val previousIndex = position.resourceIndexOf(previousHref)
             val currentIndex = position.resourceIndexOf(hrefStr)
-            beginChapterTransition(
-                forward = currentIndex >= previousIndex,
-            )
+            presentation.cover(forward = currentIndex >= previousIndex)
         }
         lastLocator = locator
         if (currentSettings.layout == ReaderLayout.Scroll && queryScrollProgress) {
@@ -943,7 +937,7 @@ private class ReadiumReaderSession(
         if (resourceChanged) {
             // Readium publishes the canonical locator after loading the resource. Finalize styling
             // here exactly once so the new chapter is not reflowed by two competing bootstraps.
-            scheduleCriticalStyling()
+            presentation.revealWhenReady()
         }
     }
 
@@ -960,11 +954,11 @@ private class ReadiumReaderSession(
         if (nav != null) {
             when {
                 criticalStylingChanged -> {
-                    beginChapterTransition()
+                    presentation.cover()
                     if (publicationPresentationChanged) {
                         nav.submitPreferences(settings.toPreferences())
                     }
-                    scheduleCriticalStyling()
+                    presentation.revealWhenReady()
                 }
 
                 previous.showScrollbar != settings.showScrollbar -> applyScrollbars(settings)
@@ -1101,19 +1095,6 @@ private class ReadiumReaderSession(
         )
     }
 
-    // Cover the page during a chapter change so it is revealed only once the new resource is re-styled.
-    private fun beginChapterTransition(forward: Boolean = true) {
-        renderGate.transition(forward)
-        styleJob?.cancel()
-        revealWatchdog?.cancel()
-        val generation = renderGeneration
-        revealWatchdog = scope.launch {
-            delay(STYLE_REVEAL_TIMEOUT_MS)
-            Log.w(TAG, "Chapter reveal timed out (generation $generation); revealing as is")
-            renderGate.revealStalled(generation, lastLocator?.href?.toString())
-        }
-    }
-
     private fun chapterStartPaddingPx(): Int {
         val topInset = topSystemInsetCssPx()
         val fallbackTop = CHAPTER_START_FALLBACK_PADDING_DP.roundToInt()
@@ -1230,79 +1211,9 @@ private class ReadiumReaderSession(
         injectJs(js)
     }
 
-    // Page turns slide horizontally (Readium's animated pagination) unless the system has animations
-    // turned off. Readium defaults to an instant jump, which made tap-to-turn feel like a hard cut.
-    override fun goForward() = requestPageTurn(forward = true)
+    override fun goForward() = presentation.requestTurn(forward = true)
 
-    override fun goBackward() = requestPageTurn(forward = false)
-
-    // Readium computes each turn from the WebView's scroll position at that instant. A tap that lands
-    // mid-animation measures a half-scrolled page, and one that lands while the next resource is still
-    // settling reads as "can't scroll" and jumps a whole chapter; pages passed that way also never
-    // report a settled page, so the chapter left behind keeps an early progress. Run turns one at a
-    // time instead: taps made during a turn are queued and replayed once it settles. Rapid tapping is
-    // how readers catch up to a position (e.g. from another device), so every tap counts and queued
-    // turns skip the slide animation to catch up quickly.
-    private fun requestPageTurn(forward: Boolean) {
-        val step = if (forward) 1 else -1
-        if (pageTurnSettle?.isActive == true) {
-            queuedPageTurns = if (queuedPageTurns == 0 || queuedPageTurns.sign == step) {
-                (queuedPageTurns + step).coerceIn(-MAX_QUEUED_PAGE_TURNS, MAX_QUEUED_PAGE_TURNS)
-            } else {
-                // Reversing direction cancels the turns still waiting in the old direction.
-                0
-            }
-            return
-        }
-        startPageTurn(forward, animated = pageTurnAnimated())
-    }
-
-    private fun startPageTurn(forward: Boolean, animated: Boolean) {
-        val nav = navigator as? OverflowableNavigator ?: return
-        // Fallback for turns that produce no page event (e.g. at the very start or end of the book).
-        pageTurnSettle = scope.launch {
-            delay(PAGE_TURN_SETTLE_TIMEOUT_MS)
-            onPageTurnSettled()
-        }
-        if (forward) nav.goForward(animated = animated) else nav.goBackward(animated = animated)
-    }
-
-    private fun onPageTurnSettled() {
-        if (pageTurnReplay?.isActive == true) return
-        val settle = pageTurnSettle ?: return
-        pageTurnSettle = null
-        settle.cancel()
-        val queued = queuedPageTurns
-        if (queued == 0) return
-        queuedPageTurns -= queued.sign
-        // One follow-up tap (typically back, then forward again) keeps the slide: replaying it as an
-        // instant jump from a page that was still settling read as a jerk. Only a backlog of several
-        // taps skips the animation to catch up. Start on the next frame so the pager has settled.
-        val animated = abs(queued) == 1 && pageTurnAnimated()
-        pageTurnReplay = scope.launch {
-            awaitNextFrame()
-            pageTurnReplay = null
-            startPageTurn(forward = queued > 0, animated = animated)
-        }
-        // Taps during the one-frame wait keep queueing behind this turn.
-        pageTurnSettle = pageTurnReplay
-    }
-
-    private suspend fun awaitNextFrame() = suspendCancellableCoroutine { continuation ->
-        val callback = Choreographer.FrameCallback { continuation.resume(Unit) }
-        Choreographer.getInstance().postFrameCallback(callback)
-        continuation.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
-    }
-
-    private fun cancelQueuedPageTurns() {
-        queuedPageTurns = 0
-        pageTurnReplay?.cancel()
-        pageTurnReplay = null
-        pageTurnSettle?.cancel()
-        pageTurnSettle = null
-    }
-
-    private fun pageTurnAnimated(): Boolean = ValueAnimator.areAnimatorsEnabled()
+    override fun goBackward() = presentation.requestTurn(forward = false)
 
     override fun nextChapter() = goToLogicalSectionOffset(+1)
 
@@ -1310,7 +1221,7 @@ private class ReadiumReaderSession(
 
     private fun goToLogicalSectionOffset(delta: Int) {
         val target = position.sectionTarget(delta) ?: return
-        beginChapterTransition(forward = delta > 0)
+        presentation.cover(forward = delta > 0)
         scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
@@ -1322,7 +1233,7 @@ private class ReadiumReaderSession(
         val prev = publication.readingOrder.getOrNull(index - 1) ?: return
         val base = publication.locatorFromLink(prev) ?: return
         val target = base.copy(locations = Locator.Locations(progression = 0.999))
-        beginChapterTransition(forward = false)
+        presentation.cover(forward = false)
         scope.launch { navigator?.let { goChecked(it, target) } }
     }
 
@@ -1335,7 +1246,7 @@ private class ReadiumReaderSession(
         val next = publication.readingOrder.getOrNull(index + 1) ?: return
         val target = publication.locatorFromLink(next) ?: return
         position.expectSequentialCrossing(target.href.toString())
-        beginChapterTransition(forward = true)
+        presentation.cover(forward = true)
         scope.launch {
             val nav = navigator
             if (nav == null || !goChecked(nav, target)) position.cancelCrossing()
@@ -1357,7 +1268,7 @@ private class ReadiumReaderSession(
             // Cover only when landing on a different resource (a same-resource jump doesn't reload, so
             // onPageLoaded wouldn't fire to lift the cover).
             if (target.href.toString() != lastLocator?.href?.toString()) {
-                beginChapterTransition(forward = position.isForward(totalProgression))
+                presentation.cover(forward = position.isForward(totalProgression))
             }
             navigator?.let { goChecked(it, target) }
         }
@@ -1368,7 +1279,7 @@ private class ReadiumReaderSession(
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
         // Cover only on a cross-resource jump (same-resource jumps don't reload to lift the cover).
         if (locator.href.toString() != lastLocator?.href?.toString()) {
-            beginChapterTransition(
+            presentation.cover(
                 forward = position.isForward(locator.href.toString(), locator.locations.progression),
             )
         }
@@ -1404,12 +1315,11 @@ private class ReadiumReaderSession(
         recoverOnFailure: Boolean = true,
     ): Boolean {
         val fallback = lastLocator
-        // An explicit jump supersedes any page turns still queued from taps.
-        cancelQueuedPageTurns()
+        presentation.cancelTurns()
         val succeeded = runCatching { nav.go(target, animated = false) }.getOrDefault(false)
         if (succeeded) return true
 
-        clearChapterTransitionCover()
+        presentation.recover()
         if (recoverOnFailure && fallback != null && !target.matchesRestoreTarget(fallback)) {
             val fallbackStarted = runCatching { nav.go(fallback, animated = false) }.getOrDefault(false)
             val recovered = fallbackStarted &&
@@ -1456,7 +1366,7 @@ private class ReadiumReaderSession(
                     restoring = false
                     confirmed?.let { updateCurrentLocator(it) }
                     if (!healthy) {
-                        clearChapterTransitionCover()
+                        presentation.recover()
                         if (recreateOnFailure) scheduleNavigatorRecreation(nav)
                     }
                 }
@@ -1501,7 +1411,7 @@ private class ReadiumReaderSession(
             if (fragmentManager.isDestroyed) return@launch
             val stale = fragmentManager.findFragmentByTag(tag) ?: return@launch
             val containerId = stale.id.takeIf { it != 0 } ?: return@launch
-            beginChapterTransition()
+            presentation.cover()
             runCatching {
                 fragmentManager.beginTransaction()
                     .remove(stale)
@@ -1513,13 +1423,8 @@ private class ReadiumReaderSession(
                     .add(containerId, replacement, tag)
                     .commitNowAllowingStateLoss()
                 onFragmentHosted(fragmentManager, tag)
-            }.onFailure { clearChapterTransitionCover() }
+            }.onFailure { presentation.recover() }
         }
-    }
-
-    private fun clearChapterTransitionCover() {
-        beginChapterTransition()
-        scheduleCriticalStyling()
     }
 
     override fun close() {
@@ -1530,8 +1435,7 @@ private class ReadiumReaderSession(
         locatorCollectionJob = null
         scrollProgressJob?.cancel()
         scrollProgressJob = null
-        styleJob?.cancel()
-        styleJob = null
+        presentation.close()
         hostedFragmentManager = null
         hostedFragmentTag = null
         scope.cancel()
@@ -1907,8 +1811,6 @@ private class ReadiumReaderSession(
     private companion object {
         // Tap-zone boundaries as fractions of the page width.
         const val TAP_LEFT = 0.33f
-        const val MAX_QUEUED_PAGE_TURNS = 50
-        const val PAGE_TURN_SETTLE_TIMEOUT_MS = 900L
         const val TAP_RIGHT = 0.67f
 
         // Menu item ids for the actions we rebuild in the text-selection menu.
@@ -1973,10 +1875,7 @@ private class ReadiumReaderSession(
         const val JS_INJECT_ATTEMPTS = 4
         const val JS_INJECT_RETRY_DELAY_MS = 80L
 
-        // Safety cap: reveal a transitioning chapter even if its onPageLoaded never arrives, so a
-        // failed/stalled load can't leave the reader stuck behind the transition cover.
         const val TAG = "ReadiumReaderEngine"
-        const val STYLE_REVEAL_TIMEOUT_MS = 3000L
 
         const val CHAPTER_START_FALLBACK_PADDING_DP = 20f
         const val CHAPTER_START_EXTRA_PADDING_DP = 4f
