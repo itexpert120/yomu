@@ -77,7 +77,6 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
-import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderNavigator
@@ -93,63 +92,18 @@ import kotlin.math.roundToInt
 @Composable
 fun ReaderScreen(
     state: ReaderUiState,
-    onBack: () -> Unit,
-    onRetryOpen: () -> Unit,
-    onOpenSheet: () -> Unit,
-    onCloseSheet: () -> Unit,
-    onSelectChapter: (String) -> Unit,
-    onNextChapter: () -> Unit,
-    onPreviousChapter: () -> Unit,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    onResetSettings: () -> Unit,
-    onOpenCustomTheme: () -> Unit,
-    onCloseCustomTheme: () -> Unit,
-    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
-    onSaveCustomTheme: (String) -> Unit,
-    onDeleteCustomTheme: (String) -> Unit,
-    // Browse sheet (Contents / Bookmarks / Highlights).
-    onOpenBrowse: () -> Unit,
-    onSelectBrowseTab: (BrowseTab) -> Unit,
-    onCloseBrowse: () -> Unit,
-    onJumpToLocator: (String) -> Unit,
-    onJumpToBookmark: (String) -> Unit,
-    onJumpToHighlight: (String) -> Unit,
-    onJumpToSearchResult: (String) -> Unit,
-    onDeleteBookmarkById: (String) -> Unit,
-    onDeleteHighlightById: (String) -> Unit,
-    onOpenSearch: () -> Unit,
-    onCloseSearch: () -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onSubmitSearch: () -> Unit,
-    // Word lookup + footnote popups.
-    onCloseLookup: () -> Unit,
-    onLookUpWord: (String) -> Unit,
-    onLookupBack: () -> Unit,
-    onRetryLookup: () -> Unit,
-    onPronounce: (String) -> Unit,
-    onCloseFootnote: () -> Unit,
-    // Highlight edit popup + bookmark toggle.
-    onDeleteHighlight: () -> Unit,
-    onSetHighlightColor: (Int) -> Unit,
-    onCloseEditHighlight: () -> Unit,
-    onToggleBookmark: () -> Unit,
-    onReadingResumed: () -> Unit,
-    onReadingPaused: () -> Unit,
-    onRetrySettings: () -> Unit = {},
-    onRetryAnnotations: () -> Unit = {},
-    onAcceptSyncOffer: () -> Unit = {},
-    onDismissSyncOffer: () -> Unit = {},
+    onAction: (ReaderAction) -> Unit,
 ) {
     // One notice at a time, in priority order. Each stays composed (with a null value) so it can
     // play its exit instead of being cut when another branch takes over.
     val settingsError = state.experience.settingsError
     val annotationError = state.experience.annotationError.takeIf { settingsError == null }
-    SaveFailureNotice(settingsError, onRetrySettings)
-    SaveFailureNotice(annotationError, onRetryAnnotations)
+    SaveFailureNotice(settingsError) { onAction(ReaderAction.RetrySettings) }
+    SaveFailureNotice(annotationError) { onAction(ReaderAction.RetryAnnotations) }
     SyncOfferNotice(
         offer = state.experience.syncOffer.takeIf { settingsError == null && annotationError == null },
-        onJump = onAcceptSyncOffer,
-        onDismiss = onDismissSyncOffer,
+        onJump = { onAction(ReaderAction.AcceptSyncOffer) },
+        onDismiss = { onAction(ReaderAction.DismissSyncOffer) },
     )
     val view = LocalView.current
     val reading = state.experience
@@ -171,27 +125,9 @@ fun ReaderScreen(
         onDispose { view.keepScreenOn = previous }
     }
 
-    // Count foreground reading time toward statistics: accumulate between resume and pause.
-    DisposableEffect(Unit) {
-        val lifecycle = (view.context.findActivity() as? LifecycleOwner)?.lifecycle
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> onReadingResumed()
-                Lifecycle.Event.ON_PAUSE -> onReadingPaused()
-                else -> Unit
-            }
-        }
-        lifecycle?.addObserver(observer)
-        // Start immediately: the screen is on-screen now (don't rely on a future resume event).
-        onReadingResumed()
-        onDispose {
-            lifecycle?.removeObserver(observer)
-            onReadingPaused()
-        }
-    }
     // The system bars show while the reader menu is up, so one back gesture (or the status bar) leaves
     // the reader instead of the first swipe only revealing hidden bars. Otherwise reading is full-screen.
-    val systemBarsShown = state.chapterControlsVisible
+    val systemBarsShown = state.chrome.controlsVisible
     val currentSystemBarsShown by rememberUpdatedState(systemBarsShown)
     // Hide both system bars for full-screen reading. Android re-shows the bars whenever the window
     // loses and regains focus (returning from background, multi-window, etc.), so this must be
@@ -338,7 +274,7 @@ fun ReaderScreen(
     // Treating transitions as "not ready" flashed the immersive top bar every chapter.
     val chromeForcedByLoad = reading.renderState is ReaderRenderState.Opening
     val readerSurfacesAvailable = reading.renderState !is ReaderRenderState.Opening
-    val chromeShown = chromeForcedByLoad || !immersive || state.chapterControlsVisible
+    val chromeShown = chromeForcedByLoad || !immersive || state.chrome.controlsVisible
     val topInset = when {
         immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeTop
         immersive -> 0.dp
@@ -404,7 +340,10 @@ fun ReaderScreen(
             .background(background),
     ) {
         when {
-            reading.failed -> ReaderFailure(onBack = onBack, onRetry = onRetryOpen)
+            reading.failed -> ReaderFailure(
+                onBack = { onAction(ReaderAction.Back) },
+                onRetry = { onAction(ReaderAction.RetryOpen) },
+            )
             navigator != null -> {
                 // Host the navigator even while loading so it can paint and fire its ready signal;
                 // an opaque scrim below covers the half-rendered page until that first paint.
@@ -461,8 +400,8 @@ fun ReaderScreen(
                         background = background,
                         content = onBackground,
                         isBookmarked = reading.currentPageBookmarked,
-                        onBack = onBack,
-                        onToggleBookmark = onToggleBookmark,
+                        onBack = { onAction(ReaderAction.Back) },
+                        onToggleBookmark = { onAction(ReaderAction.ToggleBookmark) },
                         onContentHeight = { topBarPx = it },
                     )
                 }
@@ -528,29 +467,22 @@ fun ReaderScreen(
                     // Bottom navigation bar, toggled by a centre tap. Keep it above the passive footer
                     // so both chrome surfaces remain visible when immersive controls are revealed.
                     ReaderChapterControlsBar(
-                        visible = state.chapterControlsVisible,
+                        visible = state.chrome.controlsVisible,
                         bottomPadding = footerHeight,
                         footerVisible = reading.settings.showFooter,
                         background = background,
                         content = onBackground,
-                        onBrowse = onOpenBrowse,
-                        onSearch = onOpenSearch,
-                        onDisplay = onOpenSheet,
+                        onBrowse = { onAction(ReaderAction.OpenBrowse) },
+                        onSearch = { onAction(ReaderAction.OpenSearch) },
+                        onDisplay = { onAction(ReaderAction.OpenDisplay) },
                     )
 
                     ReaderControlsSheetWithDimPreview(
-                        visible = state.sheetVisible,
+                        visible = state.chrome.displaySheetVisible,
                         state = state,
                         settings = sheetSettings,
                         dimDrag = { dimDrag },
-                        onDismiss = onCloseSheet,
-                        onSelectChapter = onSelectChapter,
-                        onNextChapter = onNextChapter,
-                        onPreviousChapter = onPreviousChapter,
-                        onUpdateSettings = onUpdateSettings,
-                        onResetSettings = onResetSettings,
-                        onOpenCustomTheme = onOpenCustomTheme,
-                        onApplyCustomTheme = onApplyCustomTheme,
+                        onAction = onAction,
                         onPreviewBrightness = { brightness ->
                             brightnessDrag = brightness.coerceIn(0f, 1f)
                         },
@@ -558,74 +490,74 @@ fun ReaderScreen(
                             val value = brightness.coerceIn(0f, 1f)
                             brightnessCommitted = value
                             brightnessDrag = null
-                            onUpdateSettings(currentSettings.copy(brightness = value))
+                            onAction(ReaderAction.UpdateSettings(currentSettings.copy(brightness = value)))
                         },
                         onPreviewDim = { dim -> dimDrag = dim.coerceIn(0f, 1f) },
                         onCommitDim = { dim ->
                             val value = dim.coerceIn(0f, 1f)
                             dimCommitted = value
                             dimDrag = null
-                            onUpdateSettings(currentSettings.copy(dimLevel = value))
+                            onAction(ReaderAction.UpdateSettings(currentSettings.copy(dimLevel = value)))
                         },
                     )
 
                     CustomThemeSheet(
-                        visible = state.customSheetVisible,
+                        visible = state.chrome.customThemeSheetVisible,
                         settings = sheetSettings,
                         customThemes = state.customThemes,
-                        onDismiss = onCloseCustomTheme,
-                        onUpdateSettings = onUpdateSettings,
-                        onSave = onSaveCustomTheme,
-                        onApply = onApplyCustomTheme,
-                        onDelete = onDeleteCustomTheme,
+                        onDismiss = { onAction(ReaderAction.CloseCustomTheme) },
+                        onUpdateSettings = { onAction(ReaderAction.UpdateSettings(it)) },
+                        onSave = { onAction(ReaderAction.SaveCustomTheme(it)) },
+                        onApply = { onAction(ReaderAction.ApplyCustomTheme(it)) },
+                        onDelete = { onAction(ReaderAction.DeleteCustomTheme(it)) },
                     )
 
                     ReaderBrowseSheet(
-                        tab = state.browseTab,
+                        tab = state.chrome.browseTab,
                         bookTitle = reading.title,
                         toc = reading.tableOfContents,
                         tocLoading = reading.tocLoading,
                         currentHref = reading.currentHref,
-                        onJumpToLocator = onJumpToLocator,
+                        onJumpToLocator = { onAction(ReaderAction.JumpToTocEntry(it)) },
                         bookmarks = reading.bookmarks,
-                        onJumpToBookmark = onJumpToBookmark,
-                        onDeleteBookmark = onDeleteBookmarkById,
+                        onJumpToBookmark = { onAction(ReaderAction.JumpToBookmark(it)) },
+                        onDeleteBookmark = { onAction(ReaderAction.DeleteBookmark(it)) },
                         highlights = reading.highlights,
-                        onJumpToHighlight = onJumpToHighlight,
-                        onDeleteHighlight = onDeleteHighlightById,
-                        onSelectTab = onSelectBrowseTab,
-                        onDismiss = onCloseBrowse,
+                        onJumpToHighlight = { onAction(ReaderAction.JumpToHighlight(it)) },
+                        onDeleteHighlight = { onAction(ReaderAction.DeleteHighlight(it)) },
+                        onSelectTab = { onAction(ReaderAction.SelectBrowseTab(it)) },
+                        onDismiss = { onAction(ReaderAction.CloseBrowse) },
                     )
 
                     ReaderSearchSheet(
-                        visible = state.searchSheetVisible,
+                        visible = state.chrome.searchSheetVisible,
                         searchQuery = reading.searchQuery,
                         searchResults = reading.searchResults,
                         searchInProgress = reading.searchInProgress,
                         searchError = reading.searchError,
                         searchPerformed = reading.searchPerformed,
-                        onSearchQueryChange = onSearchQueryChange,
-                        onSubmitSearch = onSubmitSearch,
-                        onJumpToSearchResult = onJumpToSearchResult,
-                        onDismiss = onCloseSearch,
+                        onSearchQueryChange = { onAction(ReaderAction.ChangeSearchQuery(it)) },
+                        onSubmitSearch = { onAction(ReaderAction.SubmitSearch) },
+                        onJumpToSearchResult = { onAction(ReaderAction.JumpToSearchResult(it)) },
+                        onDismiss = { onAction(ReaderAction.CloseSearch) },
                     )
 
                     WordLookupSheet(
                         state = reading.lookup,
-                        onDismiss = onCloseLookup,
-                        onPronounce = onPronounce,
-                        onLookUpWord = onLookUpWord,
-                        onBack = onLookupBack,
-                        onRetry = onRetryLookup,
+                        onDismiss = { onAction(ReaderAction.CloseLookup) },
+                        onPronounce = { onAction(ReaderAction.Pronounce(it)) },
+                        onLookUpWord = { onAction(ReaderAction.LookUpWord(it)) },
+                        onBack = { onAction(ReaderAction.LookupBack) },
+                        onRetry = { onAction(ReaderAction.RetryLookup) },
                     )
 
-                    FootnoteSheet(html = reading.footnoteHtml, onDismiss = onCloseFootnote)
+                    FootnoteSheet(html = reading.footnoteHtml, onDismiss = { onAction(ReaderAction.CloseFootnote) })
 
                     HighlightEditSheet(
                         highlight = reading.editingHighlight,
-                        onSelectColor = onSetHighlightColor,
-                        onDelete = onDeleteHighlight,
-                        onDismiss = onCloseEditHighlight,
+                        onSelectColor = { onAction(ReaderAction.SetHighlightColor(it)) },
+                        onDelete = { onAction(ReaderAction.DeleteEditingHighlight) },
+                        onDismiss = { onAction(ReaderAction.CloseHighlightEditor) },
                     )
                 }
             }
@@ -646,14 +578,7 @@ private fun ReaderControlsSheetWithDimPreview(
     state: ReaderUiState,
     settings: ReaderSettings,
     dimDrag: () -> Float?,
-    onDismiss: () -> Unit,
-    onSelectChapter: (String) -> Unit,
-    onNextChapter: () -> Unit,
-    onPreviousChapter: () -> Unit,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    onResetSettings: () -> Unit,
-    onOpenCustomTheme: () -> Unit,
-    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+    onAction: (ReaderAction) -> Unit,
     onPreviewBrightness: (Float) -> Unit,
     onCommitBrightness: (Float) -> Unit,
     onPreviewDim: (Float) -> Unit,
@@ -674,14 +599,14 @@ private fun ReaderControlsSheetWithDimPreview(
     ReaderControlsSheet(
         visible = visible,
         state = sheetState,
-        onDismiss = onDismiss,
-        onSelectChapter = onSelectChapter,
-        onNextChapter = onNextChapter,
-        onPreviousChapter = onPreviousChapter,
-        onUpdateSettings = onUpdateSettings,
-        onResetSettings = onResetSettings,
-        onOpenCustomTheme = onOpenCustomTheme,
-        onApplyCustomTheme = onApplyCustomTheme,
+        onDismiss = { onAction(ReaderAction.CloseDisplay) },
+        onSelectChapter = { onAction(ReaderAction.SelectChapter(it)) },
+        onNextChapter = { onAction(ReaderAction.NextChapter) },
+        onPreviousChapter = { onAction(ReaderAction.PreviousChapter) },
+        onUpdateSettings = { onAction(ReaderAction.UpdateSettings(it)) },
+        onResetSettings = { onAction(ReaderAction.ResetSettings) },
+        onOpenCustomTheme = { onAction(ReaderAction.OpenCustomTheme) },
+        onApplyCustomTheme = { onAction(ReaderAction.ApplyCustomTheme(it)) },
         onPreviewBrightness = onPreviewBrightness,
         onCommitBrightness = onCommitBrightness,
         onPreviewDim = onPreviewDim,

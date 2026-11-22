@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
-import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.data.fonts.FontRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
@@ -21,13 +20,9 @@ import javax.inject.Inject
 
 data class ReaderUiState(
     val experience: ReadingExperienceState = ReadingExperienceState(),
-    val chapterControlsVisible: Boolean = false,
-    val sheetVisible: Boolean = false,
+    val chrome: ReaderChromeState = ReaderChromeState(),
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val installedFonts: List<CustomFontRef> = emptyList(),
-    val customSheetVisible: Boolean = false,
-    val browseTab: BrowseTab? = null,
-    val searchSheetVisible: Boolean = false,
 )
 
 @HiltViewModel
@@ -64,72 +59,42 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch {
             readingExperience.events.collect { event ->
                 when (event) {
-                    ReadingExperienceEvent.ToggleChrome ->
-                        _state.update {
-                            it.copy(chapterControlsVisible = !it.chapterControlsVisible)
-                        }
+                    ReadingExperienceEvent.ToggleChrome -> onAction(ReaderAction.ToggleChrome)
                 }
             }
         }
         readingExperience.start()
     }
 
-    fun onRetryOpen() = dispatch(ReadingExperienceAction.RetryOpen)
-
-    fun onOpenSheet() = _state.update { it.copy(sheetVisible = true, chapterControlsVisible = false) }
-
-    fun onCloseSheet() = _state.update { it.copy(sheetVisible = false) }
-
-    fun onSelectChapter(locatorJson: String) = navigateTo(locatorJson)
-
-    fun onNextChapter() {
-        dispatch(ReadingExperienceAction.Navigate(ReaderNavigation.NextChapter))
-        _state.update { it.copy(chapterControlsVisible = false) }
-    }
-
-    fun onPreviousChapter() {
-        dispatch(ReadingExperienceAction.Navigate(ReaderNavigation.PreviousChapter))
-        _state.update { it.copy(chapterControlsVisible = false) }
-    }
-
-    fun onOpenBrowse() = openBrowse(BrowseTab.Contents)
-
-    fun onSelectBrowseTab(tab: BrowseTab) = _state.update { it.copy(browseTab = tab) }
-
-    fun onCloseBrowse() = _state.update { it.copy(browseTab = null) }
-
-    fun onJumpToLocator(locatorJson: String) {
-        navigateTo(locatorJson)
-        _state.update { it.copy(browseTab = null) }
-    }
-
-    fun onUpdateSettings(settings: ReaderSettings) {
-        if (settings != state.value.experience.settings) {
-            dispatch(ReadingExperienceAction.ApplySettings(settings))
+    fun onAction(action: ReaderAction) {
+        _state.update { it.copy(chrome = reduceChrome(it.chrome, action)) }
+        when (action) {
+            is ReaderAction.ApplyCustomTheme -> applyCustomTheme(action.theme)
+            is ReaderAction.SaveCustomTheme -> saveCustomTheme(action.name)
+            is ReaderAction.DeleteCustomTheme -> viewModelScope.launch { settingsRepository.deleteCustomTheme(action.id) }
+            else -> action.toExperienceAction()?.let(readingExperience::dispatch)
         }
     }
 
-    fun onResetBookSettings() = dispatch(ReadingExperienceAction.ResetSettings)
-    fun onRetrySettings() = dispatch(ReadingExperienceAction.RetrySettings)
-    fun onRetryAnnotations() = dispatch(ReadingExperienceAction.RetryAnnotations)
-    fun onAcceptSyncOffer() = dispatch(ReadingExperienceAction.AcceptSyncOffer)
-    fun onDismissSyncOffer() = dispatch(ReadingExperienceAction.DismissSyncOffer)
+    /** The reader is in the foreground: reading time may accrue (once the page is ready). */
+    fun onReadingResumed() = readingExperience.dispatch(ReadingExperienceAction.Resume)
 
-    fun onOpenCustomTheme() = _state.update { it.copy(customSheetVisible = true, sheetVisible = false) }
+    /** The reader left the foreground: bank the reading session and save the position. */
+    fun onReadingPaused() = readingExperience.dispatch(ReadingExperienceAction.Pause)
 
-    fun onCloseCustomTheme() = _state.update { it.copy(customSheetVisible = false) }
-
-    fun onApplyCustomTheme(theme: CustomReaderTheme) {
-        onUpdateSettings(
-            state.value.experience.settings.copy(
-                theme = ReaderThemeMode.Custom,
-                customBackground = theme.background,
-                customText = theme.text,
+    private fun applyCustomTheme(theme: CustomReaderTheme) {
+        onAction(
+            ReaderAction.UpdateSettings(
+                state.value.experience.settings.copy(
+                    theme = ReaderThemeMode.Custom,
+                    customBackground = theme.background,
+                    customText = theme.text,
+                ),
             ),
         )
     }
 
-    fun onSaveCustomTheme(name: String) {
+    private fun saveCustomTheme(name: String) {
         val settings = state.value.experience.settings
         val theme = CustomReaderTheme(
             id = UUID.randomUUID().toString(),
@@ -138,88 +103,6 @@ class ReaderViewModel @Inject constructor(
             text = settings.textArgb,
         )
         viewModelScope.launch { settingsRepository.saveCustomTheme(theme) }
-    }
-
-    fun onDeleteCustomTheme(id: String) {
-        viewModelScope.launch { settingsRepository.deleteCustomTheme(id) }
-    }
-
-    fun onLookUpWord(raw: String) = dispatch(ReadingExperienceAction.LookUpWord(raw))
-
-    fun onRetryLookup() = dispatch(ReadingExperienceAction.RetryLookup)
-
-    fun onLookupBack() = dispatch(ReadingExperienceAction.LookupBack)
-
-    fun onPronounce(word: String) = dispatch(ReadingExperienceAction.Pronounce(word))
-
-    fun onCloseLookup() = dispatch(ReadingExperienceAction.CloseLookup)
-
-    fun onCloseFootnote() = dispatch(ReadingExperienceAction.CloseFootnote)
-
-    fun onCloseEditHighlight() = dispatch(ReadingExperienceAction.CloseEditingHighlight)
-
-    fun onDeleteHighlight() = dispatch(ReadingExperienceAction.DeleteEditingHighlight)
-
-    fun onDeleteHighlightById(id: String) = dispatch(ReadingExperienceAction.DeleteHighlight(id))
-
-    fun onJumpToHighlight(locatorJson: String) {
-        navigateTo(locatorJson)
-        _state.update { it.copy(browseTab = null) }
-    }
-
-    fun onSetHighlightColor(colorArgb: Int) = dispatch(ReadingExperienceAction.SetEditingHighlightColor(colorArgb))
-
-    fun onToggleBookmark() = dispatch(ReadingExperienceAction.ToggleBookmark)
-
-    fun onJumpToBookmark(locatorJson: String) {
-        navigateTo(locatorJson)
-        _state.update { it.copy(browseTab = null) }
-    }
-
-    fun onDeleteBookmarkById(id: String) = dispatch(ReadingExperienceAction.DeleteBookmark(id))
-
-    fun onOpenSearch() = _state.update {
-        it.copy(
-            searchSheetVisible = true,
-            browseTab = null,
-            sheetVisible = false,
-            chapterControlsVisible = false,
-        )
-    }
-
-    fun onCloseSearch() {
-        dispatch(ReadingExperienceAction.ClearSearch)
-        _state.update { it.copy(searchSheetVisible = false) }
-    }
-
-    fun onSearchQueryChange(query: String) = dispatch(ReadingExperienceAction.ChangeSearchQuery(query))
-
-    fun onSubmitSearch() = dispatch(ReadingExperienceAction.SubmitSearch)
-
-    fun onJumpToSearchResult(locatorJson: String) {
-        navigateTo(locatorJson)
-        _state.update { it.copy(searchSheetVisible = false) }
-    }
-
-    fun onReadingResumed() = dispatch(ReadingExperienceAction.Resume)
-
-    fun onReadingPaused() = dispatch(ReadingExperienceAction.Pause)
-
-    private fun openBrowse(tab: BrowseTab) = _state.update {
-        it.copy(
-            browseTab = tab,
-            searchSheetVisible = false,
-            sheetVisible = false,
-            chapterControlsVisible = false,
-        )
-    }
-
-    private fun navigateTo(locatorJson: String) {
-        dispatch(ReadingExperienceAction.Navigate(ReaderNavigation.Locator(locatorJson)))
-    }
-
-    private fun dispatch(action: ReadingExperienceAction) {
-        readingExperience.dispatch(action)
     }
 
     override fun onCleared() {
