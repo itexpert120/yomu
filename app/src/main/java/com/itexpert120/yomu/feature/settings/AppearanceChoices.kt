@@ -18,11 +18,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Colorize
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.FilterBAndW
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ColorScheme
@@ -101,6 +105,15 @@ internal fun ColorStyleRow(
         options = ColorStyle.entries,
         selected = selected,
         label = { it.label },
+        icon = {
+            when (it) {
+                ColorStyle.Balanced -> Icons.Rounded.Balance
+                ColorStyle.Vibrant -> Icons.Rounded.Palette
+                ColorStyle.Expressive -> Icons.Rounded.AutoAwesome
+                ColorStyle.Neutral -> Icons.Rounded.FilterBAndW
+            }
+        },
+        iconOnTop = true,
         enabled = enabled,
         onSelect = onSelect,
     )

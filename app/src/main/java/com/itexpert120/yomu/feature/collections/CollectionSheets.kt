@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoMode
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CollectionsBookmark
+import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -93,6 +96,13 @@ fun OrganizeSheet(
                 options = StatusChoice.Options,
                 selected = status,
                 label = { it.label },
+                icon = {
+                    when (it) {
+                        StatusChoice.OnHold -> Icons.Rounded.PauseCircle
+                        StatusChoice.Dropped -> Icons.Rounded.DoNotDisturbOn
+                        StatusChoice.Auto, StatusChoice.Mixed -> Icons.Rounded.AutoMode
+                    }
+                },
                 onSelect = { onSetStatus(it.status) },
                 modifier = Modifier.fillMaxWidth(),
             )

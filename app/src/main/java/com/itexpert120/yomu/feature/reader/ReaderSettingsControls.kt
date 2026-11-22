@@ -18,14 +18,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.CallToAction
+import androidx.compose.material.icons.rounded.FormatAlignJustify
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.Height
+import androidx.compose.material.icons.rounded.HourglassBottom
+import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Percent
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.SwipeVertical
 import androidx.compose.material.icons.rounded.TextDecrease
 import androidx.compose.material.icons.rounded.TextIncrease
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,16 +44,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
+import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
+import com.itexpert120.yomu.core.designsystem.YomuSelectableChip
 import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
-import com.itexpert120.yomu.core.designsystem.YomuSingleChoiceSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
@@ -186,11 +198,12 @@ internal fun ReaderLayoutControl(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
-    val modes = ReaderLayout.entries
-    YomuSingleChoiceSegmentedControl(
-        options = modes.map { it.name },
-        selectedIndex = modes.indexOf(settings.layout),
-        onSelected = { onUpdateSettings(settings.copy(layout = modes[it])) },
+    YomuConnectedChoiceGroup(
+        options = ReaderLayout.entries,
+        selected = settings.layout,
+        label = { it.name },
+        icon = { it.icon },
+        onSelect = { onUpdateSettings(settings.copy(layout = it)) },
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -277,13 +290,45 @@ internal fun ReaderTextAlignControl(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
-    val aligns = ReaderTextAlign.entries
-    YomuSingleChoiceSegmentedControl(
-        options = aligns.map { it.label },
-        selectedIndex = aligns.indexOf(settings.textAlign),
-        onSelected = { onUpdateSettings(settings.copy(textAlign = aligns[it])) },
+    YomuConnectedChoiceGroup(
+        options = ReaderTextAlign.entries,
+        selected = settings.textAlign,
+        label = { it.label },
+        icon = { it.icon },
+        onSelect = { onUpdateSettings(settings.copy(textAlign = it)) },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+private val ReaderLayout.icon: ImageVector
+    get() = when (this) {
+        ReaderLayout.Scroll -> Icons.Rounded.SwipeVertical
+        ReaderLayout.Paged -> Icons.Rounded.AutoStories
+    }
+
+private val ReaderTextAlign.icon: ImageVector
+    get() = when (this) {
+        // Auto keeps the book's own alignment, so it shows ragged publisher text.
+        ReaderTextAlign.Default -> Icons.AutoMirrored.Rounded.Notes
+        ReaderTextAlign.Left -> Icons.AutoMirrored.Rounded.FormatAlignLeft
+        ReaderTextAlign.Justify -> Icons.Rounded.FormatAlignJustify
+    }
+
+/** Icons shared by the list and chip forms of [ReaderChromeToggles]. */
+private object ChromeIcons {
+    val Footer = Icons.Rounded.CallToAction
+    val Battery = Icons.Rounded.BatteryFull
+    val Clock = Icons.Rounded.Schedule
+    val Progress = Icons.Rounded.Percent
+    val ChapterLeft = Icons.Rounded.HourglassBottom
+    val KeepOn = Icons.Rounded.Lightbulb
+    val Scrollbar = Icons.Rounded.Height
+    val Immersive = Icons.Rounded.Fullscreen
+}
+
+@Composable
+private fun ChromeRowIcon(icon: ImageVector) {
+    Icon(icon, contentDescription = null)
 }
 
 /** Line height, page margins and paragraph spacing — each with an "Auto" default. */
@@ -342,7 +387,11 @@ internal fun ReaderChromeToggles(
         return
     }
     YomuSettingList {
-        YomuSettingRow(title = "Show footer", position = YomuSettingPosition.First) {
+        YomuSettingRow(
+            title = "Show footer",
+            position = YomuSettingPosition.First,
+            leadingContent = { ChromeRowIcon(ChromeIcons.Footer) },
+        ) {
             YomuTogglePill(
                 checked = settings.showFooter,
                 onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
@@ -360,14 +409,24 @@ internal fun ReaderChromeToggles(
                 fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
         ) {
             YomuSettingList {
-                YomuSettingRow(title = "Battery", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
+                YomuSettingRow(
+                    title = "Battery",
+                    position = YomuSettingPosition.Middle,
+                    enabled = settings.showFooter,
+                    leadingContent = { ChromeRowIcon(ChromeIcons.Battery) },
+                ) {
                     YomuTogglePill(
                         checked = settings.footerShowBattery,
                         onCheckedChange = { onUpdateSettings(settings.copy(footerShowBattery = it)) },
                         enabled = settings.showFooter,
                     )
                 }
-                YomuSettingRow(title = "Clock", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
+                YomuSettingRow(
+                    title = "Clock",
+                    position = YomuSettingPosition.Middle,
+                    enabled = settings.showFooter,
+                    leadingContent = { ChromeRowIcon(ChromeIcons.Clock) },
+                ) {
                     YomuTogglePill(
                         checked = settings.footerShowClock,
                         onCheckedChange = { onUpdateSettings(settings.copy(footerShowClock = it)) },
@@ -376,28 +435,47 @@ internal fun ReaderChromeToggles(
                 }
             }
         }
-        YomuSettingRow(title = "Reading progress", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
+        YomuSettingRow(
+            title = "Reading progress",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.showFooter,
+            leadingContent = { ChromeRowIcon(ChromeIcons.Progress) },
+        ) {
             YomuTogglePill(
                 checked = settings.footerShowProgress,
                 onCheckedChange = { onUpdateSettings(settings.copy(footerShowProgress = it)) },
                 enabled = settings.showFooter,
             )
         }
-        YomuSettingRow(title = "Chapter remaining", position = YomuSettingPosition.Middle, enabled = settings.showFooter) {
+        YomuSettingRow(
+            title = "Chapter remaining",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.showFooter,
+            leadingContent = { ChromeRowIcon(ChromeIcons.ChapterLeft) },
+        ) {
             YomuTogglePill(
                 checked = settings.footerShowPagesLeft,
                 onCheckedChange = { onUpdateSettings(settings.copy(footerShowPagesLeft = it)) },
                 enabled = settings.showFooter,
             )
         }
-        YomuSettingRow(title = "Keep screen on", position = YomuSettingPosition.Middle) {
+        YomuSettingRow(
+            title = "Keep screen on",
+            position = YomuSettingPosition.Middle,
+            leadingContent = { ChromeRowIcon(ChromeIcons.KeepOn) },
+        ) {
             YomuTogglePill(
                 checked = settings.keepScreenOn,
                 onCheckedChange = { onUpdateSettings(settings.copy(keepScreenOn = it)) },
             )
         }
         // The scrollbar only exists in scroll mode (a native WebView scroll), so disable the row in paged.
-        YomuSettingRow(title = "Show scrollbar", position = YomuSettingPosition.Middle, enabled = settings.layout == ReaderLayout.Scroll) {
+        YomuSettingRow(
+            title = "Show scrollbar",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.layout == ReaderLayout.Scroll,
+            leadingContent = { ChromeRowIcon(ChromeIcons.Scrollbar) },
+        ) {
             YomuTogglePill(
                 checked = settings.showScrollbar,
                 onCheckedChange = { onUpdateSettings(settings.copy(showScrollbar = it)) },
@@ -408,6 +486,7 @@ internal fun ReaderChromeToggles(
             title = "Immersive",
             position = YomuSettingPosition.Last,
             subtitle = "Hide the bars on tap for a full-screen page",
+            leadingContent = { ChromeRowIcon(ChromeIcons.Immersive) },
         ) {
             YomuTogglePill(
                 checked = settings.immersiveChrome,
@@ -446,17 +525,17 @@ private fun CompactChromeToggles(
             ) {
                 // Immersive mode never shows these in the footer (the status bar has them instead).
                 if (!settings.immersiveChrome) {
-                    ToggleChip("Battery", settings.footerShowBattery, settings.showFooter) {
+                    ToggleChip("Battery", ChromeIcons.Battery, settings.footerShowBattery, settings.showFooter) {
                         onUpdateSettings(settings.copy(footerShowBattery = it))
                     }
-                    ToggleChip("Clock", settings.footerShowClock, settings.showFooter) {
+                    ToggleChip("Clock", ChromeIcons.Clock, settings.footerShowClock, settings.showFooter) {
                         onUpdateSettings(settings.copy(footerShowClock = it))
                     }
                 }
-                ToggleChip("Progress", settings.footerShowProgress, settings.showFooter) {
+                ToggleChip("Progress", ChromeIcons.Progress, settings.footerShowProgress, settings.showFooter) {
                     onUpdateSettings(settings.copy(footerShowProgress = it))
                 }
-                ToggleChip("Chapter left", settings.footerShowPagesLeft, settings.showFooter) {
+                ToggleChip("Chapter left", ChromeIcons.ChapterLeft, settings.footerShowPagesLeft, settings.showFooter) {
                     onUpdateSettings(settings.copy(footerShowPagesLeft = it))
                 }
             }
@@ -467,14 +546,14 @@ private fun CompactChromeToggles(
                 horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
                 verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
             ) {
-                ToggleChip("Keep on", settings.keepScreenOn) {
+                ToggleChip("Keep on", ChromeIcons.KeepOn, settings.keepScreenOn) {
                     onUpdateSettings(settings.copy(keepScreenOn = it))
                 }
                 // The scrollbar only exists in scroll mode (a native WebView scroll).
-                ToggleChip("Scrollbar", settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
+                ToggleChip("Scrollbar", ChromeIcons.Scrollbar, settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
                     onUpdateSettings(settings.copy(showScrollbar = it))
                 }
-                ToggleChip("Immersive", settings.immersiveChrome) {
+                ToggleChip("Immersive", ChromeIcons.Immersive, settings.immersiveChrome) {
                     onUpdateSettings(settings.copy(immersiveChrome = it))
                 }
             }
@@ -485,21 +564,17 @@ private fun CompactChromeToggles(
 @Composable
 private fun ToggleChip(
     label: String,
+    icon: ImageVector,
     checked: Boolean,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    FilterChip(
+    YomuSelectableChip(
+        label = label,
+        icon = icon,
         selected = checked,
-        onClick = { onCheckedChange(!checked) },
+        onSelectedChange = onCheckedChange,
         enabled = enabled,
-        label = { Text(label) },
-        leadingIcon = if (checked) {
-            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-        } else {
-            null
-        },
-        shape = YomuShapeTokens.pill,
     )
 }
 
