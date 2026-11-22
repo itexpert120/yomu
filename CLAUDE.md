@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Yomu is a native Android EPUB reader (Kotlin + Jetpack Compose). The product intent is a polished, reader-first, tablet-optimized app built on **Material 3 Expressive** (M3E) — expressive shapes, springs, emphasized type, and seeded colour themes, applied through the `core/designsystem` layer. See `docs/` for the full product/design/architecture specs — `docs/README.md` is the entry point.
 
-Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Library **tabs**: All · Reading · To read · Finished (+ On hold / Dropped while non-empty) and the user's own **collections** (a book can be in many), as a swipeable pager under a pill tab strip whose indicator follows the pager 1:1; the last tab, a user tab order, and hidden built-in tabs are remembered per device (Library tabs sheet via the strip's "+ Add"). Books get a manual status (On hold / Dropped) and collections from multi-select **Organize** or Book details; collections and statuses sync (`collection/<id>`, `shelf/<sha>`). Also built: a **reading-statistics** dashboard (hero total, streak/metric tiles, per-book "Time by book" lifetime totals, session history) and **external "Open with"/share** EPUB import. **Hilt, Room, DataStore, Navigation Compose, Coil, MaterialKolor, and Readium are all present and wired.** (Home-screen Glance widgets were removed.)
+Current state: a **mature, feature-rich EPUB reader** — well past a minimal MVP. One `:app` module contains the custom design system, a Room-backed library (SAF import, Coil covers, search/sort/group, multi-select bulk actions, continue-reading hero), book details (two-pane on tablets, virtualized TOC with per-chapter read tracking and "mark to here"), and a Readium-backed reader with themes/fonts/brightness/extra-dim, in-reader TOC, **bookmarks**, **in-book full-text search**, **highlights** (with an optional colour palette), **advanced typography** (line height, page margins, paragraph spacing, alignment), **dictionary word-lookup + TTS**, footnote popups, and saved custom reader themes. Library **tabs**: All · Reading · To read · Finished (+ On hold / Dropped while non-empty) and the user's own **collections** (a book can be in many), as a swipeable pager under a pill tab strip whose indicator follows the pager 1:1; the last tab, a user tab order, and hidden built-in tabs are remembered per device (Library tabs sheet via the strip's "+ Add"). Every book shows one **shelf status** (To read / Reading / Finished from progress, or a manual On hold / Dropped that always wins, Statistics included); books get a manual status and collections from multi-select **Organize** or Book details; collections and statuses sync (`collection/<id>`, `shelf/<sha>`). Also built: a **reading-statistics** dashboard (hero total, streak/metric tiles, per-book "Time by book" lifetime totals, session history) and **external "Open with"/share** EPUB import. **Hilt, Room, DataStore, Navigation Compose, Coil, MaterialKolor, and Readium are all present and wired.** (Home-screen Glance widgets were removed.)
 
 Network features: the dictionary lookup (Free Dictionary API), Google Fonts installs, and **account-less sync** (a 12-word BIP39 phrase → end-to-end-encrypted records on a Convex backend in `backend/convex/`; see `docs/sync.md`). Sync runs only while the app is in the foreground (`ProcessLifecycleOwner` in `SyncRepository`): on background it stages + pushes pending changes (bounded wait), then stops and closes the connection; it resumes on return. Everything else is offline. Remaining gaps are later-phase roadmap items (e.g. OPDS catalogs, non-EPUB formats like PDF/audiobook) — see `docs/roadmap.md`. The `docs/` describe the product/design intent and are kept current — each doc has an "Implementation status (current)" note, and `docs/roadmap.md` (Phases 0–12) is the authoritative done-vs-pending source. **Keep this CLAUDE.md in sync with the code as features land.**
 
@@ -50,19 +50,23 @@ com.itexpert120.yomu
 ├── core/
 │   ├── designsystem/            # custom design system (Yomu* primitives, CompositionLocals, HSV color
 │   │                            #   picker, responsive YomuWidthClass)
-│   ├── model/                   # Book, ReaderSettings, LibraryPreferences, AccentColor, ThemePreference,
-│   │                            #   CustomReaderTheme, ReadingStats, …
+│   ├── model/                   # Book (+ Book.shelfStatus: ShelfStatus, the only place manual status
+│   │                            #   wins over progress), ReaderSettings, LibraryPreferences, AccentColor,
+│   │                            #   ThemePreference, CustomReaderTheme, ReadingStats, …
 │   ├── database/                # Room: YomuDatabase (v18) + BookEntity, ChapterReadEntity,
 │   │                            #   ReaderSettingsEntity, BookTocEntity, ReadingDayEntity,
 │   │                            #   ReadingSessionEntity, HighlightEntity, BookmarkEntity,
 │   │                            #   CollectionEntity, BookCollectionEntity,
 │   │                            #   BookDao, HighlightDao, BookmarkDao, CollectionDao, migrations
-│   ├── datastore/ · storage/    # DataStore prefs ; FileStorage (app-private epubs/covers; new covers
-│   │                            #   are ≤900 px lossy WebP)
+│   ├── datastore/ · storage/    # DataStore prefs ; BookFiles (a book's EPUB + cover lifecycle: stage /
+│   │                            #   stageCover / deleting / reconcile on DB open; new covers ≤900 px lossy
+│   │                            #   WebP) ; FileStorage (fonts, SAF name/type)
 │   └── reader/                  # ReaderEngine/ReaderSession/ReaderLocator/ReaderTocItem/ReaderHighlight
 │                                #   (Yomu-owned; no Readium types)
 ├── data/
-│   ├── books/                   # BookRepository + RoomBookRepository + mappers
+│   ├── books/                   # BookRepository + RoomBookRepository + mappers; ChapterReading (the one
+│   │                            #   "chapter read" rule in ChapterReadState, used by Book Details, Stats
+│   │                            #   and sync; mark / markThrough / position recording)
 │   ├── reader/                  # ReadingPosition (Readium-free: section progress, pages left, chapter
 │   │                            #   completion), ReaderPreloader
 │   ├── reader/readium/          # ReadiumReaderEngine (+ PagePresentation, ReadiumMetadataExtractor,
@@ -70,7 +74,9 @@ com.itexpert120.yomu
 │   ├── settings/                # AppSettingsRepository, LibraryPrefsRepository, ReaderSettingsRepository
 │   ├── highlights/              # HighlightRepository + RoomHighlightRepository
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
-│   ├── collections/             # CollectionRepository: user collections, memberships, manual status
+│   ├── collections/             # LibraryCatalog.observe(): Catalog (books + collection ids) with tabs(),
+│   │                            #   organize(), entry(); organize writes stamp edits. "Shelf" survives only
+│   │                            #   as the sync wire key shelf/<sha>
 │   ├── stats/                   # StatsRepository (reading-time sessions + derived stats/heatmap)
 │   ├── sync/                    # account-less sync: phrase/keys/HLC; one RecordKind per synced kind (registry,
 │   │                            #   golden wire tests); SyncEngine over ports (SyncTransport: Convex + in-memory
