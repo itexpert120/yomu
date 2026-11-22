@@ -2,8 +2,6 @@ package com.itexpert120.yomu.data.books
 
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
-import com.itexpert120.yomu.core.reader.ReaderPublicationCache
-import com.itexpert120.yomu.core.reader.ReaderTocItem
 import kotlinx.coroutines.flow.Flow
 
 /** What the reader needs to open a book: its file, last position, and title. */
@@ -11,7 +9,6 @@ data class ReadingTarget(
     val storagePath: String,
     val locatorJson: String?,
     val title: String,
-    val publicationCache: ReaderPublicationCache? = null,
 )
 
 data class ReadingProgressSnapshot(
@@ -30,12 +27,18 @@ data class ReadingProgressSnapshot(
 )
 
 /**
- * Library data source backed by Room ([RoomBookRepository]). The import pipeline inserts via
- * [insert]/[isDuplicate]; the UI reads via the observe* flows and mutates via the rest.
+ * Library data source backed by Room ([RoomBookRepository]): book rows and reading progress. The
+ * import pipeline inserts via [insert]/[isDuplicate]; the UI reads via the observe* flows and
+ * mutates via the rest. A book's table of contents lives in [PublicationIndex].
  */
 interface BookRepository {
     fun observeBooks(): Flow<List<Book>>
     fun observeBook(id: BookId): Flow<Book?>
+
+    /**
+     * Marks the book Finished and its chapters read. The chapters come from [PublicationIndex]'s
+     * stored copy; a book with nothing indexed is marked read without chapter rows (never parsed).
+     */
     suspend fun markRead(id: BookId)
     suspend fun markUnread(id: BookId)
     suspend fun markRead(ids: List<BookId>) {
@@ -64,29 +67,4 @@ interface BookRepository {
 
     suspend fun readingTarget(id: BookId): ReadingTarget?
     suspend fun saveProgress(id: BookId, snapshot: ReadingProgressSnapshot)
-
-    /**
-     * The [limit] most-recently-opened books (newest first), for the home-screen library widget's
-     * fast-launch grid. Empty when the library has no books.
-     */
-    suspend fun recentBooks(limit: Int): List<Book>
-
-    /**
-     * The book's table of contents, served from a persistent cache. On a cache miss it is extracted
-     * from the EPUB and stored, so subsequent opens are instant. Also keeps a process-lifetime
-     * in-memory copy ([cachedTableOfContents]) so repeat opens don't even re-read/parse from disk.
-     */
-    suspend fun tableOfContents(id: BookId): List<ReaderTocItem>
-
-    /** Persists a successfully parsed TOC, including an empty TOC, for future opens. */
-    suspend fun cacheTableOfContents(id: BookId, items: List<ReaderTocItem>)
-
-    /** Persists the reader's validated TOC and resource weights after an open/cache repair. */
-    suspend fun cachePublicationMetadata(id: BookId, cache: ReaderPublicationCache)
-
-    /**
-     * The in-memory TOC for [id] if it's already been loaded this session, else null. Synchronous so
-     * callers can render instantly without a loading flash; fall back to [tableOfContents] on null.
-     */
-    fun cachedTableOfContents(id: BookId): List<ReaderTocItem>?
 }

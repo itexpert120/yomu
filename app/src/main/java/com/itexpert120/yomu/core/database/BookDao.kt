@@ -11,11 +11,7 @@ interface BookDao {
 
     /** Single-row projection used by the reader opening path. */
     @Query(
-        "SELECT books.storagePath AS storagePath, books.locatorJson AS locatorJson, " +
-            "books.title AS title, book_toc.json AS tocJson, " +
-            "book_toc.resourceWeightsJson AS resourceWeightsJson " +
-            "FROM books LEFT JOIN book_toc ON book_toc.bookId = books.id " +
-            "WHERE books.id = :id",
+        "SELECT storagePath, locatorJson, title FROM books WHERE id = :id",
     )
     suspend fun getReadingTarget(id: String): ReadingTargetRow?
 
@@ -27,13 +23,6 @@ interface BookDao {
 
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun getBook(id: String): BookEntity?
-
-    /**
-     * The [limit] most-recently-opened books (newest first), for the resizable library widget's
-     * fast-launch grid. Books that have never been opened sort last (lastOpenedAt defaults to 0).
-     */
-    @Query("SELECT * FROM books ORDER BY lastOpenedAt DESC LIMIT :limit")
-    suspend fun getRecentBooks(limit: Int): List<BookEntity>
 
     @Query("SELECT * FROM books WHERE id IN (:ids)")
     suspend fun getBooks(ids: List<String>): List<BookEntity>
@@ -256,8 +245,6 @@ data class ReadingTargetRow(
     val storagePath: String,
     val locatorJson: String?,
     val title: String,
-    val tocJson: String?,
-    val resourceWeightsJson: String?,
 )
 
 /** Lightweight projection of a reading session: when it started and how long it lasted. */

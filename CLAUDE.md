@@ -64,9 +64,13 @@ com.itexpert120.yomu
 │   └── reader/                  # ReaderEngine/ReaderSession/ReaderLocator/ReaderTocItem/ReaderHighlight
 │                                #   (Yomu-owned; no Readium types)
 ├── data/
-│   ├── books/                   # BookRepository + RoomBookRepository + mappers; ChapterReading (the one
-│   │                            #   "chapter read" rule in ChapterReadState, used by Book Details, Stats
-│   │                            #   and sync; mark / markThrough / position recording)
+│   ├── books/                   # BookRepository + RoomBookRepository (book rows + progress) + mappers;
+│   │                            #   PublicationIndex (TOC + resource weights: observeToc(): StateFlow<TocLoad>
+│   │                            #   primed from a memory LRU, publicationCache/remember/forget; owns the
+│   │                            #   SingleFlight parse via ReaderEngine and deletion tombstones; markRead
+│   │                            #   never parses); ChapterReading (the one "chapter read" rule in
+│   │                            #   ChapterReadState, used by Book Details, Stats and sync; mark /
+│   │                            #   markThrough / position recording)
 │   ├── reader/                  # ReadingPosition (Readium-free: section progress, pages left, chapter
 │   │                            #   completion), ReaderPreloader
 │   ├── reader/readium/          # ReadiumReaderEngine (+ PagePresentation, ReadiumMetadataExtractor,
@@ -87,8 +91,8 @@ com.itexpert120.yomu
 │   │                            #   shared from About → Diagnostics via FileProvider — no analytics SDK
 │   └── dictionary/              # DictionaryRepository (Free Dictionary API — the only network call;
 │                                #   inflections like "muttered" resolve to their base word)
-├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; also
-│                                #   kicks off background TOC extraction on insert)
+├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; seeds
+│                                #   PublicationIndex with the TOC read at extraction)
 └── feature/                     # library, bookdetails, bookedit, reader, settings, stats, sync, about,
                                  #   collections (shared Organize / Library tabs sheets)
 ```

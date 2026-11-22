@@ -12,9 +12,12 @@ import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.core.reader.BookmarkAnchor
+import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ChapterReading
+import com.itexpert120.yomu.data.books.PublicationIndex
+import com.itexpert120.yomu.data.books.TocLoad
 import com.itexpert120.yomu.data.collections.LibraryCatalog
 import com.itexpert120.yomu.data.collections.Organize
 import com.itexpert120.yomu.data.collections.StatusChoice
@@ -37,7 +40,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -128,6 +130,7 @@ class BookDetailsViewModel @Inject constructor(
     private val statsRepository: StatsRepository,
     private val catalog: LibraryCatalog,
     private val chapterReading: ChapterReading,
+    publications: PublicationIndex,
     private val readerPreloader: ReaderPreloader,
 ) : ViewModel() {
 
@@ -153,11 +156,9 @@ class BookDetailsViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    // Prime from the in-memory cache when available so re-opening this book shows the TOC instantly
-    // (no loading flash); only a genuine first-load this session starts in the loading state.
-    private val cachedToc = repository.cachedTableOfContents(BookId(bookId))
-    private val tocLoading = MutableStateFlow(cachedToc == null)
-    private val tocItems = MutableStateFlow(cachedToc ?: emptyList())
+    // Starts Ready when the book's TOC is already in memory, so a repeat open shows no loading flash.
+    private val tocLoad = publications.observeToc(BookId(bookId))
+    private val tocItems: List<ReaderTocItem> get() = (tocLoad.value as? TocLoad.Ready)?.items.orEmpty()
     private val tocSort = MutableStateFlow(TocSortMode.Ascending)
     private val selectedUids = MutableStateFlow<Set<Int>>(emptySet())
     private val selectionMode = MutableStateFlow(false)
@@ -175,16 +176,15 @@ class BookDetailsViewModel @Inject constructor(
         .map { TocResumePosition(it.book?.currentChapterId, it.book?.resumeLocatorJson) }
         .distinctUntilChanged()
 
-    private val configFlow = combine(tocLoading, tocSort) { loading, sort -> loading to sort }
-
     val toc: StateFlow<TocUiState> = combine(
-        configFlow,
-        tocItems,
+        tocLoad,
+        tocSort,
         selectionFlow,
         readingAndBookmarksFlow,
         resumePosition,
-    ) { config, items, selection, reading, resume ->
-        val (loading, sort) = config
+    ) { load, sort, selection, reading, resume ->
+        val loading = load is TocLoad.Loading
+        val items = (load as? TocLoad.Ready)?.items.orEmpty()
         val (selected, inSelection) = selection
         val (chapters, bookmarked) = reading
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
@@ -237,15 +237,6 @@ class BookDetailsViewModel @Inject constructor(
             readerPreloader.warmUp()
             readerPreloader.preload(BookId(bookId))
         }
-        if (cachedToc == null) {
-            viewModelScope.launch {
-                val items = withContext(Dispatchers.IO) {
-                    repository.tableOfContents(BookId(bookId))
-                }
-                tocItems.value = items
-                tocLoading.value = false
-            }
-        }
     }
 
     fun onTocSortChange(sort: TocSortMode) = tocSort.update { sort }
@@ -267,7 +258,7 @@ class BookDetailsViewModel @Inject constructor(
     }
 
     fun onSelectAllChapters() {
-        selectedUids.value = tocItems.value
+        selectedUids.value = tocItems
             .mapIndexedNotNull { index, item -> index.takeIf { item.locatorJson != null } }
             .toSet()
     }
@@ -296,7 +287,7 @@ class BookDetailsViewModel @Inject constructor(
 
     fun onMarkSelectedChapters(read: Boolean) {
         val hrefs = selectedUids.value
-            .mapNotNull { tocItems.value.getOrNull(it)?.id }
+            .mapNotNull { tocItems.getOrNull(it)?.id }
             .distinct()
         viewModelScope.launch { chapterReading.mark(BookId(bookId), hrefs, read) }
         onExitChapterSelection()
@@ -304,14 +295,14 @@ class BookDetailsViewModel @Inject constructor(
 
     /** Per-row quick toggle of a single chapter's read state. */
     fun onSetChapterRead(uid: Int, read: Boolean) {
-        val href = tocItems.value.getOrNull(uid)?.id ?: return
+        val href = tocItems.getOrNull(uid)?.id ?: return
         viewModelScope.launch { chapterReading.mark(BookId(bookId), listOf(href), read) }
     }
 
     /** Marks every chapter up to and including the last-selected one (in reading order) as read. */
     fun onMarkPreviousRead() {
         val upTo = selectedUids.value.maxOrNull() ?: return
-        val toc = tocItems.value
+        val toc = tocItems
         viewModelScope.launch { chapterReading.markThrough(BookId(bookId), toc, upTo) }
         onExitChapterSelection()
     }

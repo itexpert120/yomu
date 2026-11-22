@@ -21,6 +21,7 @@ import com.itexpert120.yomu.core.reader.at
 import com.itexpert120.yomu.core.reader.bookmarkAnchor
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
@@ -149,6 +150,7 @@ internal sealed interface ReaderNavigation {
 class ReadingExperienceFactory @Inject constructor(
     private val engine: ReaderEngine,
     private val books: BookRepository,
+    private val publications: PublicationIndex,
     private val settings: ReaderSettingsRepository,
     private val dictionary: DictionaryRepository,
     private val highlights: HighlightRepository,
@@ -175,6 +177,7 @@ class ReadingExperienceFactory @Inject constructor(
         readAloud = AndroidReadAloud(context),
         engine = engine,
         books = books,
+        publications = publications,
         highlights = highlights,
         bookmarks = bookmarks,
         ownerScope = ownerScope,
@@ -198,6 +201,7 @@ internal class ReadingExperience(
     private val readAloud: ReadAloud,
     private val engine: ReaderEngine,
     private val books: BookRepository,
+    private val publications: PublicationIndex,
     private val highlights: HighlightRepository,
     private val bookmarks: BookmarkRepository,
     ownerScope: CoroutineScope,
@@ -255,7 +259,6 @@ internal class ReadingExperience(
         if (started || closed) return
         started = true
 
-        books.cachedTableOfContents(bookId)?.let(::primeTocTitles)
         scope.launch {
             books.observeBook(bookId).collect { book ->
                 _state.update { it.copy(coverImagePath = book?.coverImagePath) }
@@ -360,12 +363,14 @@ internal class ReadingExperience(
             }
 
             try {
-                val (target, initialSettings) = coroutineScope {
+                val (target, initialSettings, publication) = coroutineScope {
                     val targetDeferred = async { books.readingTarget(bookId) }
                     val settingsDeferred = async { settings.first() }
-                    targetDeferred.await() to settingsDeferred.await()
+                    val publicationDeferred = async { publications.publicationCache(bookId) }
+                    Triple(targetDeferred.await(), settingsDeferred.await(), publicationDeferred.await())
                 }
                 if (!isCurrent(generation)) return@launch endTrace()
+                publication?.let { primeTocTitles(it.toc) }
 
                 ReaderOpenTrace.mark("reader.target-settings-resolved")
                 applySettings(initialSettings, persist = false)
@@ -376,7 +381,7 @@ internal class ReadingExperience(
                             filePath = it.storagePath,
                             initialLocatorJson = initialLocatorJson ?: it.locatorJson,
                             initialSettings = initialSettings,
-                            publicationCache = it.publicationCache,
+                            publicationCache = publication,
                             isLookupPhrase = { text -> LookupTerm.of(text) is LookupTerm.Phrase },
                         ),
                     )
@@ -441,10 +446,7 @@ internal class ReadingExperience(
                                 cachePersisted = true
                                 launch {
                                     runCatching {
-                                        books.cachePublicationMetadata(
-                                            bookId,
-                                            openedResult.publicationCache,
-                                        )
+                                        publications.remember(bookId, openedResult.publicationCache)
                                     }
                                 }
                             }

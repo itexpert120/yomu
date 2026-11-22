@@ -1,10 +1,13 @@
 package com.itexpert120.yomu.domain.imports
 
 import android.net.Uri
+import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.storage.BookFiles
 import com.itexpert120.yomu.core.storage.FileStorage
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ImportedBook
+import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.reader.readium.ReadiumMetadataExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +36,7 @@ class ImportBooksUseCase @Inject constructor(
     private val bookFiles: BookFiles,
     private val extractor: ReadiumMetadataExtractor,
     private val repository: BookRepository,
+    private val publications: PublicationIndex,
 ) {
     suspend fun import(uris: List<Uri>): ImportSummary = withContext(Dispatchers.IO) {
         var imported = 0
@@ -98,11 +102,14 @@ class ImportBooksUseCase @Inject constructor(
                 sha256 = staged.sha256,
                 fileSizeBytes = staged.sizeBytes,
                 addedAt = System.currentTimeMillis(),
-                tableOfContents = metadata?.tableOfContents,
-                publicationCache = metadata?.publicationCache,
             ),
         )
-        if (inserted) return ImportResult.Imported(bookId)
+        if (inserted) {
+            // The TOC read during extraction seeds the index, so the book's first open doesn't parse.
+            val publication = metadata?.publicationCache ?: metadata?.tableOfContents?.let { ReaderPublicationCache(toc = it) }
+            publication?.let { runCatching { publications.remember(BookId(bookId), it) } }
+            return ImportResult.Imported(bookId)
+        }
         return repository.findIdByHash(staged.sha256)?.let { ImportResult.Duplicate(it.value) }
             ?: ImportResult.Failed("Duplicate couldn't be resolved")
     }

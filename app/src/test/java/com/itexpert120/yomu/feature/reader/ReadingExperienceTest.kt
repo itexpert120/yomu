@@ -22,12 +22,15 @@ import com.itexpert120.yomu.core.reader.at
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ImportedBook
+import com.itexpert120.yomu.data.books.InMemoryPublicationStore
+import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.books.ReadingTarget
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,8 +52,8 @@ class ReadingExperienceTest {
         val session = FakeReaderSession()
         val cache = ReaderPublicationCache(resourceWeights = mapOf("chapter.xhtml" to 1))
         val engine = FakeReaderEngine(ReaderOpenResult(session, cache))
-        val books = FakeBookRepository()
-        val experience = createExperience(engine, books, scope = this)
+        val store = InMemoryPublicationStore(mapOf(BOOK_ID to "book.epub"))
+        val experience = createExperience(engine, scope = this, publications = store)
 
         try {
             experience.start()
@@ -62,7 +65,7 @@ class ReadingExperienceTest {
 
             session.renderState.value = ReaderRenderState.Ready("chapter.xhtml")
             awaitCondition { experience.state.value.renderState is ReaderRenderState.Ready }
-            awaitCondition { books.cachedPublication == cache }
+            awaitCondition { store.rows[BOOK_ID] == cache }
 
             assertFalse(experience.state.value.loading)
             assertFalse(experience.state.value.failed)
@@ -677,6 +680,7 @@ class ReadingExperienceTest {
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),
+        publications: InMemoryPublicationStore = InMemoryPublicationStore(mapOf(BOOK_ID to "book.epub")),
         highlights: HighlightRepository = FakeHighlightRepository(),
         bookmarks: BookmarkRepository = FakeBookmarkRepository(),
         scope: CoroutineScope,
@@ -704,6 +708,7 @@ class ReadingExperienceTest {
         readAloud = readAloud,
         engine = engine,
         books = books,
+        publications = PublicationIndex(publications, engine, scope, Dispatchers.Unconfined),
         highlights = highlights,
         bookmarks = bookmarks,
         ownerScope = scope,
@@ -972,7 +977,6 @@ class ReadingExperienceTest {
         var failWrites = false
         private val book = MutableStateFlow<Book?>(null)
         val savedProgress = mutableListOf<ReadingProgressSnapshot>()
-        var cachedPublication: ReaderPublicationCache? = null
 
         override fun observeBooks(): Flow<List<Book>> = MutableStateFlow(emptyList())
 
@@ -1010,21 +1014,6 @@ class ReadingExperienceTest {
             assertEquals(BOOK_ID, id)
             savedProgress += snapshot
         }
-
-        override suspend fun recentBooks(limit: Int): List<Book> = emptyList()
-
-        override suspend fun tableOfContents(id: BookId): List<ReaderTocItem> = emptyList()
-
-        override suspend fun cacheTableOfContents(id: BookId, items: List<ReaderTocItem>) = Unit
-
-        override suspend fun cachePublicationMetadata(
-            id: BookId,
-            cache: ReaderPublicationCache,
-        ) {
-            cachedPublication = cache
-        }
-
-        override fun cachedTableOfContents(id: BookId): List<ReaderTocItem>? = null
     }
 
     private companion object {

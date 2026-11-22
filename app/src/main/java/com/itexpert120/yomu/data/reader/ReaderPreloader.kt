@@ -4,6 +4,7 @@ import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.books.PublicationIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -17,6 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class ReaderPreloader @Inject constructor(
     private val books: BookRepository,
+    private val publications: PublicationIndex,
     private val engine: ReaderEngine,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
@@ -26,7 +28,8 @@ class ReaderPreloader @Inject constructor(
     fun preload(id: BookId) {
         scope.launch {
             val target = runCatching { books.readingTarget(id) }.getOrNull() ?: return@launch
-            engine.prepare(target.storagePath, target.publicationCache)
+            val cache = runCatching { publications.publicationCache(id) }.getOrNull()
+            engine.prepare(target.storagePath, cache)
         }
     }
 }
