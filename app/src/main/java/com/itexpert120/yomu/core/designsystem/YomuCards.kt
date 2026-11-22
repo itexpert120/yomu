@@ -61,7 +61,7 @@ fun YomuBookCard(
                     Text(
                         text = title,
                         color = Color.White,
-                        style = YomuTheme.type.section,
+                        style = MaterialTheme.typography.titleMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -69,7 +69,7 @@ fun YomuBookCard(
                     Text(
                         text = author,
                         color = Color.White.copy(alpha = 0.78f),
-                        style = YomuTheme.type.caption,
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -89,7 +89,7 @@ fun YomuBookCard(
                 Text(
                     text = "${(progress * 100).toInt()}%",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = YomuTheme.type.caption,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }

@@ -101,10 +101,10 @@ private fun HighlightColorPalette(
     onSelect: (Int) -> Unit,
 ) {
     val colors = listOf(
-        "Yellow" to YomuTheme.colors.highlightYellow,
-        "Green" to YomuTheme.colors.highlightGreen,
-        "Blue" to YomuTheme.colors.highlightBlue,
-        "Pink" to YomuTheme.colors.highlightPink,
+        "Yellow" to YomuTheme.reading.highlightYellow,
+        "Green" to YomuTheme.reading.highlightGreen,
+        "Blue" to YomuTheme.reading.highlightBlue,
+        "Pink" to YomuTheme.reading.highlightPink,
     )
     Row(
         modifier = Modifier.selectableGroup(),

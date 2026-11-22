@@ -90,7 +90,7 @@ fun YomuLabeledIconAction(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = resolvedColor)
-        Text(text = label, color = resolvedColor, style = YomuTheme.type.caption, maxLines = 1)
+        Text(text = label, color = resolvedColor, style = MaterialTheme.typography.bodySmall, maxLines = 1)
     }
 }
 

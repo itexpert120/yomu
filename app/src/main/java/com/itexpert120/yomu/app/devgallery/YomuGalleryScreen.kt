@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,9 +49,9 @@ import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuFloatingPanel
 import com.itexpert120.yomu.core.designsystem.YomuPanel
 import com.itexpert120.yomu.core.designsystem.YomuRangeRow
+import com.itexpert120.yomu.core.designsystem.YomuReadingTokens
 import com.itexpert120.yomu.core.designsystem.YomuSegmentedControl
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
-import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 
 @Composable
@@ -143,8 +144,8 @@ private fun ExpandedGalleryLayout(
                 GalleryHeader(themeMode, onThemeModeChange, compact = false)
                 Text(
                     text = "Sections",
-                    color = YomuTheme.colors.textMuted,
-                    style = YomuTheme.type.caption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.bodySmall,
                 )
                 listOf(
                     "Controls",
@@ -188,11 +189,11 @@ private fun GalleryHeader(
             .padding(top = if (compact) 18.dp else 0.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = "Open Reader", color = YomuTheme.colors.textPrimary, style = YomuTheme.type.display)
+        Text(text = "Open Reader", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.displaySmall)
         Text(
             text = "Component gallery for the EPUB reader design system.",
-            color = YomuTheme.colors.textSecondary,
-            style = YomuTheme.type.body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
         )
         YomuSegmentedControl(
             options = YomuThemeMode.entries.map { it.label },
@@ -268,18 +269,18 @@ private fun ReaderGallery() {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
                         text = "Chapter 03",
-                        color = YomuTheme.colors.readerMuted,
-                        style = YomuTheme.type.caption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                     Text(
                         text = "The quiet reader",
-                        color = YomuTheme.colors.readerInk,
-                        style = YomuTheme.type.title,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.headlineSmall,
                     )
                     Text(
                         text = "The page should feel intentional before it feels styled. Controls belong at the perimeter, stable and restrained, so the sentence remains the primary surface.",
-                        color = YomuTheme.colors.readerInk,
-                        style = YomuTheme.type.reader,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = YomuReadingTokens.ReaderSample,
                     )
                     YomuFloatingPanel(modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         FlowRow(
@@ -288,8 +289,8 @@ private fun ReaderGallery() {
                         ) {
                             Text(
                                 "42%",
-                                color = YomuTheme.colors.textPrimary,
-                                style = YomuTheme.type.mono,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = YomuReadingTokens.Mono,
                                 modifier = Modifier.align(Alignment.CenterVertically),
                             )
                             YomuChip("TOC", selected = false, onClick = {})
@@ -350,7 +351,7 @@ private fun BookGallery() {
 private fun ThemeGallery() {
     var selected by remember { mutableStateOf("Default") }
     val swatches = listOf(
-        "Default" to YomuTheme.colors.readerPaper,
+        "Default" to MaterialTheme.colorScheme.surface,
         "White" to Color.White,
         "Gray" to Color(0xFFE8E8E4),
         "Sepia" to Color(0xFFEAD8B5),
@@ -383,14 +384,14 @@ private fun ThemeGallery() {
                     ) {
                         Text(
                             label,
-                            color = YomuTheme.colors.textPrimary,
-                            style = YomuTheme.type.body,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f),
                         )
                         Text(
                             "Ready",
-                            color = YomuTheme.colors.textMuted,
-                            style = YomuTheme.type.caption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
@@ -404,8 +405,8 @@ private fun SectionTitle(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = text,
-            color = YomuTheme.colors.textPrimary,
-            style = YomuTheme.type.section,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -414,7 +415,7 @@ private fun SectionTitle(text: String) {
             modifier = Modifier
                 .width(32.dp)
                 .height(1.dp)
-                .background(YomuTheme.colors.textPrimary),
+                .background(MaterialTheme.colorScheme.onSurface),
         )
     }
 }

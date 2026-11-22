@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,8 +78,8 @@ private val ScrollIndicatorThumbTouchSlop = 16.dp
 fun YomuVerticalScrollIndicator(
     state: LazyListState,
     modifier: Modifier = Modifier,
-    thumbColor: Color = YomuTheme.colors.textSecondary,
-    trackColor: Color = YomuTheme.colors.border,
+    thumbColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    trackColor: Color = MaterialTheme.colorScheme.outlineVariant,
 ) {
     VerticalScrollIndicator(
         state = state.scrollIndicatorState,
@@ -99,8 +100,8 @@ fun YomuVerticalScrollIndicator(
 fun YomuVerticalScrollIndicator(
     state: ScrollState,
     modifier: Modifier = Modifier,
-    thumbColor: Color = YomuTheme.colors.textSecondary,
-    trackColor: Color = YomuTheme.colors.border,
+    thumbColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    trackColor: Color = MaterialTheme.colorScheme.outlineVariant,
 ) {
     VerticalScrollIndicator(
         state = state.scrollIndicatorState,

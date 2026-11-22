@@ -64,6 +64,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
+import com.itexpert120.yomu.core.designsystem.YomuReadingTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
@@ -243,7 +244,7 @@ internal fun ReaderFooter(
                     Text(
                         text = chapterRemainingLabel,
                         color = muted,
-                        style = YomuTheme.type.mono,
+                        style = YomuReadingTokens.Mono,
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -252,7 +253,7 @@ internal fun ReaderFooter(
                     Text(
                         text = progressPercent?.let { "$it%" } ?: "",
                         color = muted,
-                        style = YomuTheme.type.mono,
+                        style = YomuReadingTokens.Mono,
                     )
                 }
             }
@@ -351,7 +352,7 @@ private fun FooterClock(color: Color, active: Boolean) {
             }
         }
     }
-    Text(text = time, color = color, style = YomuTheme.type.mono)
+    Text(text = time, color = color, style = YomuReadingTokens.Mono)
 }
 
 private const val MinuteMillis = 60_000L

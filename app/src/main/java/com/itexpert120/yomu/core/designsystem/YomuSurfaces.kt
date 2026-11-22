@@ -83,8 +83,8 @@ fun ReaderPageSurface(
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
-        color = YomuTheme.colors.readerPaper,
-        contentColor = YomuTheme.colors.readerInk,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 0.dp,
     ) {

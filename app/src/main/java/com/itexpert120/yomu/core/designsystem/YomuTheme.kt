@@ -27,43 +27,46 @@ import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import com.materialkolor.dynamiccolor.ColorSpec
 
+/**
+ * The few theme values Material has no role for: the highlight palette (tuned separately for light
+ * and dark themes, so highlights read on either) and the reader's monospace/sample text styles.
+ * Everything else comes straight from `MaterialTheme.colorScheme` / `typography`.
+ */
 @Immutable
-data class YomuColors(
-    val appBackground: Color,
-    val appBackgroundAccent: Color,
-    val surface: Color,
-    val surfaceRaised: Color,
-    val surfaceSunken: Color,
-    val panel: Color,
-    val panelStrong: Color,
-    val textPrimary: Color,
-    val textSecondary: Color,
-    val textMuted: Color,
-    val border: Color,
-    val accent: Color,
-    val accentSoft: Color,
-    val link: Color,
-    val danger: Color,
-    val readerPaper: Color,
-    val readerInk: Color,
-    val readerMuted: Color,
+data class YomuReadingTokens(
     val highlightYellow: Color,
     val highlightGreen: Color,
     val highlightBlue: Color,
     val highlightPink: Color,
-)
+) {
+    companion object {
+        /** Monospace for figures that must not jitter as they change (clock, progress). */
+        val Mono = TextStyle(
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+        )
 
-@Immutable
-data class YomuType(
-    val display: TextStyle,
-    val title: TextStyle,
-    val section: TextStyle,
-    val body: TextStyle,
-    val reader: TextStyle,
-    val caption: TextStyle,
-    val control: TextStyle,
-    val mono: TextStyle,
-)
+        /** Serif body text that previews the reading page outside the reader. */
+        val ReaderSample: TextStyle get() = readerSampleStyle
+
+        internal fun forMode(mode: YomuThemeMode): YomuReadingTokens = if (mode == YomuThemeMode.Light) Light else Dark
+
+        private val Light = YomuReadingTokens(
+            highlightYellow = Color(0xFFE8C55A),
+            highlightGreen = Color(0xFF8FBE79),
+            highlightBlue = Color(0xFF79ADD8),
+            highlightPink = Color(0xFFD989A4),
+        )
+        private val Dark = YomuReadingTokens(
+            highlightYellow = Color(0xFFE7C75B),
+            highlightGreen = Color(0xFF93CE80),
+            highlightBlue = Color(0xFF7CB8E8),
+            highlightPink = Color(0xFFE690AA),
+        )
+    }
+}
 
 @Immutable
 data class YomuSpacing(
@@ -91,31 +94,6 @@ enum class YomuThemeMode(val label: String) {
     Dark("Dark"),
     Oled("OLED"),
 }
-
-private val FallbackYomuColors = YomuColors(
-    appBackground = Color(0xFFFFFBFE),
-    appBackgroundAccent = Color(0xFFE7E0EC),
-    surface = Color(0xFFFFFBFE),
-    surfaceRaised = Color(0xFFF7F2FA),
-    surfaceSunken = Color(0xFFFFFBFE),
-    panel = Color(0xFFF3EDF7),
-    panelStrong = Color(0xFFECE6F0),
-    textPrimary = Color(0xFF1C1B1F),
-    textSecondary = Color(0xFF49454F),
-    textMuted = Color(0xFF49454F).copy(alpha = 0.72f),
-    border = Color(0xFFCAC4D0),
-    accent = Color(0xFF6750A4),
-    accentSoft = Color(0xFFEADDFF),
-    link = Color(0xFF6750A4),
-    danger = Color(0xFFBA1A1A),
-    readerPaper = Color(0xFFFFFBFE),
-    readerInk = Color(0xFF1C1B1F),
-    readerMuted = Color(0xFF49454F),
-    highlightYellow = Color(0xFFFFD54F),
-    highlightGreen = Color(0xFFA5D6A7),
-    highlightBlue = Color(0xFF90CAF9),
-    highlightPink = Color(0xFFF48FB1),
-)
 
 /** The full M3 Expressive corner scale (adds large-increased, extra-large-increased, 2XL). */
 private val YomuShapes = Shapes()
@@ -205,16 +183,13 @@ internal fun ColorScheme.toOled(): ColorScheme = copy(
     surfaceContainerHighest = Color(0xFF242424),
 )
 
-val LocalYomuColors = staticCompositionLocalOf { FallbackYomuColors }
-val LocalYomuType = staticCompositionLocalOf { yomuType(YomuTypography) }
+val LocalYomuReadingTokens = staticCompositionLocalOf { YomuReadingTokens.forMode(YomuThemeMode.Light) }
 val LocalYomuSpacing = staticCompositionLocalOf { YomuSpacing() }
 val LocalYomuRadius = staticCompositionLocalOf { YomuRadius() }
 
 object YomuTheme {
-    val colors: YomuColors
-        @Composable get() = LocalYomuColors.current
-    val type: YomuType
-        @Composable get() = LocalYomuType.current
+    val reading: YomuReadingTokens
+        @Composable get() = LocalYomuReadingTokens.current
     val space: YomuSpacing
         @Composable get() = LocalYomuSpacing.current
     val radius: YomuRadius
@@ -222,8 +197,8 @@ object YomuTheme {
 }
 
 /**
- * Material 3 Expressive is the app theme. The Yomu locals remain as a migration bridge so feature
- * call sites can move incrementally without changing reader and library behavior at the same time.
+ * Material 3 Expressive is the app theme; colour and type come from `MaterialTheme`. The Yomu locals
+ * add only what Material has no tokens for: spacing, radii and [YomuReadingTokens].
  */
 @Composable
 fun YomuDesignTheme(
@@ -243,8 +218,7 @@ fun YomuDesignTheme(
         motionScheme = YomuMotion.scheme,
     ) {
         CompositionLocalProvider(
-            LocalYomuColors provides yomuColors(colorScheme, mode),
-            LocalYomuType provides yomuType(YomuTypography),
+            LocalYomuReadingTokens provides YomuReadingTokens.forMode(mode),
             LocalYomuSpacing provides YomuSpacing(),
             LocalYomuRadius provides YomuRadius(),
             content = content,
@@ -252,49 +226,10 @@ fun YomuDesignTheme(
     }
 }
 
-private fun yomuColors(scheme: ColorScheme, mode: YomuThemeMode): YomuColors = YomuColors(
-    appBackground = scheme.background,
-    appBackgroundAccent = scheme.surfaceVariant,
-    surface = scheme.surface,
-    surfaceRaised = scheme.surfaceContainerLow,
-    surfaceSunken = scheme.surfaceContainerLowest,
-    panel = scheme.surfaceContainer,
-    panelStrong = scheme.surfaceContainerHigh,
-    textPrimary = scheme.onSurface,
-    textSecondary = scheme.onSurfaceVariant,
-    textMuted = scheme.onSurfaceVariant.copy(alpha = 0.72f),
-    border = scheme.outlineVariant,
-    accent = scheme.primary,
-    accentSoft = scheme.primaryContainer,
-    link = scheme.primary,
-    danger = scheme.error,
-    readerPaper = if (mode == YomuThemeMode.Oled) Color.Black else scheme.surface,
-    readerInk = scheme.onSurface,
-    readerMuted = scheme.onSurfaceVariant,
-    highlightYellow = if (mode == YomuThemeMode.Light) Color(0xFFE8C55A) else Color(0xFFE7C75B),
-    highlightGreen = if (mode == YomuThemeMode.Light) Color(0xFF8FBE79) else Color(0xFF93CE80),
-    highlightBlue = if (mode == YomuThemeMode.Light) Color(0xFF79ADD8) else Color(0xFF7CB8E8),
-    highlightPink = if (mode == YomuThemeMode.Light) Color(0xFFD989A4) else Color(0xFFE690AA),
-)
-
-private fun yomuType(typography: Typography): YomuType = YomuType(
-    display = typography.displaySmall,
-    title = typography.headlineSmall,
-    section = typography.titleMedium,
-    body = typography.bodyLarge,
-    reader = typography.bodyLarge.copy(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 20.sp,
-        lineHeight = 33.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    caption = typography.bodySmall,
-    control = typography.labelLarge,
-    mono = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-    ),
+private val readerSampleStyle = YomuTypography.bodyLarge.copy(
+    fontFamily = FontFamily.Serif,
+    fontWeight = FontWeight.Normal,
+    fontSize = 20.sp,
+    lineHeight = 33.sp,
+    letterSpacing = 0.1.sp,
 )

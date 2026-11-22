@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
+import com.itexpert120.yomu.core.designsystem.YomuReadingTokens
 import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
 import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
 import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
@@ -193,7 +194,7 @@ private fun ReaderDefaultsPreview(
                 Text(
                     text = "A page that feels like yours.",
                     color = pageText,
-                    style = YomuTheme.type.reader,
+                    style = YomuReadingTokens.ReaderSample,
                 )
                 Text(
                     text = "Open Reader keeps the words in focus and lets the details recede. " +

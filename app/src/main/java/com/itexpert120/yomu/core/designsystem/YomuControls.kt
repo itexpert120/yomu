@@ -424,13 +424,13 @@ fun YomuRangeRow(
             Text(
                 text = label,
                 color = MaterialTheme.colorScheme.onSurface,
-                style = YomuTheme.type.body,
+                style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 text = valueLabel,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = YomuTheme.type.caption,
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -507,7 +507,7 @@ fun YomuColorSwatch(
         Text(
             text = name,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = YomuTheme.type.caption,
+            style = MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
