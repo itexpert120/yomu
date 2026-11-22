@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -48,7 +49,15 @@ class StatsRepository internal constructor(
     ) : this(dao, database, calendar.dates, chapterReading.observeReadCount())
 
     /** Total time spent reading a single book (seconds), as a live flow. */
-    fun bookReadingSeconds(bookId: BookId): Flow<Long> = dao.observeBookReadingSeconds(bookId.value).distinctUntilChanged()
+    fun bookReadingSeconds(bookId: BookId): Flow<Long> = dao.observeBookReadingSeconds(bookId.value)
+        .distinctUntilChanged()
+        .onEach { lastReadingSeconds = bookId to it }
+
+    /** [bookId]'s reading time if it was the one last observed, so reopening it needs no wait. */
+    fun peekBookReadingSeconds(bookId: BookId): Long? = lastReadingSeconds?.takeIf { it.first == bookId }?.second
+
+    @Volatile
+    private var lastReadingSeconds: Pair<BookId, Long>? = null
 
     /** Logs a finished reading session and folds its time into the day it started. */
     suspend fun recordSession(bookId: BookId, startedAtMillis: Long, seconds: Long, operationId: String = UUID.randomUUID().toString()) {

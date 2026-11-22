@@ -54,7 +54,15 @@ class ChapterReading @Inject constructor(
     fun observe(book: BookId): Flow<ChapterReadState> = combine(
         dao.observeReadChapters(book.value),
         dao.observeChapterProgress(book.value),
-    ) { read, progress -> ChapterReadState.from(read, progress.associate { it.chapterId to it.progress }) }
+    ) { read, progress ->
+        ChapterReadState.from(read, progress.associate { it.chapterId to it.progress }).also { lastObserved = book to it }
+    }
+
+    /** [book]'s read state if it was the one last observed, so reopening it needs no wait. */
+    fun peek(book: BookId): ChapterReadState? = lastObserved?.takeIf { it.first == book }?.second
+
+    @Volatile
+    private var lastObserved: Pair<BookId, ChapterReadState>? = null
 
     /** Chapters read across the whole library, by the same rule as [observe]. */
     fun observeReadCount(): Flow<Int> = combine(dao.observeAllReadChapters(), dao.observeAllChapterProgress()) { read, progress ->

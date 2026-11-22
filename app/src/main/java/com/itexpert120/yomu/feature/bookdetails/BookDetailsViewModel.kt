@@ -15,9 +15,11 @@ import com.itexpert120.yomu.core.reader.BookmarkAnchor
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.bookmarks.BookmarkRepository
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.books.ChapterReadState
 import com.itexpert120.yomu.data.books.ChapterReading
 import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.books.TocLoad
+import com.itexpert120.yomu.data.collections.Catalog
 import com.itexpert120.yomu.data.collections.LibraryCatalog
 import com.itexpert120.yomu.data.collections.Organize
 import com.itexpert120.yomu.data.collections.StatusChoice
@@ -141,16 +143,27 @@ class BookDetailsViewModel @Inject constructor(
         combine(
             catalog.observe(),
             statsRepository.bookReadingSeconds(BookId(bookId)),
-        ) { catalog, readingSeconds ->
-            val entry = catalog.entry(BookId(bookId))
-            BookDetailsState(
-                loading = false,
-                book = entry?.book?.toUi(readingSeconds)?.copy(
-                    collectionNames = catalog.collections.filter { it.id in entry.collectionIds }.map { it.name },
-                ),
-                organize = catalog.organize(listOf(BookId(bookId))),
-            )
-        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BookDetailsState())
+        ) { catalog, readingSeconds -> detailsState(catalog, readingSeconds) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), seededState())
+
+    private fun detailsState(catalog: Catalog, readingSeconds: Long): BookDetailsState {
+        val entry = catalog.entry(BookId(bookId))
+        return BookDetailsState(
+            loading = false,
+            book = entry?.book?.toUi(readingSeconds)?.copy(
+                collectionNames = catalog.collections.filter { it.id in entry.collectionIds }.map { it.name },
+            ),
+            organize = catalog.organize(listOf(BookId(bookId))),
+        )
+    }
+
+    // The library has usually just loaded this book, so the page opens with its content rather than
+    // a loading frame that would sit in the middle of the screen transition.
+    private fun seededState(): BookDetailsState {
+        val known = catalog.latest?.takeIf { it.entry(BookId(bookId)) != null } ?: return BookDetailsState()
+        return detailsState(known, statsRepository.peekBookReadingSeconds(BookId(bookId)) ?: 0L)
+    }
 
     // One-shot user messages (e.g. gallery-save result), surfaced as a transient notice.
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -183,10 +196,37 @@ class BookDetailsViewModel @Inject constructor(
         readingAndBookmarksFlow,
         resumePosition,
     ) { load, sort, selection, reading, resume ->
-        val loading = load is TocLoad.Loading
+        tocState(load, sort, selection.first, selection.second, reading.first, reading.second, resume)
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), seededToc())
+
+    // A book reopened in this session still has its contents and read marks in memory.
+    private fun seededToc(): TocUiState {
+        val load = tocLoad.value as? TocLoad.Ready ?: return TocUiState()
+        val chapters = chapterReading.peek(BookId(bookId)) ?: return TocUiState()
+        val book = state.value.book
+        return tocState(
+            load = load,
+            sort = TocSortMode.Ascending,
+            selected = emptySet(),
+            inSelection = false,
+            chapters = chapters,
+            bookmarked = emptySet(),
+            resume = TocResumePosition(book?.currentChapterId, book?.resumeLocatorJson),
+        )
+    }
+
+    private fun tocState(
+        load: TocLoad,
+        sort: TocSortMode,
+        selected: Set<Int>,
+        inSelection: Boolean,
+        chapters: ChapterReadState,
+        bookmarked: Set<String?>,
+        resume: TocResumePosition,
+    ): TocUiState {
         val items = (load as? TocLoad.Ready)?.items.orEmpty()
-        val (selected, inSelection) = selection
-        val (chapters, bookmarked) = reading
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
         val ordered = items.withIndex().toList()
             .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
@@ -216,8 +256,8 @@ class BookDetailsViewModel @Inject constructor(
                 percent = if (it.locatorJson == null) null else chapters.percent(it.id),
             )
         }
-        TocUiState(
-            loading = loading,
+        return TocUiState(
+            loading = load is TocLoad.Loading,
             sort = sort,
             selectionMode = inSelection,
             items = entries,
@@ -227,8 +267,6 @@ class BookDetailsViewModel @Inject constructor(
             unreadCount = unreadCount,
         )
     }
-        .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TocUiState())
 
     init {
         // Read is the likely next tap: open the book (and warm the engine) once the page has settled.

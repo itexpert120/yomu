@@ -35,8 +35,16 @@ class LibraryCatalog @Inject constructor(
         Catalog(
             entries = bookList.map { CatalogEntry(it, memberships[it.id.value]?.toSet().orEmpty()) },
             collections = collectionRows.map { BookCollection(it.id, it.name, it.position) },
-        )
+        ).also { latest = it }
     }
+
+    /**
+     * The catalogue as last observed by anyone, or null before the first load. A screen opened
+     * from the library starts from it so it has content on its first frame, then follows [observe].
+     */
+    @Volatile
+    var latest: Catalog? = null
+        private set
 
     suspend fun setManualStatus(ids: List<BookId>, status: ManualStatus?) {
         if (ids.isEmpty()) return
