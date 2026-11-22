@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
@@ -20,6 +21,8 @@ import android.view.ViewTreeObserver
 import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnAttach
+import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentFactory
 import androidx.fragment.app.FragmentManager
 import androidx.webkit.WebViewCompat
@@ -402,7 +405,9 @@ private class ReadiumReaderSession(
     private var restorationJob: Job? = null
     private var restorationGeneration = 0L
     private var hostedFragmentManager: FragmentManager? = null
-    private var hostedFragmentTag: String? = null
+    private var hostContainer: FragmentContainerView? = null
+    private var hostFragmentManager: FragmentManager? = null
+    private var immersiveInsets = false
 
     private val initialLocator: Locator? = initialLocatorJson
         ?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
@@ -529,7 +534,7 @@ private class ReadiumReaderSession(
         }
     }
 
-    override val fragmentFactory: FragmentFactory
+    private val fragmentFactory: FragmentFactory
         get() = navigatorFactory.createFragmentFactory(
             initialLocator = lastLocator ?: initialLocator,
             readingOrder = publication.readingOrder,
@@ -701,15 +706,70 @@ private class ReadiumReaderSession(
             },
         )
 
-    override val fragmentClassName: String = EpubNavigatorFragment::class.java.name
+    override fun host(container: FragmentContainerView, fragmentManager: FragmentManager) {
+        hostContainer = container
+        hostFragmentManager = fragmentManager
+        container.applyReadiumInsetMode(immersiveInsets)
+        container.doOnAttach {
+            // After a config change a placeholder navigator may have been restored (via the
+            // activity's restore guard). Replace whatever is there with a fresh fragment bound to
+            // this session, so the reader rebuilds correctly.
+            // Let Compose render the shell and cover before Readium constructs its WebView: hosting
+            // is one ordered transaction, but it doesn't block the first frame with commitNow.
+            commitNavigatorFragment(fragmentManager, container.id, synchronously = false)
+        }
+    }
 
-    override fun onFragmentHosted(fragmentManager: FragmentManager, tag: String) {
+    override fun setImmersive(immersive: Boolean) {
+        immersiveInsets = immersive
+        hostContainer?.applyReadiumInsetMode(immersive)
+    }
+
+    override fun unhost() {
+        val fragmentManager = hostFragmentManager ?: return
+        fragmentManager.findFragmentByTag(NAVIGATOR_TAG)?.let { fragment ->
+            fragmentManager.beginTransaction().remove(fragment).commitAllowingStateLoss()
+        }
+        hostContainer = null
+        hostFragmentManager = null
+    }
+
+    /** Adds a fresh navigator fragment to [containerId], replacing the one there, then wires it up. */
+    private fun commitNavigatorFragment(
+        fragmentManager: FragmentManager,
+        containerId: Int,
+        synchronously: Boolean,
+    ) {
+        fragmentManager.fragmentFactory = fragmentFactory
+        val transaction = fragmentManager.beginTransaction().setReorderingAllowed(true)
+        fragmentManager.findFragmentByTag(NAVIGATOR_TAG)?.let(transaction::remove)
+        transaction
+            .add(containerId, EpubNavigatorFragment::class.java, Bundle(), NAVIGATOR_TAG)
+            .runOnCommit { onFragmentHosted(fragmentManager) }
+        if (synchronously) transaction.commitNowAllowingStateLoss() else transaction.commitAllowingStateLoss()
+    }
+
+    private fun FragmentContainerView.applyReadiumInsetMode(immersive: Boolean) {
+        if (immersive) {
+            // Install before the Readium fragment is attached; otherwise R2WebView can cache a first
+            // layout with the status/cutout inset already reserved.
+            ViewCompat.setOnApplyWindowInsetsListener(this) { _, _ ->
+                WindowInsetsCompat.CONSUMED
+            }
+        } else {
+            // Let Readium's own R2WebView inset dispatcher see the status/nav bars.
+            ViewCompat.setOnApplyWindowInsetsListener(this, null)
+        }
+        ViewCompat.requestApplyInsets(this)
+    }
+
+    private fun onFragmentHosted(fragmentManager: FragmentManager) {
         ReaderOpenTrace.mark("reader.fragment-attached")
         val rehost = navigator != null
         if (rehost) {
             presentation.cover()
         }
-        val nav = fragmentManager.findFragmentByTag(tag) as? EpubNavigatorFragment ?: return
+        val nav = fragmentManager.findFragmentByTag(NAVIGATOR_TAG) as? EpubNavigatorFragment ?: return
         restorationGeneration++
         restorationJob?.cancel()
         restorationJob = null
@@ -720,7 +780,6 @@ private class ReadiumReaderSession(
             presentation.attach(surface!!)
         }
         hostedFragmentManager = fragmentManager
-        hostedFragmentTag = tag
         // The system kills the WebView renderer freely while the app is backgrounded; rebuild the
         // navigator at the current position instead of letting Chromium abort the process.
         nav.childFragmentManager.guardWebViewRenderers {
@@ -1355,22 +1414,13 @@ private class ReadiumReaderSession(
         scope.launch {
             if (navigator !== expected) return@launch
             val fragmentManager = hostedFragmentManager ?: return@launch
-            val tag = hostedFragmentTag ?: return@launch
             if (fragmentManager.isDestroyed) return@launch
-            val stale = fragmentManager.findFragmentByTag(tag) ?: return@launch
+            val stale = fragmentManager.findFragmentByTag(NAVIGATOR_TAG) ?: return@launch
             val containerId = stale.id.takeIf { it != 0 } ?: return@launch
             presentation.cover()
+            // The same hosting path as host(), committed now: the dead page must go immediately.
             runCatching {
-                fragmentManager.beginTransaction()
-                    .remove(stale)
-                    .commitNowAllowingStateLoss()
-                val replacement = fragmentFactory.instantiate(context.classLoader, fragmentClassName)
-                fragmentManager.fragmentFactory = fragmentFactory
-                fragmentManager.beginTransaction()
-                    .setReorderingAllowed(true)
-                    .add(containerId, replacement, tag)
-                    .commitNowAllowingStateLoss()
-                onFragmentHosted(fragmentManager, tag)
+                commitNavigatorFragment(fragmentManager, containerId, synchronously = true)
             }.onFailure { presentation.recover() }
         }
     }
@@ -1385,7 +1435,8 @@ private class ReadiumReaderSession(
         scrollProgressJob = null
         presentation.close()
         hostedFragmentManager = null
-        hostedFragmentTag = null
+        hostContainer = null
+        hostFragmentManager = null
         scope.cancel()
         runCatching { searchIterator?.close() }
         searchIterator = null
@@ -1768,6 +1819,7 @@ private class ReadiumReaderSession(
         const val JS_INJECT_RETRY_DELAY_MS = 80L
 
         const val TAG = "ReadiumReaderEngine"
+        const val NAVIGATOR_TAG = "reader-navigator"
 
         const val CHAPTER_START_FALLBACK_PADDING_DP = 20f
         const val CHAPTER_START_EXTRA_PADDING_DP = 4f

@@ -1,7 +1,9 @@
 package com.itexpert120.yomu.app.di
 
 import com.itexpert120.yomu.core.reader.ReaderEngine
+import com.itexpert120.yomu.core.reader.ReaderRestoreGuard
 import com.itexpert120.yomu.data.reader.readium.ReadiumReaderEngine
+import com.itexpert120.yomu.data.reader.readium.ReadiumRestoreGuard
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -15,4 +17,7 @@ abstract class ReaderModule {
     @Binds
     @Singleton
     abstract fun bindReaderEngine(impl: ReadiumReaderEngine): ReaderEngine
+
+    @Binds
+    abstract fun bindReaderRestoreGuard(impl: ReadiumRestoreGuard): ReaderRestoreGuard
 }

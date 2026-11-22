@@ -23,8 +23,7 @@ import com.itexpert120.yomu.app.toSplashTheme
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.model.ThemePreference
-import com.itexpert120.yomu.data.reader.readium.readiumRestoreFragmentFactory
-import com.itexpert120.yomu.data.reader.readium.removeRestoredReadiumNavigatorFragments
+import com.itexpert120.yomu.core.reader.ReaderEngine
 import dagger.hilt.android.AndroidEntryPoint
 
 // FragmentActivity (not ComponentActivity) so the Readium EpubNavigatorFragment can be hosted.
@@ -43,15 +42,11 @@ class MainActivity : FragmentActivity() {
         persistPlatformSplashTheme(splashTheme)
         val splashScreen = installSplashScreen()
         splashScreen.setOnExitAnimationListener(::animateSplashExit)
-        // Set before super.onCreate so a navigator fragment saved before a config change (rotation)
-        // can be re-instantiated during restore instead of crashing; the reader replaces it.
-        supportFragmentManager.fragmentFactory = readiumRestoreFragmentFactory()
+        // Before super.onCreate, so a reading view saved before a config change (rotation) or process
+        // death can be re-instantiated during restore instead of crashing; the reader replaces it.
+        ReaderEngine.installRestoreGuard(this)
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { !appViewModel.appearance.value.isLoaded }
-        // Readium navigator fragments cannot be resumed from FragmentManager-saved state. If the
-        // activity was relaunched (rotation/process recreation) while the reader was open, discard
-        // the restored dummy before FragmentActivity dispatches onResume to it.
-        removeRestoredReadiumNavigatorFragments(supportFragmentManager)
         enableYomuEdgeToEdge()
         preferNativeRefreshRate()
         // Cold start from an external "Open with"/share.

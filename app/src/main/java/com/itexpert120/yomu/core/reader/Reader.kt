@@ -1,8 +1,13 @@
 package com.itexpert120.yomu.core.reader
 
-import androidx.fragment.app.FragmentFactory
+import androidx.fragment.app.FragmentActivity
+import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.ReaderSettings
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -139,14 +144,48 @@ interface ReaderEngine {
 
     /** Reads the book's table of contents without starting a reading session. */
     suspend fun tableOfContents(filePath: String): List<ReaderTocItem>?
+
+    companion object {
+        /**
+         * Lets [activity] be re-created (rotation, process death) while a book is open. Call before
+         * `super.onCreate`: the engine's reading view can't be restored from saved state, so the
+         * guard lets the framework instantiate it and then discards it before it can resume; the
+         * reader hosts a fresh one.
+         */
+        fun installRestoreGuard(activity: FragmentActivity) {
+            EntryPointAccessors.fromApplication(activity.applicationContext, ReaderRestoreGuardEntryPoint::class.java)
+                .restoreGuard()
+                .install(activity)
+        }
+    }
 }
 
-/** Restricted navigator surface exposed to Compose for fragment hosting only. */
-interface ReaderNavigator {
-    val fragmentFactory: FragmentFactory
-    val fragmentClassName: String
+/** The engine's activity re-creation guard; see [ReaderEngine.installRestoreGuard]. */
+fun interface ReaderRestoreGuard {
+    fun install(activity: FragmentActivity)
+}
 
-    fun onFragmentHosted(fragmentManager: FragmentManager, tag: String)
+// The guard runs before the activity is injected, so it is looked up from the application.
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ReaderRestoreGuardEntryPoint {
+    fun restoreGuard(): ReaderRestoreGuard
+}
+
+/** The reading view, as Compose hosts it. */
+interface ReaderNavigator {
+    /**
+     * Shows the reading view in [container], through the activity's [fragmentManager]. Doesn't block
+     * the first frame: the view is added once the container is attached, and a view restored from
+     * a previous configuration is replaced.
+     */
+    fun host(container: FragmentContainerView, fragmentManager: FragmentManager)
+
+    /** Whether the page runs under the system bars (immersive) or inset below them. */
+    fun setImmersive(immersive: Boolean)
+
+    /** Removes the reading view from its container (the host is going away). */
+    fun unhost()
 }
 
 /**

@@ -1,6 +1,6 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.fragment.app.FragmentFactory
+import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentManager
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
@@ -768,8 +768,6 @@ class ReadingExperienceTest {
         override val footnotes: SharedFlow<String> = footnoteEvents
         val highlightTapEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
         override val highlightTaps: SharedFlow<String> = highlightTapEvents
-        override val fragmentFactory = FragmentFactory()
-        override val fragmentClassName = "FakeReaderFragment"
         val appliedSettings = mutableListOf<ReaderSettings>()
         val visitedLocators = mutableListOf<String>()
         val searchQueries = mutableListOf<String>()
@@ -783,7 +781,11 @@ class ReadingExperienceTest {
         var clearSearchCalls = 0
         var closed = false
 
-        override fun onFragmentHosted(fragmentManager: FragmentManager, tag: String) = Unit
+        override fun host(container: FragmentContainerView, fragmentManager: FragmentManager) = Unit
+
+        override fun setImmersive(immersive: Boolean) = Unit
+
+        override fun unhost() = Unit
 
         override fun applySettings(settings: ReaderSettings) {
             appliedSettings += settings
