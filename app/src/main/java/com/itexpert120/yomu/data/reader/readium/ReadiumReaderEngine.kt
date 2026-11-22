@@ -207,16 +207,20 @@ class ReadiumReaderEngine @Inject constructor(
             val config = WebViewStartUpConfig.Builder(Dispatchers.Default.asExecutor())
                 .setShouldRunUiThreadStartUpTasks(true)
                 .build()
-            WebViewCompat.startUpWebView(context, config) {
-                // Chromium is loaded; the first WebView object still costs a few hundred ms, so
-                // make (and drop) one while the main thread has nothing else to do.
-                Handler(Looper.getMainLooper()).post {
-                    Looper.myQueue().addIdleHandler {
-                        runCatching { WebView(context).destroy() }
-                        false
+            WebViewCompat.startUpWebView(
+                context,
+                config,
+                WebViewCompat.WebViewStartUpCallback {
+                    // Chromium is loaded; the first WebView object still costs a few hundred ms, so
+                    // make (and drop) one while the main thread has nothing else to do.
+                    Handler(Looper.getMainLooper()).post {
+                        Looper.myQueue().addIdleHandler {
+                            runCatching { WebView(context).destroy() }
+                            false
+                        }
                     }
-                }
-            }
+                },
+            )
         }.onFailure { warmedUp = false }
     }
 
