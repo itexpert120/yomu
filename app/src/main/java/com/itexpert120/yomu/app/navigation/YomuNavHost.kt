@@ -99,7 +99,7 @@ fun YomuNavHost(
             if (state is NavigationEventTransitionState.InProgress) {
                 backMotion.released = false
                 backMotion.gestureInFlight = true
-                backMotion.swipeEdge = state.latestEvent.swipeEdge
+                backMotion.recordEdge(state.latestEvent.swipeEdge)
             } else {
                 backMotion.released = true
             }
@@ -110,10 +110,13 @@ fun YomuNavHost(
         navController = navController,
         startDestination = Home,
         modifier = modifier,
-        enterTransition = transitions.enter,
+        enterTransition = transitions.pushEnter,
         exitTransition = {
+            // A forward move starts fresh: nothing from an earlier back gesture may carry over.
             backMotion.predictive = false
-            transitions.exit(this)
+            backMotion.tapPop = false
+            backMotion.gestureInFlight = false
+            transitions.pushExit(this)
         },
         // A back tap plays the same Material back as a released gesture, from rest (see BackPreviewFrame).
         popEnterTransition = { EnterTransition.None },
@@ -139,7 +142,8 @@ fun YomuNavHost(
         predictivePopExitTransition = { swipeEdge ->
             backMotion.predictive = motionEnabled
             backMotion.tapPop = false
-            backMotion.swipeEdge = swipeEdge
+            backMotion.gestureInFlight = true
+            backMotion.recordEdge(swipeEdge)
             ExitTransition.KeepUntilTransitionsFinished
         },
     ) {
@@ -260,6 +264,12 @@ private class BackMotion {
     // NavigationEvent.EDGE_LEFT / EDGE_RIGHT: the leaving page drifts away from the edge it was pulled from.
     var swipeEdge = NavigationEvent.EDGE_LEFT
 
+    // NavHost resets its edge to EDGE_NONE as a gesture ends, and some events carry no edge; only a
+    // real left/right edge replaces the one this gesture started with.
+    fun recordEdge(edge: Int) {
+        if (edge == NavigationEvent.EDGE_LEFT || edge == NavigationEvent.EDGE_RIGHT) swipeEdge = edge
+    }
+
     // False while a finger is on a back gesture. Each page frame tracks its seeked fraction until
     // then and keeps the value at release, which splits the transition into the drag and the
     // commit (or cancel) that follows.
@@ -329,7 +339,7 @@ private fun AnimatedContentScope.BackPreviewFrame(
                     scaleY = scale
                     val drift = (size.width / 20f - edgeMarginPx).coerceAtLeast(0f) * pose.drag
                     translationX = if (fromRight) -drift else drift
-                    alpha = 1f - ((pose.commitTime - PredictiveFadeDelay) / PredictiveFadeSpan).coerceIn(0f, 1f)
+                    alpha = 1f - (pose.commitTime / PredictiveFadeSpan).coerceAtMost(1f)
                     shape = RoundedCornerShape(cornerPx * (maxOf(pose.drag, pose.commit) / 0.1f).coerceAtMost(1f))
                 } else {
                     // The page underneath waits shrunk, shifted toward the edge the gesture came
@@ -390,12 +400,10 @@ private fun NavHostController.popBackStackIfResumed() {
     }
 }
 
-// The top page fades over PredictiveFadeSpan of the commit after PredictiveFadeDelay, so it is seen
-// shrinking away (even if the page underneath costs a frame or two to compose) yet clears before
-// that page settles. The page underneath starts PredictiveEnterOffset of the width toward the swipe
-// edge.
-private const val PredictiveFadeDelay = 0.15f
-private const val PredictiveFadeSpan = 0.4f
+// The top page fades out over the first PredictiveFadeSpan of the commit while it keeps shrinking,
+// so it clears quickly instead of lingering over the page underneath as a double exposure. The page
+// underneath starts PredictiveEnterOffset of the width toward the swipe edge.
+private const val PredictiveFadeSpan = 0.3f
 private const val PredictiveEnterOffset = 0.1f
 
 /**

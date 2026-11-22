@@ -16,6 +16,8 @@ import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuScreenEnter
 import com.itexpert120.yomu.core.designsystem.yomuScreenExit
+import com.itexpert120.yomu.core.designsystem.yomuScreenPushEnter
+import com.itexpert120.yomu.core.designsystem.yomuScreenPushExit
 
 private typealias EnterSpec = AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition
 private typealias ExitSpec = AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition
@@ -35,6 +37,23 @@ internal class YomuScreenTransitions(
     val enter: EnterSpec = { slideIn(isForwardTopLevelMove(initialState.destination, targetState.destination)) }
     val exit: ExitSpec = { slideOut(isForwardTopLevelMove(initialState.destination, targetState.destination)) }
     val popEnter: EnterSpec = { slideIn(forward = false) }
+
+    // The root host opens child screens with a push (the old page stays under the new one) rather
+    // than the tab fade-through, so a slow first frame never shows an empty screen.
+    val pushEnter: EnterSpec = {
+        if (initialState.id == targetState.id || !motionEnabled) {
+            EnterTransition.None
+        } else {
+            yomuScreenPushEnter(travelDistancePx = travelDistancePx, forward = physicalDirection(true, layoutDirection))
+        }
+    }
+    val pushExit: ExitSpec = {
+        if (initialState.id == targetState.id || !motionEnabled) {
+            ExitTransition.None
+        } else {
+            yomuScreenPushExit(travelDistancePx = travelDistancePx, forward = physicalDirection(true, layoutDirection))
+        }
+    }
     val popExit: ExitSpec = { slideOut(forward = false) }
 
     private fun AnimatedContentTransitionScope<NavBackStackEntry>.slideIn(forward: Boolean): EnterTransition = if (initialState.id == targetState.id || !motionEnabled) {

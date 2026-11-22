@@ -52,6 +52,9 @@ object YomuMotion {
         ScreenTransitionDurationMillis - ScreenTransitionFadeOutMillis
     val ScreenTransitionDistance = 30.dp
 
+    // Opening a child screen (yomuScreenPushEnter): the new page is opaque this fast.
+    const val ScreenPushFadeInMillis = 150
+
     const val PopupScaleFrom = 0.90f
 
     // Predictive back on dialog-like surfaces (sheets, dialogs, cover viewer): how far they shrink.
@@ -176,6 +179,53 @@ fun yomuScreenEnter(
         initialOffsetX = { width ->
             val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
             if (forward) travel else -travel
+        },
+    )
+}
+
+/**
+ * Opening a child screen: the new page fades in quickly while travelling a short way in, on top of
+ * the page it covers, which stays opaque underneath and only drifts back. Unlike a fade-through,
+ * there is never an empty frame between the two pages, even when the new page is slow to compose.
+ */
+fun yomuScreenPushEnter(
+    travelDistancePx: Int,
+    forward: Boolean = true,
+): EnterTransition = if (!yomuAnimationsEnabled()) {
+    EnterTransition.None
+} else {
+    fadeIn(
+        animationSpec = tween(
+            durationMillis = YomuMotion.ScreenPushFadeInMillis,
+            easing = YomuMotion.EmphasizedDecel,
+        ),
+    ) + slideInHorizontally(
+        animationSpec = tween(
+            durationMillis = YomuMotion.ScreenTransitionDurationMillis,
+            easing = YomuMotion.EmphasizedDecel,
+        ),
+        initialOffsetX = { width ->
+            val travel = travelDistancePx.coerceAtMost(width).coerceAtLeast(1)
+            if (forward) travel else -travel
+        },
+    )
+}
+
+/** The page under a push: opaque, drifting back a little until the new page covers it. */
+fun yomuScreenPushExit(
+    travelDistancePx: Int,
+    forward: Boolean = true,
+): ExitTransition = if (!yomuAnimationsEnabled()) {
+    ExitTransition.None
+} else {
+    slideOutHorizontally(
+        animationSpec = tween(
+            durationMillis = YomuMotion.ScreenTransitionDurationMillis,
+            easing = YomuMotion.EmphasizedDecel,
+        ),
+        targetOffsetX = { width ->
+            val travel = (travelDistancePx / 2).coerceAtMost(width).coerceAtLeast(1)
+            if (forward) -travel else travel
         },
     )
 }
