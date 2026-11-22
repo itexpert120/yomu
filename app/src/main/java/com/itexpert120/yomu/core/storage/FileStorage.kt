@@ -1,51 +1,26 @@
 package com.itexpert120.yomu.core.storage
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
 import android.provider.OpenableColumns
-import androidx.core.graphics.scale
-import com.itexpert120.yomu.app.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.security.MessageDigest
-import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Owns app-private storage for imported EPUBs and extracted covers. Files are copied in from SAF
- * URIs so the app has stable, deletable, hashable local copies (docs/android-build-patterns.md).
+ * App-private storage for downloaded fonts, plus what an import asks of a SAF document (is it an
+ * EPUB, its display name). A book's own files live in [BookFiles].
  */
 @Singleton
 class FileStorage @Inject constructor(
     @ApplicationContext private val context: Context,
-    @ApplicationScope scope: CoroutineScope,
 ) {
     // Created on first use (always off the main thread), so constructing this during the first
     // composition does no disk I/O.
-    private val epubsDir: File by lazy { File(context.filesDir, "epubs").apply { mkdirs() } }
-    private val coversDir: File by lazy { File(context.filesDir, "covers").apply { mkdirs() } }
     private val fontsDir: File by lazy { File(context.filesDir, "fonts").apply { mkdirs() } }
-
-    // Leftover `.partial` copies from an interrupted import. copyEpub waits for this sweep so it
-    // can never delete a copy that is still being written. Deletion residue is reconciled against
-    // committed rows when the database opens.
-    private val partialSweep: Job = scope.launch(Dispatchers.IO) {
-        sequenceOf(epubsDir, coversDir).forEach { directory ->
-            directory.listFiles()
-                ?.filter { it.name.endsWith(".partial") }
-                ?.forEach { runCatching { it.delete() } }
-        }
-    }
-
-    data class CopiedFile(val file: File, val sha256: String, val sizeBytes: Long)
 
     /** Writes raw [bytes] (a downloaded font file) to app storage under [name], returning its path. */
     suspend fun saveFont(name: String, bytes: ByteArray): String = withContext(Dispatchers.IO) {
@@ -61,101 +36,10 @@ class FileStorage @Inject constructor(
         Unit
     }
 
-    /** Copies the EPUB at [uri] into app storage under [bookId], returning its path + sha256. */
-    suspend fun copyEpub(bookId: String, uri: Uri): CopiedFile = withContext(Dispatchers.IO) {
-        partialSweep.join()
-        val target = File(epubsDir, "$bookId.epub")
-        val partial = File(epubsDir, "$bookId.partial")
-        val digest = MessageDigest.getInstance("SHA-256")
-        try {
-            var total = 0L
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                partial.outputStream().use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        total += read
-                        check(total <= MAX_EPUB_BYTES) { "EPUB is larger than 500 MB" }
-                        digest.update(buffer, 0, read)
-                        output.write(buffer, 0, read)
-                    }
-                }
-            } ?: error("Unable to open input stream for $uri")
-            check(total > 0L) { "EPUB is empty" }
-            validateEpubArchive(partial)
-            check(partial.renameTo(target)) { "Unable to finalize imported EPUB" }
-            val sha = digest.digest().joinToString("") { "%02x".format(it) }
-            CopiedFile(target, sha, total)
-        } catch (failure: Throwable) {
-            partial.delete()
-            target.delete()
-            throw failure
-        }
-    }
-
-    /**
-     * Persists [bitmap] as the cover for [bookId], returning the absolute path. Covers are shown at
-     * most a few hundred dp tall, so they're stored downscaled as lossy WebP (covers imported before
-     * this stay full-size PNGs; readers go by the stored path, not the extension).
-     */
-    suspend fun saveCover(bookId: String, bitmap: Bitmap): String = withContext(Dispatchers.IO) {
-        val target = File(coversDir, "$bookId.webp")
-        val scaled = if (bitmap.height > MAX_COVER_HEIGHT_PX) {
-            val width = (bitmap.width.toLong() * MAX_COVER_HEIGHT_PX / bitmap.height).toInt().coerceAtLeast(1)
-            bitmap.scale(width, MAX_COVER_HEIGHT_PX, filter = true)
-        } else {
-            bitmap
-        }
-        try {
-            target.outputStream().use { out -> check(scaled.compress(coverFormat(), COVER_QUALITY, out)) { "Couldn't encode cover" } }
-        } catch (failure: Throwable) {
-            target.delete()
-            throw failure
-        } finally {
-            if (scaled !== bitmap) scaled.recycle()
-        }
-        target.absolutePath
-    }
-
-    @Suppress("DEPRECATION")
-    private fun coverFormat(): Bitmap.CompressFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        Bitmap.CompressFormat.WEBP_LOSSY
-    } else {
-        // Before API 30 plain WEBP is lossy for any quality below 100.
-        Bitmap.CompressFormat.WEBP
-    }
-
-    /**
-     * Copies a user-picked image as a new cover for [bookId]. Uses a fresh filename so Coil
-     * doesn't serve a cached old cover for the same path.
-     */
-    suspend fun saveCoverFromUri(bookId: String, uri: Uri, stamp: Long): String = withContext(Dispatchers.IO) {
-        val target = File(coversDir, "$bookId-$stamp.png")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        } ?: error("Unable to open input stream for $uri")
-        target.absolutePath
-    }
-
-    suspend fun deleteCover(path: String) = withContext(Dispatchers.IO) {
-        val file = File(path)
-        if (file.parentFile == coversDir && file.exists()) check(file.delete())
-    }
-
     fun canImportAsEpub(uri: Uri): Boolean {
         val mime = context.contentResolver.getType(uri)?.lowercase()
         val name = displayName(uri)?.lowercase()
-        return mime == EPUB_MIME || name?.endsWith(".epub") == true
-    }
-
-    private fun validateEpubArchive(file: File) {
-        ZipFile(file).use { zip ->
-            val mimetype = zip.getEntry("mimetype") ?: error("Not an EPUB archive")
-            val declared = zip.getInputStream(mimetype).bufferedReader().use { it.readText() }.trim()
-            check(declared == EPUB_MIME) { "Not an EPUB archive" }
-            check(zip.getEntry("META-INF/container.xml") != null) { "EPUB container is missing" }
-        }
+        return mime == BookFiles.EPUB_MIME || name?.endsWith(".epub") == true
     }
 
     /** The original display name from the SAF document, used as a title fallback. */
@@ -169,11 +53,4 @@ class FileStorage @Inject constructor(
         ?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         }
-
-    private companion object {
-        const val EPUB_MIME = "application/epub+zip"
-        const val MAX_EPUB_BYTES = 500L * 1024 * 1024
-        const val MAX_COVER_HEIGHT_PX = 900
-        const val COVER_QUALITY = 85
-    }
 }

@@ -8,6 +8,7 @@ import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.core.storage.BookFiles
 import com.itexpert120.yomu.data.books.ChapterReading
 import com.itexpert120.yomu.data.books.RoomBookRepository
 import kotlinx.coroutines.flow.first
@@ -40,7 +41,7 @@ class BookCompletionRepositoryTest {
             }
             val dao = database.bookDao()
             val chapters = ChapterReading(dao, database)
-            val repository = RoomBookRepository(dao, database, database.highlightDao(), database.bookmarkDao(), database.collectionDao(), chapters, engine, this)
+            val repository = RoomBookRepository(dao, database, database.highlightDao(), database.bookmarkDao(), database.collectionDao(), chapters, BookFiles(ApplicationProvider.getApplicationContext(), this), engine, this)
             repository.markRead(BookId("a"))
             val read = chapters.observe(BookId("a")).first()
             assertTrue(read.isRead("chapter#one") && read.isRead("chapter#two"))

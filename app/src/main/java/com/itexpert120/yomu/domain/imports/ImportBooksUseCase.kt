@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.domain.imports
 
 import android.net.Uri
+import com.itexpert120.yomu.core.storage.BookFiles
 import com.itexpert120.yomu.core.storage.FileStorage
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.ImportedBook
@@ -29,6 +30,7 @@ sealed interface ImportResult {
 @Singleton
 class ImportBooksUseCase @Inject constructor(
     private val fileStorage: FileStorage,
+    private val bookFiles: BookFiles,
     private val extractor: ReadiumMetadataExtractor,
     private val repository: BookRepository,
 ) {
@@ -60,65 +62,49 @@ class ImportBooksUseCase @Inject constructor(
             return ImportResult.Failed("Choose a valid EPUB file")
         }
         val bookId = UUID.randomUUID().toString()
-        val copied = runCatching { fileStorage.copyEpub(bookId, uri) }.getOrNull()
+        val staged = runCatching { bookFiles.stage(uri, bookId) }.getOrNull()
             ?: return ImportResult.Failed("The file is empty, invalid, or too large")
-        var coverPath: String? = null
-        var committed = false
-        try {
-            if (repository.isDuplicate(copied.sha256)) {
-                copied.file.delete()
-                // Resolve to the existing entry so an external open can still land on the book.
-                val existingId = repository.findIdByHash(copied.sha256)?.value
-                return if (existingId != null) {
-                    committed = true
-                    ImportResult.Duplicate(existingId)
-                } else {
-                    ImportResult.Failed("Duplicate couldn't be resolved")
-                }
-            }
+        // Only a committed library row keeps the staged files; every other outcome discards them.
+        val result = runCatching { commit(uri, bookId, staged) }.getOrElse { ImportResult.Failed("The EPUB couldn't be imported") }
+        if (result !is ImportResult.Imported) runCatching { staged.discard() }
+        return result
+    }
 
-            val metadata = runCatching { extractor.extract(copied.file) }.getOrNull()
-            val displayName = fileStorage.displayName(uri)
-            coverPath = metadata?.cover?.let { fileStorage.saveCover(bookId, it) }
-
-            val inserted = repository.insert(
-                ImportedBook(
-                    id = bookId,
-                    title = metadata?.title?.takeIf { it.isNotBlank() }
-                        ?: displayName?.removeEpubSuffix()
-                        ?: "Untitled",
-                    subtitle = null,
-                    author = metadata?.author ?: "Unknown author",
-                    description = metadata?.description,
-                    language = metadata?.language,
-                    publisher = metadata?.publisher,
-                    series = null,
-                    coverImagePath = coverPath,
-                    storagePath = copied.file.absolutePath,
-                    originalUri = uri.toString(),
-                    originalDisplayName = displayName,
-                    sha256 = copied.sha256,
-                    fileSizeBytes = copied.sizeBytes,
-                    addedAt = System.currentTimeMillis(),
-                    tableOfContents = metadata?.tableOfContents,
-                    publicationCache = metadata?.publicationCache,
-                ),
-            )
-            if (!inserted) {
-                val existingId = repository.findIdByHash(copied.sha256)?.value
-                return existingId?.let { ImportResult.Duplicate(it) }
-                    ?: ImportResult.Failed("Duplicate couldn't be resolved")
-            }
-            committed = true
-            return ImportResult.Imported(bookId)
-        } catch (_: Throwable) {
-            return ImportResult.Failed("The EPUB couldn't be imported")
-        } finally {
-            if (!committed) {
-                copied.file.delete()
-                coverPath?.let { runCatching { fileStorage.deleteCover(it) } }
-            }
+    private suspend fun commit(uri: Uri, bookId: String, staged: BookFiles.StagedBook): ImportResult {
+        if (repository.isDuplicate(staged.sha256)) {
+            // Resolve to the existing entry so an external open can still land on the book.
+            return repository.findIdByHash(staged.sha256)?.let { ImportResult.Duplicate(it.value) }
+                ?: ImportResult.Failed("Duplicate couldn't be resolved")
         }
+        val metadata = runCatching { extractor.extract(staged.file) }.getOrNull()
+        val displayName = fileStorage.displayName(uri)
+        val coverPath = metadata?.cover?.let { staged.saveCover(it) }
+        val inserted = repository.insert(
+            ImportedBook(
+                id = bookId,
+                title = metadata?.title?.takeIf { it.isNotBlank() }
+                    ?: displayName?.removeEpubSuffix()
+                    ?: "Untitled",
+                subtitle = null,
+                author = metadata?.author ?: "Unknown author",
+                description = metadata?.description,
+                language = metadata?.language,
+                publisher = metadata?.publisher,
+                series = null,
+                coverImagePath = coverPath,
+                storagePath = staged.file.absolutePath,
+                originalUri = uri.toString(),
+                originalDisplayName = displayName,
+                sha256 = staged.sha256,
+                fileSizeBytes = staged.sizeBytes,
+                addedAt = System.currentTimeMillis(),
+                tableOfContents = metadata?.tableOfContents,
+                publicationCache = metadata?.publicationCache,
+            ),
+        )
+        if (inserted) return ImportResult.Imported(bookId)
+        return repository.findIdByHash(staged.sha256)?.let { ImportResult.Duplicate(it.value) }
+            ?: ImportResult.Failed("Duplicate couldn't be resolved")
     }
 }
 

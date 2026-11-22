@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
-import com.itexpert120.yomu.core.storage.FileStorage
+import com.itexpert120.yomu.core.storage.BookFiles
 import com.itexpert120.yomu.data.books.BookRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +32,7 @@ data class EditBookUiState(
 class EditBookViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     repository: BookRepository,
-    private val fileStorage: FileStorage,
+    private val bookFiles: BookFiles,
     @ApplicationScope applicationScope: CoroutineScope,
 ) : ViewModel() {
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
@@ -50,7 +50,7 @@ class EditBookViewModel @Inject constructor(
                 s.coverImagePath,
             )
         },
-        deleteCover = fileStorage::deleteCover,
+        deleteCover = bookFiles::deleteCover,
     )
     val state = editor.state
     fun onTitleChange(value: String) = editor.edit { it.copy(title = value) }
@@ -58,7 +58,7 @@ class EditBookViewModel @Inject constructor(
     fun onAuthorChange(value: String) = editor.edit { it.copy(author = value) }
     fun onDescriptionChange(value: String) = editor.edit { it.copy(description = value) }
     fun onCoverPicked(uri: Uri, stamp: Long) {
-        editor.pickCover { fileStorage.saveCoverFromUri(bookId, uri, stamp) }
+        editor.pickCover { bookFiles.stageCover(bookId, uri, stamp).path }
     }
     fun save() {
         editor.save()

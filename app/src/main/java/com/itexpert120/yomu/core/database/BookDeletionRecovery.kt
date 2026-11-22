@@ -2,10 +2,10 @@ package com.itexpert120.yomu.core.database
 
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.itexpert120.yomu.core.storage.BookDeletionFiles
-import java.io.File
+import com.itexpert120.yomu.core.storage.BookFiles
 
-internal class BookDeletionRecovery(private val filesDir: File) : RoomDatabase.Callback() {
+/** Settles book files against the committed rows each time the database opens. */
+internal class BookDeletionRecovery(private val files: BookFiles) : RoomDatabase.Callback() {
     override fun onOpen(db: SupportSQLiteDatabase) {
         val livePaths = buildSet {
             db.query("SELECT storagePath, coverImagePath FROM books").use { cursor ->
@@ -15,9 +15,6 @@ internal class BookDeletionRecovery(private val filesDir: File) : RoomDatabase.C
                 }
             }
         }
-        BookDeletionFiles.recover(
-            listOf(File(filesDir, "epubs"), File(filesDir, "covers")),
-            livePaths,
-        )
+        files.reconcile(livePaths)
     }
 }

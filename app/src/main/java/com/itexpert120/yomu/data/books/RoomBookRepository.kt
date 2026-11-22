@@ -14,7 +14,7 @@ import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderPublicationCacheCodec
 import com.itexpert120.yomu.core.reader.ReaderTocItem
-import com.itexpert120.yomu.core.storage.BookDeletionFiles
+import com.itexpert120.yomu.core.storage.BookFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
@@ -37,6 +36,7 @@ class RoomBookRepository @Inject constructor(
     private val bookmarkDao: BookmarkDao,
     private val collectionDao: CollectionDao,
     private val chapterReading: ChapterReading,
+    private val bookFiles: BookFiles,
     private val readerEngine: ReaderEngine,
     @ApplicationScope applicationScope: CoroutineScope,
 ) : BookRepository {
@@ -98,34 +98,23 @@ class RoomBookRepository @Inject constructor(
         val entities = dao.getBooks(keys)
         deletedBookIds.addAll(keys)
         keys.forEach { publicationCacheMemory.remove(it) }
-        var staged = emptyList<Pair<File, File>>()
         try {
-            staged = BookDeletionFiles.stage(
-                entities.flatMap { entity ->
-                    buildList {
-                        add(File(entity.storagePath))
-                        entity.coverImagePath?.let { add(File(it)) }
-                    }
-                },
-            )
-            database.withTransaction {
-                highlightDao.deleteForBooks(keys)
-                bookmarkDao.deleteForBooks(keys)
-                dao.deleteAllReadChapters(keys)
-                dao.deleteAllChapterProgress(keys)
-                dao.deleteReaderSettingsForBooks(keys)
-                dao.deleteTocForBooks(keys)
-                collectionDao.deleteMembershipsForBooks(keys)
-                dao.deleteByIds(keys)
+            bookFiles.deleting(entities.flatMap { listOfNotNull(it.storagePath, it.coverImagePath) }) {
+                database.withTransaction {
+                    highlightDao.deleteForBooks(keys)
+                    bookmarkDao.deleteForBooks(keys)
+                    dao.deleteAllReadChapters(keys)
+                    dao.deleteAllChapterProgress(keys)
+                    dao.deleteReaderSettingsForBooks(keys)
+                    dao.deleteTocForBooks(keys)
+                    collectionDao.deleteMembershipsForBooks(keys)
+                    dao.deleteByIds(keys)
+                }
             }
         } catch (failure: Throwable) {
-            BookDeletionFiles.restore(staged)
             deletedBookIds.removeAll(keys.toSet())
             throw failure
         }
-        // The database is already committed, so an unlink failure must not turn a successful
-        // deletion into a misleading UI failure. Database startup reconciles retained residue.
-        staged.forEach { (_, trash) -> runCatching { trash.delete() } }
     }
 
     override suspend fun updateMetadata(

@@ -9,6 +9,7 @@ import com.itexpert120.yomu.core.database.CollectionDao
 import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.SyncDao
 import com.itexpert120.yomu.core.database.YomuDatabase
+import com.itexpert120.yomu.core.storage.BookFiles
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,7 +23,7 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): YomuDatabase = Room.databaseBuilder(context, YomuDatabase::class.java, "yomu.db")
+    fun provideDatabase(@ApplicationContext context: Context, bookFiles: BookFiles): YomuDatabase = Room.databaseBuilder(context, YomuDatabase::class.java, "yomu.db")
         .addMigrations(
             YomuDatabase.MIGRATION_1_2,
             YomuDatabase.MIGRATION_2_3,
@@ -42,7 +43,7 @@ object DatabaseModule {
             YomuDatabase.MIGRATION_16_17,
             YomuDatabase.MIGRATION_17_18,
         )
-        .addCallback(BookDeletionRecovery(context.filesDir))
+        .addCallback(BookDeletionRecovery(bookFiles))
         .build()
 
     @Provides
