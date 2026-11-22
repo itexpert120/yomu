@@ -24,6 +24,7 @@ import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,12 +46,16 @@ class CrashLog @Inject constructor(
     private val file = File(dir, "diagnostics.log")
     private val lock = Any()
 
+    // Breadcrumbs come from the main thread (activity callbacks, WebView recovery); the file I/O
+    // (and the occasional 512 KB trim) runs here in order instead. Crashes still write synchronously.
+    private val writer = Executors.newSingleThreadExecutor { Thread(it, "crash-log").apply { isDaemon = true } }
+
     private val _hasEntries = MutableStateFlow(false)
     val hasEntries: StateFlow<Boolean> = _hasEntries.asStateFlow()
 
     /** Call once from `Application.onCreate`. */
     fun install(application: Application) {
-        _hasEntries.value = file.length() > 0
+        writer.execute { _hasEntries.value = file.length() > 0 }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching { append("CRASH on thread '${thread.name}'\n${error.stackTraceText()}") }
@@ -58,12 +63,13 @@ class CrashLog @Inject constructor(
         }
         application.registerActivityLifecycleCallbacks(Breadcrumbs())
         // Reading exit records touches binder + disk; keep it off the startup path.
-        Thread({ runCatching { recordPastExits() } }, "crash-log-exits").start()
+        writer.execute { runCatching { recordPastExits() } }
     }
 
     /** Appends a one-line breadcrumb. */
     fun note(message: String) {
-        runCatching { append(message) }
+        val at = System.currentTimeMillis()
+        writer.execute { runCatching { append(message, at) } }
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {

@@ -15,12 +15,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itexpert120.yomu.app.navigation.YomuNavHost
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuNotice
@@ -41,12 +41,12 @@ fun YomuApp(
     onResolvedThemeChange: (YomuThemeMode) -> Unit,
     onSplashThemeChange: (ThemePreference, Boolean) -> Unit,
 ) {
-    val appearance by appViewModel.appearance.collectAsState()
+    val appearance by appViewModel.appearance.collectAsStateWithLifecycle()
     val preference = appearance.themePreference
     val oledDark = appearance.oledDark
     val systemDark = isSystemInDarkTheme()
-    val externalError by externalOpenViewModel.error.collectAsState()
-    val readingWriteError by appViewModel.readingWriteError.collectAsState()
+    val externalError by externalOpenViewModel.error.collectAsStateWithLifecycle()
+    val readingWriteError by appViewModel.readingWriteError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val dark = when (preference) {

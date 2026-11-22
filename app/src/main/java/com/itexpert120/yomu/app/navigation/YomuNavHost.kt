@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
@@ -79,7 +79,7 @@ fun YomuNavHost(
 
     // An EPUB opened from outside the app (file manager / share) is imported off-screen, then we
     // jump straight into the reader for the resolved book (an existing entry on a duplicate).
-    val pendingBooks by externalOpenViewModel.pendingBooks.collectAsState()
+    val pendingBooks by externalOpenViewModel.pendingBooks.collectAsStateWithLifecycle()
     val navigationEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(pendingBooks, navigationEntry) {
         val bookId = pendingBooks.firstOrNull() ?: return@LaunchedEffect

@@ -166,7 +166,8 @@ fun yomuColorScheme(
             seededColorScheme(accent.seedArgb(), dark, style)
         }
     }
-    return if (mode == YomuThemeMode.Oled) base.toOled() else base
+    val oled = mode == YomuThemeMode.Oled
+    return remember(base, oled) { if (oled) base.toOled() else base }
 }
 
 /** Preview/picker helper: a seeded scheme without composition. */

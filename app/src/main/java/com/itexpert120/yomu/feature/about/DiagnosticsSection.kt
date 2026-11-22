@@ -9,13 +9,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
@@ -50,7 +50,7 @@ class DiagnosticsViewModel @Inject constructor(
 /** Stateful slot for the About page: share or clear the local crash/diagnostics log. */
 @Composable
 fun DiagnosticsSection(viewModel: DiagnosticsViewModel = hiltViewModel()) {
-    val hasEntries by viewModel.hasEntries.collectAsState()
+    val hasEntries by viewModel.hasEntries.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(viewModel) {
         viewModel.shareRequests.collect { context.startActivity(it) }
