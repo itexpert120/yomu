@@ -180,6 +180,28 @@ object StackType {
     val BodySmall = style(14.5f, 21f, 400)
     val Label = style(13f, 17f, 600)
     val Caption = style(12f, 16f, 400)
+
+    /** Button labels: 16/600 in full-size pills, 15/600 in dialogs and small pills. */
+    val Button = style(16f, 20f, 600)
+    val ButtonSmall = style(15f, 20f, 600)
+
+    /** Chips and tags. */
+    val Chip = style(12.5f, 16f, 600)
+
+    /** The title in a sheet's or child screen's title row. */
+    val SheetTitle = style(17f, 22f, 600, (-0.2 / 17).em)
+
+    /** A dialog's title. */
+    val DialogTitle = style(20f, 24f, 600, (-0.3 / 20).em)
+
+    /** A settings row's value / a value readout (muted). */
+    val Value = style(13f, 17f, 400)
+
+    /** Supporting line under a row title. */
+    val Supporting = style(12.5f, 17f, 400)
+
+    /** Text in an ink notice. */
+    val Notice = style(14f, 19f, 400)
 }
 
 /**
