@@ -99,12 +99,6 @@ private val ReaderThemeMode.stackName: String
         ReaderThemeMode.Custom -> "Custom"
     }
 
-/** "Lora · Paper": the font and page theme every book starts with (the phone list's value). */
-internal fun ReaderSettings.defaultsShortSummary(): String = listOf(
-    customFont?.family ?: font.displayName,
-    theme.stackName,
-).joinToString(" · ")
-
 /** "Lora · 100% · Paper": the font, size and page theme every book starts with. */
 internal fun ReaderSettings.defaultsSummary(): String = listOf(
     customFont?.family ?: font.displayName,
@@ -166,8 +160,8 @@ internal fun SettingsScreen(
                     state = state.sync,
                     onClick = { actions.onOpenPane(SettingsPane.Sync) },
                     // The board's card sits 18dp under the 38dp title (8 under the shared 48dp row) and
-                    // the sheet 4dp under the card.
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    // the sheet 36dp under the card, so the card stands alone on the desk.
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp),
                 )
             }
             Box(
@@ -197,7 +191,7 @@ internal fun SettingsScreen(
                     SettingsSectionLabel("Reading")
                     SettingsRow(
                         title = "Reading defaults",
-                        value = state.readerSettings.defaultsShortSummary(),
+                        subtitle = state.readerSettings.defaultsSummary(),
                         icon = StackIcons.AutoStories,
                         chevron = true,
                         onClick = { actions.onOpenPane(SettingsPane.ReadingDefaults) },
@@ -221,7 +215,6 @@ internal fun SettingsScreen(
                     SettingsRow(
                         title = "About Open Reader",
                         icon = StackIcons.Info,
-                        value = BuildConfig.VERSION_NAME,
                         chevron = true,
                         divider = false,
                         onClick = { actions.onOpenPane(SettingsPane.About) },
@@ -265,8 +258,7 @@ private fun PureBlackRow(state: SettingsUiState, actions: SettingsActions, divid
     val allowed = state.selectedTheme.allowsPureBlack()
     SettingsSwitchRow(
         title = "Pure black at night",
-        // Only said when it can't be switched on.
-        subtitle = if (allowed) null else "Available with the Dark or Auto theme",
+        subtitle = if (allowed) "For OLED screens" else "Available with the Dark or Auto theme",
         icon = StackIcons.DarkMode,
         checked = state.oledDark && allowed,
         enabled = allowed,
