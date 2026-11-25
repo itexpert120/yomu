@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingToolbarDefaults
@@ -35,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /** Shared labeled action used by reader chrome, selection bars, and compact toolbars. */
 @Composable
@@ -176,7 +175,7 @@ fun YomuSelectionMark(
 ) {
     if (selected) {
         Icon(
-            imageVector = Icons.Rounded.Check,
+            imageVector = StackIcons.Check,
             contentDescription = null,
             modifier = modifier,
         )

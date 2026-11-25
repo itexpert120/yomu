@@ -5,12 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.FileDownload
-import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -41,6 +35,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.CURATED_GOOGLE_FONTS
 import com.itexpert120.yomu.core.model.CuratedFont
@@ -137,7 +132,7 @@ private fun FontLibraryCatalog(
             YomuNotice(
                 text = error,
                 modifier = Modifier.fillMaxWidth(),
-                icon = Icons.Rounded.ErrorOutline,
+                icon = StackIcons.Error,
                 tone = YomuNoticeTone.Error,
             )
         }
@@ -152,7 +147,7 @@ private fun FontLibraryCatalog(
         ) {
             if (results.isEmpty()) {
                 YomuEmptyState(
-                    icon = Icons.Rounded.SearchOff,
+                    icon = StackIcons.SearchOff,
                     title = "No fonts found",
                     body = "Nothing matches “$trimmedQuery”. Try a shorter name.",
                     compact = true,
@@ -223,14 +218,14 @@ private fun FontLibraryRow(
 
             installed -> {
                 Icon(
-                    imageVector = Icons.Rounded.Check,
+                    imageVector = StackIcons.Check,
                     contentDescription = "Installed",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
                 )
                 IconButton(onClick = onRemove, shapes = IconButtonDefaults.shapes()) {
                     Icon(
-                        imageVector = Icons.Rounded.DeleteOutline,
+                        imageVector = StackIcons.Delete,
                         contentDescription = "Remove $family",
                     )
                 }
@@ -238,7 +233,7 @@ private fun FontLibraryRow(
 
             else -> IconButton(onClick = onInstall, shapes = IconButtonDefaults.shapes()) {
                 Icon(
-                    imageVector = Icons.Rounded.FileDownload,
+                    imageVector = StackIcons.Download,
                     contentDescription = "Download $family",
                     tint = MaterialTheme.colorScheme.primary,
                 )

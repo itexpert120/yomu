@@ -28,14 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Toc
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
@@ -67,6 +59,7 @@ import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
 import com.itexpert120.yomu.core.designsystem.YomuReadingTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.model.ReaderLayout
@@ -134,7 +127,7 @@ internal fun ReaderTopBar(
                     ),
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                        imageVector = StackIcons.KeyboardArrowLeft,
                         contentDescription = "Back",
                     )
                 }
@@ -153,9 +146,9 @@ internal fun ReaderTopBar(
                 ) {
                     Icon(
                         imageVector = if (isBookmarked) {
-                            Icons.Rounded.Bookmark
+                            StackIcons.BookmarkFilled
                         } else {
-                            Icons.Rounded.BookmarkBorder
+                            StackIcons.Bookmark
                         },
                         contentDescription = if (isBookmarked) {
                             "Remove bookmark"
@@ -324,9 +317,9 @@ private fun ReaderActionBar(
             containerColor = lerp(background, content, ReaderChromeTonalStep),
             contentColor = content,
             actions = listOf(
-                YomuToolbarAction(Icons.Rounded.Toc, "Browse", onBrowse),
-                YomuToolbarAction(Icons.Rounded.Search, "Search", onSearch),
-                YomuToolbarAction(Icons.Rounded.Tune, "Display", onDisplay),
+                YomuToolbarAction(StackIcons.Toc, "Browse", onBrowse),
+                YomuToolbarAction(StackIcons.Search, "Search", onSearch),
+                YomuToolbarAction(StackIcons.Tune, "Display", onDisplay),
             ),
         )
     }
@@ -380,7 +373,7 @@ private fun BatteryIndicator(level: Int, charging: Boolean, color: Color, backgr
             )
             if (charging) {
                 Icon(
-                    imageVector = Icons.Rounded.Bolt,
+                    imageVector = StackIcons.Bolt,
                     contentDescription = "Charging",
                     tint = background,
                     modifier = Modifier

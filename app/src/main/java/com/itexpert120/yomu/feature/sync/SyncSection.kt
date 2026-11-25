@@ -25,17 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.CloudDone
-import androidx.compose.material.icons.rounded.CloudOff
-import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.DeleteForever
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Key
-import androidx.compose.material.icons.rounded.SyncDisabled
-import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -76,6 +65,7 @@ import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
@@ -112,7 +102,7 @@ fun SyncSection(viewModel: SyncViewModel = hiltViewModel()) {
         YomuDialog(
             title = "Turn off sync on this device?",
             text = "Your library stays here, and your other devices keep syncing. You can join again with your sync words.",
-            icon = Icons.Rounded.SyncDisabled,
+            icon = StackIcons.SyncDisabled,
             confirmLabel = "Turn off",
             onConfirm = viewModel::onConfirmTurnOff,
             onDismiss = viewModel::onDismissConfirm,
@@ -122,7 +112,7 @@ fun SyncSection(viewModel: SyncViewModel = hiltViewModel()) {
         YomuDialog(
             title = "Delete synced data?",
             text = "This removes the synced copy from the server and stops sync on every device. Each device keeps its own library. This can't be undone.",
-            icon = Icons.Rounded.DeleteForever,
+            icon = StackIcons.DeleteForever,
             confirmLabel = "Delete",
             destructive = true,
             onConfirm = viewModel::onConfirmDelete,
@@ -133,7 +123,7 @@ fun SyncSection(viewModel: SyncViewModel = hiltViewModel()) {
         YomuDialog(
             title = "Sync couldn't finish",
             text = message,
-            icon = Icons.Rounded.ErrorOutline,
+            icon = StackIcons.Error,
             confirmLabel = "OK",
             dismissLabel = null,
             onConfirm = viewModel::onDismissError,
@@ -190,10 +180,10 @@ fun SyncContent(
                         position = YomuSettingPosition.Middle,
                         enabled = !state.busy,
                         onClick = onShowWords,
-                        leadingContent = { Icon(Icons.Rounded.Key, contentDescription = null) },
+                        leadingContent = { Icon(StackIcons.Key, contentDescription = null) },
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            imageVector = StackIcons.KeyboardArrowRight,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
@@ -205,7 +195,7 @@ fun SyncContent(
                         position = YomuSettingPosition.Middle,
                         enabled = !state.busy,
                         onClick = onTurnOff,
-                        leadingContent = { Icon(Icons.Rounded.SyncDisabled, contentDescription = null) },
+                        leadingContent = { Icon(StackIcons.SyncDisabled, contentDescription = null) },
                     ) {}
                     YomuSettingRow(
                         title = "Delete synced data",
@@ -215,7 +205,7 @@ fun SyncContent(
                         enabled = !state.busy,
                         onClick = onDelete,
                         leadingContent = {
-                            Icon(Icons.Rounded.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            Icon(StackIcons.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                         },
                     ) {}
                 }
@@ -231,7 +221,7 @@ private fun SyncOff(state: SyncUiState, onTurnOn: () -> Unit, onOpenJoin: () -> 
             YomuNotice(
                 text = "Sync was turned off from another device. Your library here hasn't changed.",
                 modifier = Modifier.fillMaxWidth(),
-                icon = Icons.Rounded.SyncDisabled,
+                icon = StackIcons.SyncDisabled,
                 tone = YomuNoticeTone.Accent,
             )
         }
@@ -262,21 +252,21 @@ private fun SyncOff(state: SyncUiState, onTurnOn: () -> Unit, onOpenJoin: () -> 
 @Composable
 private fun StatusRow(status: SyncStatus) {
     val (title, subtitle, icon) = when (status.phase) {
-        Phase.Off, Phase.Connecting -> Triple("Connecting…", null, Icons.Rounded.CloudSync)
-        Phase.Syncing -> Triple("Syncing…", null, Icons.Rounded.CloudSync)
-        Phase.UpToDate -> Triple("Up to date", null, Icons.Rounded.CloudDone)
-        Phase.Offline -> Triple("Offline", "Changes are saved here and will sync when you're back online", Icons.Rounded.CloudOff)
+        Phase.Off, Phase.Connecting -> Triple("Connecting…", null, StackIcons.CloudSync)
+        Phase.Syncing -> Triple("Syncing…", null, StackIcons.CloudSync)
+        Phase.UpToDate -> Triple("Up to date", null, StackIcons.CloudDone)
+        Phase.Offline -> Triple("Offline", "Changes are saved here and will sync when you're back online", StackIcons.CloudOff)
         Phase.UpdateRequired -> Triple(
             "Update Open Reader to keep syncing",
             "This version can no longer sync. Your changes are saved here and will sync after you update.",
-            Icons.Rounded.SystemUpdate,
+            StackIcons.SystemUpdate,
         )
         Phase.ServerOutdated -> Triple(
             "Sync is temporarily unavailable",
             "Your changes are saved here and will sync once it's back.",
-            Icons.Rounded.CloudOff,
+            StackIcons.CloudOff,
         )
-        Phase.GroupDeleted -> Triple("Sync was turned off from another device", null, Icons.Rounded.SyncDisabled)
+        Phase.GroupDeleted -> Triple("Sync was turned off from another device", null, StackIcons.SyncDisabled)
     }
     val warning = status.phase == Phase.UpdateRequired || status.phase == Phase.ServerOutdated
     val working = status.phase == Phase.Off || status.phase == Phase.Connecting || status.phase == Phase.Syncing
@@ -443,7 +433,7 @@ private fun JoinSheet(
                                         onClick = { readClipboardText(context)?.let(onInput) },
                                         shapes = IconButtonDefaults.shapes(),
                                     ) {
-                                        Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste sync words")
+                                        Icon(StackIcons.ContentPaste, contentDescription = "Paste sync words")
                                     }
                                 },
                             )
@@ -481,7 +471,7 @@ private fun JoinSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = YomuTheme.space.md),
-                        icon = Icons.Rounded.ErrorOutline,
+                        icon = StackIcons.Error,
                         tone = YomuNoticeTone.Error,
                     )
                 }

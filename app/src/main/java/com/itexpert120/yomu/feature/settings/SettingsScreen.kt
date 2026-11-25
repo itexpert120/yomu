@@ -17,12 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +46,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.model.AccentSelection
@@ -320,10 +315,10 @@ private fun SettingsPaneRow(
     onClick: () -> Unit,
 ) {
     val icon = when (pane) {
-        SettingsPane.Appearance -> Icons.Rounded.Palette
-        SettingsPane.Reading -> Icons.AutoMirrored.Rounded.MenuBook
-        SettingsPane.Sync -> Icons.Rounded.Sync
-        SettingsPane.About -> Icons.Rounded.Info
+        SettingsPane.Appearance -> StackIcons.Palette
+        SettingsPane.Reading -> StackIcons.MenuBook
+        SettingsPane.Sync -> StackIcons.Sync
+        SettingsPane.About -> StackIcons.Info
     }
     YomuSettingRow(
         title = pane.title,
@@ -351,7 +346,7 @@ private fun SettingsPaneRow(
         // The selected row already reads as "you are here"; only the others point onward.
         if (!selected) {
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                imageVector = StackIcons.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
@@ -468,7 +463,7 @@ private fun AboutGroup(onOpenAbout: () -> Unit) {
             onClick = onOpenAbout,
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                imageVector = StackIcons.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),

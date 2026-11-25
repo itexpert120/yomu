@@ -6,13 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoMode
-import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.CollectionsBookmark
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -42,6 +35,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.data.collections.LibraryTab
@@ -72,7 +66,7 @@ fun OrganizeSheet(
                 options = StatusChoice.Options,
                 selected = status,
                 label = { it.label },
-                icon = { it.status?.shelfStatus?.icon ?: Icons.Rounded.AutoMode },
+                icon = { it.status?.shelfStatus?.icon ?: StackIcons.AutoMode },
                 onSelect = { onSetStatus(it.status) },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -140,7 +134,7 @@ fun ManageTabsSheet(
                     onClick = tab.collectionId?.let { id -> { editing = id } },
                     leadingContent = {
                         Icon(
-                            imageVector = tab.status?.icon ?: if (tab.collectionId != null) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
+                            imageVector = tab.status?.icon ?: if (tab.collectionId != null) StackIcons.CollectionsBookmark else StackIcons.AutoStories,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -161,14 +155,14 @@ fun ManageTabsSheet(
                             enabled = index > 0,
                             shapes = IconButtonDefaults.shapes(),
                         ) {
-                            Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Move ${tab.label} up")
+                            Icon(StackIcons.KeyboardArrowUp, contentDescription = "Move ${tab.label} up")
                         }
                         IconButton(
                             onClick = { onMove(tab.key, false) },
                             enabled = index < tabs.lastIndex,
                             shapes = IconButtonDefaults.shapes(),
                         ) {
-                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Move ${tab.label} down")
+                            Icon(StackIcons.KeyboardArrowDown, contentDescription = "Move ${tab.label} down")
                         }
                     }
                 }
@@ -224,7 +218,7 @@ private fun NewCollectionField(onCreate: (String) -> Unit) {
             shapes = IconButtonDefaults.shapes(),
             colors = IconButtonDefaults.filledTonalIconButtonColors(),
         ) {
-            Icon(Icons.Rounded.Add, contentDescription = "Create collection", modifier = Modifier.size(24.dp))
+            Icon(StackIcons.Add, contentDescription = "Create collection", modifier = Modifier.size(24.dp))
         }
     }
 }

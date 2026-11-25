@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -44,6 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /** Keep app chrome stationary while the outgoing reader still hides the system bars. */
 @Composable
@@ -115,7 +114,7 @@ fun YomuBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         shapes = IconButtonDefaults.shapes(),
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            imageVector = StackIcons.ArrowBack,
             contentDescription = "Back",
         )
     }

@@ -10,13 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
-import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
-import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Insights
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,15 +20,16 @@ import com.itexpert120.yomu.core.designsystem.YomuNavigationBarItem
 import com.itexpert120.yomu.core.designsystem.YomuNavigationRail
 import com.itexpert120.yomu.core.designsystem.YomuNavigationRailItem
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 internal enum class YomuTopLevelDestination(
     val label: String,
     val icon: ImageVector,
     val selectedIcon: ImageVector,
 ) {
-    Library("Library", Icons.AutoMirrored.Outlined.LibraryBooks, Icons.AutoMirrored.Filled.LibraryBooks),
-    Statistics("Statistics", Icons.Outlined.Insights, Icons.Filled.Insights),
-    Settings("Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
+    Library("Library", StackIcons.LibraryBooks, StackIcons.LibraryBooksFilled),
+    Statistics("Statistics", StackIcons.Insights, StackIcons.InsightsFilled),
+    Settings("Settings", StackIcons.Settings, StackIcons.SettingsFilled),
 }
 
 /** Material's compact bottom navigation becomes a side rail on medium and expanded screens. */

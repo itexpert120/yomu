@@ -5,9 +5,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -29,6 +26,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import androidx.compose.ui.semantics.onClick as onClickLabel
 
 enum class YomuSettingPosition { Single, First, Middle, Last }
@@ -55,7 +53,7 @@ fun YomuTogglePill(
         enabled = enabled,
         thumbContent = {
             Icon(
-                imageVector = if (checked) Icons.Rounded.Check else Icons.Rounded.Close,
+                imageVector = if (checked) StackIcons.Check else StackIcons.Close,
                 contentDescription = null,
                 modifier = Modifier.size(SwitchDefaults.IconSize),
             )

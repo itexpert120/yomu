@@ -11,11 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Toc
-import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.BorderColor
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +26,7 @@ import com.itexpert120.yomu.core.designsystem.YomuLoadingState
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.reader.ReaderBookmark
@@ -46,9 +42,9 @@ enum class BrowseTab(val label: String) {
 
 private val BrowseTab.icon: ImageVector
     get() = when (this) {
-        BrowseTab.Contents -> Icons.AutoMirrored.Rounded.Toc
-        BrowseTab.Bookmarks -> Icons.Rounded.Bookmark
-        BrowseTab.Highlights -> Icons.Rounded.BorderColor
+        BrowseTab.Contents -> StackIcons.Toc
+        BrowseTab.Bookmarks -> StackIcons.Bookmark
+        BrowseTab.Highlights -> StackIcons.BorderColor
     }
 
 /** Below this width three icon + label tabs would truncate, so the tabs fall back to labels only. */
@@ -160,7 +156,7 @@ private fun ContentsBody(
         )
 
         entries.isEmpty() -> YomuEmptyState(
-            icon = Icons.AutoMirrored.Rounded.Toc,
+            icon = StackIcons.Toc,
             title = "No table of contents",
             body = "This book doesn't list its chapters.",
             compact = true,
@@ -194,7 +190,7 @@ private fun BookmarksBody(
 ) {
     if (bookmarks.isEmpty()) {
         YomuEmptyState(
-            icon = Icons.Rounded.BookmarkBorder,
+            icon = StackIcons.Bookmark,
             title = "No bookmarks yet",
             body = "Tap the bookmark icon to save your place.",
             compact = true,
@@ -226,7 +222,7 @@ private fun HighlightsBody(
 ) {
     if (highlights.isEmpty()) {
         YomuEmptyState(
-            icon = Icons.Rounded.BorderColor,
+            icon = StackIcons.BorderColor,
             title = "No highlights yet",
             body = "Select text and tap Highlight.",
             compact = true,

@@ -17,17 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Balance
-import androidx.compose.material.icons.rounded.BrightnessAuto
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Colorize
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.FilterBAndW
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
@@ -68,6 +57,7 @@ import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.designsystem.YomuDialog
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.designsystem.yomuSeededColorScheme
@@ -86,9 +76,9 @@ internal fun ThemeChoiceRow(selectedTheme: ThemePreference, onSelectTheme: (Them
         label = { it.label },
         icon = {
             when (it) {
-                ThemePreference.System -> Icons.Rounded.BrightnessAuto
-                ThemePreference.Light -> Icons.Rounded.LightMode
-                ThemePreference.Dark -> Icons.Rounded.DarkMode
+                ThemePreference.System -> StackIcons.BrightnessAuto
+                ThemePreference.Light -> StackIcons.LightMode
+                ThemePreference.Dark -> StackIcons.DarkMode
             }
         },
         onSelect = onSelectTheme,
@@ -107,10 +97,10 @@ internal fun ColorStyleRow(
         label = { it.label },
         icon = {
             when (it) {
-                ColorStyle.Balanced -> Icons.Rounded.Balance
-                ColorStyle.Vibrant -> Icons.Rounded.Palette
-                ColorStyle.Expressive -> Icons.Rounded.AutoAwesome
-                ColorStyle.Neutral -> Icons.Rounded.FilterBAndW
+                ColorStyle.Balanced -> StackIcons.Balance
+                ColorStyle.Vibrant -> StackIcons.Palette
+                ColorStyle.Expressive -> StackIcons.AutoAwesome
+                ColorStyle.Neutral -> StackIcons.FilterBAndW
             }
         },
         iconOnTop = true,
@@ -148,7 +138,7 @@ internal fun ColorThemePicker(
                 label = "Wallpaper",
                 scheme = scheme,
                 selected = selection == AccentSelection.Wallpaper,
-                badge = Icons.Rounded.Wallpaper,
+                badge = StackIcons.Wallpaper,
                 onClick = { onSelect(AccentSelection.Wallpaper) },
             )
         }
@@ -169,7 +159,7 @@ internal fun ColorThemePicker(
             label = "Custom",
             scheme = customScheme,
             selected = custom != null,
-            badge = Icons.Rounded.Colorize,
+            badge = StackIcons.Colorize,
             onClick = { customDialogOpen = true },
         )
     }
@@ -243,7 +233,7 @@ private fun ColorSwatch(
             } else {
                 Box(Modifier.fillMaxSize().background(Brush.sweepGradient(CustomSwatchSweep)))
             }
-            val centerIcon = if (selected) Icons.Rounded.Check else badge
+            val centerIcon = if (selected) StackIcons.Check else badge
             if (centerIcon != null) {
                 Box(
                     modifier = Modifier
@@ -285,7 +275,7 @@ private fun CustomSeedDialog(
         onConfirm = { onApply(color) },
         onDismiss = onDismiss,
         text = "Pick a seed. Open Reader builds a full light and dark palette from it.",
-        icon = Icons.Rounded.Colorize,
+        icon = StackIcons.Colorize,
     ) {
         YomuColorPicker(color = color, onColorChange = { color = it })
         Box(

@@ -7,15 +7,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ViewList
-import androidx.compose.material.icons.rounded.DonutLarge
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Photo
-import androidx.compose.material.icons.rounded.SortByAlpha
-import androidx.compose.material.icons.rounded.ViewComfy
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +23,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuSlider
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.SortMode
@@ -207,18 +199,18 @@ private fun <T> ArrangementChoiceGroup(
 
 private val SortMode.icon: ImageVector
     get() = when (this) {
-        SortMode.Recent -> Icons.Rounded.History
-        SortMode.Title -> Icons.Rounded.SortByAlpha
-        SortMode.Author -> Icons.Rounded.Person
-        SortMode.Unread -> Icons.Rounded.DonutLarge
+        SortMode.Recent -> StackIcons.History
+        SortMode.Title -> StackIcons.SortByAlpha
+        SortMode.Author -> StackIcons.Person
+        SortMode.Unread -> StackIcons.DonutLarge
     }
 
 private val LibraryViewMode.icon: ImageVector
     get() = when (this) {
-        LibraryViewMode.ComfortableGrid -> Icons.Rounded.GridView
-        LibraryViewMode.CompactGrid -> Icons.Rounded.ViewComfy
-        LibraryViewMode.CoverOnlyGrid -> Icons.Rounded.Photo
-        LibraryViewMode.List -> Icons.AutoMirrored.Rounded.ViewList
+        LibraryViewMode.ComfortableGrid -> StackIcons.GridView
+        LibraryViewMode.CompactGrid -> StackIcons.ViewComfy
+        LibraryViewMode.CoverOnlyGrid -> StackIcons.Photo
+        LibraryViewMode.List -> StackIcons.ViewList
     }
 
 // Four short labels plus inline icons fit from a typical phone sheet up; the longer view-mode

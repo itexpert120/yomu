@@ -53,29 +53,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAddCheck
-import androidx.compose.material.icons.rounded.Book
-import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.CollectionsBookmark
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Deselect
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.LibraryAdd
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.RemoveDone
-import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuGroup
@@ -156,6 +133,7 @@ import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 import com.itexpert120.yomu.core.designsystem.YomuTwoPane
 import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
 import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
@@ -358,7 +336,7 @@ fun BookDetailsScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         YomuEmptyState(
-                            icon = Icons.Rounded.Book,
+                            icon = StackIcons.Book,
                             title = "No longer in your library",
                             body = "This book has been removed, so there is nothing to show here.",
                             shape = YomuBadgeShape.Clover,
@@ -561,7 +539,7 @@ fun BookDetailsScreen(
                 onRemove()
             },
             onDismiss = { showRemoveConfirm = false },
-            icon = Icons.Rounded.DeleteOutline,
+            icon = StackIcons.Delete,
             destructive = true,
         )
     }
@@ -652,17 +630,17 @@ private fun BookDetailsTopBar(
                     }
                 },
                 navigationIcon = {
-                    HeaderIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
+                    HeaderIconButton(StackIcons.ArrowBack, "Back", onBack)
                 },
                 actions = {
                     if (bookAvailable) {
                         HeaderIconButton(
-                            icon = Icons.Rounded.Edit,
+                            icon = StackIcons.Edit,
                             contentDescription = "Edit book",
                             onClick = onEdit,
                         )
                         Box {
-                            HeaderIconButton(Icons.Rounded.MoreVert, "Book options", { showActions = true })
+                            HeaderIconButton(StackIcons.MoreVert, "Book options", { showActions = true })
                             // M3 Expressive vertical menu: the destructive action sits in its own
                             // group, separated by the standard group gap.
                             DropdownMenuPopup(expanded = showActions, onDismissRequest = { showActions = false }) {
@@ -672,7 +650,7 @@ private fun BookDetailsTopBar(
                                     DropdownMenuItem(
                                         text = { Text("Organize") },
                                         shape = MenuDefaults.itemShape(0, itemCount).shape,
-                                        leadingIcon = { Icon(Icons.Rounded.LibraryAdd, contentDescription = null) },
+                                        leadingIcon = { Icon(StackIcons.LibraryAdd, contentDescription = null) },
                                         onClick = {
                                             showActions = false
                                             onOrganize()
@@ -682,7 +660,7 @@ private fun BookDetailsTopBar(
                                         DropdownMenuItem(
                                             text = { Text("Reading timeline") },
                                             shape = MenuDefaults.itemShape(1, itemCount).shape,
-                                            leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null) },
+                                            leadingIcon = { Icon(StackIcons.History, contentDescription = null) },
                                             onClick = {
                                                 showActions = false
                                                 onTimeline()
@@ -697,7 +675,7 @@ private fun BookDetailsTopBar(
                                         shape = MenuDefaults.itemShape(0, 1).shape,
                                         leadingIcon = {
                                             Icon(
-                                                Icons.Rounded.DeleteOutline,
+                                                StackIcons.Delete,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.error,
                                             )
@@ -722,7 +700,7 @@ private fun BookDetailsTopBar(
         ) {
             TopAppBar(
                 navigationIcon = {
-                    HeaderIconButton(Icons.Rounded.Close, "Exit chapter selection", onExitChapterSelection)
+                    HeaderIconButton(StackIcons.Close, "Exit chapter selection", onExitChapterSelection)
                 },
                 title = {
                     YomuScreenTitle(
@@ -732,7 +710,7 @@ private fun BookDetailsTopBar(
                 },
                 actions = {
                     HeaderIconButton(
-                        icon = if (allChaptersSelected) Icons.Rounded.Deselect else Icons.Rounded.SelectAll,
+                        icon = if (allChaptersSelected) StackIcons.Deselect else StackIcons.SelectAll,
                         contentDescription = if (allChaptersSelected) {
                             "Deselect all chapters"
                         } else {
@@ -1076,8 +1054,8 @@ private fun BookIdentityDetails(
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
             ShelfStatusChip(book.shelfStatus)
-            book.readingTime?.let { DetailsTag(icon = Icons.Rounded.Schedule, text = it) }
-            book.collectionNames.forEach { DetailsTag(icon = Icons.Rounded.CollectionsBookmark, text = it) }
+            book.readingTime?.let { DetailsTag(icon = StackIcons.Schedule, text = it) }
+            book.collectionNames.forEach { DetailsTag(icon = StackIcons.CollectionsBookmark, text = it) }
         }
     }
 }
@@ -1141,7 +1119,7 @@ private fun ReadingTimeline(book: BookDetailsUi, onClose: () -> Unit) {
                     position = yomuSettingPosition(index, rows.size),
                     leadingContent = {
                         Icon(
-                            imageVector = Icons.Rounded.History,
+                            imageVector = StackIcons.History,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -1197,7 +1175,7 @@ private fun ExpandableBookDescription(description: String) {
                 Text(text = if (expanded) "Show less" else "Show more")
                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                 Icon(
-                    imageVector = Icons.Rounded.KeyboardArrowDown,
+                    imageVector = StackIcons.KeyboardArrowDown,
                     contentDescription = null,
                     modifier = Modifier
                         .size(ButtonDefaults.IconSize)
@@ -1220,7 +1198,7 @@ private fun FloatingReadButton(
         expanded = !collapsed,
         onClick = onClick,
         modifier = modifier.semantics { testTagsAsResourceId = true }.testTag("book-details-read"),
-        icon = Icons.Rounded.PlayArrow,
+        icon = StackIcons.PlayArrowFilled,
         label = label,
         contentDescription = label,
     )
@@ -1245,7 +1223,7 @@ private fun DockedReadButton(
             .testTag("book-details-read"),
     ) {
         Icon(
-            imageVector = Icons.Rounded.PlayArrow,
+            imageVector = StackIcons.PlayArrowFilled,
             contentDescription = null,
             modifier = Modifier.size(ButtonDefaults.IconSize),
         )
@@ -1363,9 +1341,9 @@ private fun ContentsHeader(
             ) {
                 Icon(
                     imageVector = if (toc.sort == TocSortMode.Ascending) {
-                        Icons.Rounded.KeyboardArrowDown
+                        StackIcons.KeyboardArrowDown
                     } else {
-                        Icons.Rounded.KeyboardArrowUp
+                        StackIcons.KeyboardArrowUp
                     },
                     contentDescription = "Sort ${nextSort.label.lowercase()}",
                 )
@@ -1432,13 +1410,13 @@ private fun TocRow(
     } else {
         val actionBackground = scheme.primaryContainer
         val readAction = tocSwipeAction(
-            icon = if (entry.read) Icons.Rounded.RemoveDone else Icons.Rounded.CheckCircle,
+            icon = if (entry.read) StackIcons.RemoveDone else StackIcons.CheckCircle,
             background = actionBackground,
             isUndo = entry.read,
             onSwipe = onToggleRead,
         )
         val bookmarkAction = tocSwipeAction(
-            icon = if (entry.bookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+            icon = if (entry.bookmarked) StackIcons.BookmarkFilled else StackIcons.Bookmark,
             background = actionBackground,
             isUndo = entry.bookmarked,
             onSwipe = onToggleBookmark,
@@ -1520,7 +1498,7 @@ private fun TocListItem(
                     SelectionCheckMark(selected = entry.selected)
                 } else if (entry.read) {
                     Icon(
-                        imageVector = Icons.Rounded.CheckCircle,
+                        imageVector = StackIcons.CheckCircle,
                         contentDescription = "Read",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
@@ -1559,7 +1537,7 @@ private fun SelectionCheckMark(selected: Boolean) {
     ) {
         if (selected) {
             Icon(
-                imageVector = Icons.Rounded.Check,
+                imageVector = StackIcons.Check,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(18.dp),
@@ -1601,9 +1579,9 @@ private fun ChapterSelectionToolbar(
     YomuFloatingToolbar(
         vibrant = true,
         actions = listOf(
-            YomuToolbarAction(Icons.Rounded.CheckCircle, "Read", onMarkRead, enabled = hasSelection),
-            YomuToolbarAction(Icons.Rounded.RemoveDone, "Unread", onMarkUnread, enabled = hasSelection),
-            YomuToolbarAction(Icons.AutoMirrored.Rounded.PlaylistAddCheck, "To here", onMarkPrevious, enabled = hasSelection),
+            YomuToolbarAction(StackIcons.CheckCircle, "Read", onMarkRead, enabled = hasSelection),
+            YomuToolbarAction(StackIcons.RemoveDone, "Unread", onMarkUnread, enabled = hasSelection),
+            YomuToolbarAction(StackIcons.PlaylistAddCheck, "To here", onMarkPrevious, enabled = hasSelection),
         ),
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
@@ -1614,7 +1592,7 @@ private fun ChapterSelectionToolbar(
 @Composable
 private fun TocEmpty() {
     YomuEmptyState(
-        icon = Icons.AutoMirrored.Rounded.MenuBook,
+        icon = StackIcons.MenuBook,
         title = "No table of contents",
         body = "This book doesn't list its chapters.",
         tone = YomuBadgeTone.Neutral,

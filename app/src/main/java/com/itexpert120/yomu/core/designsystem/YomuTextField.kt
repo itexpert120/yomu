@@ -3,8 +3,6 @@ package com.itexpert120.yomu.core.designsystem
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -18,6 +16,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /**
  * Labeled Material 3 text field used by editors and forms. By default the IME action moves focus to
@@ -61,7 +60,7 @@ fun YomuTextField(
         trailingIcon = trailingIcon ?: if (singleLine && value.isNotEmpty()) {
             {
                 IconButton(onClick = { onValueChange("") }, shapes = IconButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Clear $label")
+                    Icon(StackIcons.Close, contentDescription = "Clear $label")
                 }
             }
         } else {

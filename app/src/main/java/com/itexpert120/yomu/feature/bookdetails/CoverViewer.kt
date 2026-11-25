@@ -24,9 +24,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -57,6 +54,7 @@ import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.YomuBackPreviewHandler
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.rememberYomuBackPreviewState
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuBackPreview
@@ -191,14 +189,14 @@ internal fun CoverViewerDialog(
                             .align(Alignment.TopEnd)
                             .padding(top = statusTop + space.xs, end = space.sm),
                     ) {
-                        CircleAction(Icons.Rounded.SaveAlt, "Save to gallery", onSave)
+                        CircleAction(StackIcons.Download, "Save to gallery", onSave)
                     }
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(top = statusTop + space.xs, start = space.sm),
                     ) {
-                        CircleAction(Icons.Rounded.Close, "Close", close)
+                        CircleAction(StackIcons.Close, "Close", close)
                     }
                 }
             }

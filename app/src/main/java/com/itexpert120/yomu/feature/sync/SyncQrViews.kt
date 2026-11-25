@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.NoPhotography
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -65,6 +63,7 @@ import com.itexpert120.yomu.core.designsystem.YomuEmptyState
 import com.itexpert120.yomu.core.designsystem.YomuLoadingState
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import java.util.concurrent.Executors
@@ -141,7 +140,7 @@ internal fun SyncQrScanner(onScanned: (String) -> Unit, modifier: Modifier = Mod
     ) {
         when {
             cameraFailed -> YomuEmptyState(
-                icon = Icons.Rounded.NoPhotography,
+                icon = StackIcons.NoPhotography,
                 title = "Camera unavailable",
                 body = "The camera couldn't start on this device. Type the words instead.",
                 compact = true,
@@ -168,7 +167,7 @@ internal fun SyncQrScanner(onScanned: (String) -> Unit, modifier: Modifier = Mod
             }
 
             showDenied -> YomuEmptyState(
-                icon = Icons.Rounded.NoPhotography,
+                icon = StackIcons.NoPhotography,
                 title = "Camera access is off",
                 body = "Allow camera access in system settings to scan, or type the words instead.",
                 compact = true,

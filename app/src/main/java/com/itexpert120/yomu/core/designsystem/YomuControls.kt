@@ -20,10 +20,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
@@ -73,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 @Composable
 fun YomuButton(
@@ -336,7 +333,7 @@ fun YomuSelectableChip(
         c.copy(alpha = c.alpha * disabledAlpha)
     }
     val optionPainter = rememberVectorPainter(icon)
-    val checkPainter = rememberVectorPainter(Icons.Rounded.Check)
+    val checkPainter = rememberVectorPainter(StackIcons.Check)
     val haptics = LocalHapticFeedback.current
     val selectedCorner = with(LocalDensity.current) { 8.dp.toPx() }
 
@@ -441,7 +438,7 @@ fun YomuRangeRow(
                     contentDescription = "Decrease $label"
                 },
             ) {
-                Icon(Icons.Rounded.Remove, contentDescription = null)
+                Icon(StackIcons.Remove, contentDescription = null)
             }
             YomuSlider(
                 value = value.coerceIn(0f, 1f),
@@ -455,7 +452,7 @@ fun YomuRangeRow(
                     contentDescription = "Increase $label"
                 },
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = null)
+                Icon(StackIcons.Add, contentDescription = null)
             }
         }
     }

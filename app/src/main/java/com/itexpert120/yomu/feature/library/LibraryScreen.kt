@@ -38,11 +38,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.CollectionsBookmark
-import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -90,6 +85,7 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuShapeBadge
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
@@ -561,7 +557,7 @@ private fun EmptyLibrary(onImport: () -> Unit) {
             modifier = Modifier.heightIn(min = buttonHeight),
         ) {
             Icon(
-                Icons.Rounded.Add,
+                StackIcons.Add,
                 contentDescription = null,
                 modifier = Modifier.size(ButtonDefaults.iconSizeFor(buttonHeight)),
             )
@@ -586,7 +582,7 @@ private fun EmptySearchResults(
 ) {
     CenteredStatePane {
         YomuEmptyState(
-            icon = Icons.Rounded.SearchOff,
+            icon = StackIcons.SearchOff,
             title = "No books found",
             body = "Nothing matches “$query”.",
             actions = {
@@ -661,7 +657,7 @@ private fun EmptyTab(tab: LibraryTab) {
     }
     CenteredStatePane {
         YomuEmptyState(
-            icon = tab.status?.icon ?: if (tab.isCollection) Icons.Rounded.CollectionsBookmark else Icons.Rounded.AutoStories,
+            icon = tab.status?.icon ?: if (tab.isCollection) StackIcons.CollectionsBookmark else StackIcons.AutoStories,
             title = title,
             body = body,
             tone = YomuBadgeTone.Neutral,

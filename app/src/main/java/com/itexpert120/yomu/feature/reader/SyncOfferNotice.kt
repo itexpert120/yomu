@@ -1,13 +1,12 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.runtime.Composable
 import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /** "Continue from <device> at 42%?": a newer position synced from another device. */
 @Composable
@@ -22,7 +21,7 @@ internal fun SyncOfferNotice(offer: SyncOfferUi?, onJump: () -> Unit, onDismiss:
             // YomuNotice has a single action slot, so the dismiss control takes the leading one.
             leading = {
                 IconButton(onClick = onDismiss, shapes = IconButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Stay here")
+                    Icon(StackIcons.Close, contentDescription = "Stay here")
                 }
             },
         )
