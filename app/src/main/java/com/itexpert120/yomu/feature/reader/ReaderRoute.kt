@@ -6,6 +6,9 @@ import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuThemeMode
+import com.itexpert120.yomu.core.model.ReaderThemeMode
 
 @Composable
 fun ReaderRoute(onBack: () -> Unit) {
@@ -24,5 +27,15 @@ fun ReaderRoute(onBack: () -> Unit) {
             if (action == ReaderAction.Back) onBack() else viewModel.onAction(action)
         }
     }
-    ReaderScreen(state = state, onAction = onAction)
+    // The reader's sheets, dialogs and notices follow the page, not the app: a Night page gets dark
+    // sheets, Paper and Sepia light ones (the chrome itself already takes the page colour).
+    val settings = state.experience.settings
+    val pageMode = when {
+        settings.isLightBackground -> YomuThemeMode.Light
+        settings.theme == ReaderThemeMode.Black -> YomuThemeMode.Oled
+        else -> YomuThemeMode.Dark
+    }
+    YomuDesignTheme(themeMode = pageMode) {
+        ReaderScreen(state = state, onAction = onAction)
+    }
 }
