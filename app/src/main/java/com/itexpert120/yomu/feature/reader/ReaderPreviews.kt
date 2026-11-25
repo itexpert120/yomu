@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
+import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
@@ -334,6 +335,66 @@ private fun NoticesSample() {
         ReaderNoticeCard(text = "Continue from Pixel Tablet at 63%?", icon = StackIcons.Devices) {
             ReaderNoticeAction("Stay here", onClick = {}, secondary = true)
             ReaderNoticeAction("Jump", onClick = {})
+        }
+    }
+}
+
+// From medium widths the reader's sheets are side sheets (YomuBottomSheet).
+
+@Preview(name = "Display side sheet", widthDp = 1280, heightDp = 800)
+@Composable
+private fun DisplaySideSheetPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) {
+    Box(Modifier.fillMaxSize().background(YomuTheme.stack.desk)) {
+        YomuBottomSheet(visible = true, onDismiss = {}, showScrollEdgeShadow = false, horizontalContentPadding = 0.dp) { dismiss ->
+            ReaderControlsSheetContent(
+                state = ReaderUiState(
+                    experience = ReadingExperienceState(
+                        title = "The Wind in the Willows",
+                        tableOfContents = SampleToc,
+                        currentHref = "ch6.xhtml",
+                        settings = SampleSettings.copy(useSystemBrightness = false, brightness = 0.6f, dimLevel = 0.2f),
+                    ),
+                ),
+                tab = SheetTab.Display,
+                onSelectTab = {},
+                dismiss = dismiss,
+                onSelectChapter = {},
+                onNextChapter = {},
+                onPreviousChapter = {},
+                onUpdateSettings = {},
+                onResetSettings = {},
+                onOpenCustomTheme = {},
+                onApplyCustomTheme = {},
+                onPreviewBrightness = {},
+                onCommitBrightness = {},
+                onPreviewDim = {},
+                onCommitDim = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Browse side sheet", widthDp = 840, heightDp = 1000)
+@Composable
+private fun BrowseSideSheetPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) {
+    Box(Modifier.fillMaxSize().background(YomuTheme.stack.desk)) {
+        YomuBottomSheet(visible = true, onDismiss = {}, scrollable = false, horizontalContentPadding = 0.dp) { dismiss ->
+            ReaderBrowseSheetContent(
+                current = BrowseTab.Contents,
+                toc = SampleToc,
+                tocLoading = false,
+                currentHref = "ch6.xhtml",
+                onJumpToLocator = {},
+                bookmarks = emptyList(),
+                onJumpToBookmark = {},
+                onDeleteBookmark = {},
+                highlights = emptyList(),
+                onJumpToHighlight = {},
+                onDeleteHighlight = {},
+                onSelectTab = {},
+                dismiss = dismiss,
+                currentPercent = 42,
+            )
         }
     }
 }
