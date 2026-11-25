@@ -71,7 +71,7 @@ fun YomuSettingGroup(
     val stack = YomuTheme.stack
     val header: @Composable () -> Unit = {
         Column(
-            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp).semantics { heading() },
+            modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(text = title, style = StackType.Label, color = stack.muted)

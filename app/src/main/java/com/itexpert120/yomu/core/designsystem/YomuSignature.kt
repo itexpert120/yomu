@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.graphics.shapes.RoundedPolygon
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /*
  * The shared Stack vocabulary every screen is built from:
@@ -170,7 +172,7 @@ fun YomuEmptyState(
         if (coverOutline) {
             YomuCoverOutline(Modifier.size(width = if (compact) 48.dp else 56.dp, height = if (compact) 72.dp else 84.dp))
         } else {
-            Icon(icon, contentDescription = null, tint = if (tone == YomuBadgeTone.Error) stack.danger else stack.faint, modifier = Modifier.size(if (compact) 40.dp else 48.dp))
+            Icon(icon.thin(), contentDescription = null, tint = if (tone == YomuBadgeTone.Error) stack.danger else stack.faint, modifier = Modifier.size(if (compact) 40.dp else 48.dp))
         }
         Text(
             text = title,
@@ -197,6 +199,23 @@ fun YomuEmptyState(
             )
         }
     }
+}
+
+/** An empty state's large symbol is drawn at weight 200 where a thin cut exists. */
+private fun ImageVector.thin(): ImageVector = when (this) {
+    StackIcons.AutoStories -> StackIcons.AutoStoriesThin
+    StackIcons.Book -> StackIcons.BookThin
+    StackIcons.Bookmarks -> StackIcons.BookmarksThin
+    StackIcons.BorderColor -> StackIcons.BorderColorThin
+    StackIcons.CloudOff -> StackIcons.CloudOffThin
+    StackIcons.CollectionsBookmark -> StackIcons.CollectionsBookmarkThin
+    StackIcons.EditOff -> StackIcons.EditOffThin
+    StackIcons.HourglassEmpty -> StackIcons.HourglassEmptyThin
+    StackIcons.MatchCase -> StackIcons.MatchCaseThin
+    StackIcons.NoPhotography -> StackIcons.NoPhotographyThin
+    StackIcons.SearchOff -> StackIcons.SearchOffThin
+    StackIcons.Toc -> StackIcons.TocThin
+    else -> this
 }
 
 /** A cover-shaped dashed outline: the "no book here" mark in empty states. */
@@ -378,12 +397,13 @@ fun YomuDialog(
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val backPreview = rememberYomuBackPreviewState()
-    Dialog(onDismissRequest = onDismiss) {
+    // The platform's default dialog width leaves ~54dp sides on a phone; Stack's card sits 24dp in.
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         YomuDialogWindowDim()
         // Registered from inside the dialog so it uses the dialog window's back dispatcher.
         YomuBackPreviewHandler(backPreview, onBack = onDismiss)
         YomuDialogCard(
-            modifier = modifier.yomuBackPreview(backPreview),
+            modifier = modifier.padding(horizontal = YomuTheme.space.lg).yomuBackPreview(backPreview),
             title = title,
             text = text,
             confirmLabel = confirmLabel,
@@ -417,18 +437,18 @@ fun YomuDialogCard(
             .widthIn(min = 280.dp, max = 400.dp)
             .clip(YomuShapeTokens.hero)
             .background(stack.sheet)
-            .padding(start = 22.dp, end = 12.dp, top = 22.dp, bottom = 12.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp),
     ) {
         Text(
             text = title,
             style = StackType.DialogTitle,
             color = stack.ink,
-            modifier = Modifier.padding(end = 10.dp).semantics { heading() },
+            modifier = Modifier.semantics { heading() },
         )
         if (text != null || content != null) {
             Column(
                 modifier = Modifier
-                    .padding(top = 8.dp, end = 10.dp)
+                    .padding(top = 10.dp)
                     .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
@@ -438,8 +458,8 @@ fun YomuDialogCard(
             }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            modifier = Modifier.fillMaxWidth().padding(top = 22.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (dismissLabel != null) {

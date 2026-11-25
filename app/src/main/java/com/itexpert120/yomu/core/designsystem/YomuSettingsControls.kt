@@ -213,7 +213,7 @@ fun YomuSectionLabel(text: String, modifier: Modifier = Modifier) {
         text = text,
         color = YomuTheme.stack.muted,
         style = StackType.Label,
-        modifier = modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
+        modifier = modifier.padding(top = 12.dp, bottom = 4.dp),
     )
 }
 
