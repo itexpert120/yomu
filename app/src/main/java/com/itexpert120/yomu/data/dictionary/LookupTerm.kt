@@ -13,9 +13,16 @@ sealed interface LookupTerm {
     }
 
     /** Several words, trimmed of surrounding punctuation; [firstWord] is the first of them as a word. */
-    data class Phrase(val text: String, val firstWord: Word?) : LookupTerm
+    data class Phrase(val text: String, val firstWord: Word?) : LookupTerm {
+        /** Short enough to be a name or a term ("river bank", "Toad Hall"): looked up on Wikipedia, not the web. */
+        val isShort: Boolean
+            get() = text.length <= MAX_SHORT_PHRASE_CHARS && text.split(WHITESPACE).size <= MAX_SHORT_PHRASE_WORDS
+    }
 
     companion object {
+        private const val MAX_SHORT_PHRASE_WORDS = 5
+        private const val MAX_SHORT_PHRASE_CHARS = 60
+
         /** Classifies [raw]; null when it holds nothing to look up. */
         fun of(raw: String?): LookupTerm? {
             val text = raw?.trim().orEmpty()

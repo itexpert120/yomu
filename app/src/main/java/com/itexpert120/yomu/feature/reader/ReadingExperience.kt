@@ -4,6 +4,7 @@ import android.content.Context
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.reader.HighlightStyle
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
@@ -28,6 +29,8 @@ import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.dictionary.DictionaryRepository
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.dictionary.LookupTerm
+import com.itexpert120.yomu.data.encyclopedia.WikipediaRepository
+import com.itexpert120.yomu.data.encyclopedia.WikipediaResult
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import com.itexpert120.yomu.data.stats.ReadingWriteQueue
@@ -65,7 +68,39 @@ data class WordLookupUiState(
     val loading: Boolean = true,
     val result: DictionaryResult? = null,
     val canGoBack: Boolean = false,
+    // The dictionary language looked up in (ISO 639), from the selection's language.
+    val language: String = "en",
+    // The selection as the reader made it ("Portly", "river bank"): Wikipedia's title, and what
+    // Translate and Search in book take.
+    val query: String = word,
+    // A short phrase: the dictionary has no entries for those, so the sheet shows only Wikipedia.
+    val phrase: Boolean = false,
+    val tab: LookupTab = if (phrase) LookupTab.Wikipedia else LookupTab.Dictionary,
+    // Null until the Wikipedia tab is first opened: nothing is fetched before that.
+    val wikipedia: WikipediaUiState? = null,
+    val canTranslate: Boolean = false,
 )
+
+enum class LookupTab(val label: String) {
+    Dictionary("Dictionary"),
+    Wikipedia("Wikipedia"),
+}
+
+data class WikipediaUiState(val loading: Boolean = true, val result: WikipediaResult? = null)
+
+/** A highlight or bookmark just deleted, kept while its Undo notice is up. */
+sealed interface AnnotationUndo {
+    val key: Long
+    val message: String
+
+    data class Highlight(override val key: Long, val highlight: ReaderHighlight) : AnnotationUndo {
+        override val message: String get() = "Highlight deleted"
+    }
+
+    data class Bookmark(override val key: Long, val bookmark: ReaderBookmark) : AnnotationUndo {
+        override val message: String get() = "Bookmark deleted"
+    }
+}
 
 data class ReadingExperienceState(
     val navigator: ReaderNavigator? = null,
@@ -113,19 +148,20 @@ data class ReadingExperienceState(
     // A picture opened from the page, and what became of saving it.
     val viewedImage: ReaderImage? = null,
     val imageMessage: String? = null,
+    val undo: AnnotationUndo? = null,
 ) {
     val currentPageBookmarked: Boolean
         get() = locator?.let { bookmarks.at(it.bookmarkAnchor()).isNotEmpty() } ?: false
 }
-
-// The dictionary's language when the text doesn't say.
-private const val DEFAULT_LOOKUP_LANGUAGE = "en"
 
 /** "Continue from <device> at <percent>%?" */
 data class SyncOfferUi(val device: String?, val percent: Int, val locatorJson: String)
 
 internal sealed interface ReadingExperienceEvent {
     data object ToggleChrome : ReadingExperienceEvent
+
+    /** "Search in book" from the selection menu: the reader opens its search sheet on [text]. */
+    data class SearchInBook(val text: String) : ReadingExperienceEvent
 }
 
 internal sealed interface ReadingExperienceAction {
@@ -159,6 +195,19 @@ internal sealed interface ReadingExperienceAction {
     data class DeleteBookmark(val id: String) : ReadingExperienceAction
     data class DeleteHighlight(val id: String) : ReadingExperienceAction
     data class SetEditingHighlightColor(val colorArgb: Int) : ReadingExperienceAction
+    data class SetEditingHighlightStyle(val style: HighlightStyle) : ReadingExperienceAction
+    data class SetHighlightNote(val id: String, val note: String) : ReadingExperienceAction
+    data object CopyEditingHighlight : ReadingExperienceAction
+    data object ShareEditingHighlight : ReadingExperienceAction
+    data class UndoDelete(val key: Long) : ReadingExperienceAction
+    data class DismissUndo(val key: Long) : ReadingExperienceAction
+    data class SelectLookupTab(val tab: LookupTab) : ReadingExperienceAction
+    data object LookUpInEnglish : ReadingExperienceAction
+    data object RetryWikipedia : ReadingExperienceAction
+    data class Translate(val text: String) : ReadingExperienceAction
+
+    /** Closes the look-up sheet and searches the book for [text]. */
+    data class SearchFor(val text: String) : ReadingExperienceAction
 }
 
 internal sealed interface ReaderNavigation {
@@ -178,6 +227,7 @@ class ReadingExperienceFactory @Inject constructor(
     private val publications: PublicationIndex,
     private val settings: ReaderSettingsRepository,
     private val dictionary: DictionaryRepository,
+    private val wikipedia: WikipediaRepository,
     private val highlights: HighlightRepository,
     private val bookmarks: BookmarkRepository,
     private val stats: StatsRepository,
@@ -198,7 +248,7 @@ class ReadingExperienceFactory @Inject constructor(
         settings = settings.effective(bookId),
         persistSettings = { settings.setForBook(bookId, it) },
         resetSettings = { settings.clearForBook(bookId) },
-        lookupWord = { word, language -> dictionary.lookup(word, language ?: DEFAULT_LOOKUP_LANGUAGE) },
+        lookupWord = { word, language -> dictionary.lookup(word, language) },
         selectionOutlet = selectionOutlet,
         imageOutlet = imageOutlet,
         readingSeconds = stats.bookReadingSeconds(bookId),
@@ -214,6 +264,7 @@ class ReadingExperienceFactory @Inject constructor(
         readingWrites = readingWrites,
         syncOffer = sync.progressOffer(bookId),
         clearSyncOffer = { sync.clearOffer(bookId) },
+        lookupWikipedia = wikipedia::summary,
     )
 }
 
@@ -224,8 +275,7 @@ internal class ReadingExperience(
     private val settings: Flow<ReaderSettings>,
     private val persistSettings: suspend (ReaderSettings) -> Unit,
     private val resetSettings: suspend () -> Unit,
-    // A word, in the language of the text it came from ("fr"; null: the book doesn't say).
-    private val lookupWord: suspend (String, String?) -> DictionaryResult,
+    private val lookupWord: suspend (word: String, language: String) -> DictionaryResult,
     private val selectionOutlet: SelectionOutlet,
     private val readAloud: ReadAloud,
     private val engine: ReaderEngine,
@@ -247,6 +297,7 @@ internal class ReadingExperience(
     // Time spent reading this book so far (Stats), for the reader's own reading speed.
     private val readingSeconds: Flow<Long> = emptyFlow(),
     private val jumpBackTimeoutMillis: Long = JUMP_BACK_TIMEOUT_MS,
+    private val lookupWikipedia: suspend (text: String, language: String?) -> WikipediaResult = { _, _ -> WikipediaResult.NotFound },
 ) {
     private val lifetimeJob = SupervisorJob(ownerScope.coroutineContext[Job])
     private val scope = CoroutineScope(ownerScope.coroutineContext + lifetimeJob)
@@ -282,15 +333,16 @@ internal class ReadingExperience(
     // The engine locator a portable locator was captured for, and that portable locator.
     private var portableLocator: Pair<String, String>? = null
     private var portableJob: Job? = null
-    private val lookupStack = ArrayDeque<String>()
+    private val lookupStack = ArrayDeque<LookupEntry>()
     private val lookupCache = mutableMapOf<String, DictionaryResult>()
 
-    // The language of the text the current look-up started from; its follow-ups use it too.
-    private var lookupLanguage: String? = null
     private val jumps = JumpHistory()
     private var jumpBackJob: Job? = null
     private var bookReadingSeconds: Long? = null
     private var imageJob: Job? = null
+    private val wikipediaCache = mutableMapOf<String, WikipediaResult>()
+    private var bookAuthor: String? = null
+    private var undoKey = 0L
     private data class AnnotationWrite(val message: String, val persist: suspend () -> Unit)
     private val annotationWrites = ArrayDeque<AnnotationWrite>()
     private var annotationJob: Job? = null
@@ -301,6 +353,7 @@ internal class ReadingExperience(
 
         scope.launch {
             books.observeBook(bookId).collect { book ->
+                bookAuthor = book?.author?.takeIf { it.isNotBlank() }
                 _state.update { it.copy(coverImagePath = book?.coverImagePath) }
             }
         }
@@ -377,6 +430,17 @@ internal class ReadingExperience(
             }
             ReadingExperienceAction.SaveImage -> saveImage()
             ReadingExperienceAction.ShareImage -> shareImage()
+            is ReadingExperienceAction.SetEditingHighlightStyle -> setEditingHighlightStyle(action.style)
+            is ReadingExperienceAction.SetHighlightNote -> setHighlightNote(action.id, action.note)
+            ReadingExperienceAction.CopyEditingHighlight -> _state.value.editingHighlight?.let { selectionOutlet.copy(it.text) }
+            ReadingExperienceAction.ShareEditingHighlight -> _state.value.editingHighlight?.let { selectionOutlet.share(it.text) }
+            is ReadingExperienceAction.UndoDelete -> undoDelete(action.key)
+            is ReadingExperienceAction.DismissUndo -> _state.update { if (it.undo?.key == action.key) it.copy(undo = null) else it }
+            is ReadingExperienceAction.SelectLookupTab -> selectLookupTab(action.tab)
+            ReadingExperienceAction.LookUpInEnglish -> lookUpInEnglish()
+            ReadingExperienceAction.RetryWikipedia -> retryWikipedia()
+            is ReadingExperienceAction.Translate -> action.text.trim().takeIf { it.isNotEmpty() }?.let(selectionOutlet::translate)
+            is ReadingExperienceAction.SearchFor -> searchFor(action.text)
         }
     }
 
@@ -505,7 +569,8 @@ internal class ReadingExperience(
                             initialLocatorJson = initialLocatorJson ?: it.locatorJson,
                             initialSettings = initialSettings,
                             publicationCache = publication,
-                            isLookupPhrase = { text -> LookupTerm.of(text) is LookupTerm.Phrase },
+                            // Short phrases look up on Wikipedia in the sheet; only longer ones lose "Look up".
+                            isLookupPhrase = { text -> (LookupTerm.of(text) as? LookupTerm.Phrase)?.isShort == false },
                         ),
                     )
                 }
@@ -648,23 +713,26 @@ internal class ReadingExperience(
             ReaderSelection.Action.Share -> selectionOutlet.share(text)
             ReaderSelection.Action.SearchWeb -> selectionOutlet.searchWeb(text)
             ReaderSelection.Action.ReadAloud -> speak(text)
-            // The menu hides "Look up" for phrases, but one that hasn't re-prepared yet can still
-            // fire it: the dictionary only knows words, so a phrase goes to the web instead.
+            ReaderSelection.Action.SearchInBook -> _events.tryEmit(ReadingExperienceEvent.SearchInBook(text))
+            ReaderSelection.Action.CopyWithCitation -> selectionOutlet.copy(formatCitation(text, bookAuthor, _state.value.title, _state.value.pageLabel?.substringBefore('–')))
+            // A short phrase is looked up on Wikipedia in the sheet. The menu hides "Look up" for
+            // longer ones, but one that hasn't re-prepared yet can still fire it: those go to the web.
             ReaderSelection.Action.LookUp -> when (val term = LookupTerm.of(text)) {
-                is LookupTerm.Phrase -> selectionOutlet.searchWeb("${term.text} meaning")
-                is LookupTerm.Word -> {
-                    lookupLanguage = selection.language
-                    lookUp(term, resetHistory = true)
+                is LookupTerm.Phrase -> if (term.isShort) {
+                    lookUpPhrase(term.text, lookupLanguage(selection.language))
+                } else {
+                    selectionOutlet.searchWeb("${term.text} meaning")
                 }
+                is LookupTerm.Word -> lookUp(term, resetHistory = true, language = lookupLanguage(selection.language), query = text)
                 null -> Unit
             }
+            // A new highlight opens its sheet straight away, for a note or another colour or style.
             ReaderSelection.Action.Highlight -> mutateAnnotation("Highlight wasn't saved.") {
-                val existing = highlights.observeForBook(bookId).first().any {
+                val existing = highlights.observeForBook(bookId).first().firstOrNull {
                     it.locatorJson == selection.locatorJson && it.text == text
                 }
-                if (!existing) {
-                    highlights.add(bookId, selection.locatorJson, text, DEFAULT_HIGHLIGHT_ARGB)
-                }
+                val highlight = existing ?: highlights.add(bookId, selection.locatorJson, text, DEFAULT_HIGHLIGHT_ARGB)
+                _state.update { it.copy(editingHighlight = highlight) }
             }
         }
     }
@@ -758,29 +826,50 @@ internal class ReadingExperience(
         }
     }
 
-    // Text from the look-up sheet (a definition's word, a synonym chip): a phrase looks up its first word.
+    // Text from the look-up sheet (a definition's word, a synonym chip): a phrase looks up its first
+    // word, in the language of the entry it was tapped in.
     private fun lookUpWord(rawText: String, resetHistory: Boolean) {
         val term = when (val parsed = LookupTerm.of(rawText)) {
             is LookupTerm.Phrase -> parsed.firstWord
             is LookupTerm.Word -> parsed
             null -> null
         } ?: return
-        lookUp(term, resetHistory)
+        lookUp(term, resetHistory, language = lookupStack.lastOrNull()?.language ?: DEFAULT_LOOKUP_LANGUAGE)
     }
 
-    private fun lookUp(term: LookupTerm.Word, resetHistory: Boolean) {
-        val word = term.word
+    private fun lookUp(term: LookupTerm.Word, resetHistory: Boolean, language: String, query: String? = null) {
+        val entry = LookupEntry(
+            word = term.word,
+            language = language,
+            query = query?.trim { !it.isLetterOrDigit() }?.takeIf { it.isNotEmpty() } ?: term.word,
+        )
         if (resetHistory) lookupStack.clear()
-        if (!resetHistory && lookupStack.lastOrNull() == word) return
-        lookupStack.addLast(word)
-        showLookup(word)
+        val top = lookupStack.lastOrNull()
+        if (!resetHistory && top?.word == entry.word && top.language == entry.language) return
+        lookupStack.addLast(entry)
+        showLookup(entry)
+    }
+
+    private fun lookUpPhrase(text: String, language: String) {
+        lookupStack.clear()
+        val entry = LookupEntry(word = text, language = language, query = text, phrase = true)
+        lookupStack.addLast(entry)
+        showLookup(entry)
+    }
+
+    private fun lookUpInEnglish() {
+        val top = lookupStack.removeLastOrNull() ?: return
+        val english = top.copy(language = DEFAULT_LOOKUP_LANGUAGE)
+        lookupStack.addLast(english)
+        showLookup(english)
     }
 
     private fun retryLookup() {
         val current = _state.value.lookup ?: return
         if (current.result !is DictionaryResult.Error || current.loading) return
-        lookupCache.remove("$lookupLanguage|${current.word}")
-        showLookup(current.word)
+        val entry = lookupStack.lastOrNull() ?: return
+        lookupCache.remove(entry.cacheKey)
+        showLookup(entry)
     }
 
     private fun lookupBack() {
@@ -797,29 +886,80 @@ internal class ReadingExperience(
         _state.update { it.copy(lookup = null) }
     }
 
-    private fun showLookup(word: String) {
-        val cacheKey = "$lookupLanguage|$word"
-        val cached = lookupCache[cacheKey]
+    private fun showLookup(entry: LookupEntry) {
+        val cached = if (entry.phrase) null else lookupCache[entry.cacheKey]
         _state.update {
             it.copy(
                 lookup = WordLookupUiState(
-                    word = word,
-                    loading = cached == null,
+                    word = entry.word,
+                    loading = !entry.phrase && cached == null,
                     result = cached,
                     canGoBack = lookupStack.size > 1,
+                    language = entry.language,
+                    query = entry.query,
+                    phrase = entry.phrase,
+                    canTranslate = selectionOutlet.canTranslate,
                 ),
             )
         }
+        if (entry.phrase) {
+            loadWikipedia()
+            return
+        }
         if (cached != null) return
         scope.launch {
-            val result = runCatching { lookupWord(word, lookupLanguage) }.getOrDefault(DictionaryResult.Error)
-            lookupCache[cacheKey] = result
+            val result = runCatching { lookupWord(entry.word, entry.language) }.getOrDefault(DictionaryResult.Error)
+            lookupCache[entry.cacheKey] = result
             _state.update { currentState ->
                 val current = currentState.lookup ?: return@update currentState
-                if (current.word != word) return@update currentState
+                if (current.word != entry.word || current.language != entry.language) return@update currentState
                 currentState.copy(lookup = current.copy(loading = false, result = result))
             }
         }
+    }
+
+    private fun selectLookupTab(tab: LookupTab) {
+        val current = _state.value.lookup ?: return
+        if (current.phrase || current.tab == tab) return
+        _state.update { it.copy(lookup = current.copy(tab = tab)) }
+        if (tab == LookupTab.Wikipedia && current.wikipedia == null) loadWikipedia()
+    }
+
+    private fun retryWikipedia() {
+        val current = _state.value.lookup ?: return
+        if (current.wikipedia?.result !is WikipediaResult.Error) return
+        wikipediaCache.remove(wikipediaKey(current))
+        loadWikipedia()
+    }
+
+    // Wikipedia is fetched only from here: when its tab is opened, or a phrase is looked up.
+    private fun loadWikipedia() {
+        val current = _state.value.lookup ?: return
+        val key = wikipediaKey(current)
+        val cached = wikipediaCache[key]
+        _state.update {
+            it.copy(lookup = current.copy(tab = LookupTab.Wikipedia, wikipedia = WikipediaUiState(loading = cached == null, result = cached)))
+        }
+        if (cached != null) return
+        scope.launch {
+            val result = runCatching { lookupWikipedia(current.query, current.language) }.getOrDefault(WikipediaResult.Error)
+            if (result !is WikipediaResult.Error) wikipediaCache[key] = result
+            _state.update { currentState ->
+                val shown = currentState.lookup ?: return@update currentState
+                if (wikipediaKey(shown) != key) return@update currentState
+                currentState.copy(lookup = shown.copy(wikipedia = WikipediaUiState(loading = false, result = result)))
+            }
+        }
+    }
+
+    private fun wikipediaKey(lookup: WordLookupUiState) = "${lookup.language}:${lookup.query}"
+
+    private fun searchFor(text: String) {
+        val query = text.trim().replace(WHITESPACE, " ")
+        if (query.isEmpty()) return
+        closeLookup()
+        changeSearchQuery(query)
+        submitSearch()
     }
 
     private fun speak(rawText: String) {
@@ -836,7 +976,9 @@ internal class ReadingExperience(
     }
 
     private fun deleteBookmark(id: String) {
+        val deleted = _state.value.bookmarks.firstOrNull { it.id == id }
         mutateAnnotation("Bookmark wasn't deleted.") { bookmarks.delete(id) }
+        if (deleted != null) _state.update { it.copy(undo = AnnotationUndo.Bookmark(++undoKey, deleted)) }
     }
 
     private fun deleteEditingHighlight() {
@@ -845,6 +987,10 @@ internal class ReadingExperience(
     }
 
     private fun deleteHighlight(id: String) {
+        // The sheet's copy is the freshest (a note just typed); the list's otherwise.
+        val deleted = _state.value.editingHighlight?.takeIf { it.id == id }
+            ?: _state.value.highlights.firstOrNull { it.id == id }
+        if (deleted != null) _state.update { it.copy(undo = AnnotationUndo.Highlight(++undoKey, deleted)) }
         mutateAnnotation("Highlight wasn't deleted.") {
             highlights.delete(id)
             _state.update { if (it.editingHighlight?.id == id) it.copy(editingHighlight = null) else it }
@@ -856,6 +1002,33 @@ internal class ReadingExperience(
         mutateAnnotation("Highlight color wasn't saved.") {
             highlights.updateColor(target.id, colorArgb)
             _state.update { if (it.editingHighlight?.id == target.id) it.copy(editingHighlight = target.copy(colorArgb = colorArgb)) else it }
+        }
+    }
+
+    private fun setEditingHighlightStyle(style: HighlightStyle) {
+        val target = _state.value.editingHighlight ?: return
+        if (target.style == style) return
+        _state.update { it.copy(editingHighlight = target.copy(style = style)) }
+        mutateAnnotation("Highlight style wasn't saved.") { highlights.setStyle(target.id, style) }
+    }
+
+    private fun setHighlightNote(id: String, note: String) {
+        val normalized = note.trim().takeIf { it.isNotEmpty() }
+        val known = _state.value.editingHighlight?.takeIf { it.id == id } ?: _state.value.highlights.firstOrNull { it.id == id }
+        if (known != null && known.note?.trim() == normalized) return
+        _state.update { state ->
+            state.editingHighlight?.takeIf { it.id == id }?.let { state.copy(editingHighlight = it.copy(note = normalized)) } ?: state
+        }
+        mutateAnnotation("Note wasn't saved.") { highlights.setNote(id, normalized) }
+    }
+
+    // Puts the row back with its own id, so sync sees the same highlight or bookmark return.
+    private fun undoDelete(key: Long) {
+        val undo = _state.value.undo?.takeIf { it.key == key } ?: return
+        _state.update { it.copy(undo = null) }
+        when (undo) {
+            is AnnotationUndo.Highlight -> mutateAnnotation("Highlight wasn't restored.") { highlights.restore(bookId, undo.highlight) }
+            is AnnotationUndo.Bookmark -> mutateAnnotation("Bookmark wasn't restored.") { bookmarks.restore(bookId, undo.bookmark) }
         }
     }
 
@@ -1041,7 +1214,14 @@ internal class ReadingExperience(
         completed = completed,
     )
 
+    /** One look-up in the sheet's history: a dictionary [word] in [language], or a short [phrase]. */
+    private data class LookupEntry(val word: String, val language: String, val query: String, val phrase: Boolean = false) {
+        val cacheKey: String get() = "$language:$word"
+    }
+
     private companion object {
+        const val DEFAULT_LOOKUP_LANGUAGE = "en"
+        val WHITESPACE = Regex("\\s+")
         const val DEFAULT_HIGHLIGHT_ARGB = 0xFFE7C75B.toInt()
         const val MAX_SESSION_SECONDS = 24L * 60 * 60
         const val PROGRESS_SAVE_INTERVAL_MS = 4_000L
@@ -1052,4 +1232,10 @@ internal class ReadingExperience(
         const val JUMP_BACK_TIMEOUT_MS = 20_000L
         const val IMAGE_MESSAGE_MS = 2_500L
     }
+}
+
+/** The dictionary language for a selection's BCP 47 tag ("fr-CA" → "fr"); English when unknown. */
+internal fun lookupLanguage(tag: String?): String {
+    val primary = tag?.trim()?.substringBefore('-')?.substringBefore('_')?.lowercase().orEmpty()
+    return primary.takeIf { it.length in 2..3 && it.all(Char::isLetter) } ?: "en"
 }

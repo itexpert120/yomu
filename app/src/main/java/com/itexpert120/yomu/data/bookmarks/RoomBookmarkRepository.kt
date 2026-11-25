@@ -37,6 +37,11 @@ class RoomBookmarkRepository @Inject constructor(
 
     override suspend fun delete(id: String) = dao.deleteById(id)
 
+    override suspend fun restore(bookId: BookId, bookmark: ReaderBookmark) {
+        val anchor = BookmarkAnchor(bookmark.href, bookmark.locatorJson, bookmark.progression)
+        dao.insert(anchor.toBookmarkEntity(bookmark.id, bookId.value, bookmark.chapterTitle, bookmark.createdAt))
+    }
+
     private fun BookmarkEntity.toModel(): ReaderBookmark {
         val anchor = anchor
         return ReaderBookmark(

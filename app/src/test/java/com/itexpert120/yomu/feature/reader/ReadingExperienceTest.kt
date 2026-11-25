@@ -6,6 +6,7 @@ import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.BookmarkAnchor
+import com.itexpert120.yomu.core.reader.HighlightStyle
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
@@ -27,6 +28,7 @@ import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.books.ReadingProgressSnapshot
 import com.itexpert120.yomu.data.books.ReadingTarget
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
+import com.itexpert120.yomu.data.encyclopedia.WikipediaResult
 import com.itexpert120.yomu.data.highlights.HighlightRepository
 import com.itexpert120.yomu.data.stats.ReadingWriteQueue
 import kotlinx.coroutines.CoroutineScope
@@ -299,20 +301,21 @@ class ReadingExperienceTest {
             experience.start()
             awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
             fun select(action: ReaderSelection.Action, text: String) = session.selectionEvents.tryEmit(ReaderSelection(action, text, "{at}"))
-            select(ReaderSelection.Action.LookUp, "“the world of fog,”")
+            select(ReaderSelection.Action.LookUp, "“the world of fog and its long grey morning,”")
             select(ReaderSelection.Action.Copy, "copied")
             select(ReaderSelection.Action.Share, "shared")
             select(ReaderSelection.Action.SearchWeb, "searched")
             awaitCondition { outlet.searched.size == 2 }
 
-            assertEquals(listOf("the world of fog meaning", "searched"), outlet.searched)
+            assertEquals(listOf("the world of fog and its long grey morning meaning", "searched"), outlet.searched)
             assertEquals(listOf("copied"), outlet.copied)
             assertEquals(listOf("shared"), outlet.shared)
             assertTrue(lookedUp.isEmpty())
             assertEquals(null, experience.state.value.lookup)
             // The engine hides "Look up" for exactly what the experience treats as a phrase.
             val isPhrase = engine.requests.single().isLookupPhrase
-            assertTrue(isPhrase("two words"))
+            assertTrue(isPhrase("far too many words for a name or a term"))
+            assertFalse(isPhrase("two words"))
             assertFalse(isPhrase("Dantès’s"))
         } finally {
             experience.close()
@@ -385,6 +388,9 @@ class ReadingExperienceTest {
             awaitCondition { experience.state.value.currentPageBookmarked }
 
             experience.dispatch(ReadingExperienceAction.DeleteBookmark("bookmark-1"))
+            // A new highlight opens its own sheet; go back to the existing one.
+            session.highlightTapEvents.emit("existing")
+            awaitCondition { experience.state.value.editingHighlight?.id == "existing" }
             experience.dispatch(ReadingExperienceAction.DeleteEditingHighlight)
             awaitCondition { bookmarks.deletedIds == listOf("bookmark-1") }
             awaitCondition { "existing" in highlights.deletedIds }
@@ -677,6 +683,172 @@ class ReadingExperienceTest {
         experience.close()
     }
 
+    @Test
+    fun newHighlightOpensItsSheetAndNotesStylesAndUndoPersist() = runBlocking {
+        val highlights = FakeHighlightRepository()
+        val bookmarks = FakeBookmarkRepository()
+        val session = FakeReaderSession()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            highlights = highlights,
+            bookmarks = bookmarks,
+            scope = this,
+        )
+        try {
+            experience.start()
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.Highlight, "noted", "{at}"))
+            awaitCondition { experience.state.value.editingHighlight?.id == "highlight-1" }
+
+            experience.dispatch(ReadingExperienceAction.SetEditingHighlightStyle(HighlightStyle.Underline))
+            awaitCondition { highlights.styles == listOf("highlight-1" to HighlightStyle.Underline) }
+            assertEquals(HighlightStyle.Underline, experience.state.value.editingHighlight?.style)
+
+            experience.dispatch(ReadingExperienceAction.SetHighlightNote("highlight-1", "  A thought \n"))
+            awaitCondition { highlights.notes == listOf("highlight-1" to "A thought") }
+            // The same note again writes nothing; a blank one clears it.
+            experience.dispatch(ReadingExperienceAction.SetHighlightNote("highlight-1", "A thought"))
+            experience.dispatch(ReadingExperienceAction.SetHighlightNote("highlight-1", "   "))
+            awaitCondition { highlights.notes.size == 2 }
+            assertEquals("highlight-1" to null, highlights.notes.last())
+            experience.dispatch(ReadingExperienceAction.SetHighlightNote("highlight-1", "Kept"))
+            awaitCondition { highlights.items.value.single().note == "Kept" }
+            awaitCondition { experience.state.value.highlights.singleOrNull()?.note == "Kept" }
+
+            experience.dispatch(ReadingExperienceAction.DeleteEditingHighlight)
+            awaitCondition { highlights.items.value.isEmpty() }
+            val undo = experience.state.value.undo as AnnotationUndo.Highlight
+            assertEquals("highlight-1", undo.highlight.id)
+            experience.dispatch(ReadingExperienceAction.UndoDelete(undo.key))
+            awaitCondition { highlights.items.value.isNotEmpty() }
+            val restored = highlights.items.value.single()
+            assertEquals("highlight-1", restored.id)
+            assertEquals("Kept", restored.note)
+            assertEquals(HighlightStyle.Underline, restored.style)
+            assertNull(experience.state.value.undo)
+
+            session.currentLocator.value = locator()
+            awaitCondition { experience.state.value.locator != null }
+            experience.dispatch(ReadingExperienceAction.ToggleBookmark)
+            awaitCondition { experience.state.value.currentPageBookmarked }
+            experience.dispatch(ReadingExperienceAction.DeleteBookmark("bookmark-1"))
+            awaitCondition { !experience.state.value.currentPageBookmarked }
+            val bookmarkUndo = experience.state.value.undo as AnnotationUndo.Bookmark
+            // A stale notice's timeout leaves a newer one alone.
+            experience.dispatch(ReadingExperienceAction.DismissUndo(undo.key))
+            assertSame(bookmarkUndo, experience.state.value.undo)
+            experience.dispatch(ReadingExperienceAction.UndoDelete(bookmarkUndo.key))
+            awaitCondition { experience.state.value.currentPageBookmarked }
+            assertEquals(listOf("bookmark-1"), bookmarks.restoredIds)
+        } finally {
+            experience.close()
+        }
+    }
+
+    @Test
+    fun lookupFollowsTheSelectionLanguageAndFetchesWikipediaOnlyWhenAsked() = runBlocking {
+        val lookedUp = mutableListOf<Pair<String, String>>()
+        val wikiCalls = mutableListOf<Pair<String, String?>>()
+        val session = FakeReaderSession()
+        val outlet = FakeSelectionOutlet()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            scope = this,
+            selectionOutlet = outlet,
+            lookupWord = { word, language ->
+                lookedUp += word to language
+                DictionaryResult.NotFound
+            },
+            lookupWikipedia = { text, language ->
+                wikiCalls += text to language
+                WikipediaResult.NotFound
+            },
+        )
+        try {
+            experience.start()
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.LookUp, "Crapaud,", "{at}", language = "fr-FR"))
+            awaitCondition { experience.state.value.lookup?.loading == false }
+            with(experience.state.value.lookup!!) {
+                assertEquals("crapaud", word)
+                assertEquals("fr", language)
+                assertEquals("Crapaud", query)
+                assertEquals(LookupTab.Dictionary, tab)
+                assertNull(wikipedia)
+            }
+            assertTrue(wikiCalls.isEmpty())
+
+            experience.dispatch(ReadingExperienceAction.SelectLookupTab(LookupTab.Wikipedia))
+            awaitCondition { experience.state.value.lookup?.wikipedia?.loading == false }
+            experience.dispatch(ReadingExperienceAction.SelectLookupTab(LookupTab.Dictionary))
+            experience.dispatch(ReadingExperienceAction.SelectLookupTab(LookupTab.Wikipedia))
+            assertEquals(listOf("Crapaud" to "fr"), wikiCalls)
+
+            experience.dispatch(ReadingExperienceAction.LookUpInEnglish)
+            awaitCondition { experience.state.value.lookup?.language == "en" && experience.state.value.lookup?.loading == false }
+            assertEquals(listOf("crapaud" to "fr", "crapaud" to "en"), lookedUp)
+
+            // A short phrase has no dictionary entry: the sheet opens on Wikipedia.
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.LookUp, "Toad Hall.", "{at}"))
+            awaitCondition { experience.state.value.lookup?.phrase == true && experience.state.value.lookup?.wikipedia?.loading == false }
+            assertEquals(LookupTab.Wikipedia, experience.state.value.lookup?.tab)
+            assertEquals("Toad Hall" to "en", wikiCalls.last())
+            assertEquals(2, lookedUp.size)
+
+            experience.dispatch(ReadingExperienceAction.Translate(" Toad Hall "))
+            assertEquals(listOf("Toad Hall"), outlet.translated)
+
+            experience.dispatch(ReadingExperienceAction.SearchFor("Toad  Hall"))
+            assertNull(experience.state.value.lookup)
+            assertEquals("Toad Hall", experience.state.value.searchQuery)
+            awaitCondition { session.searchQueries == listOf("Toad Hall") }
+        } finally {
+            experience.close()
+        }
+    }
+
+    @Test
+    fun searchInBookAndCopyWithCitationFromTheSelectionMenu() = runBlocking {
+        val session = FakeReaderSession()
+        val outlet = FakeSelectionOutlet()
+        val experience = createExperience(
+            engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
+            scope = this,
+            selectionOutlet = outlet,
+        )
+        val events = mutableListOf<ReadingExperienceEvent>()
+        val collector = launch { experience.events.collect { events += it } }
+        try {
+            experience.start()
+            awaitCondition { session.selectionEvents.subscriptionCount.value > 0 }
+            awaitCondition { experience.state.value.title == "Stored title" }
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.SearchInBook, "Ratty", "{at}"))
+            session.selectionEvents.emit(ReaderSelection(ReaderSelection.Action.CopyWithCitation, "“Messing about in boats.”", "{at}"))
+            awaitCondition { outlet.copied.isNotEmpty() && events.isNotEmpty() }
+
+            assertEquals(listOf<ReadingExperienceEvent>(ReadingExperienceEvent.SearchInBook("Ratty")), events)
+            assertEquals(listOf("“Messing about in boats.” — Stored title"), outlet.copied)
+        } finally {
+            collector.cancel()
+            experience.close()
+        }
+    }
+
+    @Test
+    fun citationsNameTheAuthorTitleAndPageWhenKnown() {
+        assertEquals("“Then the faces began.” — Kenneth Grahame, The Wind in the Willows", formatCitation(" Then the faces began. ", "Kenneth Grahame", "The Wind in the Willows"))
+        assertEquals("“Quoted” — A, B, p. 12", formatCitation("\"Quoted\"", "A", "B", page = "12"))
+        assertEquals("“Alone”", formatCitation("Alone", " ", null))
+    }
+
+    @Test
+    fun lookupLanguageUsesThePrimarySubtag() {
+        assertEquals("fr", lookupLanguage("fr-CA"))
+        assertEquals("pt", lookupLanguage("PT_br"))
+        assertEquals("en", lookupLanguage(null))
+        assertEquals("en", lookupLanguage("x1"))
+    }
+
     private fun createExperience(
         engine: ReaderEngine,
         books: BookRepository = FakeBookRepository(),
@@ -687,7 +859,8 @@ class ReadingExperienceTest {
         settings: Flow<ReaderSettings> = MutableStateFlow(ReaderSettings()),
         persistSettings: suspend (ReaderSettings) -> Unit = {},
         resetSettings: suspend () -> Unit = {},
-        lookupWord: suspend (String, String?) -> DictionaryResult = { _, _ -> DictionaryResult.NotFound },
+        lookupWord: suspend (String, String) -> DictionaryResult = { _, _ -> DictionaryResult.NotFound },
+        lookupWikipedia: suspend (String, String?) -> WikipediaResult = { _, _ -> WikipediaResult.NotFound },
         selectionOutlet: SelectionOutlet = FakeSelectionOutlet(),
         readAloud: ReadAloud = FakeReadAloud(),
         nowMillis: () -> Long = { 0L },
@@ -719,6 +892,7 @@ class ReadingExperienceTest {
         elapsedMillis = elapsedMillis,
         progressSaveIntervalMillis = progressSaveIntervalMillis,
         readyTimeoutMillis = readyTimeoutMillis,
+        lookupWikipedia = lookupWikipedia,
     )
 
     private fun locator() = ReaderLocator(
@@ -853,6 +1027,13 @@ class ReadingExperienceTest {
         override fun searchWeb(query: String) {
             searched += query
         }
+
+        val translated = mutableListOf<String>()
+        override val canTranslate = true
+
+        override fun translate(text: String) {
+            translated += text
+        }
     }
 
     private class FakeReadAloud : ReadAloud {
@@ -924,6 +1105,26 @@ class ReadingExperienceTest {
             deletedIds += id
             items.value = items.value.filterNot { it.id == id }
         }
+
+        val notes = mutableListOf<Pair<String, String?>>()
+        val styles = mutableListOf<Pair<String, HighlightStyle>>()
+
+        override suspend fun setNote(id: String, note: String?) {
+            checkMutation()
+            notes += id to note
+            items.value = items.value.map { if (it.id == id) it.copy(note = note) else it }
+        }
+
+        override suspend fun setStyle(id: String, style: HighlightStyle) {
+            checkMutation()
+            styles += id to style
+            items.value = items.value.map { if (it.id == id) it.copy(style = style) else it }
+        }
+
+        override suspend fun restore(bookId: BookId, highlight: ReaderHighlight) {
+            checkMutation()
+            items.value = listOf(highlight) + items.value.filterNot { it.id == highlight.id }
+        }
     }
 
     private class FakeBookmarkRepository : BookmarkRepository {
@@ -970,6 +1171,13 @@ class ReadingExperienceTest {
             }
             deletedIds += id
             items.value = items.value.filterNot { it.id == id }
+        }
+
+        val restoredIds = mutableListOf<String>()
+
+        override suspend fun restore(bookId: BookId, bookmark: ReaderBookmark) {
+            restoredIds += bookmark.id
+            items.value += bookmark
         }
     }
 

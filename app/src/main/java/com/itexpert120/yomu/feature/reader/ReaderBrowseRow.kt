@@ -65,6 +65,8 @@ internal fun ReaderBrowseRow(
     titleStyle: TextStyle = StackType.Body,
     divider: Boolean = true,
     leading: (@Composable RowScope.() -> Unit)? = null,
+    // Under the title, e.g. a highlight's note.
+    supporting: (@Composable () -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
     trailingIcon: ImageVector? = null,
     trailingDescription: String? = null,
@@ -89,6 +91,7 @@ internal fun ReaderBrowseRow(
                 maxLines = titleMaxLines,
                 overflow = TextOverflow.Ellipsis,
             )
+            supporting?.invoke()
         }
         trailing?.invoke(this)
         if (trailingIcon != null && onTrailingClick != null) {

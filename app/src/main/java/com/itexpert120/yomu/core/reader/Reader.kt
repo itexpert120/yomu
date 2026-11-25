@@ -67,7 +67,7 @@ data class ReaderSelection(
     val locatorJson: String,
     val language: String? = null,
 ) {
-    enum class Action { Copy, Highlight, LookUp, SearchWeb, ReadAloud, Share }
+    enum class Action { Copy, Highlight, LookUp, SearchWeb, ReadAloud, Share, SearchInBook, CopyWithCitation }
 }
 
 /** Yomu-owned reading position (wraps the engine's native locator JSON). */

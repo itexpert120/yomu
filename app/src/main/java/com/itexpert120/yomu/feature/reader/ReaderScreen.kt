@@ -80,6 +80,7 @@ import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.reader.ReaderNavigator
 import com.itexpert120.yomu.core.reader.ReaderRenderState
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -99,8 +100,19 @@ fun ReaderScreen(
     val annotationError = state.experience.annotationError.takeIf { settingsError == null }
     SaveFailureNotice(settingsError) { onAction(ReaderAction.RetrySettings) }
     SaveFailureNotice(annotationError) { onAction(ReaderAction.RetryAnnotations) }
+    val undo = state.experience.undo.takeIf { settingsError == null && annotationError == null }
+    AnnotationUndoNotice(
+        undo = undo,
+        onUndo = { onAction(ReaderAction.UndoDelete(it)) },
+        onTimeout = { onAction(ReaderAction.DismissUndo(it)) },
+    )
+    val transferNotice = state.annotationTransfer.notice.takeIf { settingsError == null && annotationError == null && undo == null }
+    AnnotationTransferNotice(
+        notice = transferNotice,
+        onTimeout = { onAction(ReaderAction.Annotations(AnnotationTransferAction.DismissNotice(it))) },
+    )
     SyncOfferNotice(
-        offer = state.experience.syncOffer.takeIf { settingsError == null && annotationError == null },
+        offer = state.experience.syncOffer.takeIf { settingsError == null && annotationError == null && undo == null && transferNotice == null },
         onJump = { onAction(ReaderAction.AcceptSyncOffer) },
         onDismiss = { onAction(ReaderAction.DismissSyncOffer) },
     )
@@ -581,6 +593,8 @@ fun ReaderScreen(
                         onGoToPage = { onAction(ReaderAction.GoToPage(it)) },
                         onSelectTab = { onAction(ReaderAction.SelectBrowseTab(it)) },
                         onDismiss = { onAction(ReaderAction.CloseBrowse) },
+                        calibreAvailable = state.annotationTransfer.calibreAvailable,
+                        onAnnotationAction = { onAction(ReaderAction.Annotations(it)) },
                     )
 
                     ReaderSearchSheet(
@@ -599,10 +613,7 @@ fun ReaderScreen(
                     WordLookupSheet(
                         state = reading.lookup,
                         onDismiss = { onAction(ReaderAction.CloseLookup) },
-                        onPronounce = { onAction(ReaderAction.Pronounce(it)) },
-                        onLookUpWord = { onAction(ReaderAction.LookUpWord(it)) },
-                        onBack = { onAction(ReaderAction.LookupBack) },
-                        onRetry = { onAction(ReaderAction.RetryLookup) },
+                        actions = remember(onAction) { wordLookupActions(onAction) },
                     )
 
                     FootnoteSheet(html = reading.footnoteHtml, onDismiss = { onAction(ReaderAction.CloseFootnote) })
@@ -618,6 +629,10 @@ fun ReaderScreen(
                     HighlightEditSheet(
                         highlight = reading.editingHighlight,
                         onSelectColor = { onAction(ReaderAction.SetHighlightColor(it)) },
+                        onSelectStyle = { onAction(ReaderAction.SetHighlightStyle(it)) },
+                        onNoteChange = { id, note -> onAction(ReaderAction.SetHighlightNote(id, note)) },
+                        onCopy = { onAction(ReaderAction.CopyEditingHighlight) },
+                        onShare = { onAction(ReaderAction.ShareEditingHighlight) },
                         onDelete = { onAction(ReaderAction.DeleteEditingHighlight) },
                         onDismiss = { onAction(ReaderAction.CloseHighlightEditor) },
                     )
