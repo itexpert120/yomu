@@ -1,9 +1,6 @@
+/* Transparent until the book's page colour is applied: the app's page colour shows through. */
 html {
     color-scheme: light dark;
-    background: #FFFFFF;
-}
-@media (prefers-color-scheme: dark) {
-    html { background: #1A1E22; }
 }
 html, body {
     margin: 0;

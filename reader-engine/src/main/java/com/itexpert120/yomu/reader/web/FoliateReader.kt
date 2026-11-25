@@ -1,7 +1,10 @@
 package com.itexpert120.yomu.reader.web
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.MutableContextWrapper
+import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -29,38 +32,57 @@ import java.util.zip.ZipFile
  * straight out of the EPUB, one at a time. Nothing else loads — any other request gets an empty
  * 404 — and the page's CSP lets only our own scripts run, so scripts inside books never do.
  *
- * Page turns are drawn natively over the WebView (see [FoliatePageTurns]). [onEvent] gets the
- * page's events (`relocate`, `first-page`, `center-tap`, …) on the main thread. [context] must be
- * an Activity: turns snapshot its window.
+ * The page loads as soon as the reader is built, before any book: a reader can be made ahead of
+ * time (on the application context) and adopted later with [attachTo] and [open], so opening a
+ * book skips the WebView's creation and the page's script loading.
+ *
+ * Page turns are drawn natively over the WebView (see [FoliatePageTurns]); they need an Activity,
+ * so a reader must be [attachTo]'d one before it's shown. [onEvent] gets the page's events
+ * (`relocate`, `first-page`, `center-tap`, …) on the main thread.
  */
 class FoliateReader(
     context: Context,
-    epub: File,
-    private val onEvent: (name: String, json: String) -> Unit,
-    private val onRendererGone: () -> Unit = {},
+    pageParams: Map<String, String> = emptyMap(),
 ) : AutoCloseable {
-    private val zip = ZipFile(epub)
+    private val contextWrapper = MutableContextWrapper(context)
+
+    var onEvent: (name: String, json: String) -> Unit = { _, _ -> }
+    var onRendererGone: () -> Unit = {}
+
+    @Volatile
+    private var zip: ZipFile? = null
 
     /** Font files outside the app's assets (user-installed fonts), served at `/userfonts/<name>`. */
     @Volatile
     var userFonts: Map<String, File> = emptyMap()
 
     private val assetLoader = WebViewAssetLoader.Builder()
-        .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
-        .addPathHandler("/book/", BookPathHandler(zip))
+        .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context.applicationContext))
+        .addPathHandler("/book/", BookPathHandler { zip })
         .addPathHandler("/userfonts/", UserFontPathHandler())
         .build()
 
     private val main = Handler(Looper.getMainLooper())
 
+    // Calls made before the page has loaded wait here, in order.
+    private var pageReady = false
+    private val pendingCalls = ArrayList<String>()
+    private var opened = false
+
+    /** The book this reader holds (loaded ahead by [preload], or by [open]). */
+    var bookFile: File? = null
+        private set
+
     @SuppressLint("SetJavaScriptEnabled")
-    val webView: WebView = WebView(context).apply {
+    val webView: WebView = WebView(contextWrapper).apply {
         settings.javaScriptEnabled = true
         settings.allowFileAccess = false
         settings.allowContentAccess = false
         settings.domStorageEnabled = false
         settings.setSupportZoom(false)
         settings.textZoom = 100
+        // The host's page colour shows until the book's own page paints.
+        setBackgroundColor(Color.TRANSPARENT)
         isVerticalScrollBarEnabled = false
         isHorizontalScrollBarEnabled = false
         overScrollMode = WebView.OVER_SCROLL_NEVER
@@ -75,7 +97,7 @@ class FoliateReader(
             // down with it. The owner rebuilds the reader instead.
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 Log.w(TAG, "WebView renderer gone (crashed=${detail.didCrash()})")
-                main.post(onRendererGone)
+                main.post { onRendererGone() }
                 return true
             }
         }
@@ -89,7 +111,7 @@ class FoliateReader(
     }
 
     /** The reader's view: the WebView with the native page-turn layer over it. */
-    val view: FrameLayout = FrameLayout(context).apply { addView(webView) }
+    val view: FrameLayout = FrameLayout(contextWrapper).apply { addView(webView) }
 
     private val turns = FoliatePageTurns(
         container = view,
@@ -105,20 +127,50 @@ class FoliateReader(
             turns.enabled = value
         }
 
-    /**
-     * Opens the book. [configJson] is `{ start, settings }` as described in yomu-reader.js; [extra]
-     * goes to the page as query parameters (debug switches).
-     */
-    fun open(configJson: String, extra: Map<String, String> = emptyMap()) {
+    init {
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
-            .appendQueryParameter("config", configJson)
-            .apply { extra.forEach { (key, value) -> appendQueryParameter(key, value) } }
+            .apply { pageParams.forEach { (key, value) -> appendQueryParameter(key, value) } }
             .build()
         webView.loadUrl(url.toString())
     }
 
-    /** Opens the book at the start of spine item [section], with the page's default settings. */
-    fun open(section: Int, extra: Map<String, String> = emptyMap()) = open("{\"start\":{\"index\":$section,\"fraction\":0}}", extra)
+    /** Moves the reader into [activity], e.g. one built ahead on the application context. */
+    fun attachTo(activity: Activity) {
+        contextWrapper.baseContext = activity
+    }
+
+    /**
+     * Starts loading [epub] into the page before it's shown: no page size is needed, so this can
+     * run ahead of a tap. A reader holds one book; a later [open] must be for the same file.
+     */
+    fun preload(epub: File) {
+        if (bookFile != null) return
+        bookFile = epub
+        zip = ZipFile(epub)
+        call("globalThis.yomuLoadBook()")
+    }
+
+    /**
+     * Shows [epub] (loading it first unless [preload]ed), once per reader. [configJson] is
+     * `{ start, settings }` as described in yomu-reader.js.
+     */
+    fun open(epub: File, configJson: String) {
+        check(!opened) { "A FoliateReader opens one book" }
+        check(bookFile == null || bookFile == epub) { "This reader holds another book" }
+        opened = true
+        if (bookFile == null) {
+            bookFile = epub
+            zip = ZipFile(epub)
+        }
+        call("globalThis.yomuStart($configJson)")
+    }
+
+    private fun call(js: String) {
+        if (pageReady) webView.evaluateJavascript(js, null) else pendingCalls += js
+    }
+
+    /** Opens [epub] at the start of spine item [section], with the page's default settings. */
+    fun open(epub: File, section: Int) = open(epub, "{\"start\":{\"index\":$section,\"fraction\":0}}")
 
     /** Restyles the page; [settingsJson] as `settings` in [open]. */
     fun applySettings(settingsJson: String) = webView.evaluateJavascript("globalThis.yomuApplySettings?.($settingsJson)", null)
@@ -134,7 +186,8 @@ class FoliateReader(
         turns.release()
         (view.parent as? ViewGroup)?.removeView(view)
         webView.destroy()
-        zip.close()
+        zip?.close()
+        zip = null
     }
 
     private fun onPageEvent(name: String, json: String) {
@@ -142,6 +195,11 @@ class FoliateReader(
             "tap" -> turns.tap(JSONObject(json).getInt("dir"))
             "jumped" -> JSONObject(json).let { turns.onJumped(it.getInt("id"), it.getBoolean("moved")) }
             "settled" -> turns.onSettled(JSONObject(json).getInt("seq"))
+            "shell-ready" -> {
+                pageReady = true
+                pendingCalls.forEach { webView.evaluateJavascript(it, null) }
+                pendingCalls.clear()
+            }
         }
         onEvent(name, json)
     }
@@ -161,18 +219,17 @@ class FoliateReader(
         }
     }
 
-    /** Serves `/book/<entry>` from the EPUB, and `/book/.sizes` as every entry's size. */
-    private class BookPathHandler(private val zip: ZipFile) : WebViewAssetLoader.PathHandler {
-        private val sizes: String by lazy {
-            zip.entries().asSequence().filterNot { it.isDirectory }
-                .joinToString(",", "{", "}") { "${quote(it.name)}:${it.size}" }
-        }
-
+    /** Serves `/book/<entry>` from the open EPUB, and `/book/.sizes` as every entry's size. */
+    private class BookPathHandler(private val zip: () -> ZipFile?) : WebViewAssetLoader.PathHandler {
         override fun handle(path: String): WebResourceResponse {
-            if (path == ".sizes") return response("application/json", sizes.toByteArray())
+            val zip = zip() ?: return notFound()
+            if (path == ".sizes") return response("application/json", sizes(zip).toByteArray())
             val entry = zip.getEntry(path) ?: return notFound()
             return WebResourceResponse(mimeType(path), null, zip.getInputStream(entry))
         }
+
+        private fun sizes(zip: ZipFile) = zip.entries().asSequence().filterNot { it.isDirectory }
+            .joinToString(",", "{", "}") { "${quote(it.name)}:${it.size}" }
 
         private fun quote(value: String) = buildString {
             append('"')

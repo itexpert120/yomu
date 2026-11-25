@@ -38,14 +38,12 @@ class FoliatePrototypeActivity : ComponentActivity() {
         // The reading page's colour, so the bars sit on the page.
         val page = if (night) Color.rgb(0x1A, 0x1E, 0x22) else Color.WHITE
         val root = FrameLayout(this).apply { setBackgroundColor(page) }
-        val reader = FoliateReader(
-            context = this,
-            epub = File(path),
-            onEvent = { name, json ->
-                Log.i(TAG, "$name +${SystemClock.elapsedRealtime() - started} ms $json")
-                if (name == "first-page") reportFullyDrawn()
-            },
-        ).also { reader = it }
+        val extra = intent.getStringExtra("params")?.split('&')?.associate { it.substringBefore('=') to it.substringAfter('=', "") }.orEmpty()
+        val reader = FoliateReader(this, extra).also { reader = it }
+        reader.onEvent = { name, json ->
+            Log.i(TAG, "$name +${SystemClock.elapsedRealtime() - started} ms $json")
+            if (name == "first-page") reportFullyDrawn()
+        }
         Log.i(TAG, "webview created +${SystemClock.elapsedRealtime() - started} ms")
         root.addView(reader.view)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
@@ -54,8 +52,7 @@ class FoliatePrototypeActivity : ComponentActivity() {
             insets
         }
         setContentView(root)
-        val extra = intent.getStringExtra("params")?.split('&')?.associate { it.substringBefore('=') to it.substringAfter('=', "") }.orEmpty()
-        reader.open(chapter, extra)
+        reader.open(File(path), chapter)
     }
 
     override fun onDestroy() {

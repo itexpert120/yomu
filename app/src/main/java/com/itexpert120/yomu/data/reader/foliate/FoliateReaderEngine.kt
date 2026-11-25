@@ -1,15 +1,22 @@
 package com.itexpert120.yomu.data.reader.foliate
 
 import android.app.Activity
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.res.Configuration
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
+import androidx.core.view.doOnLayout
 import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentManager
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewStartUpConfig
 import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
@@ -31,7 +38,12 @@ import com.itexpert120.yomu.data.reader.readium.ReadiumReaderEngine
 import com.itexpert120.yomu.reader.epub.EpubBook
 import com.itexpert120.yomu.reader.web.FoliateReader
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -65,15 +77,43 @@ class FoliateReaderEngine @Inject constructor(
     private val crashLog: CrashLog,
 ) : ReaderEngine {
 
-    override suspend fun open(request: ReaderOpenRequest): ReaderOpenResult? = withContext(Dispatchers.IO) {
+    private val main = Handler(Looper.getMainLooper())
+    private val prepareScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // One reader page loaded ahead of a tap (main thread only), and one book read ahead.
+    private var warmReader: FoliateReader? = null
+    private var webViewStarted = false
+    private var warming = false
+    private val prepareLock = Any()
+    private var prepared: Pair<String, Deferred<Prepared?>>? = null
+
+    private class Prepared(val book: FoliateBook, val cache: ReaderPublicationCache)
+
+    init {
+        // Leaving the app (or memory pressure) gives the warm page and the prepared book back.
+        context.registerComponentCallbacks(
+            object : ComponentCallbacks2 {
+                override fun onTrimMemory(level: Int) {
+                    if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) releasePrepared()
+                }
+
+                override fun onConfigurationChanged(newConfig: Configuration) = Unit
+
+                @Deprecated("Deprecated in Java")
+                override fun onLowMemory() = releasePrepared()
+            },
+        )
+    }
+
+    override suspend fun open(request: ReaderOpenRequest): ReaderOpenResult? {
         ReaderOpenTrace.mark("reader.foliate-open")
-        val file = File(request.filePath).takeIf { it.isFile } ?: return@withContext null
-        val cache = request.publicationCache?.takeIf { it.toc.isNotEmpty() }
-            ?: readium.publicationCache(request.filePath)
-            ?: ReaderPublicationCache()
-        val book = runCatching { FoliateBook.read(file, cache) }
-            .onFailure { Log.w(TAG, "Couldn't read ${file.name}", it) }
-            .getOrNull() ?: return@withContext null
+        val ready = takePrepared(request.filePath)?.let { runCatching { it.await() }.getOrNull() }
+        if (ready != null) ReaderOpenTrace.mark("reader.publication-prepared")
+        val loaded = ready
+            ?: withContext(Dispatchers.IO) { load(request.filePath, request.publicationCache) }
+            ?: return null
+        val book = loaded.book
+        val cache = loaded.cache
         ReaderOpenTrace.mark("reader.session-assembled")
         val session = FoliateReaderSession(
             book = book,
@@ -81,12 +121,128 @@ class FoliateReaderEngine @Inject constructor(
             initialLocatorJson = request.initialLocatorJson,
             initialSettings = request.initialSettings,
             crashLog = crashLog,
+            newReader = ::takeWarmReader,
         )
-        ReaderOpenResult(session, cache)
+        return ReaderOpenResult(session, cache)
     }
 
-    // WebView's one-time start-up is the same whichever engine draws the page.
-    override fun warmUp() = readium.warmUp()
+    private suspend fun load(filePath: String, publicationCache: ReaderPublicationCache?): Prepared? {
+        val file = File(filePath).takeIf { it.isFile } ?: return null
+        val cache = publicationCache?.takeIf { it.toc.isNotEmpty() }
+            ?: readium.publicationCache(filePath)
+            ?: ReaderPublicationCache()
+        val book = runCatching { FoliateBook.read(file, cache) }
+            .onFailure { Log.w(TAG, "Couldn't read ${file.name}", it) }
+            .getOrNull() ?: return null
+        return Prepared(book, cache)
+    }
+
+    override fun prepare(filePath: String, publicationCache: ReaderPublicationCache?) {
+        synchronized(prepareLock) {
+            if (prepared?.first == filePath) return
+            prepared?.second?.cancel()
+            prepared = filePath to prepareScope.async { load(filePath, publicationCache) }
+        }
+        main.post { preparedFile = File(filePath).also(::loadIntoWarmReader) }
+    }
+
+    // The book the next tap is likely to open; the warm page loads it too. Main thread.
+    private var preparedFile: File? = null
+
+    private fun loadIntoWarmReader(file: File) {
+        val warm = warmReader ?: return
+        when (warm.bookFile) {
+            null -> warm.preload(file)
+            file -> Unit
+            // It holds another book: replace it with an empty page for the new one.
+            else -> {
+                warm.close()
+                warmReader = newWarmReader()
+            }
+        }
+    }
+
+    private fun takePrepared(filePath: String): Deferred<Prepared?>? = synchronized(prepareLock) {
+        prepared?.takeIf { it.first == filePath }?.second?.also { prepared = null }
+    }
+
+    override fun releasePrepared() {
+        synchronized(prepareLock) {
+            prepared?.second?.cancel()
+            prepared = null
+        }
+        main.post {
+            warmReader?.close()
+            warmReader = null
+        }
+    }
+
+    /**
+     * Starts Chromium off the main thread, then — when the main thread is idle — builds a reader
+     * page and loads its scripts, so the next book opens into a page that is already waiting.
+     */
+    @androidx.annotation.OptIn(WebViewCompat.ExperimentalAsyncStartUp::class)
+    override fun warmUp() {
+        if (warmReader != null || warming) return
+        warming = true
+        val buildWhenIdle = {
+            main.post {
+                Looper.myQueue().addIdleHandler {
+                    warming = false
+                    if (warmReader == null) warmReader = newWarmReader()
+                    preparedFile?.let(::loadIntoWarmReader)
+                    false
+                }
+            }
+        }
+        if (webViewStarted) {
+            buildWhenIdle()
+            return
+        }
+        runCatching {
+            val config = WebViewStartUpConfig.Builder(Dispatchers.Default.asExecutor())
+                .setShouldRunUiThreadStartUpTasks(true)
+                .build()
+            WebViewCompat.startUpWebView(
+                context,
+                config,
+                WebViewCompat.WebViewStartUpCallback {
+                    webViewStarted = true
+                    buildWhenIdle()
+                },
+            )
+        }.onFailure {
+            webViewStarted = true
+            buildWhenIdle()
+        }
+    }
+
+    private fun newWarmReader(): FoliateReader? = runCatching {
+        ReaderOpenTrace.mark("reader.foliate-warm-page")
+        FoliateReader(context).also { reader ->
+            preparedFile?.takeIf { it.isFile }?.let(reader::preload)
+            reader.onRendererGone = {
+                if (warmReader === reader) {
+                    warmReader = null
+                    reader.close()
+                }
+            }
+        }
+    }.onFailure { Log.w(TAG, "Couldn't build a warm reader page", it) }.getOrNull()
+
+    /** The warm page for [file] if there is one (handing it over), else a fresh reader. Main thread. */
+    private fun takeWarmReader(activity: Activity, file: File): FoliateReader {
+        val warm = warmReader
+        warmReader = null
+        if (warm != null && warm.bookFile != null && warm.bookFile != file) {
+            warm.close()
+        } else if (warm != null) {
+            ReaderOpenTrace.mark("reader.foliate-warm-page-taken")
+            warm.attachTo(activity)
+            return warm
+        }
+        return FoliateReader(activity)
+    }
 
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem>? = readium.tableOfContents(filePath)
 
@@ -148,6 +304,7 @@ private class FoliateReaderSession(
     initialLocatorJson: String?,
     initialSettings: ReaderSettings,
     private val crashLog: CrashLog,
+    private val newReader: (Activity, File) -> FoliateReader,
 ) : ReaderSession {
 
     override val title: String = book.title ?: "Reading"
@@ -234,7 +391,11 @@ private class FoliateReaderSession(
         reader?.close()
         _renderState.value = ReaderRenderState.Opening
         ReaderOpenTrace.mark("reader.foliate-webview")
-        val created = FoliateReader(activity, book.file, onEvent = ::onPageEvent, onRendererGone = ::onRendererGone)
+        val created = newReader(activity, book.file)
+        // The book itself loads now; only showing it waits for the page's size.
+        created.preload(book.file)
+        created.onEvent = ::onPageEvent
+        created.onRendererGone = ::onRendererGone
         created.userFonts = userFonts(settings)
         created.pageTurns = settings.layout == ReaderLayout.Paged
         // Not immersive, the page sits between the system bars, as Readium's did.
@@ -243,7 +404,12 @@ private class FoliateReaderSession(
             if (immersive) view.setPadding(0, 0, 0, 0) else view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
-        created.open(JSONObject().put("start", target).put("settings", settingsJson(settings)).toString())
+        // Lay the book out at the page's real size: start once the view has been laid out.
+        created.view.doOnLayout {
+            if (reader === created) {
+                created.open(book.file, JSONObject().put("start", target).put("settings", settingsJson(settings)).toString())
+            }
+        }
         reader = created
         readerActivity = activity
         return created
@@ -264,6 +430,7 @@ private class FoliateReaderSession(
     // region Page events
 
     private fun onPageEvent(name: String, json: String) {
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "page $name $json")
         when (name) {
             "first-page" -> {
                 ReaderOpenTrace.mark("reader.first-page")
@@ -271,6 +438,7 @@ private class FoliateReaderSession(
             }
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
+            "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
             "error" -> Log.w(TAG, "page: $json")
         }
     }

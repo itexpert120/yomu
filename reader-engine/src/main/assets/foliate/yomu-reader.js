@@ -2,7 +2,8 @@
 // big blob), styled from the app's reader settings, and every position is reported to Kotlin,
 // which also draws the page turns.
 //
-// The app passes `config` (JSON) in the URL: { start, settings }. `start` is { cfi } | { href } |
+// The page loads before the app knows which book (so it can be made ahead of a tap) and reports
+// `shell-ready`; the app then calls yomuStart({ start, settings }). `start` is { cfi } | { href } |
 // { index, fraction }; `settings` is described at readerCSS. Later changes come through
 // yomuApplySettings / yomuGoTo.
 import './view.js'
@@ -19,9 +20,7 @@ const report = (name, detail = {}) => {
 }
 
 const params = new URLSearchParams(location.search)
-const config = params.has('config') ? JSON.parse(params.get('config')) : {}
-const start = config.start ?? { index: parseInt(params.get('section') ?? '0', 10), fraction: 0 }
-let settings = config.settings ?? {}
+let settings = {}
 
 const bookUrl = name => '/book/' + name.split('/').map(encodeURIComponent).join('/')
 
@@ -181,7 +180,14 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
     })
 })
 
+// Positions count only once the start position is on screen: before its chapter loads, foliate
+// reports from its empty frame (one page, no progress).
+let shown = false
 view.addEventListener('relocate', ({ detail }) => {
+    if (shown) reportLocation(detail)
+})
+
+const reportLocation = detail => {
     if (firstPage) {
         firstPage = false
         // Two frames: the first page has been laid out and painted.
@@ -206,7 +212,7 @@ view.addEventListener('relocate', ({ detail }) => {
         scrolled,
         title: detail.tocItem?.label ?? null,
     })
-})
+}
 
 globalThis.yomuApplySettings = next => {
     settings = next
@@ -223,7 +229,10 @@ const goTo = target => {
 
 globalThis.yomuGoTo = target => goTo(target).catch(e => report('error', { message: String(e?.stack ?? e) }))
 
-const open = async () => {
+// Loading the book needs no page size, so it can run before the reader is on screen (even before
+// the tap, for the book the app expects you to open).
+let bookLoad = null
+const loadBook = () => bookLoad ??= (async () => {
     report('script')
     const book = await new EPUB(await makeLoader()).init()
     report('book', { sections: book.sections.length, title: book.metadata?.title ?? null })
@@ -237,6 +246,18 @@ const open = async () => {
         }
     }
     await view.open(book)
+    report('view-open')
+    return book
+})()
+
+globalThis.yomuLoadBook = () => {
+    loadBook().catch(e => report('error', { message: String(e?.stack ?? e) }))
+}
+
+const open = async ({ start, settings: initial }) => {
+    settings = initial ?? {}
+    applyPageColor()
+    const book = await loadBook()
     configure(view.renderer)
     try {
         await goTo(start)
@@ -245,10 +266,18 @@ const open = async () => {
         report('error', { message: 'start: ' + String(e?.stack ?? e) })
         await view.renderer.goTo({ index: start?.index ?? 0, anchor: 0 })
     }
+    shown = true
+    if (view.lastLocation) reportLocation(view.lastLocation)
     if (!params.has('nostandin')) {
         standIn = installStandIn(view, book, configure)
         turns.setStandIn(standIn)
     }
 }
 
-open().catch(e => report('error', { message: String(e?.stack ?? e) }))
+let started = false
+globalThis.yomuStart = config => {
+    if (started) return
+    started = true
+    open(config).catch(e => report('error', { message: String(e?.stack ?? e) }))
+}
+report('shell-ready')

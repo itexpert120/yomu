@@ -5,6 +5,8 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Handler
@@ -108,7 +110,7 @@ internal class FoliatePageTurns(
     }
 
     private fun capture() {
-        val window = (container.context as? Activity)?.window ?: return
+        val window = container.context.findActivity()?.window ?: return
         val width = webView.width
         val height = webView.height
         if (width == 0 || height == 0 || capturing) return
@@ -290,6 +292,15 @@ internal class FoliatePageTurns(
         velocity?.recycle()
         snapshot?.recycle()
         snapshot = null
+    }
+
+    private fun Context.findActivity(): Activity? {
+        var context: Context? = this
+        while (context is ContextWrapper) {
+            if (context is Activity) return context
+            context = context.baseContext
+        }
+        return null
     }
 
     private companion object {
