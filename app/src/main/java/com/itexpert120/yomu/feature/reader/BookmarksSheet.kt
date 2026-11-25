@@ -1,10 +1,8 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.AnnotatedString
-import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 
@@ -14,22 +12,21 @@ internal fun BookmarkRow(
     bookmark: ReaderBookmark,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    position: YomuSettingPosition = YomuSettingPosition.Single,
+    divider: Boolean = true,
 ) {
+    val caption = remember(bookmark.progression, bookmark.createdAt) {
+        listOfNotNull(
+            bookmark.progression?.let { "${(it * 100).toInt()}%" },
+            readerTimestamp(bookmark.createdAt),
+        ).joinToString(" · ")
+    }
     ReaderBrowseRow(
         title = AnnotatedString(bookmark.chapterTitle?.takeIf { it.isNotBlank() } ?: "Bookmark"),
+        caption = caption,
         onClick = onClick,
-        position = position,
-        supporting = bookmark.progression?.let { "${(it * 100).toInt()}%" },
-        titleMaxLines = 1,
-        leading = {
-            Icon(
-                imageVector = StackIcons.Bookmark,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        },
-        trailingIcon = StackIcons.Delete,
+        titleMaxLines = 2,
+        divider = divider,
+        trailingIcon = StackIcons.Close,
         trailingDescription = "Delete bookmark",
         onTrailingClick = onDelete,
     )

@@ -5,18 +5,21 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -28,11 +31,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
-import com.itexpert120.yomu.core.designsystem.YomuSelectableChip
 import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
 import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
@@ -69,16 +77,16 @@ internal fun ReaderThemeRow(
         return
     }
     YomuSettingList(modifier = Modifier.selectableGroup()) {
-        ReaderThemeMode.entries.forEachIndexed { index, mode ->
+        ReaderThemeOrder.forEachIndexed { index, mode ->
             val palette = settings.copy(theme = mode)
             YomuSettingRow(
-                title = mode.name,
+                title = mode.displayName,
                 selected = settings.theme == mode,
                 role = androidx.compose.ui.semantics.Role.RadioButton,
                 onClick = { onUpdateSettings(palette) },
                 position = when (index) {
                     0 -> YomuSettingPosition.First
-                    ReaderThemeMode.entries.lastIndex -> YomuSettingPosition.Last
+                    ReaderThemeOrder.lastIndex -> YomuSettingPosition.Last
                     else -> YomuSettingPosition.Middle
                 },
                 leadingContent = {
@@ -98,43 +106,77 @@ internal fun ReaderThemeRow(
     }
 }
 
+/** Stack's names for the page themes; the stored enum keeps its original names. */
+internal val ReaderThemeMode.displayName: String
+    get() = when (this) {
+        ReaderThemeMode.Light -> "Paper"
+        ReaderThemeMode.Sepia -> "Sepia"
+        ReaderThemeMode.Dark -> "Night"
+        ReaderThemeMode.Black -> "Black"
+        ReaderThemeMode.Custom -> "Custom"
+    }
+
+/** Page themes in the order Stack presents them: light to dark, then Custom. */
+internal val ReaderThemeOrder = listOf(
+    ReaderThemeMode.Light,
+    ReaderThemeMode.Sepia,
+    ReaderThemeMode.Dark,
+    ReaderThemeMode.Black,
+    ReaderThemeMode.Custom,
+)
+
+/**
+ * The page themes as tiles: each is a small page ("Aa" in the reading serif over the theme's name)
+ * in its own colours; the current one wears a 2dp ink outline. Custom shows a palette glyph on a
+ * dashed outline until it is chosen.
+ */
 @Composable
 private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
-        ReaderThemeMode.entries.forEach { mode ->
+    val stack = YomuTheme.stack
+    val serif = rememberReadingSerif()
+    val tileShape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+    ) {
+        ReaderThemeOrder.forEach { mode ->
             val palette = settings.copy(theme = mode)
             val selected = settings.theme == mode
+            val custom = mode == ReaderThemeMode.Custom
+            val background = if (custom && !selected) stack.sheet else Color(palette.backgroundArgb)
+            val content = if (custom && !selected) stack.body else Color(palette.textArgb)
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(YomuShapeTokens.tile)
+                    .heightIn(min = 72.dp)
+                    .clip(tileShape)
+                    .background(background)
+                    .then(
+                        when {
+                            selected -> Modifier.border(2.dp, stack.ink, tileShape)
+                            custom -> Modifier.readerDashedBorder(stack.track, 14.dp)
+                            else -> Modifier.border(1.5.dp, stack.track, tileShape)
+                        },
+                    )
                     .selectable(
                         selected = selected,
-                        role = androidx.compose.ui.semantics.Role.RadioButton,
+                        role = Role.RadioButton,
                         onClick = { onUpdateSettings(palette) },
                     )
-                    .padding(vertical = YomuTheme.space.xxs),
+                    .padding(vertical = YomuTheme.space.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
             ) {
-                androidx.compose.material3.Surface(
-                    color = Color(palette.backgroundArgb),
-                    contentColor = Color(palette.textArgb),
-                    shape = YomuShapeTokens.tile,
-                    border = androidx.compose.foundation.BorderStroke(
-                        width = if (selected) 2.dp else 1.dp,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                    ),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("Aa", style = MaterialTheme.typography.titleMediumEmphasized)
-                    }
+                if (custom) {
+                    Icon(StackIcons.Palette, contentDescription = null, tint = content, modifier = Modifier.size(22.dp))
+                } else {
+                    Text("Aa", color = content, style = StackType.Body.copy(fontFamily = serif, fontSize = 20.sp, lineHeight = 24.sp))
                 }
                 Text(
-                    text = mode.name,
-                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = if (selected) MaterialTheme.typography.labelMediumEmphasized else MaterialTheme.typography.labelMedium,
+                    text = mode.displayName,
+                    color = content,
+                    style = StackType.Caption.copy(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
                 )
             }
         }
@@ -489,57 +531,51 @@ private fun CompactChromeToggles(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
-    YomuSettingList {
-        YomuSettingContainer(position = YomuSettingPosition.First, dense = true) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Footer",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                YomuTogglePill(
-                    checked = settings.showFooter,
-                    onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
-                )
+    val stack = YomuTheme.stack
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            ReaderSectionLabel("Footer", Modifier.weight(1f))
+            Text(
+                text = "Show",
+                color = stack.body,
+                style = StackType.Label.copy(fontWeight = FontWeight.Normal),
+                modifier = Modifier.padding(end = 10.dp),
+            )
+            YomuTogglePill(
+                checked = settings.showFooter,
+                onCheckedChange = { onUpdateSettings(settings.copy(showFooter = it)) },
+                modifier = Modifier.semantics { contentDescription = "Show footer" },
+            )
+        }
+        // Items stay visible but disable when the footer is off, so the layout doesn't jump.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
+            // Immersive mode never shows these in the footer (the status bar has them instead).
+            if (!settings.immersiveChrome) {
+                ToggleChip("Battery", settings.footerShowBattery, settings.showFooter) {
+                    onUpdateSettings(settings.copy(footerShowBattery = it))
+                }
+                ToggleChip("Clock", settings.footerShowClock, settings.showFooter) {
+                    onUpdateSettings(settings.copy(footerShowClock = it))
+                }
             }
-            // Items stay visible but disable when the footer is off, so the layout doesn't jump.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            ) {
-                // Immersive mode never shows these in the footer (the status bar has them instead).
-                if (!settings.immersiveChrome) {
-                    ToggleChip("Battery", ChromeIcons.Battery, settings.footerShowBattery, settings.showFooter) {
-                        onUpdateSettings(settings.copy(footerShowBattery = it))
-                    }
-                    ToggleChip("Clock", ChromeIcons.Clock, settings.footerShowClock, settings.showFooter) {
-                        onUpdateSettings(settings.copy(footerShowClock = it))
-                    }
-                }
-                ToggleChip("Progress", ChromeIcons.Progress, settings.footerShowProgress, settings.showFooter) {
-                    onUpdateSettings(settings.copy(footerShowProgress = it))
-                }
-                ToggleChip("Chapter left", ChromeIcons.ChapterLeft, settings.footerShowPagesLeft, settings.showFooter) {
-                    onUpdateSettings(settings.copy(footerShowPagesLeft = it))
-                }
+            ToggleChip("Progress", settings.footerShowProgress, settings.showFooter) {
+                onUpdateSettings(settings.copy(footerShowProgress = it))
+            }
+            ToggleChip("Chapter left", settings.footerShowPagesLeft, settings.showFooter) {
+                onUpdateSettings(settings.copy(footerShowPagesLeft = it))
             }
         }
-        YomuSettingContainer(position = YomuSettingPosition.Last, dense = true) {
-            Text(text = "Screen", style = MaterialTheme.typography.bodyMedium)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            ) {
-                ToggleChip("Keep on", ChromeIcons.KeepOn, settings.keepScreenOn) {
-                    onUpdateSettings(settings.copy(keepScreenOn = it))
-                }
-                // The scrollbar only exists in scroll mode (a native WebView scroll).
-                ToggleChip("Scrollbar", ChromeIcons.Scrollbar, settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
-                    onUpdateSettings(settings.copy(showScrollbar = it))
-                }
-                ToggleChip("Immersive", ChromeIcons.Immersive, settings.immersiveChrome) {
-                    onUpdateSettings(settings.copy(immersiveChrome = it))
-                }
+        ReaderSectionLabel("Screen", Modifier.padding(top = YomuTheme.space.sm, bottom = 2.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
+            ToggleChip("Keep on", settings.keepScreenOn) {
+                onUpdateSettings(settings.copy(keepScreenOn = it))
+            }
+            // The scrollbar only exists in scroll mode (a native WebView scroll).
+            ToggleChip("Scrollbar", settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
+                onUpdateSettings(settings.copy(showScrollbar = it))
+            }
+            ToggleChip("Immersive", settings.immersiveChrome) {
+                onUpdateSettings(settings.copy(immersiveChrome = it))
             }
         }
     }
@@ -548,17 +584,16 @@ private fun CompactChromeToggles(
 @Composable
 private fun ToggleChip(
     label: String,
-    icon: ImageVector,
     checked: Boolean,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    YomuSelectableChip(
+    ReaderChip(
         label = label,
-        icon = icon,
         selected = checked,
-        onSelectedChange = onCheckedChange,
+        onClick = { onCheckedChange(!checked) },
         enabled = enabled,
+        showCheck = true,
     )
 }
 
