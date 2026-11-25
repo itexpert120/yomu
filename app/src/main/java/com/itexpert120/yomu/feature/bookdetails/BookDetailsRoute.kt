@@ -38,6 +38,7 @@ fun BookDetailsRoute(
     onEdit: () -> Unit,
     onOpenChapter: (String) -> Unit,
     libraryBeside: Boolean = false,
+    resume: BookSheetResume? = null,
 ) {
     val viewModel: BookDetailsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -59,6 +60,7 @@ fun BookDetailsRoute(
             bookLoaded = !state.loading,
             toc = toc,
             libraryBeside = libraryBeside,
+            resume = resume,
             onBack = onBack,
             onRead = onRead,
             onEdit = onEdit,

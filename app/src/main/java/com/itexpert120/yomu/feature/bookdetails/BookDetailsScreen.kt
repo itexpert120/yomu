@@ -60,8 +60,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -73,8 +81,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -107,13 +117,10 @@ import androidx.compose.animation.core.animate as animateValue
 /** Which whole-screen state is showing; drives the fade-through between them. */
 private enum class BookDetailsContentState { Loading, Missing, Ready }
 
-/** How far below the status bar the phone sheet starts: the library shows above it. */
-private val PhoneSheetTopGap = 50.dp
-
 /** Wide windows without the library beside the book: the sheet starts just under the status bar. */
 private val WideSheetTopGap = 24.dp
 
-private val SheetCorner = 32.dp
+private val SheetCorner = BookSheetCorner
 
 /** Width from which the book is a pane beside the library (spec: medium and up). */
 private val PaneMinWindowWidth = 600.dp
@@ -143,6 +150,7 @@ fun bookPaneBesideLibrary(windowWidth: Dp): Boolean = windowWidth >= PaneMinWind
  * by the navigation frame behind this screen), and drags down to close. With [libraryBeside] on a
  * wide window the book is a pane at the end edge with the library beside it; a wide window without
  * the library behind it (a restored page) gets one wide sheet with the contents in their own column.
+ * On Resume, navigation moves the phone sheet on into the reader through [resume].
  */
 @Composable
 fun BookDetailsScreen(
@@ -166,6 +174,7 @@ fun BookDetailsScreen(
     onMarkSelectedChapters: (Boolean) -> Unit,
     onMarkPreviousRead: () -> Unit,
     libraryBeside: Boolean = false,
+    resume: BookSheetResume? = null,
     onStartChapterSelection: () -> Unit = {},
     organize: Organize = Organize(StatusChoice.Auto, emptyList()),
     onSetStatus: (ManualStatus?) -> Unit = {},
@@ -215,8 +224,9 @@ fun BookDetailsScreen(
         val wide = bookPaneBesideLibrary(windowWidth)
         when {
             !wide -> PhoneSheet(
-                top = statusTop + PhoneSheetTopGap,
+                top = bookSheetTop(statusTop),
                 onDismiss = onBack,
+                resume = resume,
             ) {
                 SingleColumnBody(contentState, book, toc, hasTimeline, actions, contents, gutter = 24.dp, closeIcon = StackIcons.KeyboardArrowDown)
             }
@@ -354,11 +364,16 @@ private class ContentsActions(
 /**
  * The phone sheet: starts [top] down, follows a drag down (from its bar, or from the top of its
  * list) and closes past [DismissDistance] or on a downward fling; otherwise it settles back.
+ *
+ * On Resume ([resume]) the sheet keeps rising until its top meets the window's top, squaring its
+ * corners, while the book info scrolls up off it and fades: the sheet becomes the reader's page.
+ * Its surface then runs taller than its box, so its bottom never lifts off the window's edge.
  */
 @Composable
 private fun PhoneSheet(
     top: Dp,
     onDismiss: () -> Unit,
+    resume: BookSheetResume?,
     content: @Composable () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -376,21 +391,54 @@ private fun PhoneSheet(
     }
     drag.spec = settleSpec
     drag.onDismiss = onDismiss
+    val surface = MaterialTheme.colorScheme.surface
+    val topPx = with(density) { top.toPx() }
+    val cornerPx = with(density) { SheetCorner.toPx() }
+    val scrollPx = with(density) { BookSheetResumeScroll.toPx() }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(top = top)
             .onSizeChanged { drag.height = it.height.toFloat() }
-            .graphicsLayer { translationY = drag.offset }
-            .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
-            .background(MaterialTheme.colorScheme.surface)
+            .graphicsLayer { translationY = drag.offset - topPx * (resume?.rise ?: 0f).coerceIn(0f, 1f) }
+            .drawBehind {
+                val lift = topPx * (resume?.rise ?: 0f).coerceIn(0f, 1f)
+                drawOutline(sheetOutline(Size(size.width, size.height + lift), cornerPx * (1f - (resume?.square ?: 0f)).coerceIn(0f, 1f)), surface)
+            }
+            .graphicsLayer {
+                shape = SheetTopShape(cornerPx * (1f - (resume?.square ?: 0f)).coerceIn(0f, 1f))
+                clip = true
+            }
             .nestedScroll(drag.connection)
             .draggable(
                 orientation = Orientation.Vertical,
                 state = rememberDraggableState { drag.dragBy(it) },
                 onDragStopped = { velocity -> drag.release(velocity) },
             ),
-    ) { content() }
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    if (resume == null) return@graphicsLayer
+                    translationY = -scrollPx * resume.rise
+                    alpha = (1f - resume.away).coerceIn(0f, 1f)
+                },
+        ) { content() }
+    }
+}
+
+/** The sheet's outline: its top corners rounded by [cornerPx], square at the bottom. */
+private fun sheetOutline(size: Size, cornerPx: Float): Outline = Outline.Rounded(
+    RoundRect(
+        rect = Rect(Offset.Zero, size),
+        topLeft = CornerRadius(cornerPx),
+        topRight = CornerRadius(cornerPx),
+    ),
+)
+
+private class SheetTopShape(private val cornerPx: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline = sheetOutline(size, cornerPx)
 }
 
 @Stable
@@ -900,6 +948,7 @@ private fun PreviewDetails(
     loaded: Boolean = true,
     toc: TocUiState = previewToc(),
     libraryBeside: Boolean = false,
+    resume: BookSheetResume? = null,
 ) {
     PreviewBackdrop {
         BookDetailsScreen(
@@ -907,6 +956,7 @@ private fun PreviewDetails(
             bookLoaded = loaded,
             toc = toc,
             libraryBeside = libraryBeside,
+            resume = resume,
             onBack = {},
             onRead = {},
             onEdit = {},
@@ -995,6 +1045,36 @@ private fun BookDetailsWidePreview() {
 @Composable
 private fun BookDetailsMediumPanePreview() {
     YomuDesignTheme(darkTheme = false) { PreviewDetails(libraryBeside = true) }
+}
+
+/** Three frames of Resume: just after the tap, halfway, and the sheet risen into a blank page. */
+@Composable
+private fun ResumeFrames() {
+    Row {
+        listOf(Triple(0.15f, 0.3f, 0.5f), Triple(0.5f, 0.8f, 0.95f), Triple(1f, 1f, 1f)).forEach { (rise, square, away) ->
+            Box(Modifier.width(390.dp)) {
+                PreviewDetails(
+                    resume = BookSheetResume(
+                        riseState = mutableFloatStateOf(rise),
+                        squareState = mutableFloatStateOf(square),
+                        awayState = mutableFloatStateOf(away),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Details resuming", widthDp = 1170, heightDp = 844)
+@Composable
+private fun BookDetailsResumePreview() {
+    YomuDesignTheme(darkTheme = false) { ResumeFrames() }
+}
+
+@Preview(name = "Details resuming dark", widthDp = 1170, heightDp = 844)
+@Composable
+private fun BookDetailsResumeDarkPreview() {
+    YomuDesignTheme(darkTheme = true) { ResumeFrames() }
 }
 
 // endregion

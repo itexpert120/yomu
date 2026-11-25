@@ -2,9 +2,11 @@ package com.itexpert120.yomu.app.navigation
 
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.feature.bookdetails.BookSheetResume
 import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
 import com.itexpert120.yomu.feature.bookdetails.bookPaneWidth
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +43,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 /** Behind an open book the library dims to 80% (spec: black at 20%, never blur). */
-private const val SheetDim = 0.2f
+internal const val SheetDim = 0.2f
 
 /** How much of its travel the sheet follows a back gesture before the back commits. */
 private const val SheetDragShare = 0.35f
@@ -102,21 +105,23 @@ internal fun AnimatedContentScope.LibraryPageRecorder(
  *
  * The library page underneath is live during these moves; at rest, once navigation has removed
  * it, the frame draws [LibraryUnderlay]'s picture of it (or the plain desk when there is none).
- * Moving on to the reader or the editor, or coming back from them, leaves the sheet where it is.
+ * Moving on to the editor, or coming back from it or from the reader, leaves the sheet where it is.
+ *
+ * Resume ([resuming]: the page is leaving for the reader, as a phone sheet) keeps the sheet moving
+ * up: it rises to the window's top and squares its corners while the book info scrolls up off it
+ * and fades, on the same spring as the reader's page arriving in it ([ReaderEntranceFrame]). The
+ * library under it stays dimmed.
  */
 @Composable
 internal fun AnimatedContentScope.BookSheetFrame(
     motion: BackMotion,
     underlay: LibraryUnderlay,
-    content: @Composable (libraryBeside: Boolean) -> Unit,
+    resuming: () -> Boolean,
+    content: @Composable (libraryBeside: Boolean, resume: BookSheetResume?) -> Unit,
 ) {
     val motionEnabled = yomuAnimationsEnabled()
     val scheme = MaterialTheme.motionScheme
-    val enterSpring = remember(scheme) {
-        // A visibility threshold of a pixel's worth of the 0..1 travel, so the sheet lands smoothly.
-        (scheme.defaultSpatialSpec<Float>() as? SpringSpec<Float>)?.let { spring(it.dampingRatio, it.stiffness, visibilityThreshold = 0.0005f) }
-            ?: scheme.defaultSpatialSpec()
-    }
+    val enterSpring = rememberSheetSpring()
     val dimSpring = remember(scheme) { scheme.defaultEffectsSpec<Float>() }
     // 1 = off screen / not dimmed, 0 = at rest. Entering springs; leaving runs linearly so a back
     // gesture can scrub it (the pose below eases it).
@@ -133,6 +138,23 @@ internal fun AnimatedContentScope.BookSheetFrame(
         label = "bookSheetDim",
     ) { state -> if (motionEnabled && state != EnterExitState.Visible) 1f else 0f }
     val leaving = transition.targetState == EnterExitState.PostExit
+    // Decided in composition, unlike the back flags: a pop must not gain these springs, or a back
+    // gesture would seek a longer transition and distort its own pose.
+    val resumingNow = leaving && motionEnabled && resuming()
+    val fadeSpring = remember(scheme) { scheme.fastEffectsSpec<Float>() }
+    val rise = transition.animateFloat(
+        transitionSpec = { if (resumingNow) enterSpring else snap() },
+        label = "bookSheetResume",
+    ) { state -> if (resumingNow && state == EnterExitState.PostExit) 1f else 0f }
+    val square = transition.animateFloat(
+        transitionSpec = { if (resumingNow) dimSpring else snap() },
+        label = "bookSheetResumeCorners",
+    ) { state -> if (resumingNow && state == EnterExitState.PostExit) 1f else 0f }
+    val away = transition.animateFloat(
+        transitionSpec = { if (resumingNow) fadeSpring else snap() },
+        label = "bookSheetResumeInfo",
+    ) { state -> if (resumingNow && state == EnterExitState.PostExit) 1f else 0f }
+    val resume = remember(rise, square, away) { BookSheetResume(rise, square, away) }
     val releaseAt = remember { floatArrayOf(0f) }
     val desk = YomuTheme.stack.desk
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -198,6 +220,19 @@ internal fun AnimatedContentScope.BookSheetFrame(
                         translationY = size.height * away
                     }
                 },
-        ) { content(besideLibrary) }
+        ) { content(besideLibrary, resume.takeUnless { besideLibrary }) }
+    }
+}
+
+/**
+ * The spatial default spring the book sheet moves on, landing within a pixel's worth of its 0..1
+ * travel so it settles smoothly. The reader's page arriving in a rising sheet uses the same one.
+ */
+@Composable
+internal fun rememberSheetSpring(): FiniteAnimationSpec<Float> {
+    val scheme = MaterialTheme.motionScheme
+    return remember(scheme) {
+        (scheme.defaultSpatialSpec<Float>() as? SpringSpec<Float>)?.let { spring(it.dampingRatio, it.stiffness, visibilityThreshold = 0.0005f) }
+            ?: scheme.defaultSpatialSpec()
     }
 }

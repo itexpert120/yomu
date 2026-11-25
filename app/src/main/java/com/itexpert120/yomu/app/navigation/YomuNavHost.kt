@@ -9,6 +9,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -25,10 +26,13 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.lerp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -44,17 +48,21 @@ import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
+import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
+import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
 import com.itexpert120.yomu.feature.library.LibraryRoute
 import com.itexpert120.yomu.feature.reader.FontLibraryRoute
 import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
+import com.itexpert120.yomu.feature.reader.ReaderViewModel
 import com.itexpert120.yomu.feature.settings.SettingsRoute
 import com.itexpert120.yomu.feature.stats.StatsRoute
 import com.itexpert120.yomu.feature.sync.SyncRoute
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 @Composable
 fun YomuNavHost(
@@ -114,17 +122,33 @@ fun YomuNavHost(
     val libraryUnderlay = remember { LibraryUnderlay() }
     val captureScope = rememberCoroutineScope()
 
+    // Resume: opening the reader from a book's phone sheet, or from the library pile, plays Stack's
+    // Resume motion (the sheet rises into the page: BookSheetFrame + ReaderEntranceFrame) instead
+    // of the push. A book shown as a pane beside the library keeps the push.
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val bookIsPhoneSheet = !bookPaneBesideLibrary(windowWidth)
+    fun readerEntrance(from: NavDestination?, to: NavDestination): ReaderEntrance? = readerEntrance(
+        toReader = to.hasRoute<Reader>(),
+        fromLibrary = from?.hasRoute<Home>() == true,
+        fromBook = from?.hasRoute<BookDetails>() == true,
+        bookIsPhoneSheet = bookIsPhoneSheet,
+    )
+
     NavHost(
         navController = navController,
         startDestination = Home,
         modifier = modifier,
         enterTransition = {
             // A book opens as a sheet over the library (BookSheetFrame moves it); everything else pushes.
-            if (targetState.destination.hasRoute<BookDetails>()) {
-                backMotion.sheetEnter = initialState.id != targetState.id
-                EnterTransition.None
-            } else {
-                transitions.pushEnter(this)
+            when {
+                targetState.destination.hasRoute<BookDetails>() -> {
+                    backMotion.sheetEnter = initialState.id != targetState.id
+                    EnterTransition.None
+                }
+                // ReaderEntranceFrame draws the Resume motion; with animations off it is a crossfade.
+                initialState.id != targetState.id && readerEntrance(initialState.destination, targetState.destination) != null ->
+                    if (motionEnabled) EnterTransition.None else fadeIn(tween(ResumeCrossfadeMillis))
+                else -> transitions.pushEnter(this)
             }
         },
         exitTransition = {
@@ -134,11 +158,14 @@ fun YomuNavHost(
             backMotion.gestureInFlight = false
             backMotion.sheet = false
             if (initialState.id != targetState.id) backMotion.opening = true
-            // The library holds still under an opening book; only the sheet moves.
-            if (targetState.destination.hasRoute<BookDetails>() && initialState.id != targetState.id && motionEnabled) {
-                ExitTransition.KeepUntilTransitionsFinished
-            } else {
-                transitions.pushExit(this)
+            when {
+                // The library holds still under an opening book; only the sheet moves.
+                targetState.destination.hasRoute<BookDetails>() && initialState.id != targetState.id && motionEnabled ->
+                    ExitTransition.KeepUntilTransitionsFinished
+                // Resume: the page underneath stays until the reader has covered it.
+                initialState.id != targetState.id && readerEntrance(initialState.destination, targetState.destination) != null ->
+                    ExitTransition.KeepUntilTransitionsFinished
+                else -> transitions.pushExit(this)
             }
         },
         // A back tap plays the same Material back as a released gesture, from rest (see BackPreviewFrame).
@@ -201,7 +228,15 @@ fun YomuNavHost(
         }
         composable<BookDetails> { entry ->
             BackPreviewFrame(backMotion) {
-                BookSheetFrame(backMotion, libraryUnderlay) { libraryBeside ->
+                BookSheetFrame(
+                    motion = backMotion,
+                    underlay = libraryUnderlay,
+                    // Read while the page leaves: the reader it is leaving for is already on top.
+                    resuming = {
+                        val top = navController.currentBackStackEntry?.destination
+                        top != null && readerEntrance(entry.destination, top) == ReaderEntrance.BookSheet
+                    },
+                ) { libraryBeside, resume ->
                     val args = entry.toRoute<BookDetails>()
                     BookDetailsRoute(
                         onBack = navController::popBackStackIfResumed,
@@ -211,6 +246,7 @@ fun YomuNavHost(
                             navigateToReader(Reader(args.bookId, locator), "chapter")
                         },
                         libraryBeside = libraryBeside,
+                        resume = resume,
                     )
                 }
             }
@@ -243,9 +279,18 @@ fun YomuNavHost(
                 SyncRoute(onBack = navController::popBackStackIfResumed)
             }
         }
-        composable<Reader> {
+        composable<Reader> { entry ->
+            // Where this reader was opened from, taken at its first frame (the page under it).
+            val entrance = remember { readerEntrance(navController.previousBackStackEntry?.destination, entry.destination) }
+            // The same ViewModel ReaderRoute uses (this entry owns it): its first page is laid out.
+            val reader: ReaderViewModel = hiltViewModel()
+            val pageReady = remember(reader) {
+                reader.state.map { it.experience.failed || (it.experience.renderState is ReaderRenderState.Ready && !it.experience.loading) }
+            }
             BackPreviewFrame(backMotion) {
-                ReaderRoute(onBack = navController::popBackStackIfResumed)
+                ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
+                    ReaderRoute(onBack = navController::popBackStackIfResumed)
+                }
             }
         }
     }
@@ -495,6 +540,9 @@ private fun NavHostController.popBackStackIfResumed() {
         popBackStack()
     }
 }
+
+/** With animations off the Resume motion is a short crossfade into the reader. */
+private const val ResumeCrossfadeMillis = 150
 
 // The top page fades out over the first PredictiveFadeSpan of the commit while it keeps shrinking,
 // so it clears quickly instead of lingering over the page underneath as a double exposure. The page
