@@ -1,8 +1,16 @@
 package com.itexpert120.yomu.feature.library
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,9 +31,16 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,10 +54,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,7 +73,14 @@ import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.stackCoverShadow
+import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.roundToInt
+import kotlin.math.sign
 
 /** Where the pile's reading info sits relative to the covers. */
 internal enum class PileLayout {
@@ -75,7 +98,6 @@ private const val SLOT_ROTATION = 3.5f
 
 /** The pile always shows this many slots; books fill them from the front. */
 private const val PileSlots = 3
-private val FlickDistance = 48.dp
 
 /** Cover size and the per-slot offsets, scaled together so the pile keeps its shape at any size. */
 private class PileMetrics(val coverWidth: Dp) {
@@ -92,8 +114,10 @@ private val ColumnMetrics = PileMetrics(120.dp)
 /**
  * Stack's library hero: the books in progress as a tilted pile on the desk (up to three, the front
  * one upright, each one behind offset, turned and a little darker), with where you are in the
- * front book and a play button beside it. A horizontal flick brings the next book to the front;
- * tapping the front cover opens its details, play resumes it.
+ * front book and a play button beside it. Tapping the front cover opens its details, play resumes
+ * it. A horizontal swipe turns the pile over: the front cover follows the finger off to the start
+ * while the covers behind move up a slot with it (dragging toward the end brings the previous book
+ * back from the start). The pile is a loop, so it turns the same way at every book.
  */
 @Composable
 internal fun LibraryPile(
@@ -105,20 +129,22 @@ internal fun LibraryPile(
     gutter: Dp = 24.dp,
 ) {
     if (books.isEmpty()) return
-    var front by rememberSaveable(books.map { it.id }) { mutableIntStateOf(0) }
-    val frontIndex = front.coerceIn(0, books.lastIndex)
-    val frontBook = books[frontIndex]
+    val ids = books.map { it.id }
+    // The front book survives a configuration change, and the pile's books changing around it.
+    var savedFront by rememberSaveable { mutableStateOf<String?>(null) }
+    val pile = remember(ids) { PileState(start = ids.indexOf(savedFront).coerceAtLeast(0), count = books.size) }
+    val frontIndex by remember(pile) { derivedStateOf { pile.nearest } }
+    val frontBook = books[frontIndex.coerceIn(0, books.lastIndex)]
     val metrics = if (layout == PileLayout.Column) ColumnMetrics else PhoneMetrics
     val covers: @Composable () -> Unit = {
         PileCovers(
             books = books,
-            frontIndex = frontIndex,
+            pile = pile,
             metrics = metrics,
-            onFlick = { step -> front = (frontIndex + step) % books.size },
+            onSettled = { index -> savedFront = books.getOrNull(index)?.id },
             onOpenDetails = onOpenDetails,
         )
     }
-    val count = if (books.size > 1) "${frontIndex + 1} of ${books.size}" else " "
 
     when (layout) {
         PileLayout.Column -> Column(modifier = modifier.padding(horizontal = gutter)) {
@@ -130,21 +156,23 @@ internal fun LibraryPile(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = frontBook.statusLabel,
-                        style = StackType.Figure.copy(fontSize = 22.sp, lineHeight = 24.sp, letterSpacing = (-0.6).sp),
-                        color = YomuTheme.stack.ink,
-                        maxLines = 1,
-                    )
-                    Text(
-                        text = frontBook.title,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = YomuTheme.stack.body,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
+                PileText(book = frontBook, modifier = Modifier.weight(1f)) { book ->
+                    Column {
+                        Text(
+                            text = book.statusLabel,
+                            style = StackType.Figure.copy(fontSize = 22.sp, lineHeight = 24.sp, letterSpacing = (-0.6).sp),
+                            color = YomuTheme.stack.ink,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = book.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = YomuTheme.stack.body,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                 }
                 ResumeButton(title = frontBook.title, size = 52.dp, onClick = { onResume(frontBook.id) })
             }
@@ -157,9 +185,10 @@ internal fun LibraryPile(
             verticalAlignment = Alignment.Top,
         ) {
             covers()
-            if (layout == PileLayout.Phone) Spacer(Modifier.weight(1f)) else Spacer(Modifier.width(28.dp))
+            if (layout == PileLayout.Phone) Spacer(Modifier.weight(1f)) else Spacer(Modifier.width(PileInfoGap))
             PileInfo(
-                count = count,
+                index = frontIndex,
+                count = books.size,
                 book = frontBook,
                 alignEnd = layout == PileLayout.Phone,
                 onResume = { onResume(frontBook.id) },
@@ -168,56 +197,173 @@ internal fun LibraryPile(
     }
 }
 
+/** Gap between the pile's box and its info column beside it (tablets). */
+private val PileInfoGap = 28.dp
+
+/**
+ * Where the pile is turned to: [position] counts books brought to the front (fractional while a
+ * swipe or its settle is under way; it can run past the book count or below zero, as the pile is a
+ * loop). Read in layers only, so turning the pile never recomposes it except when the front
+ * changes.
+ */
+@Stable
+private class PileState(start: Int, val count: Int) {
+    var position by mutableFloatStateOf(start.toFloat())
+
+    /** Where the last release is heading; a swipe that starts mid-settle continues from there. */
+    var target = start
+
+    var settling by mutableStateOf(false)
+    var settle: Job? = null
+
+    /** The book (0 until [count]) closest to the front right now. */
+    val nearest: Int get() = Math.floorMod(position.roundToInt(), count)
+}
+
+/**
+ * Where a released swipe settles, in books brought to the front: one step on from [start] toward
+ * the side it was flung ([velocity], books per second) once it is fast enough, else toward the side
+ * it was dragged ([position] - [start]) once that's far enough, else back to [start]. Never more
+ * than one step from [start], so a single swipe turns one book.
+ */
+internal fun pileSettleTarget(
+    start: Int,
+    position: Float,
+    velocity: Float,
+    distanceThreshold: Float = PileCommitDistance,
+    velocityThreshold: Float = PileCommitVelocity,
+): Int {
+    val dragged = position - start
+    val step = when {
+        abs(velocity) >= velocityThreshold -> sign(velocity).toInt()
+        abs(dragged) >= distanceThreshold -> sign(dragged).toInt()
+        else -> 0
+    }
+    return start + step
+}
+
+/** A swipe commits past this share of a cover's width… */
+internal const val PileCommitDistance = 0.3f
+
+/** …or when flung faster than this many cover widths a second (about 400dp/s on a phone). */
+internal const val PileCommitVelocity = 2.6f
+
 @Composable
 private fun PileCovers(
     books: List<LibraryBook>,
-    frontIndex: Int,
+    pile: PileState,
     metrics: PileMetrics,
-    onFlick: (step: Int) -> Unit,
+    onSettled: (index: Int) -> Unit,
     onOpenDetails: (String) -> Unit,
 ) {
+    val count = books.size
     val haptics = LocalHapticFeedback.current
-    val flick = with(LocalDensity.current) { FlickDistance.toPx() }
+    val scope = rememberCoroutineScope()
+    val animate = yomuAnimationsEnabled()
+    val spring = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    // One cover width (and a little) of finger travel turns the pile by one book, so the front
+    // cover follows the finger 1:1.
+    val travel = with(LocalDensity.current) { metrics.coverWidth.toPx() * TravelFactor }
+    val currentOnSettled by rememberUpdatedState(onSettled)
+    // Only the whole part is read in composition: the covers' order changes once per book.
+    val base by remember(pile) { derivedStateOf { floor(pile.position).toInt() } }
+    var dragStart by remember(pile) { mutableIntStateOf(pile.target) }
+
+    fun settleTo(target: Int, velocity: Float) {
+        pile.target = target
+        pile.settle?.cancel()
+        pile.settle = scope.launch {
+            pile.settling = true
+            try {
+                if (animate) {
+                    animate(pile.position, target.toFloat(), velocity, spring) { value, _ -> pile.position = value }
+                } else {
+                    pile.position = target.toFloat()
+                }
+                currentOnSettled(Math.floorMod(target, count))
+            } finally {
+                pile.settling = false
+            }
+        }
+    }
+
+    val dragState = rememberDraggableState { delta -> pile.position -= delta / travel }
     Box(
         modifier = Modifier
             .size(width = metrics.boxWidth, height = metrics.boxHeight)
-            .semantics { contentDescription = "Books in progress" }
-            .pointerInput(books.size) {
-                if (books.size < 2) return@pointerInput
-                var travelled = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { travelled = 0f },
-                    onHorizontalDrag = { _, amount -> travelled += amount },
-                    onDragEnd = {
-                        if (kotlin.math.abs(travelled) >= flick) {
-                            onFlick(if (travelled < 0) 1 else books.size - 1)
-                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                        }
-                    },
-                )
-            },
+            .semantics {
+                contentDescription = "Books in progress"
+                if (count > 1) {
+                    customActions = listOf(
+                        CustomAccessibilityAction("Next book") {
+                            settleTo(pile.target + 1, 0f)
+                            true
+                        },
+                        CustomAccessibilityAction("Previous book") {
+                            settleTo(pile.target - 1, 0f)
+                            true
+                        },
+                    )
+                }
+            }
+            .draggable(
+                state = dragState,
+                orientation = Orientation.Horizontal,
+                enabled = count > 1,
+                // Catching a pile that is still settling takes it without waiting for touch slop.
+                startDragImmediately = pile.settling,
+                onDragStarted = {
+                    // A swipe during a settle continues from where that settle was heading, so a
+                    // quick double swipe turns two books.
+                    dragStart = if (pile.settling) pile.target else pile.position.roundToInt()
+                    pile.settle?.cancel()
+                },
+                onDragStopped = { velocity ->
+                    val target = pileSettleTarget(dragStart, pile.position, -velocity / travel)
+                    if (target != dragStart) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    settleTo(target, -velocity / travel)
+                },
+            ),
     ) {
         // A pile of one or two still reads as a pile: the empty slots behind hold quiet blanks.
-        for (depth in PileSlots - 1 downTo books.size) {
+        for (depth in PileSlots - 1 downTo count) {
             key("blank-$depth") { PileBlank(depth = depth, metrics = metrics) }
         }
-        // Back to front, so the front cover draws last.
-        for (depth in books.indices.reversed()) {
-            val book = books[(frontIndex + depth) % books.size]
+        if (count > 1) {
+            // The front book's second copy, arriving at the back as the front one leaves (and the
+            // other way round). Drawn first, behind everything.
+            val front = books[Math.floorMod(base, count)]
+            key("back-${front.id}") {
+                PileCover(book = front, slot = count, base = base, pile = pile, metrics = metrics, onClick = null)
+            }
+        }
+        // Back to front, so the front cover draws last. Keys follow the book, so a cover keeps its
+        // node (and loaded image) as it moves between slots.
+        for (slot in count - 1 downTo 0) {
+            val book = books[Math.floorMod(base + slot, count)]
             key(book.id) {
                 PileCover(
                     book = book,
-                    depth = depth,
+                    slot = slot,
+                    base = base,
+                    pile = pile,
                     metrics = metrics,
-                    onClick = { onOpenDetails(book.id) },
+                    onClick = if (slot == 0) ({ onOpenDetails(book.id) }) else null,
                 )
             }
         }
     }
 }
 
+/** How far (in cover widths) the front cover travels off the pile while it turns over. */
+private const val TravelFactor = 1.06f
+
+/** The front cover tilts this far (degrees) as it leaves toward the start. */
+private const val LeaveRotation = -4f
+
+/** "N of M", the figure and the book, as on the board. */
 @Composable
-private fun PileInfo(count: String, book: LibraryBook, alignEnd: Boolean, onResume: () -> Unit) {
+private fun PileInfo(index: Int, count: Int, book: LibraryBook, alignEnd: Boolean, onResume: () -> Unit) {
     Column(
         modifier = Modifier
             .width(if (alignEnd) 118.dp else 200.dp)
@@ -225,60 +371,102 @@ private fun PileInfo(count: String, book: LibraryBook, alignEnd: Boolean, onResu
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
     ) {
         Text(
-            text = count,
+            text = if (count > 1) "${index + 1} of $count" else " ",
             style = MaterialTheme.typography.bodySmall,
             color = YomuTheme.stack.muted,
         )
         Spacer(Modifier.height(48.dp))
-        Text(
-            text = book.statusLabel,
-            style = StackType.Figure,
-            color = YomuTheme.stack.ink,
-            maxLines = 1,
-        )
-        Text(
-            text = book.title,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal),
-            color = YomuTheme.stack.body,
-            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
-        )
+        PileText(book = book, modifier = Modifier.fillMaxWidth()) { shown ->
+            Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+                Text(
+                    text = shown.statusLabel,
+                    style = StackType.Figure,
+                    color = YomuTheme.stack.ink,
+                    maxLines = 1,
+                )
+                Text(
+                    text = shown.title,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal),
+                    color = YomuTheme.stack.body,
+                    textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+                    // Always two lines tall, so a one-line title doesn't move the play button.
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(22.dp))
         ResumeButton(title = book.title, size = 64.dp, onClick = onResume)
     }
 }
 
+/** The front book's text, cross-faded in place (same size either way) when the front changes. */
 @Composable
-private fun PileCover(book: LibraryBook, depth: Int, metrics: PileMetrics, onClick: () -> Unit) {
-    // Each cover glides to its slot when the pile turns over; read in the layer, never recomposed.
-    val slot by animateFloatAsState(
-        targetValue = depth.toFloat(),
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "pileSlot",
-    )
+private fun PileText(
+    book: LibraryBook,
+    modifier: Modifier = Modifier,
+    content: @Composable (LibraryBook) -> Unit,
+) {
+    val enter = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val exit = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    AnimatedContent(
+        targetState = book,
+        contentKey = { it.id },
+        transitionSpec = { fadeIn(enter) togetherWith fadeOut(exit) using SizeTransform(clip = false) { _, _ -> snap() } },
+        label = "pileText",
+        modifier = modifier,
+    ) { shown -> content(shown) }
+}
+
+/**
+ * One cover of the pile at [slot] (0 = front) while the pile's whole turn count is [base]; its
+ * depth is the slot less how far the pile has turned past [base], read in the layer. Below 0 the
+ * cover is leaving the front toward the start (fading as it goes); past the last slot it is the
+ * front book's copy arriving at the back (fading in).
+ */
+@Composable
+private fun PileCover(
+    book: LibraryBook,
+    slot: Int,
+    base: Int,
+    pile: PileState,
+    metrics: PileMetrics,
+    onClick: (() -> Unit)?,
+) {
     val density = LocalDensity.current
     val dx = with(density) { metrics.slotX.toPx() }
     val dy = with(density) { metrics.slotY.toPx() }
+    val travel = with(density) { metrics.coverWidth.toPx() * TravelFactor }
+    val last = (pile.count - 1).toFloat()
+    val depth = { slot - (pile.position - base).coerceIn(0f, 1f) }
     Box(
         modifier = Modifier
             .size(metrics.coverWidth, metrics.coverHeight)
             .graphicsLayer {
-                translationX = dx * slot
-                translationY = dy * slot
-                rotationZ = SLOT_ROTATION * slot
+                val d = depth()
                 transformOrigin = TransformOrigin(0f, 1f)
+                if (d < 0f) {
+                    translationX = travel * d
+                    rotationZ = LeaveRotation * -d
+                    alpha = 1f + d
+                } else {
+                    translationX = dx * d
+                    translationY = dy * d
+                    rotationZ = SLOT_ROTATION * d
+                    alpha = if (d > last) (1f - (d - last)).coerceIn(0f, 1f) else 1f
+                }
             }
             .stackCoverShadow()
-            .then(if (depth == 0) Modifier.yomuPressable(onClick = onClick, shape = YomuShapeTokens.cover) else Modifier),
+            .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick, shape = YomuShapeTokens.cover) else Modifier),
     ) {
         BookCoverImage(book = book, modifier = Modifier.fillMaxSize())
         // Covers further back sit a little darker (brightness .95, .9).
         Box(
             Modifier
                 .fillMaxSize()
-                .drawWithContent { drawRect(Color.Black.copy(alpha = (0.05f * slot).coerceIn(0f, 0.12f))) },
+                .drawWithContent { drawRect(Color.Black.copy(alpha = (0.05f * depth()).coerceIn(0f, 0.12f))) },
         )
     }
 }
