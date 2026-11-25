@@ -170,7 +170,10 @@ internal fun Modifier.readerSheetHeight(fraction: Float, fill: Boolean): Modifie
         // The sheet's own chrome under its body: the gesture bar (hidden by a keyboard) and padding.
         val below = (if (keyboard > 0) 0 else navigationBars.getBottom(this)) + SheetChromeBelow.roundToPx()
         val room = windowHeight - keyboard - statusBars.getTop(this) - PageStripAbove.roundToPx() - below
-        val target = minOf((windowHeight * fraction).roundToInt(), room).coerceAtLeast(MinSheetBody.roundToPx())
+        // The body runs on down behind the gesture bar (its rows add LocalYomuSheetBottomInset as
+        // content padding), so the sheet's top stays where the room calls for.
+        val behind = (if (keyboard > 0) 0 else navigationBars.getBottom(this)) + SheetBottomBreath.roundToPx()
+        val target = minOf((windowHeight * fraction).roundToInt(), room).coerceAtLeast(MinSheetBody.roundToPx()) + behind
         if (fill) {
             fixed(measurable, constraints, target)
         } else {
@@ -197,3 +200,6 @@ private val PageStripAbove = 40.dp
 private val SheetChromeBelow = 32.dp
 
 private val MinSheetBody = 200.dp
+
+/** The breathing room YomuBottomSheet keeps under content, above the gesture bar. */
+private val SheetBottomBreath = 16.dp

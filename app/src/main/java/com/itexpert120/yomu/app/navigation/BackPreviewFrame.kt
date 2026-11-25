@@ -21,6 +21,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -207,7 +208,9 @@ internal fun AnimatedContentScope.BackPreviewFrame(
                 translationX = size.width * x * if (towardLeft) -1f else 1f
             }
             // The page slides as one opaque sheet of desk, whatever it draws itself.
-            .drawBehind { if (sliding()) drawRect(desk) },
+            .drawBehind { if (sliding()) drawRect(desk) }
+            // An opaque page takes every touch in its area: the library is live beneath the host.
+            .then(if (slides) Modifier.pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } } else Modifier),
     ) {
         content()
     }

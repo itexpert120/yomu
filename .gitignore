@@ -19,3 +19,7 @@ local.properties
 
 # Claude agent worktrees / session files
 .claude/worktrees/
+
+# JVM crash dumps (Gradle/test workers)
+hs_err_pid*.log
+replay_pid*.log

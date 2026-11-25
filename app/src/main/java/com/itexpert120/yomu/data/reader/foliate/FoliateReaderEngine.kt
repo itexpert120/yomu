@@ -693,6 +693,8 @@ private class FoliateReaderSession(
             }
             // Readium's page-margin factor (1 = its default gutter) as foliate's gap.
             .put("gap", "${"%.2f".format(java.util.Locale.US, 5.0 * (settings.pageMargins ?: 1f))}%")
+            // Also scales the column's maximum width, which is what sets the margins on wide screens.
+            .put("margins", (settings.pageMargins ?: 1f).toDouble())
             .put(
                 "align",
                 when (settings.textAlign) {

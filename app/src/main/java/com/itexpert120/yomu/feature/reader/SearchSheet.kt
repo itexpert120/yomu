@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuIconButton
@@ -205,6 +206,7 @@ internal fun ReaderSearchSheetContent(
                             .weight(1f)
                             .fillMaxWidth()
                             .yomuScrollEdgeRule(top = listState.canScrollBackward),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = LocalYomuSheetBottomInset.current),
                     ) {
                         itemsIndexed(searchResults) { index, result ->
                             SearchResultRow(

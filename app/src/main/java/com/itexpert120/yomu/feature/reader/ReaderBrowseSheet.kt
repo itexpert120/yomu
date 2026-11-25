@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuEmptyState
@@ -286,7 +287,7 @@ private fun ContentsPage(
                     modifier = Modifier
                         .fillMaxSize()
                         .yomuScrollEdgeRule(top = listState.canScrollBackward),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp + LocalYomuSheetBottomInset.current),
                 ) {
                     contentsItems(
                         rows = rows,
@@ -316,7 +317,7 @@ private fun ContentsPage(
                     if (outline.currentSection >= 0) expanded = expanded + outline.currentSection
                     revealCurrent = true
                 },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = YomuTheme.space.md),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = YomuTheme.space.md + LocalYomuSheetBottomInset.current),
             )
         }
     }
@@ -604,7 +605,7 @@ private fun <T> GroupedList(
         modifier = Modifier
             .fillMaxSize()
             .yomuScrollEdgeRule(top = listState.canScrollBackward),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = YomuTheme.space.lg),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = YomuTheme.space.lg + LocalYomuSheetBottomInset.current),
     ) {
         groups.forEachIndexed { groupIndex, group ->
             stickyHeader(key = "g$groupIndex", contentType = "chapter") {
