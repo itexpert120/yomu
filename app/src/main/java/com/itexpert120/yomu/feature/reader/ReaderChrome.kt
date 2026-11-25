@@ -103,13 +103,8 @@ internal fun ReaderTopBar(
 ) {
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val wide = YomuWidthClass.fromWidth(windowWidth).isWide
-    val chapterTitle = chapter.ifBlank { "Reading" }
-    val book = bookTitle?.takeIf { it.isNotBlank() }
-    val (caption, title) = if (wide) {
-        (if (book != null) chapterTitle else null) to (book ?: chapterTitle)
-    } else {
-        chapterTitleParts(chapterTitle)?.let { (label, name) -> label to name } ?: (book to chapterTitle)
-    }
+    // One quiet line: the chapter as the book names it ("Chapter I. Down the Rabbit-Hole").
+    val title = chapter.ifBlank { bookTitle?.takeIf { it.isNotBlank() } ?: "Reading" }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -127,12 +122,8 @@ internal fun ReaderTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (wide) ReaderTopBarWideHeight else ReaderTopBarHeight)
-                .padding(
-                    start = if (wide) 16.dp else 6.dp,
-                    end = if (wide) 16.dp else 6.dp,
-                    top = if (wide) 0.dp else 14.dp,
-                ),
+                .height(ReaderTopBarHeight)
+                .padding(horizontal = if (wide) 16.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
@@ -142,30 +133,17 @@ internal fun ReaderTopBar(
             ) {
                 Icon(StackIcons.ArrowBack, contentDescription = "Back")
             }
-            Column(
+            Text(
+                text = title,
+                color = colors.ink,
+                style = StackType.Heading,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 4.dp)
-                    .semantics(mergeDescendants = true) { heading() },
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                val captionText: @Composable () -> Unit = {
-                    caption?.let {
-                        Text(text = it, color = colors.muted, style = StackType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                val titleText: @Composable () -> Unit = {
-                    Text(text = title, color = colors.ink, style = StackType.Heading, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                // Phone: the label above the name. Wide: the book above the chapter.
-                if (wide) {
-                    titleText()
-                    captionText()
-                } else {
-                    captionText()
-                    titleText()
-                }
-            }
+                    .semantics { heading() },
+            )
             IconToggleButton(
                 checked = isBookmarked,
                 onCheckedChange = { onToggleBookmark() },
@@ -184,19 +162,8 @@ internal fun ReaderTopBar(
     }
 }
 
-// Below the status area: 14 of air over a 62 row on a phone; a 64 row across a spread.
-private val ReaderTopBarHeight = 76.dp
-private val ReaderTopBarWideHeight = 64.dp
-
-private val ChapterLabel = Regex(
-    """^((?:chapter|part|book|volume|vol\.|section|act|episode)\s+[\p{L}\p{N}.]+)\s*[:.\-–—]\s*(.+)$""",
-    RegexOption.IGNORE_CASE,
-)
-
-/** "Chapter 3: Melissa" as ("Chapter 3", "Melissa"); null when the title has no such label. */
-internal fun chapterTitleParts(title: String): Pair<String, String>? = ChapterLabel.matchEntire(title.trim())?.let {
-    it.groupValues[1] to it.groupValues[2].trim()
-}?.takeIf { it.second.isNotEmpty() }
+// One 56dp row below the status area, on phones and across a spread alike.
+private val ReaderTopBarHeight = 56.dp
 
 /** "3 pages left in chapter" (paged) or "12% of chapter left" (scroll); null while unknown. */
 internal fun chapterRemainingLabel(layout: ReaderLayout, pagesLeft: Int?, chapterProgression: Double): String? = when (layout) {

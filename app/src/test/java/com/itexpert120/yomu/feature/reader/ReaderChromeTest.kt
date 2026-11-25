@@ -131,15 +131,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun topBarSplitsAChapterLabelFromItsName() {
-        assertEquals("Chapter 3" to "Melissa", chapterTitleParts("Chapter 3: Melissa"))
-        assertEquals("Chapter VII" to "The Piper at the Gates of Dawn", chapterTitleParts("Chapter VII. The Piper at the Gates of Dawn"))
-        assertEquals("Part 2" to "Home", chapterTitleParts("Part 2 — Home"))
-        assertNull(chapterTitleParts("Foreword"))
-        assertNull(chapterTitleParts("Chapter 12"))
-    }
-
-    @Test
     fun seekingTheSliderNavigatesWithinTheChapter() {
         assertEquals(
             ReadingExperienceAction.Navigate(ReaderNavigation.ChapterProgression(0.4)),
