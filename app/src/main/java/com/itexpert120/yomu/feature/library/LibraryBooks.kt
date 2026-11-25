@@ -54,6 +54,7 @@ import com.itexpert120.yomu.core.designsystem.YomuProgressBar
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
+import com.itexpert120.yomu.core.designsystem.stackCoverShadow
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import java.io.File
@@ -64,6 +65,7 @@ import java.io.File
  * secondaryContainer. No borders, no elevation; corners come from YomuShapeTokens.
  */
 
+/** Stack's grid cell: the cover as an object (one static shadow), title, and a one-word status. */
 @Composable
 fun GridBookCard(
     book: LibraryBook,
@@ -72,36 +74,36 @@ fun GridBookCard(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    val container = rememberCardContainer(selected)
     Column(
         modifier = modifier
-            .clip(YomuShapeTokens.tile)
-            .drawBehind { drawRect(container.value) }
             .yomuPressable(onClick = onClick, onLongClick = onLongPress)
-            .semantics { this.selected = selected }
-            .padding(YomuTheme.space.xs),
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            .semantics { this.selected = selected },
     ) {
-        SelectableCover(book = book, selected = selected, modifier = Modifier.fillMaxWidth())
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                // Two title lines, so rows of cards keep one height.
-                .height(42.dp)
-                .padding(horizontal = YomuTheme.space.xxs),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Text(
-                text = book.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        YomuProgressBar(progress = book.progress)
+        SelectableCover(book = book, selected = selected, modifier = Modifier.fillMaxWidth().stackCoverShadow())
+        Text(
+            text = book.title,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = YomuTheme.space.xs),
+        )
+        Text(
+            text = book.statusLabel,
+            color = YomuTheme.stack.muted,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+        )
     }
 }
+
+/** One word for where a book stands: Finished, New, or how far in. */
+internal val LibraryBook.statusLabel: String
+    get() = when {
+        progress >= 0.995f -> "Finished"
+        progress <= 0f -> "New"
+        else -> "${(progress * 100).toInt().coerceIn(1, 99)}%"
+    }
 
 /** Borderless cover treatment for dense tablet grids. */
 @Composable

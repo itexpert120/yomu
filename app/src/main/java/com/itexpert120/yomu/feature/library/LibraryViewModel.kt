@@ -304,6 +304,16 @@ class LibraryViewModel @Inject constructor(
         } else {
             null
         }
+        val pile = if (query.isBlank()) {
+            entries.asSequence().map { it.book }
+                .filter { it.lastOpenedAt > 0L && it.progress < 0.995f }
+                .sortedByDescending { it.lastOpenedAt }
+                .take(3)
+                .map { projected.getValue(it) }
+                .toList()
+        } else {
+            emptyList()
+        }
         val tabs = catalog.tabs(prefs.tabOrder, prefs.hiddenTabs, inputs.tab)
         val searched = entries.matching(query).sortedBy(prefs.sortMode)
         val pages = tabs.visible.map { tab ->
@@ -315,6 +325,7 @@ class LibraryViewModel @Inject constructor(
             totalCount = entries.size,
             selectableCount = current.bookCount,
             continueReading = continueBook?.let { projected.getValue(it) },
+            pile = pile,
             books = current.books,
             sortMode = prefs.sortMode,
             viewMode = prefs.viewMode,

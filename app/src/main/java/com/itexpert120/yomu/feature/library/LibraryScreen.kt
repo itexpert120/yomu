@@ -10,6 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,8 +24,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +41,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -54,6 +59,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,9 +69,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -75,6 +87,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
@@ -94,8 +107,6 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
-import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
-import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
@@ -106,6 +117,7 @@ import com.itexpert120.yomu.feature.collections.ManageTabsSheet
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
 import com.itexpert120.yomu.feature.collections.icon
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.lazy.items as lazyListItems
 
 private enum class LibraryContentMode {
@@ -281,34 +293,108 @@ fun LibraryScreen(
         val gridInset = ((maxWidth - YomuContentMaxWidth) / 2).coerceAtLeast(margin)
         val listInset = ((maxWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(margin)
         val headerInset = if (state.viewMode == LibraryViewMode.List) listInset else gridInset
-        val bottomChromeVisible = state.continueReading != null || state.selectionMode
+        val bottomChromeVisible = state.selectionMode
         val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
         // The last row must scroll clear of the Resume button / selection toolbar.
         val contentBottom = navBottom +
             if (bottomChromeVisible) LibraryBottomChromeClearance else YomuTheme.space.lg
         val contentTop = YomuTheme.space.md
 
-        Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-                LibraryTopBarTransition(
-                    state = state,
-                    onSearchToggle = onSearchToggle,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onImport = onImport,
-                    onOptionsSheetToggle = { showOptionsSheet = true },
-                    onExitSelection = onExitSelection,
-                    onSelectAll = onSelectAll,
-                    onDeselectAll = onDeselectAll,
-                    scrollBehavior = scrollBehavior,
-                    contentInset = headerInset,
-                )
+        // Stack's library: the title and the pile of books in progress lie on the desk; the shelf
+        // (tabs + grid) is a white sheet over them. Scrolling first lifts the sheet over the still
+        // pile until its tabs pin under the status bar (its corners square off on the way), then
+        // scrolls the shelf. Search and selection swap the title row for their own bars.
+        val density = LocalDensity.current
+        val stack = YomuTheme.stack
+        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val collapsedTop = with(density) { statusTop.toPx() }
+        var deskHeight by remember { mutableIntStateOf(0) }
+        val travel = (deskHeight - collapsedTop).coerceAtLeast(0f)
+        val sheetLift = remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(travel) { sheetLift.floatValue = sheetLift.floatValue.coerceIn(-travel, 0f) }
+        val sheetScroll = remember(travel) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (available.y >= 0f) return Offset.Zero
+                    val next = (sheetLift.floatValue + available.y).coerceAtLeast(-travel)
+                    val used = next - sheetLift.floatValue
+                    sheetLift.floatValue = next
+                    return Offset(0f, used)
+                }
+
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (available.y <= 0f) return Offset.Zero
+                    val next = (sheetLift.floatValue + available.y).coerceAtMost(0f)
+                    val used = next - sheetLift.floatValue
+                    sheetLift.floatValue = next
+                    return Offset(0f, used)
+                }
+            }
+        }
+        val barsMode = state.selectionMode || state.searchActive
+        val showPile = !barsMode && contentMode == LibraryContentMode.Tabs && state.pile.isNotEmpty()
+        val sheetRadius = with(density) { 32.dp.toPx() }
+        val sheetHeight = maxHeight - statusTop
+
+        Box(Modifier.fillMaxSize().nestedScroll(sheetScroll)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { deskHeight = it.height }
+                    .statusBarsPadding(),
+            ) {
+                if (barsMode) {
+                    LibraryTopBarTransition(
+                        state = state,
+                        onSearchToggle = onSearchToggle,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onImport = onImport,
+                        onOptionsSheetToggle = { showOptionsSheet = true },
+                        onExitSelection = onExitSelection,
+                        onSelectAll = onSelectAll,
+                        onDeselectAll = onDeselectAll,
+                        scrollBehavior = scrollBehavior,
+                        contentInset = headerInset,
+                    )
+                } else {
+                    LibraryTitleRow(
+                        onSearch = onSearchToggle,
+                        onImport = onImport,
+                        onArrange = { showOptionsSheet = true },
+                    )
+                }
+                if (showPile) {
+                    LibraryPile(
+                        books = state.pile,
+                        onOpenDetails = onOpenDetails,
+                        onResume = onOpenReader,
+                        modifier = Modifier.padding(top = 30.dp),
+                    )
+                }
+                Spacer(Modifier.height(if (showPile) 46.dp else YomuTheme.space.md))
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .height(sheetHeight)
+                    .offset { IntOffset(0, (deskHeight + sheetLift.floatValue).roundToInt()) }
+                    .graphicsLayer {
+                        // Corners square off over the last stretch before the tabs pin.
+                        val remaining = deskHeight + sheetLift.floatValue - collapsedTop
+                        val radius = sheetRadius * (remaining / sheetRadius).coerceIn(0f, 1f)
+                        shape = RoundedCornerShape(topStart = radius, topEnd = radius)
+                        clip = true
+                    }
+                    .background(stack.sheet),
+            ) {
                 if (contentMode == LibraryContentMode.Tabs) {
                     LibraryTabRow(
                         tabs = state.tabs,
                         pagerState = pagerState,
                         onSelect = { index -> pagerScope.launch { pagerState.animateScrollToPage(index) } },
                         onEditTabs = { showManageCollections = true },
-                        horizontalInset = headerInset - YomuTheme.space.xxs,
+                        horizontalInset = headerInset,
+                        modifier = Modifier.padding(top = 6.dp),
                     )
                 }
                 Box(
@@ -398,23 +484,6 @@ fun LibraryScreen(
                     onMarkUnread = onMarkSelectedUnread,
                     onDelete = { showDeleteConfirm = true },
                 )
-            }
-
-            val continueReading = state.continueReading
-            AnimatedVisibility(
-                visible = continueReading != null && !state.selectionMode,
-                enter = yomuPopupEnter(ResumeFabTransformOrigin),
-                exit = yomuPopupExit(ResumeFabTransformOrigin),
-                modifier = Modifier.align(Alignment.BottomEnd),
-            ) {
-                continueReading?.let { book ->
-                    FloatingResumeButton(
-                        book = book,
-                        collapsed = resumeCollapsed,
-                        onResume = { onOpenReader(book.id) },
-                        endMargin = margin,
-                    )
-                }
             }
 
             ImportNotice(

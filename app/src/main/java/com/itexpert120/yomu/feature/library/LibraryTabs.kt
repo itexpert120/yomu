@@ -2,6 +2,7 @@ package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -41,17 +40,19 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.data.collections.LibraryTab
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-private val TabHeight = 40.dp
+private val TabHeight = 48.dp
+private val TabGap = 22.dp
+private val LineHeight = 2.dp
 
 /** A tab's horizontal span inside the strip, in px; written once it has been placed. */
 private data class TabSpan(val left: Float, val width: Float) {
@@ -59,11 +60,11 @@ private data class TabSpan(val left: Float, val width: Float) {
 }
 
 /**
- * The library tabs as a scrolling strip of pill tabs. The selection pill is drawn from the
- * pager's live position, so it slides 1:1 with a swipe, and each label blends toward the selected
- * colour by how close the pager is to it. Both are read in the draw phase, so a swipe never
- * recomposes the strip. The strip scrolls to keep the pill centred, and ends with the
- * collection-management chip.
+ * The library tabs: words on a scrolling strip (Stack — no counts, no pills). One 2dp ink line is
+ * drawn from the pager's live position, so it glides 1:1 with a swipe, and each label blends toward
+ * ink by how close the pager is to it. Both are read in the draw phase, so a swipe never recomposes
+ * the strip. The strip scrolls to keep the line centred, sits on a rule, and ends with a quiet "+"
+ * that opens the tab editor.
  */
 @Composable
 internal fun LibraryTabRow(
@@ -77,12 +78,14 @@ internal fun LibraryTabRow(
     if (tabs.isEmpty()) return
     val scroll = rememberScrollState()
     val spans = remember(tabs.size) { mutableStateListOf<TabSpan?>().apply { repeat(tabs.size) { add(null) } } }
-    val pillColor = MaterialTheme.colorScheme.secondaryContainer
-    val selectedColor = MaterialTheme.colorScheme.onSecondaryContainer
-    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val stack = YomuTheme.stack
+    val lineColor = stack.ink
+    val ruleColor = stack.rule
+    val selectedColor = stack.ink
+    val unselectedColor = stack.muted
     val position = { pagerState.currentPage + pagerState.currentPageOffsetFraction }
 
-    // Follow the pill: keep it centred while swiping or animating between tabs.
+    // Follow the line: keep it centred while swiping or animating between tabs.
     LaunchedEffect(pagerState, spans) {
         snapshotFlow {
             val span = spans.interpolate(position()) ?: return@snapshotFlow null
@@ -96,6 +99,10 @@ internal fun LibraryTabRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .drawBehind {
+                val rule = 1.dp.toPx()
+                drawRect(ruleColor, topLeft = Offset(0f, size.height - rule), size = Size(size.width, rule))
+            }
             // Soft scroll edges: the strip fades out toward an edge only while there is more
             // to scroll that way, ramping in over the first few dp of travel.
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
@@ -130,17 +137,18 @@ internal fun LibraryTabRow(
                 }
             }
             .horizontalScroll(scroll)
-            .padding(horizontal = horizontalInset, vertical = YomuTheme.space.xs)
+            .padding(horizontal = horizontalInset)
             .drawBehind {
                 val span = spans.interpolate(position()) ?: return@drawBehind
+                val line = LineHeight.toPx()
                 drawRoundRect(
-                    color = pillColor,
-                    topLeft = Offset(span.left, 0f),
-                    size = Size(span.width, size.height),
-                    cornerRadius = CornerRadius(size.height / 2),
+                    color = lineColor,
+                    topLeft = Offset(span.left, size.height - line),
+                    size = Size(span.width, line),
+                    cornerRadius = CornerRadius(line / 2),
                 )
             },
-        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+        horizontalArrangement = Arrangement.spacedBy(TabGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         tabs.forEachIndexed { index, tab ->
@@ -182,31 +190,22 @@ private fun LibraryTabPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val labelStyle = MaterialTheme.typography.titleSmallEmphasized
-    val countStyle = MaterialTheme.typography.labelMedium
-    Row(
+    val style = MaterialTheme.typography.bodyLarge.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+    Box(
         modifier = modifier
             .height(TabHeight)
-            .clip(YomuShapeTokens.pill)
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .selectable(selected = selected, role = Role.Tab, indication = null, interactionSource = null, onClick = onClick)
             .semantics {
                 contentDescription = "${tab.label}, ${tab.count} ${if (tab.count == 1) "book" else "books"}"
-            }
-            .padding(horizontal = YomuTheme.space.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            },
+        contentAlignment = Alignment.Center,
     ) {
         BasicText(
             text = tab.label,
-            style = labelStyle,
+            style = style,
             color = labelColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-        BasicText(
-            text = tab.count.toString(),
-            style = countStyle,
-            color = { labelColor().copy(alpha = 0.72f) },
         )
     }
 }
@@ -214,26 +213,18 @@ private fun LibraryTabPill(
 /** The strip's quiet last item: opens the tab editor (add a collection, rearrange tabs). */
 @Composable
 private fun AddTabButton(onClick: () -> Unit) {
-    Row(
+    Box(
         modifier = Modifier
-            .height(TabHeight)
-            .clip(YomuShapeTokens.pill)
+            .size(TabHeight)
             .selectable(selected = false, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Add or arrange tabs" }
-            .padding(start = YomuTheme.space.sm, end = YomuTheme.space.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+            .semantics { contentDescription = "Add or arrange tabs" },
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             Icons.Rounded.Add,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-        Text(
-            text = "Add",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
+            tint = YomuTheme.stack.muted,
+            modifier = Modifier.size(22.dp),
         )
     }
 }

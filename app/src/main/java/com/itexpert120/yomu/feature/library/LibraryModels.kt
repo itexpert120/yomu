@@ -56,6 +56,8 @@ data class LibraryUiState(
     // Number of selectable grid items (excludes the continue-reading hero); for "select all".
     val selectableCount: Int = 0,
     val continueReading: LibraryBook? = null,
+    // Books in progress for the pile: opened, not finished, most recent first (at most three).
+    val pile: List<LibraryBook> = emptyList(),
     val books: List<LibraryBook> = emptyList(),
     val sortMode: SortMode = SortMode.Recent,
     val viewMode: LibraryViewMode = LibraryViewMode.ComfortableGrid,

@@ -1,18 +1,25 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.R
@@ -174,6 +181,14 @@ object StackType {
     val Label = style(13f, 17f, 600)
     val Caption = style(12f, 16f, 400)
 }
+
+/**
+ * Stack's one static cover shadow (0 1 2 and 0 14 28 −12): covers sit on the page like objects.
+ * Apply before the cover's clip. Nothing in Stack animates elevation.
+ */
+fun Modifier.stackCoverShadow(shape: Shape = RoundedCornerShape(4.dp)): Modifier = this
+    .dropShadow(shape, Shadow(radius = 28.dp, spread = (-12).dp, offset = DpOffset(0.dp, 14.dp), color = Color.Black.copy(alpha = 0.42f)))
+    .dropShadow(shape, Shadow(radius = 2.dp, offset = DpOffset(0.dp, 1.dp), color = Color.Black.copy(alpha = 0.2f)))
 
 internal val StackTypography: Typography = Typography(
     displayLarge = StackType.Figure,
