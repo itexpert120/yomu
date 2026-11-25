@@ -396,31 +396,13 @@ private fun AppearanceGroup(
 ) {
     YomuSettingGroup(
         title = "Appearance",
-        subtitle = "Set the app’s tone. Reader page themes stay independent.",
+        subtitle = "Light, dark or following the system. Reading themes are set in the reader.",
     ) {
         YomuSectionLabel("Mode")
         YomuSettingContainer {
             ThemeChoiceRow(
                 selectedTheme = selectedTheme,
                 onSelectTheme = onSelectTheme,
-            )
-        }
-        YomuSectionLabel("Colour theme")
-        YomuSettingContainer {
-            ColorThemePicker(
-                selection = accentSelection,
-                style = colorStyle,
-                onSelect = onSelectAccent,
-            )
-        }
-        YomuSectionLabel(
-            if (accentSelection == AccentSelection.Wallpaper) "Palette style · set by your wallpaper" else "Palette style",
-        )
-        YomuSettingContainer {
-            ColorStyleRow(
-                selected = colorStyle,
-                enabled = accentSelection != AccentSelection.Wallpaper,
-                onSelect = onSelectColorStyle,
             )
         }
         OledSettingRow(

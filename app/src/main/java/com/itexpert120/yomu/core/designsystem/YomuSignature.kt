@@ -58,20 +58,20 @@ const val YomuBookCoverAspectRatio: Float = 1f / 1.5f
 
 /** Role-based corner grammar. Prefer these over literal `RoundedCornerShape`s in feature code. */
 object YomuShapeTokens {
-    /** Book covers, wherever they appear. */
+    /** Book covers, wherever they appear (Stack: 4dp, with one static shadow). */
     val cover: Shape
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.shapes.medium
+        get() = MaterialTheme.shapes.extraSmall
 
-    /** Hero cards, contained panes, dialogs. */
+    /** Hero cards, contained panes, dialogs (Stack: card on desk, 24dp). */
     val hero: Shape
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.shapes.extraLarge
+        get() = MaterialTheme.shapes.large
 
-    /** Standalone tiles and cards that sit in a grid. */
+    /** Standalone tiles and rows (Stack: row/inset, 16dp). */
     val tile: Shape
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.shapes.large
+        get() = MaterialTheme.shapes.medium
 
     /** Small inline containers: tags, thumbnails, previews inside a row. */
     val inset: Shape
