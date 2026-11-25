@@ -200,7 +200,8 @@ internal class HighlightKind @Inject constructor(private val dao: SyncDao, priva
         val shaById = store.localBooks()
         return dao.highlights().mapNotNull { h ->
             val sha = shaById[h.bookId] ?: return@mapNotNull null
-            record(h.id, sha, HighlightPayload(sha, h.locatorJson, h.text, h.colorArgb, h.createdAt), h.createdAt)
+            val payload = HighlightPayload(sha, h.locatorJson, h.text, h.colorArgb, h.createdAt, h.note, h.style, h.modifiedAt)
+            record(h.id, sha, payload, maxOf(h.createdAt, h.modifiedAt))
         }
     }
 
@@ -209,7 +210,7 @@ internal class HighlightKind @Inject constructor(private val dao: SyncDao, priva
             dao.deleteHighlight(id)
         } else {
             val h = payload
-            dao.upsertHighlight(HighlightEntity(id, checkNotNull(ctx.bookId), h.locator, h.text, h.color, h.createdAt))
+            dao.upsertHighlight(HighlightEntity(id, checkNotNull(ctx.bookId), h.locator, h.text, h.color, h.createdAt, h.note, h.style, h.modifiedAt))
         }
         return stored(payload)
     }

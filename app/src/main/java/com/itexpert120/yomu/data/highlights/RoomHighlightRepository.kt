@@ -3,6 +3,7 @@ package com.itexpert120.yomu.data.highlights
 import com.itexpert120.yomu.core.database.HighlightDao
 import com.itexpert120.yomu.core.database.HighlightEntity
 import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.core.reader.HighlightStyle
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -15,7 +16,7 @@ class RoomHighlightRepository @Inject constructor(
     private val dao: HighlightDao,
 ) : HighlightRepository {
 
-    override fun observeForBook(bookId: BookId): Flow<List<ReaderHighlight>> = dao.observeForBook(bookId.value).map { rows -> rows.map { it.toModel() } }
+    override fun observeForBook(bookId: BookId): Flow<List<ReaderHighlight>> = dao.observeForBook(bookId.value).map { rows -> rows.map { it.toReaderHighlight() } }
 
     override suspend fun add(
         bookId: BookId,
@@ -32,18 +33,28 @@ class RoomHighlightRepository @Inject constructor(
             createdAt = System.currentTimeMillis(),
         )
         dao.upsert(entity)
-        return entity.toModel()
+        return entity.toReaderHighlight()
     }
 
-    override suspend fun updateColor(id: String, colorArgb: Int) = dao.updateColor(id, colorArgb)
+    override suspend fun updateColor(id: String, colorArgb: Int) = dao.updateColor(id, colorArgb, System.currentTimeMillis())
+
+    override suspend fun setNote(id: String, note: String?) = dao.updateNote(id, normalizedNote(note), System.currentTimeMillis())
+
+    override suspend fun setStyle(id: String, style: HighlightStyle) = dao.updateStyle(id, style.key, System.currentTimeMillis())
 
     override suspend fun delete(id: String) = dao.deleteById(id)
-
-    private fun HighlightEntity.toModel() = ReaderHighlight(
-        id = id,
-        locatorJson = locatorJson,
-        text = text,
-        colorArgb = colorArgb,
-        createdAt = createdAt,
-    )
 }
+
+/** A note as stored: surrounding blank lines trimmed, and an empty note is no note. */
+fun normalizedNote(note: String?): String? = note?.trim('\n', '\r', ' ', '\t')?.takeIf { it.isNotEmpty() }
+
+fun HighlightEntity.toReaderHighlight() = ReaderHighlight(
+    id = id,
+    locatorJson = locatorJson,
+    text = text,
+    colorArgb = colorArgb,
+    createdAt = createdAt,
+    note = note,
+    style = HighlightStyle.fromKey(style),
+    modifiedAt = modifiedAt,
+)

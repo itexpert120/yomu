@@ -53,7 +53,7 @@ com.itexpert120.yomu
 │   ├── model/                   # Book (+ Book.shelfStatus: ShelfStatus, the only place manual status
 │   │                            #   wins over progress), ReaderSettings, LibraryPreferences, AccentColor,
 │   │                            #   ThemePreference, CustomReaderTheme, ReadingStats, …
-│   ├── database/                # Room: YomuDatabase (v18) + BookEntity, ChapterReadEntity,
+│   ├── database/                # Room: YomuDatabase (v19) + BookEntity, ChapterReadEntity,
 │   │                            #   ReaderSettingsEntity, BookTocEntity, ReadingDayEntity,
 │   │                            #   ReadingSessionEntity, HighlightEntity, BookmarkEntity,
 │   │                            #   CollectionEntity, BookCollectionEntity,
@@ -76,7 +76,13 @@ com.itexpert120.yomu
 │   ├── reader/readium/          # ReadiumReaderEngine (+ PagePresentation, ReadiumMetadataExtractor,
 │   │                            #   ReadiumRestoreGuard, RendererGoneGuard) — the ONLY package that imports Readium
 │   ├── settings/                # AppSettingsRepository, LibraryPrefsRepository, ReaderSettingsRepository
-│   ├── highlights/              # HighlightRepository + RoomHighlightRepository
+│   ├── highlights/              # HighlightRepository + RoomHighlightRepository (colour, note, style:
+│   │                            #   highlight/underline/squiggly/strikethrough; edits stamp modifiedAt)
+│   ├── annotations/             # BookAnnotations: export one book's highlights/notes/bookmarks by TOC
+│   │                            #   chapter in reading order (Markdown, HTML, versioned Open Reader JSON
+│   │                            #   keyed by the EPUB sha256; share via the cache/shared FileProvider) and
+│   │                            #   import that JSON (preview + merge without duplicates); CalibreAnnotations
+│   │                            #   reads META-INF/calibre_bookmarks.txt from an EPUB as an import
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
 │   ├── collections/             # LibraryCatalog.observe(): Catalog (books + collection ids) with tabs(),
 │   │                            #   organize(), entry(); organize writes stamp edits. "Shelf" survives only

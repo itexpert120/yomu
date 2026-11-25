@@ -1,5 +1,8 @@
 package com.itexpert120.yomu.data.sync
 
+import com.itexpert120.yomu.core.database.DEFAULT_HIGHLIGHT_STYLE
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -66,8 +69,23 @@ internal data class BookmarkPayload(
     val createdAt: Long,
 )
 
+/**
+ * [note], [style] and [modifiedAt] came later: they are left off the wire while at their defaults,
+ * so an unedited highlight encodes exactly as older builds wrote it (and no upgrade re-pushes every
+ * highlight), and older builds, which ignore unknown keys, still read a record that carries them.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
-internal data class HighlightPayload(val sha256: String, val locator: String, val text: String, val color: Int, val createdAt: Long)
+internal data class HighlightPayload(
+    val sha256: String,
+    val locator: String,
+    val text: String,
+    val color: Int,
+    val createdAt: Long,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val note: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val style: String = DEFAULT_HIGHLIGHT_STYLE,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val modifiedAt: Long = 0,
+)
 
 @Serializable
 internal data class SessionPayload(val sha256: String, val startedAt: Long, val seconds: Long)
