@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +28,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -282,6 +287,10 @@ fun YomuNavHost(
                 onOpenAbout = { navController.navigate(About) },
                 onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
                 onOpenSync = { navController.navigate(Sync) },
+                // A tab switch beside an open book pane closes the pane as the tab changes.
+                onLeaveLibrary = {
+                    navController.currentBackStackEntry?.takeIf { it.destination.hasRoute<BookDetails>() }?.let(::popWhenSettled)
+                },
             )
         }
     }
@@ -312,9 +321,19 @@ private fun LibraryLayer(
     val besidePane = top?.hasRoute<BookDetails>() == true && pane.openness != null
     val back = rememberNavigationEventDispatcherOwner(enabled = homeOnTop)
     val density = LocalDensity.current
+    // The library's lifecycle is its own, not the Home entry's (which Navigation stops whenever a
+    // book is on top): it follows the host's while the library is on screen — beside a book pane,
+    // or dimmed under a phone sheet — so it keeps collecting, its tabs keep switching and what it
+    // shows stays current, and drops to CREATED while another page covers it.
+    val host = LocalLifecycleOwner.current
+    val hostState by host.lifecycle.currentStateFlow.collectAsState()
+    val lifecycle = remember { LibraryLifecycleOwner() }
+    val target = (if (shown) hostState else minOf(hostState, Lifecycle.State.CREATED)).coerceAtLeast(Lifecycle.State.CREATED)
+    SideEffect { lifecycle.moveTo(target) }
+    DisposableEffect(lifecycle) { onDispose { lifecycle.moveTo(Lifecycle.State.DESTROYED) } }
     CompositionLocalProvider(
         LocalViewModelStoreOwner provides home,
-        LocalLifecycleOwner provides home,
+        LocalLifecycleOwner provides lifecycle,
         LocalSavedStateRegistryOwner provides home,
         LocalNavigationEventDispatcherOwner provides back,
     ) {
@@ -337,6 +356,16 @@ private fun LibraryLayer(
     }
 }
 
+/** The library layer's lifecycle (see [LibraryLayer]). */
+private class LibraryLifecycleOwner : LifecycleOwner {
+    private val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = registry
+
+    fun moveTo(state: Lifecycle.State) {
+        if (registry.currentState != Lifecycle.State.DESTROYED) registry.currentState = state
+    }
+}
+
 @Composable
 private fun TopLevelNavigationShell(
     appViewModel: AppViewModel,
@@ -346,6 +375,7 @@ private fun TopLevelNavigationShell(
     onOpenAbout: () -> Unit,
     onOpenReaderDefaults: () -> Unit,
     onOpenSync: () -> Unit,
+    onLeaveLibrary: () -> Unit,
 ) {
     val navController = rememberNavController()
     val currentDestination = navController.currentBackStackEntryAsState().value?.destination
@@ -364,7 +394,12 @@ private fun TopLevelNavigationShell(
     var librarySelecting by remember { mutableStateOf(false) }
     YomuTopLevelNavigation(
         selected = selected,
-        onSelected = { destination -> if (destination != selected && navController.navigateTopLevel(destination)) tabTap[0] = true },
+        onSelected = { destination ->
+            if (destination != selected && navController.navigateTopLevel(destination)) {
+                tabTap[0] = true
+                onLeaveLibrary()
+            }
+        },
         barVisible = !librarySelecting,
     ) { hostModifier ->
         NavHost(

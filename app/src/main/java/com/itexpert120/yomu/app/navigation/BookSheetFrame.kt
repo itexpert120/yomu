@@ -2,6 +2,7 @@ package com.itexpert120.yomu.app.navigation
 
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -14,11 +15,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
@@ -36,6 +39,7 @@ import com.itexpert120.yomu.feature.bookdetails.BookSheetResume
 import com.itexpert120.yomu.feature.bookdetails.LocalBookSheetHold
 import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
 import com.itexpert120.yomu.feature.bookdetails.bookPaneWidth
+import kotlinx.coroutines.launch
 
 /** Behind an open book the library dims to 80% (spec: black at 20%, never blur). */
 internal const val SheetDim = 0.2f
@@ -86,19 +90,27 @@ internal fun AnimatedContentScope.BookSheetFrame(
     val slowSpring = remember(scheme) { scheme.slowSpatialSpec<Float>() }
     val enterSpring = if (paneMode) slowSpring else sheetSpring
     val dimSpring = remember(scheme) { scheme.defaultEffectsSpec<Float>() }
-    // 1 = off screen, 0 = at rest. Opening springs; any other move is the linear back clock.
+    // 1 = off screen, 0 = at rest: the back clock (and the transition's length while opening).
     val hidden = transition.animateFloat(
         transitionSpec = {
             if (initialState == EnterExitState.PreEnter) enterSpring else tween(YomuMotion.BackSlideMillis, easing = LinearEasing)
         },
         label = "bookSheet",
     ) { state -> if (motionEnabled && state != EnterExitState.Visible) 1f else 0f }
-    val undimmed = transition.animateFloat(
-        transitionSpec = {
-            if (initialState == EnterExitState.PreEnter) dimSpring else tween(YomuMotion.BackSlideMillis, easing = LinearEasing)
-        },
-        label = "bookSheetDim",
-    ) { state -> if (motionEnabled && state != EnterExitState.Visible) 1f else 0f }
+    // Opening runs on its own clock, started only once the page's first frame — its heaviest, where
+    // the whole page composes — has been drawn: the sheet waits off screen through that frame and
+    // then rises from its very start, instead of the spring's first steps being spent inside one
+    // long frame (a jump). The dim follows the same start.
+    val entering = remember { motionEnabled && transition.currentState == EnterExitState.PreEnter }
+    val rising = remember { Animatable(if (entering) 1f else 0f) }
+    val undimming = remember { Animatable(if (entering) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!entering) return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
+        launch { undimming.animateTo(0f, dimSpring) }
+        rising.animateTo(0f, enterSpring)
+    }
     val leaving = transition.targetState == EnterExitState.PostExit
     // Decided in composition, unlike the back flags: a pop must not gain these springs, or a back
     // gesture would seek a longer transition and distort its own pose.
@@ -135,7 +147,7 @@ internal fun AnimatedContentScope.BookSheetFrame(
         val held = hold.offsetPx.coerceIn(0f, extent.coerceAtLeast(0f))
         val moved = when {
             closing() -> slide.position(hidden.value, dragging = !motion.released, tap = motion.tapPop)
-            opening() -> hidden.value
+            opening() -> rising.value
             else -> 0f
         }
         return if (extent <= 0f) moved else (held + (extent - held) * moved) / extent
@@ -159,7 +171,7 @@ internal fun AnimatedContentScope.BookSheetFrame(
                     // The dimmed library under a phone sheet takes no touches.
                     .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
                     .drawBehind {
-                        val gone = if (opening()) undimmed.value else travel(size.height)
+                        val gone = if (opening()) undimming.value else travel(size.height)
                         drawRect(Color.Black, alpha = SheetDim * (1f - gone).coerceIn(0f, 1f))
                     },
             )
