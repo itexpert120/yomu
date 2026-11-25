@@ -159,7 +159,8 @@ internal fun ReaderBrowseSheetContent(
     // The reader's state names the tab (the menu's Marks opens on Bookmarks); the pager follows it,
     // and reports where a swipe or tap lands so the two never disagree.
     LaunchedEffect(current) {
-        if (pager.targetPage != current.ordinal) pager.scrollToPage(current.ordinal)
+        // Only follow a change made elsewhere (the menu's Marks); never jump a page the finger holds.
+        if (!pager.isScrollInProgress && pager.targetPage != current.ordinal) pager.scrollToPage(current.ordinal)
     }
     LaunchedEffect(pager) {
         snapshotFlow { pager.settledPage }.drop(1).distinctUntilChanged().collect { currentOnSelectTab(tabs[it]) }
@@ -175,6 +176,9 @@ internal fun ReaderBrowseSheetContent(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalAlignment = Alignment.Top,
             key = { tabs[it] },
+            // Keep every tab composed: a page rebuilt mid-swipe (outline of thousands of chapters, its
+            // list re-placing at the current chapter) made the incoming tab jitter as it slid in.
+            beyondViewportPageCount = tabs.size - 1,
         ) { page ->
             when (tabs[page]) {
                 BrowseTab.Contents -> ContentsPage(
