@@ -865,8 +865,11 @@ export class Paginator extends HTMLElement {
         this.scrollBy(dx, dy)
     }
     #onTouchEnd() {
+        // Open Reader: only a drag needs snapping to a page. After a tap, the snap (a frame later)
+        // caught the tap's own page turn just starting and slid it back to the page it left.
+        const dragged = this.#touchScrolled
         this.#touchScrolled = false
-        if (this.scrolled) return
+        if (this.scrolled || !dragged) return
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at
