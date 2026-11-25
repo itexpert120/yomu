@@ -208,9 +208,14 @@ const reportLocation = detail => {
     const fraction = scrolled
         ? (r.viewSize > 0 ? r.start / r.viewSize : 0)
         : (textPages > 1 ? page / (textPages - 1) : 0)
+    // How far through the scrollable range: 1 at the chapter's end (`fraction` measures the top of
+    // the screen, so it never gets there).
+    const scrollRange = r.viewSize - r.size
+    const measured = scrolled ? (scrollRange > 1 ? r.start / scrollRange : 1) : fraction
     report('relocate', {
         index: detail.section?.current,
         fraction: Math.min(1, Math.max(0, fraction)),
+        measured: Math.min(1, Math.max(0, measured)),
         total: detail.fraction,
         cfi: detail.cfi,
         page,
@@ -543,6 +548,135 @@ view.addEventListener('create-overlay', ({ detail: { index } }) => Promise.resol
     }
 }))
 
+// --- Scrolled flow: continuing into the adjacent chapter, and the scrollbar ---
+// Each chapter scrolls on its own. Pulling on past either end and letting go continues into the
+// adjacent chapter: reported as `continue` { index, forward } for the app to navigate (so it can
+// count the chapter as read through). A badge with an arrow grows with the pull and fills once
+// letting go will continue.
+
+// CSS px of finger travel past the edge; well beyond a scrolling flick's overshoot.
+const PULL = 140
+const isScrolled = () => settings.flow === 'scrolled' && view.renderer?.scrolled
+const adjacentIndex = dir => {
+    const current = view.renderer?.getContents()?.[0]?.index
+    const sections = view.book?.sections ?? []
+    if (current == null) return null
+    for (let i = current + dir; i >= 0 && i < sections.length; i += dir) {
+        if (sections[i]?.linear !== 'no') return i
+    }
+    return null
+}
+const atEdge = dir => {
+    const r = view.renderer
+    return dir > 0 ? r.viewSize - r.end <= 2 : r.start <= 1
+}
+const hasSelection = () => (view.renderer?.getContents() ?? [])
+    .some(({ doc }) => doc.getSelection()?.type === 'Range')
+
+const SVG = 'http://www.w3.org/2000/svg'
+const pullHint = document.createElement('div')
+pullHint.id = 'yomu-pull'
+const pullArrow = document.createElementNS(SVG, 'svg')
+pullArrow.setAttribute('viewBox', '0 0 24 24')
+const pullArrowPath = document.createElementNS(SVG, 'path')
+pullArrowPath.setAttribute('d', 'M12 19V5M5 12l7-7 7 7')
+pullArrow.append(pullArrowPath)
+pullHint.append(pullArrow)
+document.body.append(pullHint)
+
+const pull = { active: false, dir: 0, from: 0, last: 0, distance: 0 }
+
+const showPull = () => {
+    const progress = Math.min(1, pull.distance / PULL)
+    const armed = pull.distance >= PULL
+    const ink = settings.colors?.ink ?? 'gray'
+    pullHint.className = pull.dir > 0 ? 'next' : 'prev'
+    pullHint.style.transition = 'none'
+    pullHint.style.opacity = String(progress)
+    pullHint.style.scale = String(0.6 + 0.4 * progress)
+    pullHint.style.color = armed ? (settings.colors?.page ?? 'white') : ink
+    pullHint.style.background = armed ? ink : `color-mix(in srgb, ${ink} 16%, transparent)`
+}
+const hidePull = () => {
+    pullHint.style.transition = ''
+    pullHint.style.opacity = '0'
+}
+
+const onPullStart = e => {
+    pull.active = isScrolled() && e.touches.length === 1
+    pull.dir = 0
+    pull.distance = 0
+    pull.last = e.touches[0]?.screenY ?? 0
+}
+const onPullMove = e => {
+    if (!pull.active) return
+    if (e.touches.length > 1) {
+        pull.active = false
+        hidePull()
+        return
+    }
+    const y = e.touches[0].screenY
+    const dy = y - pull.last
+    pull.last = y
+    if (!pull.dir) {
+        // Finger moving up reads on (forward), down reads back.
+        const dir = dy < 0 ? 1 : dy > 0 ? -1 : 0
+        if (dir && atEdge(dir) && adjacentIndex(dir) != null && !hasSelection()) {
+            pull.dir = dir
+            pull.from = y
+        }
+        return
+    }
+    pull.distance = Math.max(0, (pull.from - y) * pull.dir)
+    if (pull.distance === 0) {
+        // Pulled back to where it started: scrolling again, not continuing.
+        pull.dir = 0
+        hidePull()
+        return
+    }
+    showPull()
+}
+const onPullEnd = () => {
+    if (!pull.active) return
+    pull.active = false
+    hidePull()
+    const index = pull.dir && pull.distance >= PULL ? adjacentIndex(pull.dir) : null
+    if (index != null) report('continue', { index, forward: pull.dir > 0 })
+    pull.dir = 0
+}
+const listenForPulls = target => {
+    target.addEventListener('touchstart', onPullStart, { passive: true })
+    target.addEventListener('touchmove', onPullMove, { passive: true })
+    target.addEventListener('touchend', onPullEnd, { passive: true })
+    target.addEventListener('touchcancel', onPullEnd, { passive: true })
+}
+// Below a short chapter the touches land on this page rather than the chapter's.
+listenForPulls(document)
+view.addEventListener('load', ({ detail: { doc } }) => listenForPulls(doc))
+
+// The chapter scrolls inside foliate's (closed) shadow root, out of reach of the WebView's own
+// scrollbar, so the page draws one: shown while scrolling, faded out shortly after.
+const scrollbar = document.createElement('div')
+scrollbar.id = 'yomu-scrollbar'
+document.body.append(scrollbar)
+let scrollbarTimer = 0
+const showScrollbar = () => {
+    const r = view.renderer
+    if (!isScrolled() || settings.showScrollbar === false || !(r.viewSize > r.size + 1)) {
+        scrollbar.style.opacity = '0'
+        return
+    }
+    const track = innerHeight
+    const height = Math.max(32, track * r.size / r.viewSize)
+    const top = (track - height) * Math.min(1, r.start / (r.viewSize - r.size))
+    scrollbar.style.height = `${height}px`
+    scrollbar.style.transform = `translateY(${top}px)`
+    scrollbar.style.background = settings.colors?.ink ?? 'gray'
+    scrollbar.style.opacity = '0.4'
+    clearTimeout(scrollbarTimer)
+    scrollbarTimer = setTimeout(() => scrollbar.style.opacity = '0', 900)
+}
+
 globalThis.yomuApplySettings = next => {
     settings = next
     applyPageColor()
@@ -574,6 +708,7 @@ const loadBook = () => bookLoad ??= (async () => {
         }
     }
     await view.open(book)
+    view.renderer.addEventListener('scroll', showScrollbar)
     report('view-open')
     return book
 })()

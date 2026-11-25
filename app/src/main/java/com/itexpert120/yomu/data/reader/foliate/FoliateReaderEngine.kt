@@ -76,7 +76,7 @@ import kotlin.math.ceil
  * from Readium's parser (import-time cache, or [ReadiumReaderEngine.publicationCache] on a miss), so
  * chapter read marks stay keyed the same.
  *
- * Not yet ported (no-ops for now): the scroll-mode chapter rubberband.
+ * Scroll mode continues into the adjacent chapter when the reader pulls on past either end.
  */
 @Singleton
 class FoliateReaderEngine @Inject constructor(
@@ -463,6 +463,7 @@ private class FoliateReaderSession(
             "center-tap" -> _centerTaps.tryEmit(Unit)
             "footnote" -> JSONObject(json).optString("html").takeIf { it.isNotBlank() }?.let(_footnotes::tryEmit)
             "search-hits", "search-done" -> onSearchEvent(name, JSONObject(json))
+            "continue" -> JSONObject(json).let { continueReading(it.optInt("index", -1), it.optBoolean("forward")) }
             "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
             "error" -> Log.w(TAG, "page: $json")
         }
@@ -476,9 +477,16 @@ private class FoliateReaderSession(
         val cfi = event.optString("cfi").takeIf { it.isNotEmpty() && it != "null" }
         val title = event.optString("title").takeIf { it.isNotEmpty() && it != "null" }
         if (event.optBoolean("scrolled")) {
-            position.onScrollMeasured(href, fraction)
+            position.onScrollMeasured(href, event.optDouble("measured", fraction).takeUnless { it.isNaN() } ?: fraction)
         } else {
             position.onPage(href, event.optInt("page"), event.optInt("pages"))
+        }
+        // A continue that ends up somewhere else completes nothing.
+        continuing?.let { (from, to) ->
+            if (index != from) {
+                if (index != to) position.cancelCrossing()
+                continuing = null
+            }
         }
         val snapshot = position.onLocator(href = href, progression = fraction, totalProgression = total, title = title)
         val locations = JSONObject().put("progression", fraction)
@@ -497,6 +505,23 @@ private class FoliateReaderSession(
     // endregion
 
     // region Navigation
+
+    // A scroll-mode continue (from section, to section) until the page reports a new section.
+    private var continuing: Pair<Int, Int>? = null
+
+    /**
+     * Scroll mode: the reader pulled past a chapter's end (or start) to read on into section
+     * [index]. Going forward is reading continuously, so it completes the chapter left behind;
+     * going back opens the previous section at its end.
+     */
+    private fun continueReading(index: Int, forward: Boolean) {
+        val href = book.readingOrder.getOrNull(index) ?: return
+        if (forward) {
+            position.expectSequentialCrossing(href)
+            continuing = target.optInt("index", -1) to index
+        }
+        go(JSONObject().put("index", index).put("fraction", if (forward) 0 else 1))
+    }
 
     override fun nextChapter() = goToSection(+1)
 
@@ -612,6 +637,7 @@ private class FoliateReaderSession(
                 },
             )
             .put("tapTurns", settings.tapNavigation)
+            .put("showScrollbar", settings.showScrollbar)
             .put("animated", ValueAnimator.areAnimatorsEnabled())
     }
 
