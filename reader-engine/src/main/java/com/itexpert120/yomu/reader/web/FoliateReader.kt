@@ -21,6 +21,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -173,6 +175,35 @@ class FoliateReader(
 
     /** Jumps to [targetJson]: `{ cfi }`, `{ href }` or `{ index, fraction }`. */
     fun goTo(targetJson: String) = webView.evaluateJavascript("globalThis.yomuGoTo?.($targetJson)", null)
+
+    /**
+     * Searches the book: [requestJson] is `{ id, query, sections, limit }` (see yomuSearch in
+     * yomu-reader.js); hits arrive through [onEvent] as `search-hits`, then `search-done`.
+     */
+    fun search(requestJson: String) = call("globalThis.yomuSearch?.($requestJson)")
+
+    fun cancelSearch() = call("globalThis.yomuCancelSearch?.()")
+
+    /** Underlines search hits [cfisJson] (a JSON array of CFIs), replacing the previous set. */
+    fun setSearchHits(cfisJson: String) = call("globalThis.yomuSetSearchHits?.($cfisJson)")
+
+    /** Runs [js] in the page; [onResult] gets its JSON result, or null before the page has loaded. */
+    fun evaluate(js: String, onResult: (String?) -> Unit) {
+        if (pageReady) webView.evaluateJavascript(js) { onResult(it) } else onResult(null)
+    }
+
+    /**
+     * Kills a renderer that stopped responding, so [onRendererGone] rebuilds as after a crash (a new
+     * page would share the hung renderer). False when the WebView can't do that.
+     */
+    fun terminateRenderer(): Boolean {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.GET_WEB_VIEW_RENDERER) ||
+            !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_VIEW_RENDERER_TERMINATE)
+        ) {
+            return false
+        }
+        return WebViewCompat.getWebViewRenderProcess(webView)?.terminate() ?: false
+    }
 
     fun next() = call("document.querySelector('foliate-view')?.next()")
 

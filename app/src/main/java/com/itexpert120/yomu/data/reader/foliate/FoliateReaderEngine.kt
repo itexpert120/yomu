@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.view.doOnAttach
 import androidx.core.view.doOnLayout
@@ -36,6 +37,7 @@ import com.itexpert120.yomu.data.reader.ReadingPosition
 import com.itexpert120.yomu.data.reader.readium.ReadiumReaderEngine
 import com.itexpert120.yomu.reader.epub.EpubBook
 import com.itexpert120.yomu.reader.web.FoliateReader
+import com.itexpert120.yomu.reader.web.SearchText
 import com.itexpert120.yomu.reader.web.SelectionAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -44,18 +46,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 import kotlin.math.ceil
 
 /**
@@ -67,8 +77,7 @@ import kotlin.math.ceil
  * from Readium's parser (import-time cache, or [ReadiumReaderEngine.publicationCache] on a miss), so
  * chapter read marks stay keyed the same.
  *
- * Not yet ported (no-ops for now): in-book search, footnote popups, and the scroll-mode chapter
- * rubberband.
+ * Scroll mode continues into the adjacent chapter when the reader pulls on past either end.
  */
 @Singleton
 class FoliateReaderEngine @Inject constructor(
@@ -311,6 +320,8 @@ private class FoliateReaderSession(
 
     override val title: String = book.title ?: "Reading"
 
+    private val main = Handler(Looper.getMainLooper())
+
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
@@ -326,8 +337,8 @@ private class FoliateReaderSession(
     private val _highlightTaps = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val highlightTaps: SharedFlow<String> = _highlightTaps.asSharedFlow()
 
-    // Not ported yet: never emits.
-    override val footnotes: SharedFlow<String> = MutableSharedFlow<String>().asSharedFlow()
+    private val _footnotes = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val footnotes: SharedFlow<String> = _footnotes.asSharedFlow()
 
     // The latest highlight set, drawn once the page shows (and again on a rebuilt page).
     private var highlights: List<ReaderHighlight> = emptyList()
@@ -418,9 +429,14 @@ private class FoliateReaderSession(
         return created
     }
 
-    private fun onRendererGone() {
+    private fun onRendererGone() = rebuild("Reader: WebView renderer was killed; rebuilt the page view")
+
+    /** Replaces the page with a fresh one at [target] (the old one is dead or not answering). */
+    private fun rebuild(reason: String) {
         if (closed) return
-        crashLog.note("Reader: WebView renderer was killed; rebuilt the page view")
+        crashLog.note(reason)
+        // A search running in the old page ends with the hits it had.
+        activeSearch?.events?.close()
         reader?.close()
         reader = null
         val container = hostContainer
@@ -439,10 +455,14 @@ private class FoliateReaderSession(
                 ReaderOpenTrace.mark("reader.first-page")
                 _renderState.value = ReaderRenderState.Ready(_currentLocator.value?.href)
                 drawHighlights()
+                drawSearchHits()
             }
             "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
+            "footnote" -> JSONObject(json).optString("html").takeIf { it.isNotBlank() }?.let(_footnotes::tryEmit)
+            "search-hits", "search-done" -> onSearchEvent(name, JSONObject(json))
+            "continue" -> JSONObject(json).let { continueReading(it.optInt("index", -1), it.optBoolean("forward")) }
             "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
             "error" -> Log.w(TAG, "page: $json")
         }
@@ -456,9 +476,16 @@ private class FoliateReaderSession(
         val cfi = event.optString("cfi").takeIf { it.isNotEmpty() && it != "null" }
         val title = event.optString("title").takeIf { it.isNotEmpty() && it != "null" }
         if (event.optBoolean("scrolled")) {
-            position.onScrollMeasured(href, fraction)
+            position.onScrollMeasured(href, event.optDouble("measured", fraction).takeUnless { it.isNaN() } ?: fraction)
         } else {
             position.onPage(href, event.optInt("page"), event.optInt("pages"))
+        }
+        // A continue that ends up somewhere else completes nothing.
+        continuing?.let { (from, to) ->
+            if (index != from) {
+                if (index != to) position.cancelCrossing()
+                continuing = null
+            }
         }
         val snapshot = position.onLocator(href = href, progression = fraction, totalProgression = total, title = title)
         val locations = JSONObject().put("progression", fraction)
@@ -477,6 +504,23 @@ private class FoliateReaderSession(
     // endregion
 
     // region Navigation
+
+    // A scroll-mode continue (from section, to section) until the page reports a new section.
+    private var continuing: Pair<Int, Int>? = null
+
+    /**
+     * Scroll mode: the reader pulled past a chapter's end (or start) to read on into section
+     * [index]. Going forward is reading continuously, so it completes the chapter left behind;
+     * going back opens the previous section at its end.
+     */
+    private fun continueReading(index: Int, forward: Boolean) {
+        val href = book.readingOrder.getOrNull(index) ?: return
+        if (forward) {
+            position.expectSequentialCrossing(href)
+            continuing = target.optInt("index", -1) to index
+        }
+        go(JSONObject().put("index", index).put("fraction", if (forward) 0 else 1))
+    }
 
     override fun nextChapter() = goToSection(+1)
 
@@ -508,13 +552,27 @@ private class FoliateReaderSession(
         val cfi = locations?.optString("cfi")?.takeIf { it.isNotEmpty() }
         val fragment = locations?.optJSONArray("fragments")?.optString(0)?.takeIf { it.isNotEmpty() }
         val progression = locations?.optDouble("progression")?.takeUnless { it.isNaN() }
+        val text = quotedText(locator)
         return JSONObject().put("index", index).apply {
             when {
                 cfi != null -> put("cfi", cfi)
+                // A position the Readium engine wrote (bookmark, highlight, synced position) is
+                // found by its text, as Readium would.
+                text != null -> put("text", text).put("fraction", progression ?: 0.0)
                 fragment != null -> put("href", "${book.paths[index]}#$fragment")
                 else -> put("fraction", progression ?: 0.0)
             }
         }
+    }
+
+    /** A locator's `text` (before / highlight / after) when it quotes some, else null. */
+    private fun quotedText(locator: JSONObject): JSONObject? {
+        val text = locator.optJSONObject("text") ?: return null
+        val highlight = text.optString("highlight").takeIf { it.isNotBlank() } ?: return null
+        return JSONObject()
+            .put("before", text.optString("before"))
+            .put("highlight", highlight)
+            .put("after", text.optString("after"))
     }
 
     // endregion
@@ -547,7 +605,7 @@ private class FoliateReaderSession(
                 .put("family", custom.family)
                 .put(
                     "faces",
-                    org.json.JSONArray().apply {
+                    JSONArray().apply {
                         put(JSONObject().put("src", "/userfonts/regular"))
                         if (custom.italicPath != null) put(JSONObject().put("src", "/userfonts/italic").put("style", "italic"))
                     },
@@ -558,7 +616,7 @@ private class FoliateReaderSession(
                 .put("family", family)
                 .put(
                     "faces",
-                    org.json.JSONArray().apply {
+                    JSONArray().apply {
                         put(JSONObject().put("src", "/assets/fonts/$family-Regular.ttf"))
                         put(JSONObject().put("src", "/assets/fonts/$family-Italic.ttf").put("style", "italic"))
                         if (family == "Cardo") put(JSONObject().put("src", "/assets/fonts/Cardo-Bold.ttf").put("weight", "bold"))
@@ -592,6 +650,7 @@ private class FoliateReaderSession(
                 },
             )
             .put("tapTurns", settings.tapNavigation)
+            .put("showScrollbar", settings.showScrollbar)
             .put("animated", ValueAnimator.areAnimatorsEnabled())
     }
 
@@ -599,7 +658,65 @@ private class FoliateReaderSession(
 
     // endregion
 
-    override fun onForegroundResumed() = Unit
+    // region Session hooks
+
+    /**
+     * Back from the background: a killed renderer is rebuilt by [onRendererGone]; this also catches
+     * a page that no longer answers (rebuilt) or that lost its chapter (sent back to [target]).
+     */
+    override fun onForegroundResumed() {
+        val current = reader ?: return
+        if (_renderState.value !is ReaderRenderState.Ready) return
+        var answered = false
+        val unresponsive = Runnable {
+            if (answered || reader !== current) return@Runnable
+            Log.w(TAG, "Page didn't answer after returning to the foreground")
+            // Killing the renderer rebuilds through onRendererGone.
+            if (!current.terminateRenderer()) rebuild("Reader: the page stopped responding; rebuilt the page view")
+        }
+        main.postDelayed(unresponsive, ALIVE_TIMEOUT_MS)
+        current.evaluate("globalThis.yomuAlive?.()") { result ->
+            answered = true
+            main.removeCallbacks(unresponsive)
+            if (reader !== current || closed) return@evaluate
+            val state = result?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return@evaluate
+            if (state.optBoolean("shown") && !state.optBoolean("content")) {
+                Log.w(TAG, "Page lost its chapter in the background; reopening it")
+                current.goTo(target.toString())
+            }
+        }
+    }
+
+    /**
+     * The current locator plus the text at the top of the screen (`text.before/highlight/after`,
+     * as it stands in the book). The CFI already survives other screens and fonts here; the text
+     * lets an engine that anchors on text (Readium) land on the same paragraph.
+     */
+    override suspend fun portableLocator(): String? = withContext(Dispatchers.Main.immediate) {
+        val current = _currentLocator.value ?: return@withContext null
+        val reader = reader ?: return@withContext current.locatorJson
+        val result = withTimeoutOrNull(PORTABLE_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                reader.evaluate("globalThis.yomuPortable?.() ?? null") { continuation.resume(it) }
+            }
+        }
+        val portable = result?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return@withContext current.locatorJson
+        val locator = runCatching { JSONObject(current.locatorJson) }.getOrNull() ?: return@withContext current.locatorJson
+        if (book.indexOfHref(locator.optString("href")) != portable.optInt("index", -1)) return@withContext current.locatorJson
+        val highlight = portable.optString("highlight")
+        if (highlight.isEmpty()) return@withContext current.locatorJson
+        locator.optJSONObject("locations")?.put("cfi", portable.optString("cfi"))
+        locator.put(
+            "text",
+            JSONObject()
+                .put("before", portable.optString("before"))
+                .put("highlight", highlight)
+                .put("after", portable.optString("after")),
+        )
+        locator.toString().also { if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "portable $it") }
+    }
+
+    // endregion
 
     // region Selection and highlights
 
@@ -637,28 +754,177 @@ private class FoliateReaderSession(
         if (_renderState.value is ReaderRenderState.Ready) drawHighlights()
     }
 
-    // Only highlights made in this engine carry a CFI to draw; Readium's are positioned by its
-    // own text search and aren't drawn here.
+    // Highlights made in this engine carry a CFI; the Readium engine's carry their text, which the
+    // page finds when their chapter loads.
     private fun drawHighlights() {
         val reader = reader ?: return
-        val list = org.json.JSONArray()
+        val list = JSONArray()
         for (highlight in highlights) {
-            val cfi = runCatching { JSONObject(highlight.locatorJson).optJSONObject("locations")?.optString("cfi") }
-                .getOrNull()?.takeIf { it.isNotEmpty() } ?: continue
-            list.put(JSONObject().put("id", highlight.id).put("cfi", cfi).put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF)))
+            val locator = runCatching { JSONObject(highlight.locatorJson) }.getOrNull() ?: continue
+            val entry = JSONObject().put("id", highlight.id).put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF))
+            val cfi = locator.optJSONObject("locations")?.optString("cfi")?.takeIf { it.isNotEmpty() }
+            val text = quotedText(locator)
+            val index = book.indexOfHref(locator.optString("href"))
+            when {
+                cfi != null -> list.put(entry.put("cfi", cfi))
+                text != null && index >= 0 -> list.put(entry.put("index", index).put("text", text))
+            }
         }
         reader.setHighlights(list.toString())
     }
 
     // endregion
 
-    override suspend fun search(query: String): List<ReaderSearchResult> = emptyList()
+    // region Search
 
-    override fun applySearchDecorations(results: List<ReaderSearchResult>) = Unit
+    private class ActiveSearch(val id: Int, val events: Channel<JSONObject>)
 
-    override fun clearSearch() = Unit
+    private var searchIds = 0
+    private var activeSearch: ActiveSearch? = null
+
+    // The latest underlined hits, redrawn on a rebuilt page.
+    private var searchHits: List<String> = emptyList()
+
+    /**
+     * The chapter files are scanned for the query first ([SearchText], a few chapters in parallel)
+     * and the page opens only the chapters that can match: opening a document per chapter is what
+     * made foliate's own search slow. Chapters go in growing blocks, so a common word stops after
+     * the first few chapters and a rare one costs one pass over the book's text.
+     */
+    override suspend fun search(query: String): List<ReaderSearchResult> {
+        val needle = SearchText.fold(query).trim()
+        if (needle.isEmpty()) return emptyList()
+        val started = SystemClock.elapsedRealtime()
+        var scanMs = 0L
+        var candidates = 0
+        val results = ArrayList<ReaderSearchResult>()
+        withContext(Dispatchers.IO) {
+            ChapterScan(book.file, book.paths, needle).use { scan ->
+                var next = 0
+                var block = FIRST_SCAN_BLOCK
+                while (next < book.paths.size && results.size < MAX_SEARCH_RESULTS) {
+                    val end = minOf(next + block, book.paths.size)
+                    val scanStarted = SystemClock.elapsedRealtime()
+                    val sections = scan.matching(next until end)
+                    scanMs += SystemClock.elapsedRealtime() - scanStarted
+                    candidates += sections.size
+                    next = end
+                    block = minOf(block * 2, MAX_SCAN_BLOCK)
+                    if (sections.isEmpty()) continue
+                    val hits = withContext(Dispatchers.Main.immediate) {
+                        searchPage(query, sections, MAX_SEARCH_RESULTS - results.size)
+                    }
+                    results += hits
+                }
+            }
+        }
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Log.d(
+                TAG,
+                "search \"$query\": ${results.size} hits in ${SystemClock.elapsedRealtime() - started} ms " +
+                    "(scan $scanMs ms, $candidates candidate chapters)",
+            )
+        }
+        return results
+    }
+
+    /** Reads chapter files on [SCAN_WORKERS] threads, one zip handle each. */
+    private class ChapterScan(file: File, private val paths: List<String>, private val needle: String) : java.io.Closeable {
+        private val zips = List(SCAN_WORKERS) { ZipFile(file) }
+
+        /** The chapters in [range] that may hold the needle, in order. */
+        suspend fun matching(range: IntRange): List<Int> = coroutineScope {
+            zips.mapIndexed { worker, zip ->
+                async(Dispatchers.IO) {
+                    val scratch = StringBuilder()
+                    range.filter { (it - range.first) % SCAN_WORKERS == worker }.filter {
+                        ensureActive()
+                        SearchText.chapterMayContain(zip, paths[it], needle, scratch)
+                    }
+                }
+            }.awaitAll().flatten().sorted()
+        }
+
+        override fun close() = zips.forEach { runCatching { it.close() } }
+    }
+
+    private suspend fun searchPage(query: String, sections: List<Int>, limit: Int): List<ReaderSearchResult> {
+        val reader = reader ?: return emptyList()
+        activeSearch?.events?.close()
+        val search = ActiveSearch(++searchIds, Channel(Channel.UNLIMITED))
+        activeSearch = search
+        val results = ArrayList<ReaderSearchResult>()
+        var done = false
+        try {
+            reader.search(
+                JSONObject()
+                    .put("id", search.id)
+                    .put("query", query)
+                    .put("sections", JSONArray(sections))
+                    .put("limit", limit)
+                    .toString(),
+            )
+            for (event in search.events) {
+                val hits = event.optJSONArray("hits")
+                if (hits == null) {
+                    done = true
+                    break
+                }
+                for (i in 0 until hits.length()) searchResult(hits.getJSONObject(i))?.let(results::add)
+                if (results.size >= limit) break
+            }
+        } finally {
+            if (activeSearch === search) activeSearch = null
+            if (!done) this.reader?.cancelSearch()
+        }
+        return results.take(limit)
+    }
+
+    private fun onSearchEvent(name: String, event: JSONObject) {
+        val search = activeSearch?.takeIf { it.id == event.optInt("id") } ?: return
+        search.events.trySend(if (name == "search-done") JSONObject() else event)
+    }
+
+    private fun searchResult(hit: JSONObject): ReaderSearchResult? {
+        val index = hit.optInt("index", -1)
+        val href = book.readingOrder.getOrNull(index) ?: return null
+        val cfi = hit.optString("cfi").takeIf { it.isNotEmpty() } ?: return null
+        val title = hit.optString("title").takeIf { it.isNotEmpty() && it != "null" }
+        val before = hit.optString("before")
+        val match = hit.optString("match")
+        val after = hit.optString("after")
+        val locator = JSONObject()
+            .put("href", href)
+            .put("type", book.mediaTypes[index])
+            .apply { title?.let { put("title", it) } }
+            .put("locations", JSONObject().put("progression", hit.optDouble("progression", 0.0)).put("cfi", cfi))
+            .put("text", JSONObject().put("before", before).put("highlight", match).put("after", after))
+        return ReaderSearchResult(locatorJson = locator.toString(), before = before, match = match, after = after, chapterTitle = title)
+    }
+
+    override fun applySearchDecorations(results: List<ReaderSearchResult>) {
+        searchHits = results.mapNotNull { result ->
+            runCatching { JSONObject(result.locatorJson).optJSONObject("locations")?.optString("cfi") }.getOrNull()?.takeIf { it.isNotEmpty() }
+        }
+        drawSearchHits()
+    }
+
+    override fun clearSearch() {
+        activeSearch?.events?.close()
+        reader?.cancelSearch()
+        searchHits = emptyList()
+        drawSearchHits()
+    }
+
+    private fun drawSearchHits() {
+        if (_renderState.value !is ReaderRenderState.Ready) return
+        reader?.setSearchHits(JSONArray(searchHits).toString())
+    }
+
+    // endregion
 
     override fun close() {
+        activeSearch?.events?.close()
         closed = true
         unhost()
         reader?.close()
@@ -678,5 +944,15 @@ private class FoliateReaderSession(
     private companion object {
         const val TAG = "FoliateSession"
         const val HOST_TAG = "foliate-reader"
+
+        // As many hits as the Readium engine returns.
+        const val MAX_SEARCH_RESULTS = 150
+        const val FIRST_SCAN_BLOCK = 32
+        const val MAX_SCAN_BLOCK = 256
+        const val SCAN_WORKERS = 4
+
+        // How long a page may take to answer before it's taken for hung (it normally takes ms).
+        const val ALIVE_TIMEOUT_MS = 4_000L
+        const val PORTABLE_TIMEOUT_MS = 1_000L
     }
 }
