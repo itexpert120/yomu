@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -235,6 +236,7 @@ class ReadingExperienceFactory @Inject constructor(
     private val sync: SyncRepository,
     private val selectionOutlet: AndroidSelectionOutlet,
     private val imageOutlet: AndroidImageOutlet,
+    private val screenShape: ReaderScreenShape,
     @ApplicationContext private val context: Context,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
@@ -245,7 +247,10 @@ class ReadingExperienceFactory @Inject constructor(
     ): ReadingExperience = ReadingExperience(
         bookId = bookId,
         initialLocatorJson = initialLocatorJson,
-        settings = settings.effective(bookId),
+        // Layout Auto resolves for the screen here, so everything downstream sees scroll or paged.
+        settings = combine(settings.effective(bookId), screenShape.phonePortrait) { stored, phonePortrait ->
+            stored.forScreen(phonePortrait)
+        },
         persistSettings = { settings.setForBook(bookId, it) },
         resetSettings = { settings.clearForBook(bookId) },
         lookupWord = { word, language -> dictionary.lookup(word, language) },

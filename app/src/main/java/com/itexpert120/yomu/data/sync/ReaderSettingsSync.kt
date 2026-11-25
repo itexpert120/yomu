@@ -52,6 +52,7 @@ internal object ReaderSettingsSync {
             "pageMargins",
             "paragraphSpacing",
             "twoPageSpread",
+            "layoutFollowsScreen",
         ),
     )
 

@@ -434,11 +434,19 @@ internal fun ReaderFontSizeLine(settings: ReaderSettings, onUpdateSettings: (Rea
 internal fun ReaderLayoutLine(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
     ReaderSettingLine("Layout") {
         YomuConnectedChoiceGroup(
-            options = ReaderLayout.entries,
-            selected = settings.layout,
+            options = LayoutChoice.entries,
+            selected = if (settings.layoutFollowsScreen) LayoutChoice.Auto else LayoutChoice.of(settings.layout),
             label = { it.name },
             icon = { it.icon },
-            onSelect = { onUpdateSettings(settings.copy(layout = it)) },
+            onSelect = { choice ->
+                onUpdateSettings(
+                    when (choice) {
+                        LayoutChoice.Auto -> settings.copy(layoutFollowsScreen = true)
+                        LayoutChoice.Scroll -> settings.copy(layoutFollowsScreen = false, layout = ReaderLayout.Scroll)
+                        LayoutChoice.Paged -> settings.copy(layoutFollowsScreen = false, layout = ReaderLayout.Paged)
+                    },
+                )
+            },
             height = ReaderControlHeight,
             modifier = Modifier.weight(1f),
         )
@@ -646,10 +654,23 @@ private fun StepperEnd(icon: ImageVector, description: String, onClick: (() -> U
     }
 }
 
-private val ReaderLayout.icon: ImageVector
+/** Layout as offered: Auto (scroll on an upright phone, paged elsewhere), or a fixed one. */
+private enum class LayoutChoice {
+    Auto,
+    Scroll,
+    Paged,
+    ;
+
+    companion object {
+        fun of(layout: ReaderLayout): LayoutChoice = if (layout == ReaderLayout.Scroll) Scroll else Paged
+    }
+}
+
+private val LayoutChoice.icon: ImageVector
     get() = when (this) {
-        ReaderLayout.Scroll -> StackIcons.SwipeVertical
-        ReaderLayout.Paged -> StackIcons.AutoStories
+        LayoutChoice.Auto -> StackIcons.AutoMode
+        LayoutChoice.Scroll -> StackIcons.SwipeVertical
+        LayoutChoice.Paged -> StackIcons.AutoStories
     }
 
 // endregion
