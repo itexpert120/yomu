@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -28,6 +26,7 @@ import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.model.ThemePreference
 
 /**
@@ -83,7 +82,7 @@ fun YomuApp(
             SnackbarHost(hostState = snackbarHostState, modifier = noticeModifier) { data ->
                 YomuNotice(
                     text = data.visuals.message,
-                    icon = Icons.Rounded.ErrorOutline,
+                    icon = StackIcons.Error,
                     tone = YomuNoticeTone.Floating,
                 )
             }
@@ -91,7 +90,7 @@ fun YomuApp(
                 YomuNotice(
                     text = message,
                     modifier = noticeModifier,
-                    icon = Icons.Rounded.ErrorOutline,
+                    icon = StackIcons.Error,
                     tone = YomuNoticeTone.Floating,
                     actionLabel = "Retry",
                     onAction = appViewModel::onRetryReadingWrites,

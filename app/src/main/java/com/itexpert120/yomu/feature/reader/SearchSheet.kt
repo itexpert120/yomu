@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,6 +35,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 
@@ -101,12 +99,12 @@ internal fun ReaderSearchSheet(
                     searchError != null -> YomuNotice(
                         text = searchError,
                         modifier = Modifier.fillMaxWidth(),
-                        icon = Icons.Rounded.ErrorOutline,
+                        icon = StackIcons.Error,
                         tone = YomuNoticeTone.Error,
                     )
 
                     searchPerformed && searchResults.isEmpty() -> YomuEmptyState(
-                        icon = Icons.Rounded.SearchOff,
+                        icon = StackIcons.SearchOff,
                         title = "No results",
                         body = "Try a different word or a shorter phrase.",
                         compact = true,

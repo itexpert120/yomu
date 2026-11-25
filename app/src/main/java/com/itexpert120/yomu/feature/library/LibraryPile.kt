@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -49,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.stackCoverShadow
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 
@@ -196,7 +192,7 @@ private fun ResumeButton(title: String, onClick: () -> Unit) {
             .semantics { contentDescription = "Resume $title" },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = stack.onInk, modifier = Modifier.size(30.dp))
+        Icon(StackIcons.PlayArrowFilled, contentDescription = null, tint = stack.onInk, modifier = Modifier.size(30.dp))
     }
 }
 
@@ -220,9 +216,9 @@ internal fun LibraryTitleRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        TitleAction(Icons.Rounded.Search, "Search", onSearch)
-        TitleAction(Icons.Rounded.Add, "Import book", onImport)
-        TitleAction(Icons.Rounded.Tune, "Arrange library", onArrange)
+        TitleAction(StackIcons.Search, "Search", onSearch)
+        TitleAction(StackIcons.Add, "Import book", onImport)
+        TitleAction(StackIcons.Tune, "Arrange library", onArrange)
     }
 }
 

@@ -43,7 +43,7 @@ Dependencies should point inward or downward:
 - UI depends on domain/data abstractions through ViewModels.
 - Domain depends on repository interfaces or concrete repositories, depending on module stage.
 - Data depends on Room, DataStore, file system, Readium, Coil, SAF helpers.
-- Design system depends on Compose, Material 3, Material icons, and minimal Android resources; it must not depend on feature packages.
+- Design system depends on Compose, Material 3, its own Material Symbols vectors (`core/designsystem/icons/StackIcons`), and minimal Android resources; it must not depend on feature packages.
 - Reader feature depends on the reader engine abstraction, not Readium directly except in the engine adapter package/module.
 
 ## Current Package Structure

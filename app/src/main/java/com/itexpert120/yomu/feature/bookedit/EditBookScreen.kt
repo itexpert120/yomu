@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -51,6 +48,7 @@ import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import java.io.File
 
 /** Width of the cover pane when the cover sits beside the fields (expanded and up). */
@@ -95,7 +93,7 @@ fun EditBookScreen(
                         modifier = Modifier.padding(end = YomuTheme.space.xs),
                     ) {
                         Icon(
-                            Icons.Rounded.Check,
+                            StackIcons.Check,
                             contentDescription = null,
                             modifier = Modifier.size(ButtonDefaults.IconSize),
                         )
@@ -116,7 +114,7 @@ fun EditBookScreen(
                 )
 
                 !state.available -> YomuEmptyState(
-                    icon = Icons.Rounded.ErrorOutline,
+                    icon = StackIcons.Error,
                     title = "Can't edit this book",
                     body = state.error ?: "This book is no longer available.",
                     shape = YomuBadgeShape.Burst,
@@ -218,7 +216,7 @@ private fun EditFields(
     state.error?.let { message ->
         YomuNotice(
             text = message,
-            icon = Icons.Rounded.ErrorOutline,
+            icon = StackIcons.Error,
             tone = YomuNoticeTone.Error,
             modifier = Modifier.fillMaxWidth(),
         )

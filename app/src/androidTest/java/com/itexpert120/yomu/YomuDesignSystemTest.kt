@@ -1,7 +1,5 @@
 package com.itexpert120.yomu
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -9,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuLabeledIconAction
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,7 +23,7 @@ class YomuDesignSystemTest {
             YomuDesignTheme {
                 YomuLabeledIconAction(
                     label = "Search",
-                    icon = Icons.Rounded.Search,
+                    icon = StackIcons.Search,
                     onClick = {},
                 )
             }

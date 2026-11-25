@@ -17,11 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.CloudOff
-import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -62,6 +57,7 @@ import com.itexpert120.yomu.core.designsystem.YomuLoadingState
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.web.openWebSearchSheet
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
@@ -119,7 +115,7 @@ internal fun WordLookupSheet(
             ) {
                 if (state.canGoBack) {
                     CircleIconButton(
-                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        icon = StackIcons.ArrowBack,
                         description = "Back",
                         onClick = onBack,
                     )
@@ -133,7 +129,7 @@ internal fun WordLookupSheet(
                     trailing = {
                         // No audio clips in this API — speak the word with the device voice instead.
                         CircleIconButton(
-                            icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                            icon = StackIcons.VolumeUp,
                             description = "Pronounce",
                             onClick = { onPronounce(headword) },
                         )
@@ -179,7 +175,7 @@ internal fun WordLookupSheet(
                     }
 
                     target.result is DictionaryResult.Error -> LookupMessage(
-                        icon = Icons.Rounded.CloudOff,
+                        icon = StackIcons.CloudOff,
                         title = "Couldn't reach the dictionary",
                         text = "Check your connection and try again.",
                         word = target.word,
@@ -187,7 +183,7 @@ internal fun WordLookupSheet(
                     )
 
                     else -> LookupMessage(
-                        icon = Icons.Rounded.SearchOff,
+                        icon = StackIcons.SearchOff,
                         title = "No definition found",
                         text = "Nothing for “${target.word}” in the dictionary.",
                         word = target.word,

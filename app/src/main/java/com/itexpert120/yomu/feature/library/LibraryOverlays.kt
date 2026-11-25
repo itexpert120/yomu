@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -26,6 +23,7 @@ import com.itexpert120.yomu.core.designsystem.YomuLoadingIndicator
 import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 
@@ -47,7 +45,7 @@ internal fun ConfirmRemoveDialog(
         title = "Remove ${if (count == 1) "this book" else "$count books"}?",
         text = "This deletes the imported file${if (count == 1) "" else "s"} and cover from " +
             "the device. It can't be undone.",
-        icon = Icons.Rounded.Delete,
+        icon = StackIcons.Delete,
         confirmLabel = "Remove",
         onConfirm = onConfirm,
         onDismiss = onCancel,
@@ -120,7 +118,7 @@ internal fun FloatingResumeButton(
         onClick = onResume,
         modifier = modifier
             .padding(end = endMargin, bottom = navBottom + YomuTheme.space.md),
-        icon = Icons.Rounded.PlayArrow,
+        icon = StackIcons.PlayArrowFilled,
         label = "Resume",
         contentDescription = "Resume ${book.title}",
     )

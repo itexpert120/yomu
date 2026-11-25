@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,6 +22,7 @@ import androidx.compose.ui.window.Popup
 import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 
@@ -32,7 +31,7 @@ internal fun SaveFailureNotice(message: String?, onRetry: () -> Unit) {
     ReaderFloatingNotice(value = message) { text ->
         YomuNotice(
             text = text,
-            icon = Icons.Rounded.ErrorOutline,
+            icon = StackIcons.Error,
             tone = YomuNoticeTone.Floating,
             actionLabel = "Retry",
             onAction = onRetry,

@@ -2,9 +2,6 @@ package com.itexpert120.yomu.feature.about
 
 import android.content.Intent
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -22,6 +19,7 @@ import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.data.diagnostics.CrashLog
 import com.itexpert120.yomu.data.reader.ReaderEngineChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -94,7 +92,7 @@ internal fun DiagnosticsGroup(
             onClick = onShare,
         ) {
             Icon(
-                imageVector = Icons.Rounded.Share,
+                imageVector = StackIcons.Share,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
@@ -108,7 +106,7 @@ internal fun DiagnosticsGroup(
             onClick = onClear,
         ) {
             Icon(
-                imageVector = Icons.Rounded.DeleteOutline,
+                imageVector = StackIcons.Delete,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp),

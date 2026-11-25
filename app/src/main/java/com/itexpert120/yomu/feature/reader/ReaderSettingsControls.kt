@@ -17,23 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
-import androidx.compose.material.icons.automirrored.rounded.Notes
-import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.BatteryFull
-import androidx.compose.material.icons.rounded.CallToAction
-import androidx.compose.material.icons.rounded.FormatAlignJustify
-import androidx.compose.material.icons.rounded.Fullscreen
-import androidx.compose.material.icons.rounded.Height
-import androidx.compose.material.icons.rounded.HourglassBottom
-import androidx.compose.material.icons.rounded.Lightbulb
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Percent
-import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.SwipeVertical
-import androidx.compose.material.icons.rounded.TextDecrease
-import androidx.compose.material.icons.rounded.TextIncrease
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -59,6 +42,7 @@ import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
@@ -187,7 +171,7 @@ internal fun ReaderCustomThemeRow(
         shapes = ButtonDefaults.shapes(),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Icon(Icons.Rounded.Palette, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Icon(StackIcons.Palette, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
         Text("Customise theme")
     }
@@ -269,7 +253,7 @@ internal fun ReaderFontSizeControl(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
-            RoundIcon(Icons.Rounded.TextDecrease, "Decrease font size", compact = compact) {
+            RoundIcon(StackIcons.TextDecrease, "Decrease font size", compact = compact) {
                 onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale - step)))
             }
             ReaderSlider(
@@ -278,7 +262,7 @@ internal fun ReaderFontSizeControl(
                 modifier = Modifier.weight(1f),
                 contentDescription = "Font size",
             )
-            RoundIcon(Icons.Rounded.TextIncrease, "Increase font size", compact = compact) {
+            RoundIcon(StackIcons.TextIncrease, "Increase font size", compact = compact) {
                 onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale + step)))
             }
         }
@@ -302,28 +286,28 @@ internal fun ReaderTextAlignControl(
 
 private val ReaderLayout.icon: ImageVector
     get() = when (this) {
-        ReaderLayout.Scroll -> Icons.Rounded.SwipeVertical
-        ReaderLayout.Paged -> Icons.Rounded.AutoStories
+        ReaderLayout.Scroll -> StackIcons.SwipeVertical
+        ReaderLayout.Paged -> StackIcons.AutoStories
     }
 
 private val ReaderTextAlign.icon: ImageVector
     get() = when (this) {
         // Auto keeps the book's own alignment, so it shows ragged publisher text.
-        ReaderTextAlign.Default -> Icons.AutoMirrored.Rounded.Notes
-        ReaderTextAlign.Left -> Icons.AutoMirrored.Rounded.FormatAlignLeft
-        ReaderTextAlign.Justify -> Icons.Rounded.FormatAlignJustify
+        ReaderTextAlign.Default -> StackIcons.Notes
+        ReaderTextAlign.Left -> StackIcons.FormatAlignLeft
+        ReaderTextAlign.Justify -> StackIcons.FormatAlignJustify
     }
 
 /** Icons shared by the list and chip forms of [ReaderChromeToggles]. */
 private object ChromeIcons {
-    val Footer = Icons.Rounded.CallToAction
-    val Battery = Icons.Rounded.BatteryFull
-    val Clock = Icons.Rounded.Schedule
-    val Progress = Icons.Rounded.Percent
-    val ChapterLeft = Icons.Rounded.HourglassBottom
-    val KeepOn = Icons.Rounded.Lightbulb
-    val Scrollbar = Icons.Rounded.Height
-    val Immersive = Icons.Rounded.Fullscreen
+    val Footer = StackIcons.CallToAction
+    val Battery = StackIcons.BatteryFull
+    val Clock = StackIcons.Schedule
+    val Progress = StackIcons.Percent
+    val ChapterLeft = StackIcons.HourglassBottom
+    val KeepOn = StackIcons.Lightbulb
+    val Scrollbar = StackIcons.Height
+    val Immersive = StackIcons.Fullscreen
 }
 
 @Composable

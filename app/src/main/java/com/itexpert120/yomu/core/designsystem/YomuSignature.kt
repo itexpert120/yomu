@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /*
  * The Yomu signature: the handful of decisions that make every screen read as the same app.
@@ -437,7 +436,7 @@ fun YomuSheetHeader(
         trailing?.invoke(this)
         if (onClose != null && LocalYomuSheetPresentation.current == YomuSheetPresentation.Dialog) {
             IconButton(onClick = onClose, shapes = IconButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close")
+                Icon(StackIcons.Close, contentDescription = "Close")
             }
         }
     }

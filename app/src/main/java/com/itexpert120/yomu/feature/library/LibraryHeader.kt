@@ -34,13 +34,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Deselect
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.SelectAll
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +79,7 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuScreenTitle
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
@@ -209,7 +203,7 @@ internal fun LibraryTopBar(
                 ) {
                     TooltipIconButton(
                         label = "Exit selection",
-                        icon = Icons.Rounded.Close,
+                        icon = StackIcons.Close,
                         onClick = onExitSelection,
                     )
                 }
@@ -231,7 +225,7 @@ internal fun LibraryTopBar(
                         if (selecting) {
                             TooltipIconButton(
                                 label = if (allSelected) "Deselect all" else "Select all",
-                                icon = if (allSelected) Icons.Rounded.Deselect else Icons.Rounded.SelectAll,
+                                icon = if (allSelected) StackIcons.Deselect else StackIcons.SelectAll,
                                 onClick = if (allSelected) onDeselectAll else onSelectAll,
                             )
                         } else {
@@ -242,21 +236,21 @@ internal fun LibraryTopBar(
                             ) {
                                 TooltipIconButton(
                                     label = "Search library",
-                                    icon = Icons.Rounded.Search,
+                                    icon = StackIcons.Search,
                                     onClick = { searchRevealed = true },
                                 )
                             }
                             if (showImport) {
                                 TooltipIconButton(
                                     label = "Import book",
-                                    icon = Icons.Rounded.Add,
+                                    icon = StackIcons.Add,
                                     emphasized = true,
                                     onClick = onImport,
                                 )
                             }
                             TooltipIconButton(
                                 label = "Arrange library",
-                                icon = Icons.Rounded.Tune,
+                                icon = StackIcons.Tune,
                                 onClick = onOptionsSheetToggle,
                             )
                         }
@@ -325,11 +319,11 @@ internal fun LibraryTopBar(
                                 searchFocused = it.isFocused
                             },
                         placeholder = { Text("Search your library") },
-                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "Search library") },
+                        leadingIcon = { Icon(StackIcons.Search, contentDescription = "Search library") },
                         trailingIcon = if (searchQuery.isNotEmpty()) {
                             {
                                 IconButton(onClick = { onSearchQueryChange("") }, shapes = IconButtonDefaults.shapes()) {
-                                    Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                                    Icon(StackIcons.Close, contentDescription = "Clear search")
                                 }
                             }
                         } else {

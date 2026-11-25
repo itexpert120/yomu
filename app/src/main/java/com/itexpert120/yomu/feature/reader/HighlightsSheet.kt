@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +25,7 @@ import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 
 /** Edit popup for an existing highlight: recolour (optional) or delete it. */
@@ -64,7 +63,7 @@ internal fun HighlightEditSheet(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(
-                    Icons.Rounded.Delete,
+                    StackIcons.Delete,
                     contentDescription = null,
                     modifier = Modifier.size(ButtonDefaults.IconSize),
                 )
@@ -88,7 +87,7 @@ internal fun HighlightRow(
         onClick = onClick,
         position = position,
         leading = { ReaderSwatch(color = Color(highlight.colorArgb), size = 24.dp) },
-        trailingIcon = Icons.Rounded.Delete,
+        trailingIcon = StackIcons.Delete,
         trailingDescription = "Delete highlight",
         onTrailingClick = onDelete,
     )

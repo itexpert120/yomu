@@ -33,18 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
-import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.DateRange
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -95,6 +83,7 @@ import com.itexpert120.yomu.core.designsystem.YomuShapeBadge
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
 import com.itexpert120.yomu.core.designsystem.yomuLeadingPaneWidth
@@ -255,7 +244,7 @@ private fun TabletStatsPanes(
                     YomuSectionHeader(title = "Recent history")
                     YomuCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
                         YomuEmptyState(
-                            icon = Icons.Rounded.History,
+                            icon = StackIcons.History,
                             title = "No sessions yet",
                             body = "Your reading sessions will appear here.",
                             compact = true,
@@ -394,7 +383,7 @@ private fun HistoricalDetailNotice(stats: ReadingStats) {
             text = "Older session details were previously removed. Session and per-book figures include only " +
                 "recoverable history; total reading time is preserved.",
             modifier = Modifier.fillMaxWidth(),
-            icon = Icons.Rounded.Info,
+            icon = StackIcons.Info,
             tone = YomuNoticeTone.Neutral,
         )
     }
@@ -408,7 +397,7 @@ private fun StatsLoading(modifier: Modifier = Modifier) {
 @Composable
 private fun StatsError(message: String?) {
     YomuEmptyState(
-        icon = Icons.Rounded.ErrorOutline,
+        icon = StackIcons.Error,
         title = message ?: "Statistics couldn't be loaded.",
         shape = YomuBadgeShape.Burst,
         tone = YomuBadgeTone.Error,
@@ -451,7 +440,7 @@ private fun AtAGlanceCard(stats: ReadingStats) {
                     }
                     if (badgeSize != null) {
                         YomuShapeBadge(
-                            icon = Icons.Rounded.Schedule,
+                            icon = StackIcons.Schedule,
                             size = badgeSize,
                             shape = YomuBadgeShape.Sunny,
                             tone = YomuBadgeTone.Solid,
@@ -465,20 +454,20 @@ private fun AtAGlanceCard(stats: ReadingStats) {
                 DetailMetric(
                     formatDays(stats.currentStreakDays),
                     "Current streak",
-                    icon = Icons.Rounded.LocalFireDepartment,
+                    icon = StackIcons.LocalFireDepartment,
                     shape = YomuBadgeShape.Sunny,
                     accent = MetricAccent.Tertiary,
                 ),
                 DetailMetric(
                     formatReadingTime(stats.secondsLast7Days),
                     "Last 7 days",
-                    icon = Icons.Rounded.DateRange,
+                    icon = StackIcons.DateRange,
                     shape = YomuBadgeShape.Scallop,
                     accent = MetricAccent.Secondary,
                 ),
-                DetailMetric(stats.booksInLibrary.toString(), "Library items", icon = Icons.AutoMirrored.Rounded.LibraryBooks),
-                DetailMetric(stats.booksFinished.toString(), "Completed books", icon = Icons.Rounded.TaskAlt),
-                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days", icon = Icons.Rounded.CalendarMonth),
+                DetailMetric(stats.booksInLibrary.toString(), "Library items", icon = StackIcons.LibraryBooks),
+                DetailMetric(stats.booksFinished.toString(), "Completed books", icon = StackIcons.TaskAlt),
+                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days", icon = StackIcons.CalendarMonth),
             ),
         )
     }
@@ -488,7 +477,7 @@ private fun AtAGlanceCard(stats: ReadingStats) {
 private fun EmptyActivityCard() {
     YomuCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
         YomuEmptyState(
-            icon = Icons.Rounded.Bookmark,
+            icon = StackIcons.Bookmark,
             title = "No reading activity yet",
             body = "Open a book to start building your reading history.",
             compact = true,
@@ -552,7 +541,7 @@ private fun History(history: List<ReadingSessionItem>) {
                     .padding(top = YomuTheme.space.xxs),
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ExpandMore,
+                    imageVector = StackIcons.ExpandMore,
                     contentDescription = null,
                     modifier = Modifier.size(ButtonDefaults.IconSize),
                 )

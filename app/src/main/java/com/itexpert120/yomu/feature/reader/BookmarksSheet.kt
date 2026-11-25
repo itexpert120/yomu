@@ -1,13 +1,11 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.AnnotatedString
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 
 /** A single bookmark row (jump on tap, delete on the trailing button). Used by the Browse sheet. */
@@ -26,12 +24,12 @@ internal fun BookmarkRow(
         titleMaxLines = 1,
         leading = {
             Icon(
-                imageVector = Icons.Rounded.Bookmark,
+                imageVector = StackIcons.Bookmark,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
             )
         },
-        trailingIcon = Icons.Rounded.Delete,
+        trailingIcon = StackIcons.Delete,
         trailingDescription = "Delete bookmark",
         onTrailingClick = onDelete,
     )

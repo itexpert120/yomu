@@ -13,18 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.BrightnessHigh
-import androidx.compose.material.icons.rounded.BrightnessLow
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.RestartAlt
-import androidx.compose.material.icons.rounded.TextFields
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -74,6 +62,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTextField
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
 import com.itexpert120.yomu.core.designsystem.YomuValueChip
+import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
@@ -132,8 +121,8 @@ internal fun ReaderControlsSheet(
                 label = { it.label },
                 icon = {
                     when (it) {
-                        SheetTab.Controls -> Icons.Rounded.Tune
-                        SheetTab.Display -> Icons.Rounded.TextFields
+                        SheetTab.Controls -> StackIcons.Tune
+                        SheetTab.Display -> StackIcons.TextFields
                     }
                 },
                 onSelect = { tab = it },
@@ -217,7 +206,7 @@ private fun ControlsTab(
                 horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
                 RoundIcon(
-                    Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                    StackIcons.KeyboardArrowLeft,
                     "Previous chapter",
                     compact = true,
                     onClick = onPreviousChapter,
@@ -235,7 +224,7 @@ private fun ControlsTab(
                     snapPoints = chapters.size,
                     contentDescription = "Chapter selector",
                 )
-                RoundIcon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next chapter", compact = true, onClick = onNextChapter)
+                RoundIcon(StackIcons.KeyboardArrowRight, "Next chapter", compact = true, onClick = onNextChapter)
             }
             Text(
                 text = chapters.getOrNull(previewChapterIndex)?.let { chapter ->
@@ -270,7 +259,7 @@ private fun ControlsTab(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
                     ) {
-                        Icon(Icons.Rounded.BrightnessLow, contentDescription = null)
+                        Icon(StackIcons.BrightnessLow, contentDescription = null)
                         ReaderSlider(
                             fraction = s.brightness,
                             onSeek = onCommitBrightness,
@@ -278,7 +267,7 @@ private fun ControlsTab(
                             modifier = Modifier.weight(1f),
                             contentDescription = "Brightness",
                         )
-                        Icon(Icons.Rounded.BrightnessHigh, contentDescription = null)
+                        Icon(StackIcons.BrightnessHigh, contentDescription = null)
                     }
                 }
             }
@@ -351,7 +340,7 @@ private fun DisplayTab(
             shapes = ButtonDefaults.shapes(),
             modifier = Modifier.fillMaxWidth().padding(top = YomuTheme.space.xs),
         ) {
-            Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Icon(StackIcons.RestartAlt, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
             Spacer(Modifier.width(ButtonDefaults.IconSpacing))
             Text("Reset this book to defaults")
         }
@@ -397,7 +386,7 @@ internal fun AutoSlider(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
         ) {
-            RoundIcon(Icons.Rounded.Remove, "Decrease $label", compact = compact) { onChange(snap(current - step)) }
+            RoundIcon(StackIcons.Remove, "Decrease $label", compact = compact) { onChange(snap(current - step)) }
             ReaderSlider(
                 fraction = ((current - min) / (max - min)).coerceIn(0f, 1f),
                 // Tick marks the default value's position on the track.
@@ -406,7 +395,7 @@ internal fun AutoSlider(
                 contentDescription = label,
                 modifier = Modifier.weight(1f),
             )
-            RoundIcon(Icons.Rounded.Add, "Increase $label", compact = compact) { onChange(snap(current + step)) }
+            RoundIcon(StackIcons.Add, "Increase $label", compact = compact) { onChange(snap(current + step)) }
         }
     }
 }
@@ -543,7 +532,7 @@ private fun SavedThemeRow(
         },
     ) {
         IconButton(onClick = onDelete, shapes = IconButtonDefaults.shapes()) {
-            Icon(Icons.Rounded.Delete, contentDescription = "Delete ${theme.name}")
+            Icon(StackIcons.Delete, contentDescription = "Delete ${theme.name}")
         }
     }
 }
@@ -586,7 +575,7 @@ private fun ReaderFontFilterChip(
             )
         },
         leadingIcon = if (selected) {
-            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+            { Icon(StackIcons.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
         } else {
             null
         },
@@ -601,7 +590,7 @@ internal fun AddFontChip(onClick: () -> Unit) {
     AssistChip(
         onClick = onClick,
         label = { Text("Add font") },
-        leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+        leadingIcon = { Icon(StackIcons.Add, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
         shape = YomuShapeTokens.pill,
         modifier = Modifier.heightIn(min = 40.dp),
     )
