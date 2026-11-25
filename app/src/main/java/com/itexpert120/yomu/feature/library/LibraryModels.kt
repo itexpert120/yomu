@@ -63,6 +63,8 @@ data class LibraryUiState(
     val continueReading: LibraryBook? = null,
     // Books in progress for the pile: opened, not finished, most recent first (at most three).
     val pile: List<LibraryBook> = emptyList(),
+    // Where each pile book is, by book id ("Chapter VII"), when its contents are already indexed.
+    val pileChapters: Map<String, String> = emptyMap(),
     val books: List<LibraryBook> = emptyList(),
     val sortMode: SortMode = SortMode.Recent,
     val viewMode: LibraryViewMode = LibraryViewMode.ComfortableGrid,

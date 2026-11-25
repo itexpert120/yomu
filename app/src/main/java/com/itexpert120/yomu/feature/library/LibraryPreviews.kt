@@ -79,6 +79,7 @@ private fun previewState(
         totalCount = if (empty) 0 else PreviewBooks.size,
         selectableCount = current.bookCount,
         pile = if (searchQuery == null && !empty) PreviewBooks.filter { it.progress in 0.01f..0.99f }.take(3) else emptyList(),
+        pileChapters = mapOf("0" to "Chapter VII", "1" to "Chapter 17"),
         books = current.books,
         viewMode = viewMode,
         searchActive = searchQuery != null,
@@ -192,6 +193,14 @@ private fun LibraryLandscapePreview() = LibraryPreview(previewState())
 @Preview(name = "Tablet", widthDp = 1200, heightDp = 800)
 @Composable
 private fun LibraryTabletPreview() = LibraryPreview(previewState())
+
+@Preview(name = "Tablet library column (beside a book pane)", widthDp = 752, heightDp = 768)
+@Composable
+private fun LibraryTabletColumnPreview() = LibraryPreview(previewState())
+
+@Preview(name = "Tablet portrait", widthDp = 720, heightDp = 1248)
+@Composable
+private fun LibraryTabletPortraitPreview() = LibraryPreview(previewState())
 
 @Preview(name = "Arrange sheet", widthDp = 390, heightDp = 844)
 @Composable

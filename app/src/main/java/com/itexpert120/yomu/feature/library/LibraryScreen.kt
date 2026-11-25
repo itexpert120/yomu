@@ -204,9 +204,20 @@ fun LibraryScreen(
         // accounted for) drives the gutters, grid and list, so their edges line up.
         val widthClass = YomuWidthClass.fromWidth(maxWidth)
         val gutter = if (widthClass.isWide) 32.dp else 24.dp
-        // Capped content is centred: its leading edge is the gutter until the cap bites.
-        val gridInset = ((maxWidth - YomuContentMaxWidth) / 2).coerceAtLeast(gutter)
-        val listInset = ((maxWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(gutter)
+        // The boards: a phone's pile has its info at the far edge; a tall (portrait) tablet the same,
+        // larger; a wide landscape column the info right beside the pile.
+        val pileLayout = when {
+            !widthClass.isWide -> PileLayout.Phone
+            maxHeight > maxWidth * 1.25f -> PileLayout.Tall
+            else -> PileLayout.Beside
+        }
+        // On tablets the shelf sheet stands 16dp off the rail (and off the far edge in portrait).
+        val sheetStart = if (widthClass.isWide) 16.dp else 0.dp
+        val sheetEnd = if (pileLayout == PileLayout.Tall) 16.dp else 0.dp
+        val sheetWidth = maxWidth - sheetStart - sheetEnd
+        // Capped content is centred inside the sheet: its leading edge is 24dp in until the cap bites.
+        val gridInset = ((sheetWidth - YomuContentMaxWidth) / 2).coerceAtLeast(24.dp)
+        val listInset = ((sheetWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(24.dp)
         val headerInset = if (state.viewMode == LibraryViewMode.List) listInset else gridInset
         // Over the navigation bar the content already ends above the gesture area; without it (rail,
         // selection toolbar, search) the last row must clear that area, and the toolbar too.
@@ -224,11 +235,11 @@ fun LibraryScreen(
             state.pile.isNotEmpty()
         // Beside the pile on a landscape phone the shelf is phone-sized, so it keeps phone density.
         val grid = if (sideBySide) {
-            gridSpec(state.viewMode, YomuWidthClass.Compact, 24.dp)
+            gridSpec(state.viewMode, PileLayout.Phone, 24.dp)
         } else {
-            gridSpec(state.viewMode, widthClass, gridInset)
+            gridSpec(state.viewMode, pileLayout, gridInset)
         }
-        val autoColumns = grid.autoColumns(if (sideBySide) maxWidth - SideBySidePileWidth else maxWidth)
+        val autoColumns = grid.autoColumns(if (sideBySide) maxWidth - SideBySidePileWidth else sheetWidth)
 
         val bookPage: @Composable (LibraryPage) -> Unit = { page ->
             if (state.viewMode != LibraryViewMode.List) {
@@ -268,7 +279,8 @@ fun LibraryScreen(
                 onSelect = { index -> pagerScope.launch { pagerState.animateScrollToPage(index) } },
                 onEditTabs = { showManageCollections = true },
                 horizontalInset = headerInset,
-                modifier = Modifier.padding(top = 6.dp),
+                gap = if (widthClass.isWide) 26.dp else 22.dp,
+                modifier = Modifier.padding(top = if (widthClass.isWide) 4.dp else 6.dp),
                 trailing = trailing,
             )
             LibraryTabPager(
@@ -299,6 +311,9 @@ fun LibraryScreen(
                 content = content,
                 flat = flat,
                 gutter = gutter,
+                pileLayout = pileLayout,
+                sheetStart = sheetStart,
+                sheetEnd = sheetEnd,
                 sheetHeightCap = maxHeight,
                 onSearchToggle = onSearchToggle,
                 onImport = onImport,
@@ -430,6 +445,9 @@ private fun StackedLibrary(
     content: ShelfContent,
     flat: Boolean,
     gutter: Dp,
+    pileLayout: PileLayout,
+    sheetStart: Dp,
+    sheetEnd: Dp,
     sheetHeightCap: Dp,
     onSearchToggle: () -> Unit,
     onImport: () -> Unit,
@@ -546,21 +564,22 @@ private fun StackedLibrary(
                 )
             }
             when {
-                content == ShelfContent.Loading -> LibraryPileSkeleton(Modifier.padding(top = 30.dp), gutter = gutter)
+                content == ShelfContent.Loading -> LibraryPileSkeleton(Modifier.padding(top = pileLayout.topGap), gutter = gutter)
                 showPile -> LibraryPile(
                     books = state.pile,
+                    chapters = state.pileChapters,
                     onOpenDetails = onOpenDetails,
                     onResume = onOpenReader,
-                    layout = if (gutter > 24.dp) PileLayout.Beside else PileLayout.Phone,
+                    layout = pileLayout,
                     gutter = gutter,
-                    modifier = Modifier.padding(top = 30.dp),
+                    modifier = Modifier.padding(top = pileLayout.topGap),
                 )
             }
             val pileBelow = showPile || content == ShelfContent.Loading
             Spacer(
                 Modifier.height(
                     if (pileBelow) {
-                        46.dp
+                        pileLayout.sheetGap
                     } else if (flat) {
                         YomuTheme.space.xs
                     } else {
@@ -571,6 +590,7 @@ private fun StackedLibrary(
         }
         Column(
             Modifier
+                .padding(start = sheetStart, end = sheetEnd)
                 .fillMaxWidth()
                 .height(sheetHeight.coerceAtLeast(0.dp))
                 .offset { IntOffset(0, (sheetTop.value + sheetLift.floatValue).roundToInt()) }
@@ -645,6 +665,7 @@ private fun SideBySideLibrary(
         Box(Modifier.fillMaxHeight()) {
             LibraryPile(
                 books = state.pile,
+                chapters = state.pileChapters,
                 onOpenDetails = onOpenDetails,
                 onResume = onOpenReader,
                 layout = PileLayout.Column,
@@ -680,15 +701,12 @@ internal data class GridSpec(
     }
 }
 
-private fun gridSpec(mode: LibraryViewMode, widthClass: YomuWidthClass, gridInset: Dp): GridSpec {
-    val wide = widthClass.isWide
-    // Automatic cell sizes per width class, so a phone shows 3 covers, a foldable or tablet in
-    // portrait 4–5 and a landscape tablet 5–6 (compact view about a third more).
-    val comfortable = when (widthClass) {
-        YomuWidthClass.Compact, YomuWidthClass.Medium -> 100.dp
-        YomuWidthClass.Expanded -> 124.dp
-        YomuWidthClass.Large -> 144.dp
-    }
+private fun gridSpec(mode: LibraryViewMode, layout: PileLayout, gridInset: Dp): GridSpec {
+    // Automatic cell sizes from the boards, so a cover stays about board size whatever width the
+    // library is given (a phone 3 across, a portrait tablet 4, a 752dp landscape column 6) and
+    // wider columns simply fit more of them.
+    val comfortable = if (layout == PileLayout.Tall) 136.dp else 100.dp
+    val wide = layout != PileLayout.Phone
     return when (mode) {
         LibraryViewMode.CompactGrid -> GridSpec(
             inset = gridInset - 4.dp,
@@ -706,12 +724,10 @@ private fun gridSpec(mode: LibraryViewMode, widthClass: YomuWidthClass, gridInse
             autoMinSize = comfortable,
         )
 
-        else -> GridSpec(
-            inset = gridInset,
-            top = 18.dp,
-            rowGap = if (wide) 22.dp else 20.dp,
-            columnGap = if (wide) 16.dp else 14.dp,
-            autoMinSize = comfortable,
-        )
+        else -> when (layout) {
+            PileLayout.Tall -> GridSpec(inset = gridInset, top = 22.dp, rowGap = 24.dp, columnGap = 18.dp, autoMinSize = comfortable)
+            PileLayout.Beside -> GridSpec(inset = gridInset, top = 20.dp, rowGap = 22.dp, columnGap = 16.dp, autoMinSize = comfortable)
+            else -> GridSpec(inset = gridInset, top = 18.dp, rowGap = 20.dp, columnGap = 14.dp, autoMinSize = comfortable)
+        }
     }
 }

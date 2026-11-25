@@ -82,16 +82,22 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sign
 
-/** Where the pile's reading info sits relative to the covers. */
-internal enum class PileLayout {
+/**
+ * Where the pile's reading info sits relative to the covers, and the gaps around it (from the
+ * boards): [topGap] under the title row, [sheetGap] from the pile's box to the shelf sheet.
+ */
+internal enum class PileLayout(val topGap: Dp, val sheetGap: Dp) {
     /** Phone portrait: covers on the left, the info at the right edge. */
-    Phone,
+    Phone(topGap = 24.dp, sheetGap = 46.dp),
 
-    /** Tablet: the info right beside the covers, the rest of the desk left open. */
-    Beside,
+    /** Portrait tablet: as the phone, larger (176dp covers, a 52 figure). */
+    Tall(topGap = 26.dp, sheetGap = 40.dp),
+
+    /** Landscape tablet column: the info right beside the covers, the rest of the desk left open. */
+    Beside(topGap = 20.dp, sheetGap = 38.dp),
 
     /** Landscape phone: a 120dp-wide pile with the info underneath, in a column beside the shelf. */
-    Column,
+    Column(topGap = 0.dp, sheetGap = 0.dp),
 }
 
 private const val SLOT_ROTATION = 3.5f
@@ -109,6 +115,7 @@ private class PileMetrics(val coverWidth: Dp) {
 }
 
 private val PhoneMetrics = PileMetrics(150.dp)
+private val TallMetrics = PileMetrics(176.dp)
 private val ColumnMetrics = PileMetrics(120.dp)
 
 /**
@@ -127,6 +134,8 @@ internal fun LibraryPile(
     modifier: Modifier = Modifier,
     layout: PileLayout = PileLayout.Phone,
     gutter: Dp = 24.dp,
+    // Where each book is ("Chapter VII"), by id; the title stands in for a book not indexed yet.
+    chapters: Map<String, String> = emptyMap(),
 ) {
     if (books.isEmpty()) return
     val ids = books.map { it.id }
@@ -135,7 +144,12 @@ internal fun LibraryPile(
     val pile = remember(ids) { PileState(start = ids.indexOf(savedFront).coerceAtLeast(0), count = books.size) }
     val frontIndex by remember(pile) { derivedStateOf { pile.nearest } }
     val frontBook = books[frontIndex.coerceIn(0, books.lastIndex)]
-    val metrics = if (layout == PileLayout.Column) ColumnMetrics else PhoneMetrics
+    val metrics = when (layout) {
+        PileLayout.Column -> ColumnMetrics
+        PileLayout.Tall -> TallMetrics
+        else -> PhoneMetrics
+    }
+    val where: (LibraryBook) -> String = { book -> chapters[book.id] ?: book.title }
     val covers: @Composable () -> Unit = {
         PileCovers(
             books = books,
@@ -165,7 +179,7 @@ internal fun LibraryPile(
                             maxLines = 1,
                         )
                         Text(
-                            text = book.title,
+                            text = where(book),
                             style = MaterialTheme.typography.bodySmall,
                             color = YomuTheme.stack.body,
                             maxLines = 1,
@@ -178,27 +192,28 @@ internal fun LibraryPile(
             }
         }
 
-        PileLayout.Phone, PileLayout.Beside -> Row(
+        PileLayout.Phone, PileLayout.Tall, PileLayout.Beside -> Row(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = gutter),
             verticalAlignment = Alignment.Top,
         ) {
             covers()
-            if (layout == PileLayout.Phone) Spacer(Modifier.weight(1f)) else Spacer(Modifier.width(PileInfoGap))
+            if (layout == PileLayout.Beside) Spacer(Modifier.width(PileInfoGap)) else Spacer(Modifier.weight(1f))
             PileInfo(
                 index = frontIndex,
                 count = books.size,
                 book = frontBook,
-                alignEnd = layout == PileLayout.Phone,
+                where = where,
+                layout = layout,
                 onResume = { onResume(frontBook.id) },
             )
         }
     }
 }
 
-/** Gap between the pile's box and its info column beside it (tablets). */
-private val PileInfoGap = 28.dp
+/** Gap between the pile's box and its info column beside it (landscape tablets): 268dp from the pile's start. */
+private val PileInfoGap = 38.dp
 
 /**
  * Where the pile is turned to: [position] counts books brought to the front (fractional while a
@@ -361,12 +376,27 @@ private const val TravelFactor = 1.06f
 /** The front cover tilts this far (degrees) as it leaves toward the start. */
 private const val LeaveRotation = -4f
 
-/** "N of M", the figure and the book, as on the board. */
+/** "N of M", the figure and where you are in the book, as on the boards. */
 @Composable
-private fun PileInfo(index: Int, count: Int, book: LibraryBook, alignEnd: Boolean, onResume: () -> Unit) {
+private fun PileInfo(
+    index: Int,
+    count: Int,
+    book: LibraryBook,
+    where: (LibraryBook) -> String,
+    layout: PileLayout,
+    onResume: () -> Unit,
+) {
+    val alignEnd = layout != PileLayout.Beside
+    val tall = layout == PileLayout.Tall
     Column(
         modifier = Modifier
-            .width(if (alignEnd) 118.dp else 200.dp)
+            .width(
+                when (layout) {
+                    PileLayout.Beside -> 200.dp
+                    PileLayout.Tall -> 180.dp
+                    else -> 110.dp
+                },
+            )
             .padding(top = 12.dp),
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
     ) {
@@ -375,23 +405,26 @@ private fun PileInfo(index: Int, count: Int, book: LibraryBook, alignEnd: Boolea
             style = MaterialTheme.typography.bodySmall,
             color = YomuTheme.stack.muted,
         )
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(if (tall) 84.dp else 56.dp))
         PileText(book = book, modifier = Modifier.fillMaxWidth()) { shown ->
             Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
                 Text(
                     text = shown.statusLabel,
-                    style = StackType.Figure,
+                    style = if (tall) TallFigure else StackType.Figure,
                     color = YomuTheme.stack.ink,
                     maxLines = 1,
                 )
                 Text(
-                    text = shown.title,
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal),
+                    text = where(shown),
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Normal,
+                        fontSize = if (tall) 14.sp else 13.sp,
+                        lineHeight = if (tall) 18.sp else 17.sp,
+                    ),
                     color = YomuTheme.stack.body,
                     textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-                    // Always two lines tall, so a one-line title doesn't move the play button.
-                    minLines = 2,
-                    maxLines = 2,
+                    // One line, so a long chapter name never moves the play button.
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 6.dp),
                 )
@@ -401,6 +434,9 @@ private fun PileInfo(index: Int, count: Int, book: LibraryBook, alignEnd: Boolea
         ResumeButton(title = book.title, size = 64.dp, onClick = onResume)
     }
 }
+
+/** The portrait tablet's larger figure (52/52). */
+private val TallFigure = StackType.Figure.copy(fontSize = 52.sp, lineHeight = 52.sp, letterSpacing = (-1.8).sp)
 
 /** The front book's text, cross-faded in place (same size either way) when the front changes. */
 @Composable

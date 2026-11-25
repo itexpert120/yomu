@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -49,8 +50,11 @@ import androidx.compose.ui.unit.dp
  * recomposes them.
  */
 
-/** Space between the status bar and the large title row. */
+/** Space between the status bar and the large title row on a phone… */
 val StackTitleRowTop: Dp = 20.dp
+
+/** …and beside a navigation rail (from 600dp wide), as on the tablet boards. */
+val StackTitleRowTopWide: Dp = 16.dp
 
 /** Minimum height of the large title row (its actions are 48dp targets). */
 val StackTitleRowHeight: Dp = 48.dp
@@ -80,11 +84,12 @@ fun StackTitleRow(
 ) {
     val stack = YomuTheme.stack
     val end = endPadding ?: if (actions != null) YomuTheme.space.xs else gutter
+    val top = if (LocalConfiguration.current.screenWidthDp >= 600) StackTitleRowTopWide else StackTitleRowTop
     FlowRow(
         modifier = modifier
             .fillMaxWidth()
             .then(if (collapse != null) Modifier.graphicsLayer { alpha = 1f - collapse().coerceIn(0f, 1f) } else Modifier)
-            .padding(start = gutter, end = end, top = StackTitleRowTop),
+            .padding(start = gutter, end = end, top = top),
         horizontalArrangement = Arrangement.SpaceBetween,
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
