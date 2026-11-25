@@ -3,10 +3,12 @@ package com.itexpert120.yomu.feature.reader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
@@ -59,11 +62,11 @@ private val SampleToc = listOf(
 private val SampleSettings = ReaderSettings(layout = ReaderLayout.Paged)
 
 @Composable
-private fun ReaderChromeSample(theme: ReaderThemeMode, controls: Boolean) {
+private fun ReaderChromeSample(theme: ReaderThemeMode, controls: Boolean, belowHinge: Dp = 0.dp) {
     val settings = SampleSettings.copy(theme = theme)
     val colors = settings.chromeColors()
     Box(Modifier.fillMaxSize().background(colors.page)) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(bottom = belowHinge)) {
             ReaderTopBar(
                 chapter = "The Piper at the Gates of Dawn",
                 bookTitle = "The Wind in the Willows",
@@ -86,22 +89,50 @@ private fun ReaderChromeSample(theme: ReaderThemeMode, controls: Boolean) {
             chapterProgression = 0.4,
             settings = settings.copy(footerShowPagesLeft = true),
             onContentHeight = {},
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = belowHinge),
         )
-        ReaderControlsPanel(
-            visible = controls,
-            colors = colors,
-            remainingLabel = chapterRemainingLabel(ReaderLayout.Paged, 3, 0.4),
-            progressPercent = 42,
-            chapters = SampleToc,
-            currentChapterIndex = 6,
-            onSelectChapter = {},
-            onContents = {},
-            onSearch = {},
-            onMarks = {},
-            onDisplay = {},
-        )
+        val panel: @Composable BoxScope.(Boolean) -> Unit = { visible ->
+            ReaderControlsPanel(
+                visible = visible,
+                colors = colors,
+                remainingLabel = chapterRemainingLabel(ReaderLayout.Paged, 3, 0.4),
+                progressPercent = 42,
+                chapters = SampleToc,
+                currentChapterIndex = 6,
+                onSelectChapter = {},
+                onContents = {},
+                onSearch = {},
+                onMarks = {},
+                onDisplay = {},
+            )
+        }
+        if (belowHinge > 0.dp) {
+            // Where the fold crosses the screen (not drawn by the app; just marks it here).
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = belowHinge)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color.Red.copy(alpha = 0.5f)),
+            )
+            ReaderBelowHinge(belowHinge) { panel(true) }
+        } else {
+            panel(controls)
+        }
     }
+}
+
+@Preview(name = "Tabletop fold", widthDp = 840, heightDp = 900)
+@Composable
+private fun ReaderTabletopPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) {
+    ReaderChromeSample(ReaderThemeMode.Light, controls = false, belowHinge = 450.dp)
+}
+
+@Preview(name = "Tabletop flip", widthDp = 412, heightDp = 900)
+@Composable
+private fun ReaderTabletopFlipPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) {
+    ReaderChromeSample(ReaderThemeMode.Dark, controls = false, belowHinge = 450.dp)
 }
 
 @Preview(widthDp = 390, heightDp = 844)

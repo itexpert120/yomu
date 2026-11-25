@@ -273,6 +273,10 @@ fun ReaderScreen(
     val chromeForcedByLoad = reading.renderState is ReaderRenderState.Opening
     val readerSurfacesAvailable = reading.renderState !is ReaderRenderState.Opening
     val chromeShown = chromeForcedByLoad || !immersive || state.chrome.controlsVisible
+    // Tabletop (a half-opened horizontal fold): the page and its bars live above the hinge and the
+    // controls panel stays up on the half lying flat. 0.dp everywhere else.
+    val belowHinge = rememberTabletopBelowHinge()
+    val tabletop = belowHinge > 0.dp
     val topInset = when {
         immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeTop
         immersive -> 0.dp
@@ -280,7 +284,8 @@ fun ReaderScreen(
     }
     val bottomInset by animateDpAsState(
         targetValue = when {
-            immersive && reading.settings.layout == ReaderLayout.Paged -> pagedSafeBottom
+            // Above a hinge there is no navigation bar to keep clear of.
+            immersive && reading.settings.layout == ReaderLayout.Paged -> if (tabletop) 0.dp else pagedSafeBottom
             immersive -> 0.dp
             else -> baseBottomInset
         },
@@ -353,7 +358,7 @@ fun ReaderScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         // The spatial spring may overshoot below zero; padding must not.
-                        .padding(top = topInset, bottom = bottomInset.coerceAtLeast(0.dp))
+                        .padding(top = topInset, bottom = bottomInset.coerceAtLeast(0.dp) + belowHinge)
                         .graphicsLayer {
                             alpha = reveal.value
                             translationY = revealShift.value * revealTravelPx
@@ -445,6 +450,7 @@ fun ReaderScreen(
                             deviceStatusActive = chromeShown,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
+                                .padding(bottom = belowHinge)
                                 .graphicsLayer {
                                     alpha = if (readerSurfacesAvailable) footerAlpha.coerceIn(0f, 1f) else 0f
                                     translationY = footerSlidePx
@@ -469,26 +475,34 @@ fun ReaderScreen(
 
                     // The menu's controls panel, toggled by a centre tap. It carries the chapter
                     // remaining and book progress itself, so it covers the passive footer while up.
-                    ReaderControlsPanel(
-                        visible = state.chrome.controlsVisible,
-                        colors = chromeColors,
-                        remainingLabel = chapterRemainingLabel(
-                            reading.settings.layout,
-                            reading.chapterPagesLeft,
-                            reading.chapterProgression,
-                        ),
-                        progressPercent = reading.progressPercent,
-                        chapters = chapters,
-                        currentChapterIndex = chapters.currentChapterIndex(reading.currentHref),
-                        onSelectChapter = { onAction(ReaderAction.SelectChapter(it)) },
-                        onContents = { onAction(ReaderAction.OpenBrowse) },
-                        onSearch = { onAction(ReaderAction.OpenSearch) },
-                        onMarks = {
-                            onAction(ReaderAction.OpenBrowse)
-                            onAction(ReaderAction.SelectBrowseTab(BrowseTab.Bookmarks))
-                        },
-                        onDisplay = { onAction(ReaderAction.OpenDisplay) },
-                    )
+                    // In tabletop it stays up on the flat half, below the hinge.
+                    val controlsPanel: @Composable BoxScope.(Boolean) -> Unit = { panelVisible ->
+                        ReaderControlsPanel(
+                            visible = panelVisible,
+                            colors = chromeColors,
+                            remainingLabel = chapterRemainingLabel(
+                                reading.settings.layout,
+                                reading.chapterPagesLeft,
+                                reading.chapterProgression,
+                            ),
+                            progressPercent = reading.progressPercent,
+                            chapters = chapters,
+                            currentChapterIndex = chapters.currentChapterIndex(reading.currentHref),
+                            onSelectChapter = { onAction(ReaderAction.SelectChapter(it)) },
+                            onContents = { onAction(ReaderAction.OpenBrowse) },
+                            onSearch = { onAction(ReaderAction.OpenSearch) },
+                            onMarks = {
+                                onAction(ReaderAction.OpenBrowse)
+                                onAction(ReaderAction.SelectBrowseTab(BrowseTab.Bookmarks))
+                            },
+                            onDisplay = { onAction(ReaderAction.OpenDisplay) },
+                        )
+                    }
+                    if (tabletop) {
+                        ReaderBelowHinge(belowHinge) { controlsPanel(true) }
+                    } else {
+                        controlsPanel(state.chrome.controlsVisible)
+                    }
 
                     ReaderControlsSheetWithDimPreview(
                         visible = state.chrome.displaySheetVisible,
