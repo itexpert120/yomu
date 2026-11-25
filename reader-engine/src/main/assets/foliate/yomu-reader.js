@@ -9,6 +9,7 @@
 import './view.js'
 import { EPUB } from './epub.js'
 import { Overlayer } from './overlayer.js'
+import { textWalker } from './text-walker.js'
 
 const host = globalThis.YomuHost
 const t0 = performance.now()
@@ -285,6 +286,208 @@ globalThis.yomuSelection = () => {
 globalThis.yomuClearSelection = () => {
     for (const { doc } of view.renderer?.getContents() ?? []) doc.getSelection()?.removeAllRanges()
 }
+
+// --- In-book search ---
+// foliate's own search opens every chapter with a locale-aware segmenter and is far too slow for a
+// long book. The app scans the chapter files first (SearchText.kt) and passes only the chapters that
+// can match; here they're matched with the same folding: no case, no diacritics, one space for any
+// run of whitespace.
+
+const foldChar = ch => ch.normalize('NFD').replace(/[\p{M}\p{Cf}]/gu, '').toLowerCase()
+
+/** strs folded into one string, with each folded unit's source: string index, offset, length. */
+const fold = strs => {
+    const parts = []
+    const node = [], offset = [], length = []
+    let space = false
+    const push = (text, n, i, len) => {
+        parts.push(text)
+        for (let k = 0; k < text.length; k++) {
+            node.push(n)
+            offset.push(i)
+            length.push(len)
+        }
+    }
+    strs.forEach((s, n) => {
+        for (let i = 0; i < s.length;) {
+            const code = s.codePointAt(i)
+            const len = code > 0xFFFF ? 2 : 1
+            if (code < 128) {
+                if (code === 32 || (code >= 9 && code <= 13)) {
+                    if (!space) push(' ', n, i, len)
+                    space = true
+                } else {
+                    push(code >= 65 && code <= 90 ? String.fromCharCode(code + 32) : s[i], n, i, len)
+                    space = false
+                }
+            } else {
+                const ch = s.slice(i, i + len)
+                if (/\s/u.test(ch)) {
+                    if (!space) push(' ', n, i, len)
+                    space = true
+                } else {
+                    const folded = foldChar(ch)
+                    if (folded) {
+                        push(folded, n, i, len)
+                        space = false
+                    }
+                }
+            }
+            i += len
+        }
+    })
+    return { text: parts.join(''), node, offset, length }
+}
+
+const EXCERPT = 50
+const squash = s => s.replace(/\s+/g, ' ')
+// Whole words of the context around a match, at most EXCERPT characters.
+const excerptBefore = s => {
+    const text = squash(s).trimStart()
+    return text.length <= EXCERPT ? text : '…' + text.slice(-EXCERPT).replace(/^\S*\s/, '')
+}
+const excerptAfter = s => {
+    const text = squash(s).trimEnd()
+    return text.length <= EXCERPT ? text : text.slice(0, EXCERPT).replace(/\s\S*$/, '') + '…'
+}
+
+const BLOCK = new Set(['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'tr', 'dt', 'dd',
+    'blockquote', 'section', 'article', 'aside', 'header', 'footer', 'nav', 'pre', 'figcaption', 'body'])
+const blockOf = node => {
+    let el = node.parentElement
+    while (el && !BLOCK.has(el.localName)) el = el.parentElement
+    return el
+}
+
+/** Up to [max] matches of [needle] (folded) in [doc], section [index]. */
+const searchDocument = (doc, index, needle, max) => {
+    const hits = []
+    const matches = textWalker(doc, function* (strs, makeRange) {
+        const { text, node, offset, length } = fold(strs)
+        const range = (a, b) => makeRange(node[a], offset[a], node[b], offset[b] + length[b])
+        // The context shown with a hit breaks lines between blocks (matching doesn't: like the
+        // app's scan, it reads the text nodes back to back).
+        let context = null
+        const starts = []
+        const contextOf = () => {
+            const parts = []
+            let total = 0, lastBlock
+            strs.forEach((s, n) => {
+                const block = blockOf(makeRange(n, 0, n, 0).startContainer)
+                if (n > 0 && block !== lastBlock) {
+                    parts.push('\n')
+                    total++
+                }
+                lastBlock = block
+                starts.push(total)
+                parts.push(s)
+                total += s.length
+            })
+            return parts.join('')
+        }
+        for (let at = text.indexOf(needle); at > -1; at = text.indexOf(needle, at + needle.length)) {
+            const last = at + needle.length - 1
+            const hitRange = range(at, last)
+            context ??= contextOf()
+            const start = starts[node[at]] + offset[at]
+            const end = starts[node[last]] + offset[last] + length[last]
+            yield {
+                range: hitRange,
+                progression: text.length ? at / text.length : 0,
+                before: excerptBefore(context.slice(Math.max(0, start - EXCERPT * 3), start)),
+                match: context.slice(start, end),
+                after: excerptAfter(context.slice(end, end + EXCERPT * 3)),
+            }
+        }
+    })
+    for (const { range, ...hit } of matches) {
+        hits.push({
+            ...hit,
+            index,
+            cfi: view.getCFI(index, range),
+            title: view.getProgressOf(index, range)?.tocItem?.label ?? null,
+        })
+        if (hits.length >= max) break
+    }
+    return hits
+}
+
+let searchToken = 0
+
+/**
+ * Searches chapters [sections] (in order) for [query], reporting `search-hits` { id, hits } per
+ * chapter with matches and `search-done` { id } at the end, after [limit] hits, or once cancelled.
+ */
+globalThis.yomuSearch = async ({ id, query, sections, limit }) => {
+    const token = ++searchToken
+    const needle = fold([query]).text.trim()
+    let found = 0
+    try {
+        const book = await loadBook()
+        for (const index of needle ? sections : []) {
+            if (token !== searchToken || found >= limit) break
+            const section = book.sections[index]
+            if (!section?.createDocument) continue
+            const doc = await section.createDocument()
+            if (token !== searchToken) break
+            const hits = searchDocument(doc, index, needle, limit - found)
+            found += hits.length
+            if (hits.length) report('search-hits', { id, hits })
+        }
+    } catch (e) {
+        report('error', { message: 'search: ' + String(e?.stack ?? e) })
+    }
+    report('search-done', { id })
+}
+
+globalThis.yomuCancelSearch = () => {
+    searchToken++
+}
+
+// Search hits are underlined in whichever chapter is on screen. Keyed with foliate's search prefix,
+// so a tap on one isn't reported as a tap on an annotation.
+const SEARCH_KEY = 'foliate-search:'
+const SEARCH_COLOR = '#E7C75B'
+let searchHits = new Map() // section index -> [cfi]
+
+const drawSearchHits = ({ index, overlayer, doc }) => {
+    if (!overlayer || !doc) return
+    for (const cfi of searchHits.get(index) ?? []) {
+        try {
+            const range = view.resolveNavigation(cfi).anchor(doc)
+            overlayer.add(SEARCH_KEY + cfi, range, Overlayer.underline, { color: SEARCH_COLOR, width: 3 })
+        } catch {
+            // A hit that no longer resolves is simply not drawn.
+        }
+    }
+}
+
+/** Underlines [cfis] (replacing the previous set; [] clears them). */
+globalThis.yomuSetSearchHits = cfis => {
+    for (const { index, overlayer } of view.renderer?.getContents() ?? []) {
+        for (const cfi of searchHits.get(index) ?? []) overlayer?.remove(SEARCH_KEY + cfi)
+    }
+    searchHits = new Map()
+    for (const cfi of cfis) {
+        let index
+        try {
+            index = view.resolveNavigation(cfi)?.index
+        } catch {
+            continue
+        }
+        if (index == null) continue
+        if (!searchHits.has(index)) searchHits.set(index, [])
+        searchHits.get(index).push(cfi)
+    }
+    for (const content of view.renderer?.getContents() ?? []) drawSearchHits(content)
+}
+
+// The overlay is attached right after this event, so draw once it is.
+view.addEventListener('create-overlay', ({ detail: { index } }) => Promise.resolve().then(() => {
+    for (const content of view.renderer?.getContents() ?? []) {
+        if (content.index === index) drawSearchHits(content)
+    }
+}))
 
 globalThis.yomuApplySettings = next => {
     settings = next

@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -38,6 +39,7 @@ import com.itexpert120.yomu.data.reader.ReadingPosition
 import com.itexpert120.yomu.data.reader.readium.ReadiumReaderEngine
 import com.itexpert120.yomu.reader.epub.EpubBook
 import com.itexpert120.yomu.reader.web.FoliateReader
+import com.itexpert120.yomu.reader.web.SearchText
 import com.itexpert120.yomu.reader.web.SelectionAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +48,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -53,6 +59,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipFile
@@ -69,8 +76,7 @@ import kotlin.math.ceil
  * from Readium's parser (import-time cache, or [ReadiumReaderEngine.publicationCache] on a miss), so
  * chapter read marks stay keyed the same.
  *
- * Not yet ported (no-ops for now): in-book search, footnote popups, and the scroll-mode chapter
- * rubberband.
+ * Not yet ported (no-ops for now): footnote popups and the scroll-mode chapter rubberband.
  */
 @Singleton
 class FoliateReaderEngine @Inject constructor(
@@ -430,6 +436,8 @@ private class FoliateReaderSession(
     private fun onRendererGone() {
         if (closed) return
         crashLog.note("Reader: WebView renderer was killed; rebuilt the page view")
+        // A search running in the old page ends with the hits it had.
+        activeSearch?.events?.close()
         reader?.close()
         reader = null
         val container = hostContainer
@@ -448,10 +456,12 @@ private class FoliateReaderSession(
                 ReaderOpenTrace.mark("reader.first-page")
                 _renderState.value = ReaderRenderState.Ready(_currentLocator.value?.href)
                 drawHighlights()
+                drawSearchHits()
             }
             "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
+            "search-hits", "search-done" -> onSearchEvent(name, JSONObject(json))
             "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
             "error" -> Log.w(TAG, "page: $json")
         }
@@ -556,7 +566,7 @@ private class FoliateReaderSession(
                 .put("family", custom.family)
                 .put(
                     "faces",
-                    org.json.JSONArray().apply {
+                    JSONArray().apply {
                         put(JSONObject().put("src", "/userfonts/regular"))
                         if (custom.italicPath != null) put(JSONObject().put("src", "/userfonts/italic").put("style", "italic"))
                     },
@@ -567,7 +577,7 @@ private class FoliateReaderSession(
                 .put("family", family)
                 .put(
                     "faces",
-                    org.json.JSONArray().apply {
+                    JSONArray().apply {
                         put(JSONObject().put("src", "/assets/fonts/$family-Regular.ttf"))
                         put(JSONObject().put("src", "/assets/fonts/$family-Italic.ttf").put("style", "italic"))
                         if (family == "Cardo") put(JSONObject().put("src", "/assets/fonts/Cardo-Bold.ttf").put("weight", "bold"))
@@ -650,7 +660,7 @@ private class FoliateReaderSession(
     // own text search and aren't drawn here.
     private fun drawHighlights() {
         val reader = reader ?: return
-        val list = org.json.JSONArray()
+        val list = JSONArray()
         for (highlight in highlights) {
             val cfi = runCatching { JSONObject(highlight.locatorJson).optJSONObject("locations")?.optString("cfi") }
                 .getOrNull()?.takeIf { it.isNotEmpty() } ?: continue
@@ -661,13 +671,156 @@ private class FoliateReaderSession(
 
     // endregion
 
-    override suspend fun search(query: String): List<ReaderSearchResult> = emptyList()
+    // region Search
 
-    override fun applySearchDecorations(results: List<ReaderSearchResult>) = Unit
+    private class ActiveSearch(val id: Int, val events: Channel<JSONObject>)
 
-    override fun clearSearch() = Unit
+    private var searchIds = 0
+    private var activeSearch: ActiveSearch? = null
+
+    // The latest underlined hits, redrawn on a rebuilt page.
+    private var searchHits: List<String> = emptyList()
+
+    /**
+     * The chapter files are scanned for the query first ([SearchText], a few chapters in parallel)
+     * and the page opens only the chapters that can match: opening a document per chapter is what
+     * made foliate's own search slow. Chapters go in growing blocks, so a common word stops after
+     * the first few chapters and a rare one costs one pass over the book's text.
+     */
+    override suspend fun search(query: String): List<ReaderSearchResult> {
+        val needle = SearchText.fold(query).trim()
+        if (needle.isEmpty()) return emptyList()
+        val started = SystemClock.elapsedRealtime()
+        var scanMs = 0L
+        var candidates = 0
+        val results = ArrayList<ReaderSearchResult>()
+        withContext(Dispatchers.IO) {
+            ChapterScan(book.file, book.paths, needle).use { scan ->
+                var next = 0
+                var block = FIRST_SCAN_BLOCK
+                while (next < book.paths.size && results.size < MAX_SEARCH_RESULTS) {
+                    val end = minOf(next + block, book.paths.size)
+                    val scanStarted = SystemClock.elapsedRealtime()
+                    val sections = scan.matching(next until end)
+                    scanMs += SystemClock.elapsedRealtime() - scanStarted
+                    candidates += sections.size
+                    next = end
+                    block = minOf(block * 2, MAX_SCAN_BLOCK)
+                    if (sections.isEmpty()) continue
+                    val hits = withContext(Dispatchers.Main.immediate) {
+                        searchPage(query, sections, MAX_SEARCH_RESULTS - results.size)
+                    }
+                    results += hits
+                }
+            }
+        }
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Log.d(
+                TAG,
+                "search \"$query\": ${results.size} hits in ${SystemClock.elapsedRealtime() - started} ms " +
+                    "(scan $scanMs ms, $candidates candidate chapters)",
+            )
+        }
+        return results
+    }
+
+    /** Reads chapter files on [SCAN_WORKERS] threads, one zip handle each. */
+    private class ChapterScan(file: File, private val paths: List<String>, private val needle: String) : java.io.Closeable {
+        private val zips = List(SCAN_WORKERS) { ZipFile(file) }
+
+        /** The chapters in [range] that may hold the needle, in order. */
+        suspend fun matching(range: IntRange): List<Int> = coroutineScope {
+            zips.mapIndexed { worker, zip ->
+                async(Dispatchers.IO) {
+                    val scratch = StringBuilder()
+                    range.filter { (it - range.first) % SCAN_WORKERS == worker }.filter {
+                        ensureActive()
+                        SearchText.chapterMayContain(zip, paths[it], needle, scratch)
+                    }
+                }
+            }.awaitAll().flatten().sorted()
+        }
+
+        override fun close() = zips.forEach { runCatching { it.close() } }
+    }
+
+    private suspend fun searchPage(query: String, sections: List<Int>, limit: Int): List<ReaderSearchResult> {
+        val reader = reader ?: return emptyList()
+        activeSearch?.events?.close()
+        val search = ActiveSearch(++searchIds, Channel(Channel.UNLIMITED))
+        activeSearch = search
+        val results = ArrayList<ReaderSearchResult>()
+        var done = false
+        try {
+            reader.search(
+                JSONObject()
+                    .put("id", search.id)
+                    .put("query", query)
+                    .put("sections", JSONArray(sections))
+                    .put("limit", limit)
+                    .toString(),
+            )
+            for (event in search.events) {
+                val hits = event.optJSONArray("hits")
+                if (hits == null) {
+                    done = true
+                    break
+                }
+                for (i in 0 until hits.length()) searchResult(hits.getJSONObject(i))?.let(results::add)
+                if (results.size >= limit) break
+            }
+        } finally {
+            if (activeSearch === search) activeSearch = null
+            if (!done) this.reader?.cancelSearch()
+        }
+        return results.take(limit)
+    }
+
+    private fun onSearchEvent(name: String, event: JSONObject) {
+        val search = activeSearch?.takeIf { it.id == event.optInt("id") } ?: return
+        search.events.trySend(if (name == "search-done") JSONObject() else event)
+    }
+
+    private fun searchResult(hit: JSONObject): ReaderSearchResult? {
+        val index = hit.optInt("index", -1)
+        val href = book.readingOrder.getOrNull(index) ?: return null
+        val cfi = hit.optString("cfi").takeIf { it.isNotEmpty() } ?: return null
+        val title = hit.optString("title").takeIf { it.isNotEmpty() && it != "null" }
+        val before = hit.optString("before")
+        val match = hit.optString("match")
+        val after = hit.optString("after")
+        val locator = JSONObject()
+            .put("href", href)
+            .put("type", book.mediaTypes[index])
+            .apply { title?.let { put("title", it) } }
+            .put("locations", JSONObject().put("progression", hit.optDouble("progression", 0.0)).put("cfi", cfi))
+            .put("text", JSONObject().put("before", before).put("highlight", match).put("after", after))
+        return ReaderSearchResult(locatorJson = locator.toString(), before = before, match = match, after = after, chapterTitle = title)
+    }
+
+    override fun applySearchDecorations(results: List<ReaderSearchResult>) {
+        searchHits = results.mapNotNull { result ->
+            runCatching { JSONObject(result.locatorJson).optJSONObject("locations")?.optString("cfi") }.getOrNull()?.takeIf { it.isNotEmpty() }
+        }
+        drawSearchHits()
+    }
+
+    override fun clearSearch() {
+        activeSearch?.events?.close()
+        reader?.cancelSearch()
+        searchHits = emptyList()
+        drawSearchHits()
+    }
+
+    private fun drawSearchHits() {
+        if (_renderState.value !is ReaderRenderState.Ready) return
+        reader?.setSearchHits(JSONArray(searchHits).toString())
+    }
+
+    // endregion
 
     override fun close() {
+        activeSearch?.events?.close()
         closed = true
         unhost()
         reader?.close()
@@ -687,5 +840,11 @@ private class FoliateReaderSession(
     private companion object {
         const val TAG = "FoliateSession"
         const val HOST_TAG = "foliate-reader"
+
+        // As many hits as the Readium engine returns.
+        const val MAX_SEARCH_RESULTS = 150
+        const val FIRST_SCAN_BLOCK = 32
+        const val MAX_SCAN_BLOCK = 256
+        const val SCAN_WORKERS = 4
     }
 }
