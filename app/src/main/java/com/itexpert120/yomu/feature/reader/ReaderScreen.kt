@@ -25,11 +25,13 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,8 +55,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.ViewCompat
@@ -64,13 +69,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
-import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
-import com.itexpert120.yomu.core.designsystem.YomuBadgeTone
-import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
-import com.itexpert120.yomu.core.designsystem.YomuEmptyState
-import com.itexpert120.yomu.core.designsystem.YomuLoadingIndicator
-import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
@@ -289,9 +288,9 @@ fun ReaderScreen(
         label = "readerBottomInset",
     )
 
-    val background = Color(reading.settings.backgroundArgb)
-    val onBackground = Color(reading.settings.textArgb)
-    val mutedOnBackground = Color(reading.settings.colorPalette.secondaryTextArgb)
+    val chromeColors = remember(reading.settings) { reading.settings.chromeColors() }
+    val chapters = remember(reading.tableOfContents) { reading.tableOfContents.readerChapters() }
+    val background = chromeColors.page
 
     // Page reveal: the new chapter fades in on an effects spring while travelling a short distance
     // in its reading direction on a spatial spring — rising into place going forward, settling down
@@ -328,7 +327,7 @@ fun ReaderScreen(
     // Session creation changes which layer owns the opening scrim. Keep the indicator as movable
     // content so Compose transfers its animation state instead of disposing and restarting it.
     val openingContent = remember {
-        movableContentOf<Modifier, Color> { modifier, color -> ReaderOpening(color, modifier) }
+        movableContentOf<Modifier, ReaderChromeColors> { modifier, colors -> ReaderOpening(colors, modifier) }
     }
 
     Box(
@@ -340,6 +339,7 @@ fun ReaderScreen(
     ) {
         when {
             reading.failed -> ReaderFailure(
+                colors = chromeColors,
                 onBack = { onAction(ReaderAction.Back) },
                 onRetry = { onAction(ReaderAction.RetryOpen) },
             )
@@ -368,7 +368,7 @@ fun ReaderScreen(
                             .matchParentSize()
                             .background(background),
                     ) {
-                        openingContent(Modifier.align(Alignment.Center), mutedOnBackground)
+                        openingContent(Modifier.align(Alignment.Center), chromeColors)
                     }
                 }
 
@@ -396,8 +396,8 @@ fun ReaderScreen(
                         // Keep the last known chapter title visible while the next resource is
                         // covered and styled; blanking it here exposes the generic "Reading" label.
                         chapter = reading.chapterTitle ?: "Reading",
-                        background = background,
-                        content = onBackground,
+                        bookTitle = reading.title,
+                        colors = chromeColors,
                         isBookmarked = reading.currentPageBookmarked,
                         onBack = { onAction(ReaderAction.Back) },
                         onToggleBookmark = { onAction(ReaderAction.ToggleBookmark) },
@@ -467,16 +467,26 @@ fun ReaderScreen(
                             },
                     )
 
-                    // Bottom navigation bar, toggled by a centre tap. Keep it above the passive footer
-                    // so both chrome surfaces remain visible when immersive controls are revealed.
-                    ReaderChapterControlsBar(
+                    // The menu's controls panel, toggled by a centre tap. It carries the chapter
+                    // remaining and book progress itself, so it covers the passive footer while up.
+                    ReaderControlsPanel(
                         visible = state.chrome.controlsVisible,
-                        bottomPadding = footerHeight,
-                        footerVisible = reading.settings.showFooter,
-                        background = background,
-                        content = onBackground,
-                        onBrowse = { onAction(ReaderAction.OpenBrowse) },
+                        colors = chromeColors,
+                        remainingLabel = chapterRemainingLabel(
+                            reading.settings.layout,
+                            reading.chapterPagesLeft,
+                            reading.chapterProgression,
+                        ),
+                        progressPercent = reading.progressPercent,
+                        chapters = chapters,
+                        currentChapterIndex = chapters.currentChapterIndex(reading.currentHref),
+                        onSelectChapter = { onAction(ReaderAction.SelectChapter(it)) },
+                        onContents = { onAction(ReaderAction.OpenBrowse) },
                         onSearch = { onAction(ReaderAction.OpenSearch) },
+                        onMarks = {
+                            onAction(ReaderAction.OpenBrowse)
+                            onAction(ReaderAction.SelectBrowseTab(BrowseTab.Bookmarks))
+                        },
                         onDisplay = { onAction(ReaderAction.OpenDisplay) },
                     )
 
@@ -518,6 +528,7 @@ fun ReaderScreen(
                     ReaderBrowseSheet(
                         tab = state.chrome.browseTab,
                         bookTitle = reading.title,
+                        currentPercent = reading.progressPercent,
                         toc = reading.tableOfContents,
                         tocLoading = reading.tocLoading,
                         currentHref = reading.currentHref,
@@ -565,7 +576,7 @@ fun ReaderScreen(
                 }
             }
 
-            else -> openingContent(Modifier.align(Alignment.Center), mutedOnBackground)
+            else -> openingContent(Modifier.align(Alignment.Center), chromeColors)
         }
     }
 }
@@ -623,51 +634,73 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-/** The opening state: the shared morphing indicator, captioned in the reading theme's muted ink. */
+/** The opening state: Stack's 2dp line over "Opening…", in the reading theme's own ink. */
 @Composable
-private fun ReaderOpening(captionColor: Color, modifier: Modifier = Modifier) {
+private fun ReaderOpening(colors: ReaderChromeColors, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier,
+        modifier = modifier.semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        YomuLoadingIndicator()
-        Text(text = "Opening…", color = captionColor, style = MaterialTheme.typography.bodyMedium)
+        ReaderLoadingLine(color = colors.ink, track = colors.track, modifier = Modifier.width(120.dp))
+        Text(text = "Opening…", color = colors.muted, style = StackType.Label.copy(fontWeight = FontWeight.Normal))
     }
 }
 
 /**
- * The book could not be opened. The page behind is in the reading theme, so the message sits on
- * its own app-themed surface to keep the shared empty-state colours legible on any page colour.
+ * The book could not be opened: Stack's empty state drawn straight on the page, in the reading
+ * theme's colours so it stays legible on any page.
  */
 @Composable
 private fun BoxScope.ReaderFailure(
+    colors: ReaderChromeColors,
     onBack: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    Surface(
+    Column(
         modifier = Modifier
             .align(Alignment.Center)
-            .padding(YomuTheme.space.lg)
+            .padding(horizontal = YomuTheme.space.xl)
             .widthIn(max = ReaderFailureMaxWidth),
-        shape = YomuShapeTokens.hero,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        YomuEmptyState(
-            icon = StackIcons.Error,
-            title = "This book couldn't be opened",
-            body = "The file may have moved or be damaged. Try again, or head back to your library.",
-            shape = YomuBadgeShape.Burst,
-            tone = YomuBadgeTone.Error,
-            actions = {
-                YomuButton(text = "Try again", onClick = onRetry)
-                YomuButton(
-                    text = "Back to library",
-                    onClick = onBack,
-                    emphasis = YomuButtonEmphasis.Secondary,
-                )
-            },
+        Icon(
+            imageVector = StackIcons.MenuBook,
+            contentDescription = null,
+            tint = colors.muted,
+            modifier = Modifier.size(48.dp),
+        )
+        Text(
+            text = "This book couldn't be opened",
+            color = colors.ink,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 18.dp).semantics { heading() },
+        )
+        Text(
+            text = "The file may be damaged or use a format Open Reader can't read. Your place and notes are kept.",
+            color = colors.muted,
+            style = StackType.Body,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        ReaderPillButton(
+            text = "Try again",
+            onClick = onRetry,
+            ink = colors.ink,
+            surface = colors.page,
+            height = 52.dp,
+            modifier = Modifier.padding(top = 24.dp).widthIn(min = 220.dp),
+        )
+        ReaderPillButton(
+            text = "Back to library",
+            onClick = onBack,
+            style = ReaderPillStyle.Secondary,
+            ink = colors.ink,
+            surface = colors.page,
+            border = colors.track,
+            height = 52.dp,
+            modifier = Modifier.padding(top = 8.dp).widthIn(min = 220.dp),
         )
     }
 }
