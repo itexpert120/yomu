@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -108,28 +109,53 @@ fun YomuNavHost(
         }
     }
 
+    // The library as it looked when a book opened: the book sheet stands on it (BookSheetFrame).
+    val libraryUnderlay = remember { LibraryUnderlay() }
+    val captureScope = rememberCoroutineScope()
+
     NavHost(
         navController = navController,
         startDestination = Home,
         modifier = modifier,
-        enterTransition = transitions.pushEnter,
+        enterTransition = {
+            // A book opens as a sheet over the library (BookSheetFrame moves it); everything else pushes.
+            if (targetState.destination.hasRoute<BookDetails>()) {
+                backMotion.sheetEnter = initialState.id != targetState.id
+                EnterTransition.None
+            } else {
+                transitions.pushEnter(this)
+            }
+        },
         exitTransition = {
             // A forward move starts fresh: nothing from an earlier back gesture may carry over.
             backMotion.predictive = false
             backMotion.tapPop = false
             backMotion.gestureInFlight = false
+            backMotion.sheet = false
             if (initialState.id != targetState.id) backMotion.opening = true
-            transitions.pushExit(this)
+            // The library holds still under an opening book; only the sheet moves.
+            if (targetState.destination.hasRoute<BookDetails>() && initialState.id != targetState.id && motionEnabled) {
+                ExitTransition.KeepUntilTransitionsFinished
+            } else {
+                transitions.pushExit(this)
+            }
         },
         // A back tap plays the same Material back as a released gesture, from rest (see BackPreviewFrame).
-        popEnterTransition = { EnterTransition.None },
+        popEnterTransition = {
+            backMotion.sheetEnter = false
+            EnterTransition.None
+        },
         popExitTransition = {
             val sameEntry = initialState.id == targetState.id
+            backMotion.sheet = false
             if (sameEntry || !motionEnabled) {
                 backMotion.predictive = false
                 ExitTransition.None
             } else {
                 backMotion.predictive = true
+                // Closing a book: the sheet goes back down over the library (BookSheetFrame).
+                backMotion.sheet = initialState.destination.hasRoute<BookDetails>()
+                if (backMotion.sheet) backMotion.sheetEnter = false
                 // NavHost re-runs this when a released gesture commits; that is not a tap.
                 if (!backMotion.gestureInFlight) {
                     backMotion.tapPop = true
@@ -141,9 +167,13 @@ fun YomuNavHost(
         // A back gesture: both pages hold still and BackPreviewFrame draws the Material predictive
         // back from the gesture-seeked transition (the leaving page shrinks, rounds and drifts with
         // the finger over the page underneath, then fades away on commit).
-        predictivePopEnterTransition = { EnterTransition.None },
+        predictivePopEnterTransition = {
+            backMotion.sheetEnter = false
+            EnterTransition.None
+        },
         predictivePopExitTransition = { swipeEdge ->
             backMotion.predictive = motionEnabled
+            backMotion.sheet = motionEnabled && initialState.destination.hasRoute<BookDetails>()
             backMotion.tapPop = false
             backMotion.gestureInFlight = true
             backMotion.recordEdge(swipeEdge)
@@ -152,26 +182,34 @@ fun YomuNavHost(
     ) {
         composable<Home> {
             BackPreviewFrame(backMotion) {
-                TopLevelNavigationShell(
-                    appViewModel = appViewModel,
-                    onOpenReader = ::navigateToReader,
-                    onOpenDetails = { bookId -> navController.navigate(BookDetails(bookId)) },
-                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                    onOpenAbout = { navController.navigate(About) },
-                )
+                LibraryPageRecorder(libraryUnderlay) { libraryLayer ->
+                    TopLevelNavigationShell(
+                        appViewModel = appViewModel,
+                        onOpenReader = ::navigateToReader,
+                        onOpenDetails = { bookId ->
+                            libraryUnderlay.capture(libraryLayer, captureScope)
+                            navController.navigate(BookDetails(bookId))
+                        },
+                        onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                        onOpenAbout = { navController.navigate(About) },
+                    )
+                }
             }
         }
         composable<BookDetails> { entry ->
             BackPreviewFrame(backMotion) {
-                val args = entry.toRoute<BookDetails>()
-                BookDetailsRoute(
-                    onBack = navController::popBackStackIfResumed,
-                    onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
-                    onEdit = { navController.navigate(EditBook(args.bookId)) },
-                    onOpenChapter = { locator ->
-                        navigateToReader(Reader(args.bookId, locator), "chapter")
-                    },
-                )
+                BookSheetFrame(backMotion, libraryUnderlay) { libraryBeside ->
+                    val args = entry.toRoute<BookDetails>()
+                    BookDetailsRoute(
+                        onBack = navController::popBackStackIfResumed,
+                        onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
+                        onEdit = { navController.navigate(EditBook(args.bookId)) },
+                        onOpenChapter = { locator ->
+                            navigateToReader(Reader(args.bookId, locator), "chapter")
+                        },
+                        libraryBeside = libraryBeside,
+                    )
+                }
             }
         }
         composable<EditBook> {
@@ -270,7 +308,7 @@ private fun TopLevelNavigationShell(
 }
 
 /** Whether the root host's running transition is a back (pop) rather than a forward handoff. */
-private class BackMotion {
+internal class BackMotion {
     // The running pop is a gesture-driven predictive back (Material style, drawn by BackPreviewFrame).
     var predictive by mutableStateOf(false)
 
@@ -290,6 +328,13 @@ private class BackMotion {
 
     // A back tap / back key (no gesture): the same Material back, committing from rest.
     var tapPop = false
+
+    // The running pop closes a book sheet onto the library: the sheet slides away itself
+    // (BookSheetFrame) instead of the Material page back, and the library under it never scales.
+    var sheet = false
+
+    // The book page is opening over the library (not returning from the reader or the editor).
+    var sheetEnter = false
 
     // A forward move is still animating; a back gesture can't be previewed until it settles.
     var opening by mutableStateOf(false)
@@ -354,7 +399,7 @@ private fun AnimatedContentScope.BackPreviewFrame(
             .graphicsLayer {
                 val t = predictiveFraction.value
                 if (t <= 0f && motion.released) motion.gestureInFlight = false
-                if (t <= 0f || !motion.predictive) {
+                if (t <= 0f || !motion.predictive || motion.sheet) {
                     clip = false
                     return@graphicsLayer
                 }
@@ -394,7 +439,7 @@ private fun AnimatedContentScope.BackPreviewFrame(
                 // Predictive back: the page underneath is darkened, lifting a little with the drag and
                 // fully once the back commits.
                 val t = predictiveFraction.value
-                if (!leaving && t > 0f && motion.predictive) {
+                if (!leaving && t > 0f && motion.predictive && !motion.sheet) {
                     val pose = PredictivePose.of(1f - t, release = if (motion.tapPop) 0f else releaseAt[0])
                     drawRect(Color.Black, alpha = YomuMotion.PredictiveBackScrim * (1f - 0.25f * pose.drag) * (1f - pose.commit))
                 }
@@ -447,7 +492,7 @@ private const val PredictiveEnterOffset = 0.1f
  * drag (frozen at release while committing; retracing on cancel), [commit] the eased 0..1 commit for
  * geometry and [commitTime] its linear time, for the fade (the eased curve front-loads too hard to fade on).
  */
-private class PredictivePose(val drag: Float, val commit: Float, val commitTime: Float) {
+internal class PredictivePose(val drag: Float, val commit: Float, val commitTime: Float) {
     companion object {
         fun of(fraction: Float, release: Float): PredictivePose {
             val dragged = minOf(fraction, release).coerceIn(0f, 1f)
