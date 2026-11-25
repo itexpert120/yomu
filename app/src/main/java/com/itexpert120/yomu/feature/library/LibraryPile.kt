@@ -32,23 +32,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itexpert120.yomu.core.designsystem.StackTitleRow
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -69,6 +72,9 @@ internal enum class PileLayout {
 }
 
 private const val SLOT_ROTATION = 3.5f
+
+/** The pile always shows this many slots; books fill them from the front. */
+private const val PileSlots = 3
 private val FlickDistance = 48.dp
 
 /** Cover size and the per-slot offsets, scaled together so the pile keeps its shape at any size. */
@@ -191,6 +197,10 @@ private fun PileCovers(
                 )
             },
     ) {
+        // A pile of one or two still reads as a pile: the empty slots behind hold quiet blanks.
+        for (depth in PileSlots - 1 downTo books.size) {
+            key("blank-$depth") { PileBlank(depth = depth, metrics = metrics) }
+        }
         // Back to front, so the front cover draws last.
         for (depth in books.indices.reversed()) {
             val book = books[(frontIndex + depth) % books.size]
@@ -273,6 +283,29 @@ private fun PileCover(book: LibraryBook, depth: Int, metrics: PileMetrics, onCli
     }
 }
 
+/**
+ * An empty slot of the pile: a cover-shaped blank in the raised colour, turned and offset like a
+ * cover at that depth, with a much softer shadow than a real cover so it stays in the background.
+ */
+@Composable
+private fun PileBlank(depth: Int, metrics: PileMetrics) {
+    val raised = YomuTheme.stack.raised
+    val shadow = Color.Black.copy(alpha = if (YomuTheme.stack.isDark) 0.28f else 0.1f)
+    Box(
+        modifier = Modifier
+            .size(metrics.coverWidth, metrics.coverHeight)
+            .graphicsLayer {
+                translationX = metrics.slotX.toPx() * depth
+                translationY = metrics.slotY.toPx() * depth
+                rotationZ = SLOT_ROTATION * depth
+                transformOrigin = TransformOrigin(0f, 1f)
+            }
+            .dropShadow(YomuShapeTokens.cover, Shadow(radius = 16.dp, spread = (-8).dp, offset = DpOffset(0.dp, 8.dp), color = shadow))
+            .clip(YomuShapeTokens.cover)
+            .background(raised),
+    )
+}
+
 @Composable
 private fun ResumeButton(title: String, size: Dp, onClick: () -> Unit) {
     val stack = YomuTheme.stack
@@ -347,7 +380,7 @@ internal fun SkeletonBlock(color: Color, width: Dp, height: Dp, modifier: Modifi
     )
 }
 
-/** Stack's library title row: the screen title and its actions (48dp icon buttons). */
+/** The library's title row (the shared top-level title row) with its actions. */
 @Composable
 internal fun LibraryTitleRow(
     onSearch: () -> Unit,
@@ -356,27 +389,22 @@ internal fun LibraryTitleRow(
     modifier: Modifier = Modifier,
     gutter: Dp = 24.dp,
     showActions: Boolean = true,
+    collapse: (() -> Float)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = gutter, end = YomuTheme.space.sm, top = 20.dp)
-            .height(48.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Library",
-            style = StackType.Display,
-            color = YomuTheme.stack.ink,
-            modifier = Modifier
-                .weight(1f)
-                .semantics { heading() },
-        )
-        if (showActions) LibraryActions(onSearch = onSearch, onImport = onImport, onArrange = onArrange)
-    }
+    StackTitleRow(
+        title = "Library",
+        modifier = modifier,
+        gutter = gutter,
+        collapse = collapse,
+        actions = if (showActions) {
+            { LibraryActions(onSearch = onSearch, onImport = onImport, onArrange = onArrange) }
+        } else {
+            null
+        },
+    )
 }
 
-/** Search, import and arrange: on the title row, and on the shelf's tab row once it has pinned. */
+/** Search, import and arrange: on the title row and the compact header (and the landscape tab row). */
 @Composable
 internal fun RowScope.LibraryActions(
     onSearch: () -> Unit,

@@ -7,6 +7,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +60,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itexpert120.yomu.app.navigation.LocalYomuNavigationBarShown
+import com.itexpert120.yomu.core.designsystem.StackCompactHeader
+import com.itexpert120.yomu.core.designsystem.StackCompactHeaderHeight
+import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
+import com.itexpert120.yomu.core.designsystem.StackTitleRow
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuButton
@@ -68,6 +74,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
 import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.DailyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
@@ -208,6 +215,33 @@ private fun PeriodOverview(
 
 private val PinnedRowHeight = 48.dp
 
+/**
+ * The statistics title: the shared top-level title row with the period choice as its action, so
+ * "Statistics" sits exactly where "Library" and "Settings" do. With [onBack] (a pushed page) it
+ * keeps the dashboard's own row with a back button.
+ */
+@Composable
+private fun StatsTitle(
+    onBack: (() -> Unit)?,
+    period: StatsPeriod?,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    gutter: Dp,
+    endPadding: Dp = gutter,
+    collapse: (() -> Float)? = null,
+) {
+    if (onBack != null) {
+        StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = gutter)
+    } else {
+        StackTitleRow(
+            title = "Statistics",
+            gutter = gutter,
+            endPadding = endPadding,
+            collapse = collapse,
+            actions = period?.let { { PeriodPicker(selected = it, onSelect = onPeriodChange) } },
+        )
+    }
+}
+
 @Composable
 private fun PhoneStats(
     state: StatsUiState,
@@ -216,24 +250,48 @@ private fun PhoneStats(
     onBack: (() -> Unit)?,
     gutter: Dp,
     viewport: Dp,
+    scroll: ScrollState = rememberScrollState(),
 ) {
     val stack = YomuTheme.stack
     val density = LocalDensity.current
-    val scroll = rememberScrollState()
     var deskHeight by remember { mutableIntStateOf(0) }
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val navBottom = if (LocalYomuNavigationBarShown.current) {
+        0.dp
+    } else {
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    }
     val sheetRadius = with(density) { 32.dp.toPx() }
+    val headerBottom = with(density) { (statusTop + StackCompactHeaderHeight).toPx() }
+    val pinnedBottom = with(density) { (statusTop + StackCompactHeaderHeight + PinnedRowHeight).toPx() }
+    val headerFade = with(density) { StackHeaderFadeDistance.toPx() }
+    val edgeRamp = with(density) { 28.dp.toPx() }
     // Where the sheet's top edge is on screen; read only in layer and draw blocks, so scrolling
     // never recomposes the dashboard.
     val sheetTop = { (deskHeight - scroll.value).toFloat() }
-    // The corners square off over the last stretch before the sheet reaches the top of the screen.
-    val cornerRadius = { sheetRadius * (sheetTop() / sheetRadius).coerceIn(0f, 1f) }
+    // The corners square off over the last stretch before the sheet reaches the compact header.
+    val cornerRadius = { sheetRadius * ((sheetTop() - headerBottom) / sheetRadius).coerceIn(0f, 1f) }
+    // The compact header comes in as the large title scrolls up under it.
+    val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
 
-    Box(Modifier.fillMaxSize()) {
+    // How far the sheet has arrived under the pinned period line (0 -> 1 over its first 28dp).
+    val sheetArrived = { ((pinnedBottom - sheetTop()) / edgeRamp).coerceIn(0f, 1f) }
+    Box(
+        Modifier
+            .fillMaxSize()
+            // The sheet's colour behind the scrolling column, so the edge fade below dissolves the
+            // sheet's content into the sheet (not into the desk).
+            .drawBehind { drawRect(stack.sheet, topLeft = Offset(0f, (sheetTop() + cornerRadius()).coerceAtLeast(0f))) },
+    ) {
         Column(
             Modifier
                 .fillMaxSize()
+                // Content dissolves under the compact header, then under the period line once the
+                // sheet has come up to it.
+                .stackPinnedEdgeFade(
+                    edge = { headerBottom + (pinnedBottom - headerBottom) * sheetArrived() },
+                    strength = headerProgress,
+                )
                 .verticalScroll(scroll),
         ) {
             Column(
@@ -242,7 +300,7 @@ private fun PhoneStats(
                     .onSizeChanged { deskHeight = it.height }
                     .statusBarsPadding(),
             ) {
-                StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = gutter)
+                StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = gutter, collapse = headerProgress)
                 PeriodOverview(state, period, wide = false, modifier = Modifier.padding(horizontal = gutter))
                 Spacer(Modifier.height(YomuTheme.space.lg))
             }
@@ -250,7 +308,7 @@ private fun PhoneStats(
                 Modifier
                     .fillMaxWidth()
                     // Tall enough to reach the pinned line, so the sheet can always scroll up to it.
-                    .heightIn(min = viewport - statusTop - PinnedRowHeight)
+                    .heightIn(min = viewport - statusTop - StackCompactHeaderHeight - PinnedRowHeight)
                     .graphicsLayer {
                         val radius = cornerRadius()
                         shape = RoundedCornerShape(topStart = radius, topEnd = radius)
@@ -271,20 +329,33 @@ private fun PhoneStats(
                 )
             }
         }
-        PinnedSummary(
-            text = state.stats.summary(period).compact,
-            gutter = gutter,
-            sheetTop = sheetTop,
-            cornerRadius = cornerRadius,
-            pinnedBottom = with(density) { (statusTop + PinnedRowHeight).toPx() },
-        )
+        Column(Modifier.fillMaxWidth()) {
+            StackCompactHeader(
+                title = "Statistics",
+                progress = headerProgress,
+                gutter = gutter,
+                endPadding = gutter,
+                actions = if (onBack == null) {
+                    { PeriodPicker(selected = period, onSelect = onPeriodChange) }
+                } else {
+                    null
+                },
+            )
+            PinnedSummary(
+                text = state.stats.summary(period).compact,
+                gutter = gutter,
+                sheetTop = { sheetTop() - headerBottom },
+                cornerRadius = cornerRadius,
+            )
+        }
     }
 }
 
 /**
- * The compact figure that stays at the top once the sheet has covered the desk. It paints the
- * sheet only where the sheet already is (same corners), so the sheet's content slides under it
- * without a band appearing over the desk; its text fades in as the sheet arrives.
+ * The period's compact figure, pinned under the compact header once the sheet has covered the
+ * desk. It paints the sheet only where the sheet already is (same corners), so the sheet's content
+ * slides under it without a band appearing over the desk; its text fades in as the sheet arrives.
+ * [sheetTop] is in this row's own coordinates.
  */
 @Composable
 private fun PinnedSummary(
@@ -292,12 +363,12 @@ private fun PinnedSummary(
     gutter: Dp,
     sheetTop: () -> Float,
     cornerRadius: () -> Float,
-    pinnedBottom: Float,
 ) {
     val stack = YomuTheme.stack
     Box(
         Modifier
             .fillMaxWidth()
+            .height(PinnedRowHeight)
             .clipToBounds()
             .drawBehind {
                 val top = sheetTop()
@@ -315,13 +386,12 @@ private fun PinnedSummary(
     ) {
         Row(
             Modifier
-                .statusBarsPadding()
-                .fillMaxWidth()
-                .height(PinnedRowHeight)
+                .fillMaxSize()
                 .padding(horizontal = gutter)
                 .graphicsLayer {
-                    // Clear while the sheet is below the line, fully there once it reaches the top.
-                    alpha = ((pinnedBottom - sheetTop()) / pinnedBottom.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                    // Clear until the sheet covers half the line, fully there once it reaches its top.
+                    val half = size.height / 2f
+                    alpha = ((half - sheetTop()) / half.coerceAtLeast(1f)).coerceIn(0f, 1f)
                 },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -345,9 +415,26 @@ private fun WideStats(
     onBack: (() -> Unit)?,
 ) {
     val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val scroll = rememberScrollState()
+    val headerFade = with(LocalDensity.current) { StackHeaderFadeDistance.toPx() }
+    val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
     WidePanes(
+        dashboardScroll = scroll,
+        dashboardHeader = {
+            StackCompactHeader(
+                title = "Statistics",
+                progress = headerProgress,
+                gutter = YomuTheme.space.xl,
+                endPadding = YomuTheme.space.xl,
+                actions = if (onBack == null) {
+                    { PeriodPicker(selected = period, onSelect = onPeriodChange) }
+                } else {
+                    null
+                },
+            )
+        },
         dashboard = {
-            StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = 0.dp)
+            StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = 0.dp, collapse = headerProgress)
             PeriodOverview(state, period, wide = true)
             FactCards(state.stats, Modifier.padding(top = 28.dp))
             SectionHeading("Reading details", Modifier.padding(top = 32.dp, bottom = YomuTheme.space.sm))
@@ -381,21 +468,30 @@ private val SideSheetShape: Shape = RoundedCornerShape(topStart = 32.dp)
 private fun WidePanes(
     dashboard: @Composable () -> Unit,
     side: @Composable () -> Unit,
-    dashboardScrollable: Boolean = true,
+    // Null keeps the dashboard still (the loading skeleton).
+    dashboardScroll: ScrollState? = null,
+    // Pinned over the dashboard pane (the compact header), drawn above its scrolling content.
+    dashboardHeader: (@Composable () -> Unit)? = null,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         val sideWidth = (maxWidth * 0.36f).coerceIn(360.dp, 440.dp)
         Row(Modifier.fillMaxSize()) {
-            Column(
+            Box(
                 Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .then(if (dashboardScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                    .statusBarsPadding()
-                    .padding(horizontal = YomuTheme.space.xl),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                    .fillMaxHeight(),
             ) {
-                Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { dashboard() }
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .then(if (dashboardScroll != null) Modifier.verticalScroll(dashboardScroll) else Modifier)
+                        .statusBarsPadding()
+                        .padding(horizontal = YomuTheme.space.xl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { dashboard() }
+                }
+                dashboardHeader?.invoke()
             }
             Column(
                 Modifier
@@ -421,7 +517,7 @@ private fun StatsStatePane(onBack: (() -> Unit)?, gutter: Dp, content: @Composab
             .verticalScroll(rememberScrollState())
             .statusBarsPadding(),
     ) {
-        StatsTitleRow(onBack = onBack, period = null, onPeriodChange = {}, startPadding = gutter)
+        StatsTitle(onBack = onBack, period = null, onPeriodChange = {}, gutter = gutter)
         Box(
             Modifier
                 .fillMaxWidth()
@@ -517,7 +613,7 @@ private fun PhoneSkeleton(
             .statusBarsPadding()
             .clearAndSetSemantics { },
     ) {
-        StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = gutter)
+        StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = gutter)
         DeskSkeleton(wide = false, Modifier.padding(horizontal = gutter))
         Column(
             Modifier
@@ -560,9 +656,8 @@ private fun WideSkeleton(
 ) {
     Box(Modifier.clearAndSetSemantics { }) {
         WidePanes(
-            dashboardScrollable = false,
             dashboard = {
-                StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = 0.dp)
+                StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = 0.dp)
                 DeskSkeleton(wide = true)
                 Row(Modifier.padding(top = 28.dp), horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.md)) {
                     repeat(3) {
@@ -653,6 +748,31 @@ private fun StatsPhoneMonthPreview() = StatsPreview(previewState(), period = Sta
 @Preview(name = "Phone all, black", widthDp = 390, heightDp = 844)
 @Composable
 private fun StatsPhoneAllPreview() = StatsPreview(previewState(), YomuThemeMode.Oled, StatsPeriod.All)
+
+@Composable
+private fun StatsScrolledPreview(mode: YomuThemeMode) {
+    YomuDesignTheme(themeMode = mode) {
+        YomuAppSurface {
+            PhoneStats(
+                state = previewState(),
+                period = StatsPeriod.Week,
+                onPeriodChange = {},
+                onBack = null,
+                gutter = YomuTheme.space.lg,
+                viewport = maxHeight,
+                scroll = rememberScrollState(620),
+            )
+        }
+    }
+}
+
+@Preview(name = "Phone scrolled", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsPhoneScrolledPreview() = StatsScrolledPreview(YomuThemeMode.Light)
+
+@Preview(name = "Phone scrolled dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsPhoneScrolledDarkPreview() = StatsScrolledPreview(YomuThemeMode.Dark)
 
 @Preview(name = "Loading", widthDp = 390, heightDp = 844)
 @Composable

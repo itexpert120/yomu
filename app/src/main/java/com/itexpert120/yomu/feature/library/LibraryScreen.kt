@@ -9,10 +9,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +36,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -67,11 +62,16 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.app.navigation.LocalYomuNavigationBarShown
+import com.itexpert120.yomu.core.designsystem.StackCompactHeader
+import com.itexpert120.yomu.core.designsystem.StackCompactHeaderHeight
+import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.stackHeaderProgress
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -133,6 +133,8 @@ fun LibraryScreen(
     onForgetSearch: (String) -> Unit = {},
     // Shown on the empty library when the app can take the user to join sync.
     onHaveSyncWords: (() -> Unit)? = null,
+    // Previews only: start with the shelf lifted and its tabs pinned under the compact header.
+    startPinned: Boolean = false,
 ) {
     var showOptionsSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -206,8 +208,13 @@ fun LibraryScreen(
         val gridInset = ((maxWidth - YomuContentMaxWidth) / 2).coerceAtLeast(gutter)
         val listInset = ((maxWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(gutter)
         val headerInset = if (state.viewMode == LibraryViewMode.List) listInset else gridInset
-        val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-        // The last row must scroll clear of the selection toolbar.
+        // Over the navigation bar the content already ends above the gesture area; without it (rail,
+        // selection toolbar, search) the last row must clear that area, and the toolbar too.
+        val navBottom = if (LocalYomuNavigationBarShown.current) {
+            0.dp
+        } else {
+            WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+        }
         val contentBottom = navBottom + if (selecting) SelectionToolbarClearance + YomuTheme.space.md else YomuTheme.space.lg
         val flat = selecting || searching || content == ShelfContent.Empty
         val sideBySide = maxHeight < SideBySideMaxHeight &&
@@ -321,6 +328,7 @@ fun LibraryScreen(
                 },
                 onSearchQueryChange = onSearchQueryChange,
                 onRememberSearch = onRememberSearch,
+                startPinned = startPinned,
             )
         }
 
@@ -367,8 +375,7 @@ fun LibraryScreen(
 
         OrganizeSheet(
             visible = showOrganize && selecting,
-            title = "Organize",
-            subtitle = if (state.selectedIds.size == 1) "1 book" else "${state.selectedIds.size} books",
+            title = if (state.selectedIds.size == 1) "Organize 1 book" else "Organize ${state.selectedIds.size} books",
             status = state.organize.status,
             collections = state.organize.collections,
             onSetStatus = onSetSelectedStatus,
@@ -411,8 +418,9 @@ private fun LibraryUiState.selectedTitles(): List<String> = pages.asSequence()
 /**
  * Stack's library on a phone or tablet: the title and the pile of books in progress lie on the desk;
  * the shelf (tabs + grid) is a white sheet over them. Scrolling first lifts the sheet over the still
- * pile until its tabs pin under the status bar (its corners square off on the way, and search and
- * arrange join the tab row), then scrolls the shelf. Search, selection and the empty library are
+ * pile until its tabs pin under the compact header (its corners square off on the way, and the
+ * header — "Library" with search, import and arrange — fades in as the large title is covered),
+ * then scrolls the shelf. Search, selection and the empty library are
  * flat: the whole screen turns sheet, their bar takes the title's place and the sheet glides up
  * under it.
  */
@@ -436,12 +444,15 @@ private fun StackedLibrary(
     search: @Composable () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onRememberSearch: (String) -> Unit,
+    startPinned: Boolean = false,
 ) {
     val density = LocalDensity.current
     val stack = YomuTheme.stack
     val animate = yomuAnimationsEnabled()
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val collapsedTop = with(density) { statusTop.toPx() }
+    // The tabs pin under the compact header, which sits under the status bar.
+    val collapsedTop = with(density) { (statusTop + StackCompactHeaderHeight).toPx() }
+    val headerFade = with(density) { StackHeaderFadeDistance.toPx() }
     var deskHeight by remember { mutableIntStateOf(0) }
     val travel = if (flat) 0f else (deskHeight - collapsedTop).coerceAtLeast(0f)
     val sheetLift = remember { mutableFloatStateOf(0f) }
@@ -451,6 +462,7 @@ private fun StackedLibrary(
     val sheetTop = remember { Animatable(0f) }
     val glide = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     LaunchedEffect(deskHeight, travel) {
+        if (startPinned && deskHeight > 0) sheetLift.floatValue = -travel
         val lift = sheetLift.floatValue
         val clamped = lift.coerceIn(-travel, 0f)
         if (clamped != lift) {
@@ -479,8 +491,11 @@ private fun StackedLibrary(
             }
         }
     }
-    val pinned by remember(travel) {
-        derivedStateOf { travel > 0f && sheetLift.floatValue <= -travel + 1f }
+    // 0 at rest, 1 once the tabs have pinned under the compact header; read in layers only.
+    val headerProgress: () -> Float = if (flat || travel <= 0f) {
+        { 0f }
+    } else {
+        { stackHeaderProgress(sheetTop.value + sheetLift.floatValue, collapsedTop, headerFade) }
     }
     // 0 on the desk, 1 when the whole screen is sheet (search, selection, the empty library).
     val flatness = animateFloatAsState(
@@ -490,7 +505,7 @@ private fun StackedLibrary(
     )
     val sheetRadius = with(density) { 32.dp.toPx() }
     val deskHeightDp = with(density) { deskHeight.toDp() }
-    val sheetHeight = if (flat) sheetHeightCap - deskHeightDp else sheetHeightCap - statusTop
+    val sheetHeight = if (flat) sheetHeightCap - deskHeightDp else sheetHeightCap - statusTop - StackCompactHeaderHeight
     val showPile = content == ShelfContent.Shelf && !flat && state.pile.isNotEmpty()
 
     Box(
@@ -527,6 +542,7 @@ private fun StackedLibrary(
                     onArrange = onArrange,
                     gutter = gutter,
                     showActions = content != ShelfContent.Empty,
+                    collapse = headerProgress,
                 )
             }
             when {
@@ -586,27 +602,21 @@ private fun StackedLibrary(
                         gutter = gutter,
                     )
                     ShelfContent.Search -> search()
-                    ShelfContent.Shelf -> Column(Modifier.fillMaxSize()) {
-                        shelf(
-                            if (flat) {
-                                null
-                            } else {
-                                {
-                                    AnimatedVisibility(
-                                        visible = pinned,
-                                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                                            expandHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()),
-                                        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                            shrinkHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()),
-                                    ) {
-                                        Row { LibraryActions(onSearch = onSearchToggle, onImport = null, onArrange = onArrange) }
-                                    }
-                                }
-                            },
-                        )
-                    }
+                    ShelfContent.Shelf -> Column(Modifier.fillMaxSize()) { shelf(null) }
                 }
             }
+        }
+        if (!flat) {
+            StackCompactHeader(
+                title = "Library",
+                progress = headerProgress,
+                gutter = gutter,
+                actions = if (content == ShelfContent.Empty) {
+                    null
+                } else {
+                    { LibraryActions(onSearch = onSearchToggle, onImport = onImport, onArrange = onArrange) }
+                },
+            )
         }
     }
 }

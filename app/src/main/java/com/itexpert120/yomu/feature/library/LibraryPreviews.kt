@@ -94,7 +94,7 @@ private fun previewState(
 }
 
 @Composable
-private fun LibraryPreview(state: LibraryUiState, mode: YomuThemeMode = YomuThemeMode.Light) {
+private fun LibraryPreview(state: LibraryUiState, mode: YomuThemeMode = YomuThemeMode.Light, pinned: Boolean = false) {
     YomuDesignTheme(themeMode = mode) {
         LibraryScreen(
             state = state,
@@ -108,6 +108,7 @@ private fun LibraryPreview(state: LibraryUiState, mode: YomuThemeMode = YomuThem
             onOpenDetails = {},
             onImport = {},
             onHaveSyncWords = {},
+            startPinned = pinned,
         )
     }
 }
@@ -119,6 +120,22 @@ private fun LibraryPhonePreview() = LibraryPreview(previewState())
 @Preview(name = "Library dark", widthDp = 390, heightDp = 844)
 @Composable
 private fun LibraryPhoneDarkPreview() = LibraryPreview(previewState(), YomuThemeMode.Dark)
+
+@Preview(name = "Library scrolled", widthDp = 390, heightDp = 844)
+@Composable
+private fun LibraryScrolledPreview() = LibraryPreview(previewState(), pinned = true)
+
+@Preview(name = "Library scrolled dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun LibraryScrolledDarkPreview() = LibraryPreview(previewState(), YomuThemeMode.Dark, pinned = true)
+
+@Preview(name = "Pile of one", widthDp = 390, heightDp = 520)
+@Composable
+private fun LibraryPileOnePreview() = LibraryPreview(previewState().let { it.copy(pile = it.pile.take(1)) })
+
+@Preview(name = "Pile of two dark", widthDp = 390, heightDp = 520)
+@Composable
+private fun LibraryPileTwoDarkPreview() = LibraryPreview(previewState().let { it.copy(pile = it.pile.take(2)) }, YomuThemeMode.Dark)
 
 @Preview(name = "Library compact grid", widthDp = 390, heightDp = 844)
 @Composable
