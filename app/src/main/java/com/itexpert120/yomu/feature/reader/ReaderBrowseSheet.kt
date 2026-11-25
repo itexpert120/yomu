@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -22,6 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -55,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuEmptyState
+import com.itexpert120.yomu.core.designsystem.YomuIconButton
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
@@ -66,6 +69,8 @@ import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.ChapterReadState
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferMenuItems
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlin.math.roundToInt
@@ -104,6 +109,8 @@ internal fun ReaderBrowseSheet(
     chapterReads: ChapterReadState = ChapterReadState.Empty,
     chapterProgress: Double? = null,
     currentPercent: Int? = null,
+    calibreAvailable: Boolean = false,
+    onAnnotationAction: (AnnotationTransferAction) -> Unit = {},
 ) {
     YomuBottomSheet(
         visible = tab != null,
@@ -129,6 +136,8 @@ internal fun ReaderBrowseSheet(
             chapterReads = chapterReads,
             chapterProgress = chapterProgress,
             currentPercent = currentPercent,
+            calibreAvailable = calibreAvailable,
+            onAnnotationAction = onAnnotationAction,
         )
     }
 }
@@ -152,6 +161,8 @@ internal fun ReaderBrowseSheetContent(
     chapterReads: ChapterReadState = ChapterReadState.Empty,
     chapterProgress: Double? = null,
     currentPercent: Int? = null,
+    calibreAvailable: Boolean = false,
+    onAnnotationAction: (AnnotationTransferAction) -> Unit = {},
 ) {
     val tabs = BrowseTab.entries
     val pager = rememberPagerState(initialPage = current.ordinal) { tabs.size }
@@ -189,7 +200,7 @@ internal fun ReaderBrowseSheetContent(
 
                 BrowseTab.Bookmarks -> BookmarksPage(bookmarks, toc, onJumpToBookmark, onDeleteBookmark)
 
-                BrowseTab.Highlights -> HighlightsPage(highlights, toc, onJumpToHighlight, onDeleteHighlight)
+                BrowseTab.Highlights -> HighlightsPage(highlights, toc, onJumpToHighlight, onDeleteHighlight, calibreAvailable, onAnnotationAction)
             }
         }
     }
@@ -547,19 +558,26 @@ private fun HighlightsPage(
     toc: List<ReaderTocItem>,
     onJump: (String) -> Unit,
     onDelete: (String) -> Unit,
+    calibreAvailable: Boolean,
+    onAnnotationAction: (AnnotationTransferAction) -> Unit,
 ) {
+    val summary = remember(highlights) { highlightsSummary(highlights) }
+    val actions: @Composable () -> Unit = { HighlightsActionsRow(summary, calibreAvailable, onAnnotationAction) }
     if (highlights.isEmpty()) {
-        YomuEmptyState(
-            icon = StackIcons.BorderColor,
-            title = "No highlights yet",
-            body = "Select text and tap Highlight.",
-            compact = true,
-            modifier = Modifier.padding(top = YomuTheme.space.lg),
-        )
+        Column(Modifier.fillMaxSize()) {
+            actions()
+            YomuEmptyState(
+                icon = StackIcons.BorderColor,
+                title = "No highlights yet",
+                body = "Select text and tap Highlight.",
+                compact = true,
+                modifier = Modifier.padding(top = YomuTheme.space.sm),
+            )
+        }
         return
     }
     val groups = remember(highlights, toc) { groupHighlights(highlights, toc) }
-    GroupedList(groups) { item, divider ->
+    GroupedList(groups, header = actions) { item, divider ->
         HighlightRow(
             highlight = item,
             divider = divider,
@@ -573,6 +591,7 @@ private fun HighlightsPage(
 @Composable
 private fun <T> GroupedList(
     groups: List<AnnotationGroup<T>>,
+    header: (@Composable () -> Unit)? = null,
     row: @Composable (item: T, divider: Boolean) -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -583,6 +602,7 @@ private fun <T> GroupedList(
             .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = YomuTheme.space.lg),
     ) {
+        if (header != null) item(key = "header", contentType = "header") { header() }
         groups.forEachIndexed { groupIndex, group ->
             stickyHeader(key = "g$groupIndex", contentType = "chapter") {
                 AnnotationChapterHeader(group.title ?: "Elsewhere in the book", group.items.size)
@@ -615,6 +635,73 @@ private fun AnnotationChapterHeader(title: String, count: Int) {
             modifier = Modifier.weight(1f),
         )
         if (count > 1) Text(text = "$count", color = stack.faint, style = ReaderFigures)
+    }
+}
+
+/**
+ * The Highlights tab's quiet header: how many there are (and how many carry notes), and a ⋯ menu
+ * to export them or import more.
+ */
+@Composable
+private fun HighlightsActionsRow(
+    summary: String?,
+    calibreAvailable: Boolean,
+    onAnnotationAction: (AnnotationTransferAction) -> Unit,
+) {
+    val stack = YomuTheme.stack
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = YomuTheme.space.lg, end = YomuTheme.space.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = summary.orEmpty(),
+            color = stack.muted,
+            style = StackType.Caption,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Box {
+            YomuIconButton(
+                icon = StackIcons.MoreHoriz,
+                contentDescription = "Highlight options",
+                tint = stack.muted,
+                onClick = {
+                    menuOpen = true
+                    onAnnotationAction(AnnotationTransferAction.MenuOpened)
+                },
+            )
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = stack.sheet,
+                tonalElevation = 0.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.width(264.dp),
+            ) {
+                AnnotationTransferMenuItems(
+                    calibreAvailable = calibreAvailable,
+                    onAction = onAnnotationAction,
+                    closeMenu = { menuOpen = false },
+                )
+            }
+        }
+    }
+}
+
+/** "12 highlights · 3 notes"; null when there are none. */
+internal fun highlightsSummary(highlights: List<ReaderHighlight>): String? {
+    if (highlights.isEmpty()) return null
+    val notes = highlights.count { !it.note.isNullOrBlank() }
+    val count = if (highlights.size == 1) "1 highlight" else "${highlights.size} highlights"
+    return when (notes) {
+        0 -> count
+        1 -> "$count · 1 note"
+        else -> "$count · $notes notes"
     }
 }
 

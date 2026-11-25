@@ -57,8 +57,10 @@ data class ReaderSelection(
     val action: Action,
     val text: String,
     val locatorJson: String,
+    // The selection's language as a BCP 47 tag (the element's `lang`, else the book's), if known.
+    val language: String? = null,
 ) {
-    enum class Action { Copy, Highlight, LookUp, SearchWeb, ReadAloud, Share }
+    enum class Action { Copy, Highlight, LookUp, SearchWeb, ReadAloud, Share, SearchInBook, CopyWithCitation }
 }
 
 /** Yomu-owned reading position (wraps the engine's native locator JSON). */

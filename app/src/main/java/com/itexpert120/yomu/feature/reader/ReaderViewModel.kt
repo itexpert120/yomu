@@ -11,6 +11,9 @@ import com.itexpert120.yomu.data.books.ChapterReadState
 import com.itexpert120.yomu.data.books.ChapterReading
 import com.itexpert120.yomu.data.fonts.FontRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
+import com.itexpert120.yomu.feature.annotations.AnnotationTransfer
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferState
+import com.itexpert120.yomu.feature.annotations.BookAnnotationsTransferPort
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +30,8 @@ data class ReaderUiState(
     val installedFonts: List<CustomFontRef> = emptyList(),
     /** Which chapters are read, for the Browse sheet's contents. */
     val chapterReads: ChapterReadState = ChapterReadState.Empty,
+    /** Export / import of the book's highlights and notes (Browse → Highlights). */
+    val annotationTransfer: AnnotationTransferState = AnnotationTransferState(),
 )
 
 @HiltViewModel
@@ -36,6 +41,7 @@ class ReaderViewModel @Inject constructor(
     private val settingsRepository: ReaderSettingsRepository,
     fonts: FontRepository,
     chapterReading: ChapterReading,
+    annotationPort: BookAnnotationsTransferPort,
 ) : ViewModel() {
     private val bookId = BookId(requireNotNull(savedStateHandle["bookId"]))
     private val readingExperience = experienceFactory.create(
@@ -46,6 +52,9 @@ class ReaderViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ReaderUiState())
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
+
+    /** The book's highlights as files; its share sheets are started by the route. */
+    val annotations = AnnotationTransfer(bookId, annotationPort, viewModelScope)
 
     init {
         viewModelScope.launch {
@@ -60,6 +69,9 @@ class ReaderViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            annotations.state.collect { transfer -> _state.update { it.copy(annotationTransfer = transfer) } }
+        }
+        viewModelScope.launch {
             readingExperience.state.collect { experience ->
                 _state.update { it.copy(experience = experience) }
             }
@@ -68,6 +80,7 @@ class ReaderViewModel @Inject constructor(
             readingExperience.events.collect { event ->
                 when (event) {
                     ReadingExperienceEvent.ToggleChrome -> onAction(ReaderAction.ToggleChrome)
+                    is ReadingExperienceEvent.SearchInBook -> onAction(ReaderAction.SearchInBook(event.text))
                 }
             }
         }
@@ -80,6 +93,7 @@ class ReaderViewModel @Inject constructor(
             is ReaderAction.ApplyCustomTheme -> applyCustomTheme(action.theme)
             is ReaderAction.SaveCustomTheme -> saveCustomTheme(action.name)
             is ReaderAction.DeleteCustomTheme -> viewModelScope.launch { settingsRepository.deleteCustomTheme(action.id) }
+            is ReaderAction.Annotations -> annotations.onAction(action.action)
             else -> action.toExperienceAction()?.let(readingExperience::dispatch)
         }
     }
