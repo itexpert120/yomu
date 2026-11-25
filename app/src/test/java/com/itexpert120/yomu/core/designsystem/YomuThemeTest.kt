@@ -6,35 +6,55 @@ import com.itexpert120.yomu.core.model.AccentColor
 import com.itexpert120.yomu.core.model.AccentSelection
 import com.itexpert120.yomu.core.model.ColorStyle
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class YomuThemeTest {
-    @Test
-    fun seededSchemesExposeDistinctLightAndDarkRoles() {
-        val light = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = false, style = ColorStyle.Balanced)
-        val dark = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = true, style = ColorStyle.Balanced)
+    private val all = listOf(StackColors.Light, StackColors.Dark, StackColors.Black)
 
-        assertTrue(light.background.luminance() > 0.5f)
-        assertTrue(dark.background.luminance() < 0.5f)
-        assertNotEquals(light.primary, dark.primary)
-        assertNotEquals(light.surfaceContainer, dark.surfaceContainer)
+    private fun contrast(a: Color, b: Color): Double {
+        val (hi, lo) = listOf(a.luminance(), b.luminance()).sortedDescending()
+        return (hi + 0.05) / (lo + 0.05)
     }
 
     @Test
-    fun presetsProduceDifferentPrimaries() {
-        val ocean = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = false, style = ColorStyle.Balanced)
-        val forest = yomuSeededColorScheme(AccentColor.Forest.seed, dark = false, style = ColorStyle.Balanced)
-        assertNotEquals(ocean.primary, forest.primary)
+    fun everyTextTokenMeetsItsContrastOnSheetAndDesk() {
+        for (stack in all) {
+            for (surface in listOf(stack.sheet, stack.desk)) {
+                assertTrue("ink on $surface", contrast(stack.ink, surface) >= 7.0)
+                assertTrue("body on $surface", contrast(stack.body, surface) >= 7.0)
+                assertTrue("muted on $surface", contrast(stack.muted, surface) >= 4.5)
+                assertTrue("faint on $surface", contrast(stack.faint, surface) >= 4.5)
+                assertTrue("danger on $surface", contrast(stack.danger, surface) >= 4.5)
+            }
+            assertTrue(contrast(stack.onInk, stack.ink) >= 7.0)
+        }
     }
 
     @Test
-    fun neutralStyleStillFollowsTheSeed() {
-        val ocean = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = false, style = ColorStyle.Neutral)
-        val coral = yomuSeededColorScheme(AccentColor.Coral.seed, dark = false, style = ColorStyle.Neutral)
-        assertNotEquals(ocean.primary, coral.primary)
+    fun themesMapStackTokensOntoMaterialRoles() {
+        for (stack in all) {
+            val scheme = stack.toColorScheme()
+            assertEquals(stack.desk, scheme.background)
+            assertEquals(stack.sheet, scheme.surface)
+            assertEquals(stack.ink, scheme.primary)
+            assertEquals(stack.onInk, scheme.onPrimary)
+            assertEquals(stack.raised, scheme.surfaceContainer)
+            assertEquals(stack.muted, scheme.onSurfaceVariant)
+            assertEquals(stack.danger, scheme.error)
+            // No tonal elevation: the tint is the surface itself.
+            assertEquals(stack.sheet, scheme.surfaceTint)
+        }
+    }
+
+    @Test
+    fun modesPickTheirStack() {
+        assertEquals(StackColors.Light, StackColors.forMode(YomuThemeMode.Light))
+        assertEquals(StackColors.Dark, StackColors.forMode(YomuThemeMode.Dark))
+        assertEquals(Color.Black, StackColors.forMode(YomuThemeMode.Oled).desk)
+        assertTrue(StackColors.Light.desk.luminance() > 0.5f)
+        assertTrue(StackColors.Dark.desk.luminance() < 0.1f)
     }
 
     @Test
@@ -42,19 +62,6 @@ class YomuThemeTest {
         assertEquals(ColorStyle.Neutral, ColorStyle.fromStoredName("Monochrome"))
         assertEquals(ColorStyle.Vibrant, ColorStyle.fromStoredName("Vibrant"))
         assertNull(ColorStyle.fromStoredName("NotAStyle"))
-    }
-
-    @Test
-    fun oledUsesBlackBaseAndTieredContainers() {
-        val oled = yomuSeededColorScheme(AccentColor.Ocean.seed, dark = true, style = ColorStyle.Balanced).toOled()
-
-        assertEquals(Color.Black, oled.background)
-        assertEquals(Color.Black, oled.surface)
-        assertEquals(Color.Black, oled.surfaceContainerLowest)
-        assertEquals(Color(0xFF0C0C0C), oled.surfaceContainerLow)
-        assertEquals(Color(0xFF131313), oled.surfaceContainer)
-        assertEquals(Color(0xFF1B1B1B), oled.surfaceContainerHigh)
-        assertEquals(Color(0xFF242424), oled.surfaceContainerHighest)
     }
 
     @Test

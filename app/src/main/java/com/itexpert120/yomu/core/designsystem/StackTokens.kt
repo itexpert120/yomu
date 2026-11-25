@@ -63,7 +63,7 @@ data class StackColors(
             onInk = Color(0xFFFFFFFF),
             body = Color(0xFF2E3439),
             muted = Color(0xFF5B636B),
-            faint = Color(0xFF6A737B),
+            faint = Color(0xFF636C74),
             rule = Color(0xFFEDF0F2),
             track = Color(0xFFD6DCE0),
             danger = Color(0xFFB3261E),
