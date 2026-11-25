@@ -8,11 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -46,20 +46,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
+import com.itexpert120.yomu.core.designsystem.YomuIconButton
 import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.web.openWebSearchSheet
 
-/** Space the Search sheet needs around its results: field row, count, insets. */
-private val SearchSheetReservedHeight = 240.dp
-
 /**
- * Search in the book: a chevron to close beside Stack's search field, then the live state —
- * searching (2dp line), an error, no matches (with a way out to the web) or the ruled results,
- * each showing its chapter over the passage with the match marked as a highlight.
+ * Search in the book, on a tall sheet that opens at the same height whatever it holds and stays
+ * above the keyboard. Its header is the search field, with the close × at the end. Below it the
+ * live state: a hint before the first search, searching (2dp line), an error, no matches (with a
+ * way out to the web) or the ruled results, each showing its chapter over the passage with the
+ * match marked as a highlight.
  */
 @Composable
 internal fun ReaderSearchSheet(
@@ -78,8 +79,8 @@ internal fun ReaderSearchSheet(
         visible = visible,
         onDismiss = onDismiss,
         scrollable = false,
-        minHeight = 360.dp,
         horizontalContentPadding = 0.dp,
+        showScrollEdgeShadow = false,
     ) { dismiss ->
         ReaderSearchSheetContent(
             searchQuery = searchQuery,
@@ -108,140 +109,151 @@ internal fun ReaderSearchSheetContent(
     onJumpToSearchResult: (String) -> Unit,
     dismiss: () -> Unit,
 ) {
-    run {
-        val stack = YomuTheme.stack
-        val activity = LocalActivity.current
-        Column(
+    val stack = YomuTheme.stack
+    val activity = LocalActivity.current
+    val focusManager = LocalFocusManager.current
+    val focusRequester = remember { FocusRequester() }
+    // Opening search means the user wants to type: focus the field (unless results are already
+    // showing, e.g. when returning to a previous search).
+    LaunchedEffect(Unit) { if (searchQuery.isEmpty()) focusRequester.requestFocus() }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .readerSheetHeight(fraction = 0.82f, fill = true),
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 280.dp),
+                .padding(start = YomuTheme.space.lg, end = YomuTheme.space.lg - 12.dp, top = YomuTheme.space.xxs, bottom = YomuTheme.space.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
         ) {
-            val focusManager = LocalFocusManager.current
-            val focusRequester = remember { FocusRequester() }
-            // Opening search means the user wants to type: focus the field (unless results are
-            // already showing, e.g. when returning to a previous search).
-            LaunchedEffect(Unit) { if (searchQuery.isEmpty()) focusRequester.requestFocus() }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = YomuTheme.space.xs, end = YomuTheme.space.md),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            ) {
-                IconButton(
-                    onClick = dismiss,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = stack.ink),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(StackIcons.KeyboardArrowDown, contentDescription = "Close search")
-                }
-                ReaderSearchField(
-                    query = searchQuery,
-                    onQueryChange = onSearchQueryChange,
-                    onSearch = {
-                        onSubmitSearch()
-                        // Drop the keyboard so the results list has the room.
-                        focusManager.clearFocus()
-                    },
-                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
+            ReaderFilterField(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                placeholder = "Search in book",
+                onSearch = {
+                    onSubmitSearch()
+                    // Drop the keyboard so the results list has the room.
+                    focusManager.clearFocus()
+                },
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+            )
+            YomuIconButton(icon = StackIcons.Close, contentDescription = "Close search", onClick = dismiss, tint = stack.muted)
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .semantics { liveRegion = LiveRegionMode.Polite },
+        ) {
+            when {
+                searchInProgress -> ReaderLoadingBlock("Searching the whole book…")
+
+                searchError != null -> YomuNotice(
+                    text = searchError,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = YomuTheme.space.lg),
+                    icon = StackIcons.Error,
+                    tone = YomuNoticeTone.Error,
                 )
-            }
-            Column(
-                modifier = Modifier
-                    .padding(top = YomuTheme.space.sm)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-            ) {
-                when {
-                    searchInProgress -> ReaderLoadingBlock("Searching the whole book…")
 
-                    searchError != null -> YomuNotice(
-                        text = searchError,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = YomuTheme.space.lg),
-                        icon = StackIcons.Error,
-                        tone = YomuNoticeTone.Error,
+                searchPerformed && searchResults.isEmpty() -> Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = YomuTheme.space.xl, vertical = YomuTheme.space.xl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(StackIcons.SearchOff, contentDescription = null, tint = stack.faint, modifier = Modifier.size(48.dp))
+                    Text(
+                        text = "No matches for “${searchQuery.trim()}”",
+                        color = stack.ink,
+                        style = StackType.Heading.copy(fontSize = 20.sp, lineHeight = 26.sp),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = YomuTheme.space.md).semantics { heading() },
                     )
+                    Text(
+                        text = "Check the spelling, or try a shorter word or phrase.",
+                        color = stack.muted,
+                        style = StackType.Body,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = YomuTheme.space.xs),
+                    )
+                    if (activity != null && searchQuery.isNotBlank()) {
+                        ReaderPillButton(
+                            text = "Search the web",
+                            onClick = { activity.openWebSearchSheet(searchQuery.trim()) },
+                            style = ReaderPillStyle.Secondary,
+                            icon = StackIcons.TravelExplore,
+                            modifier = Modifier.padding(top = 22.dp),
+                        )
+                    }
+                }
 
-                    searchPerformed && searchResults.isEmpty() -> Column(
+                searchResults.isNotEmpty() -> {
+                    ReaderSectionLabel(
+                        text = if (searchResults.size >= 150) {
+                            "First ${searchResults.size} matches"
+                        } else {
+                            "${searchResults.size} ${if (searchResults.size == 1) "match" else "matches"}"
+                        },
+                        modifier = Modifier.padding(start = YomuTheme.space.lg, end = YomuTheme.space.lg, top = 4.dp, bottom = 4.dp),
+                    )
+                    val listState = rememberLazyListState()
+                    LazyColumn(
+                        state = listState,
                         modifier = Modifier
+                            .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = YomuTheme.space.xl, vertical = YomuTheme.space.xl),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                            .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
                     ) {
-                        Icon(StackIcons.SearchOff, contentDescription = null, tint = stack.faint, modifier = Modifier.size(48.dp))
-                        Text(
-                            text = "No matches for “${searchQuery.trim()}”",
-                            color = stack.ink,
-                            style = StackType.Heading.copy(fontSize = 20.sp, lineHeight = 26.sp),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = YomuTheme.space.md).semantics { heading() },
-                        )
-                        Text(
-                            text = "Check the spelling, or try a shorter word or phrase.",
-                            color = stack.muted,
-                            style = StackType.Body,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = YomuTheme.space.xs),
-                        )
-                        if (activity != null && searchQuery.isNotBlank()) {
-                            ReaderPillButton(
-                                text = "Search the web",
-                                onClick = { activity.openWebSearchSheet(searchQuery.trim()) },
-                                style = ReaderPillStyle.Secondary,
-                                icon = StackIcons.TravelExplore,
-                                modifier = Modifier.padding(top = 22.dp),
+                        itemsIndexed(searchResults) { index, result ->
+                            SearchResultRow(
+                                result = result,
+                                divider = index != searchResults.lastIndex,
+                                onClick = { onJumpToSearchResult(result.locatorJson) },
                             )
                         }
                     }
-
-                    searchResults.isNotEmpty() -> {
-                        ReaderSectionLabel(
-                            text = if (searchResults.size >= 150) {
-                                "First ${searchResults.size} matches"
-                            } else {
-                                "${searchResults.size} ${if (searchResults.size == 1) "match" else "matches"}"
-                            },
-                            modifier = Modifier.padding(start = YomuTheme.space.lg, end = YomuTheme.space.lg, top = 4.dp, bottom = 4.dp),
-                        )
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = readerSheetListMaxHeight(SearchSheetReservedHeight)),
-                        ) {
-                            itemsIndexed(searchResults) { index, result ->
-                                SearchResultRow(
-                                    result = result,
-                                    divider = index != searchResults.lastIndex,
-                                    onClick = { onJumpToSearchResult(result.locatorJson) },
-                                )
-                            }
-                        }
-                    }
                 }
+
+                else -> Text(
+                    text = "Every chapter is searched. Press search on the keyboard to start.",
+                    color = stack.muted,
+                    style = StackType.BodySmall,
+                    modifier = Modifier.padding(horizontal = YomuTheme.space.lg, vertical = YomuTheme.space.xs),
+                )
             }
         }
     }
 }
 
-/** Stack's search field: raised, 52 tall, radius 16, a search glyph and a clear button inside. */
+/**
+ * Stack's search field: raised, 48 tall, radius 16, a search glyph and a clear button inside.
+ * In-book search runs on the keyboard's search key ([onSearch]); the Contents filter is live.
+ */
 @Composable
-private fun ReaderSearchField(
+internal fun ReaderFilterField(
     query: String,
     onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
+    placeholder: String,
     modifier: Modifier = Modifier,
+    onSearch: (() -> Unit)? = null,
 ) {
     val stack = YomuTheme.stack
+    val focusManager = LocalFocusManager.current
     Row(
         modifier = modifier
-            .height(52.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(stack.raised)
-            .padding(start = 14.dp, end = 4.dp),
+            .padding(start = 14.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(StackIcons.Search, contentDescription = null, tint = stack.muted, modifier = Modifier.size(20.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (query.isEmpty()) {
-                Text(text = "Words or phrases", color = stack.faint, style = StackType.Body.copy(fontSize = 16.sp))
+                Text(text = placeholder, color = stack.faint, style = StackType.Body.copy(fontSize = 16.sp), maxLines = 1)
             }
             BasicTextField(
                 value = query,
@@ -249,11 +261,14 @@ private fun ReaderSearchField(
                 singleLine = true,
                 textStyle = StackType.Body.copy(fontSize = 16.sp, color = stack.ink),
                 cursorBrush = SolidColor(stack.ink),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                keyboardOptions = KeyboardOptions(imeAction = if (onSearch != null) ImeAction.Search else ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onSearch = { onSearch?.invoke() },
+                    onDone = { focusManager.clearFocus() },
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .semantics { contentDescription = "Search in book" },
+                    .semantics { contentDescription = placeholder },
             )
         }
         if (query.isNotEmpty()) {

@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -104,6 +105,14 @@ data class TocEntryUi(
     val number: Int? = null,
     // The entry the reading position is in (the first one, when entries share a resource).
     val current: Boolean = false,
+    // Entries nested under this one (a volume's chapters); > 0 makes it collapsible.
+    val children: Int = 0,
+    val expanded: Boolean = true,
+    // Jumpable entries under this one, and how many of them are read.
+    val chapterCount: Int = 0,
+    val chapterReadCount: Int = 0,
+    // The reading position is somewhere under this entry.
+    val holdsCurrent: Boolean = false,
 ) {
     val jumpable: Boolean get() = locatorJson != null
 }
@@ -127,6 +136,9 @@ data class TocUiState(
     val currentTitle: String? = null,
     // Every jumpable entry sits at the top level, so entries can be counted as chapters.
     val flat: Boolean = false,
+    // Entries with others nested under them (volumes), and how many of those are collapsed.
+    val collapsibleCount: Int = 0,
+    val collapsedCount: Int = 0,
 )
 
 /** The book's reading position, as far as the TOC needs it. */
@@ -182,6 +194,11 @@ class BookDetailsViewModel @Inject constructor(
     private val tocLoad = publications.observeToc(BookId(bookId))
     private val tocItems: List<ReaderTocItem> get() = (tocLoad.value as? TocLoad.Ready)?.items.orEmpty()
     private val tocSort = MutableStateFlow(TocSortMode.Ascending)
+
+    // Collapsed volumes by uid; kept across process death so the contents come back as left.
+    private val collapsed = MutableStateFlow(savedStateHandle.get<IntArray>(COLLAPSED_KEY)?.toSet().orEmpty())
+    private val savedState = savedStateHandle
+    private val layout = combine(tocSort, collapsed) { sort, collapsed -> TocLayout(sort, collapsed) }
     private val selectedUids = MutableStateFlow<Set<Int>>(emptySet())
     private val selectionMode = MutableStateFlow(false)
     private val bookmarks = bookmarkRepository.observeForBook(BookId(bookId))
@@ -200,12 +217,12 @@ class BookDetailsViewModel @Inject constructor(
 
     val toc: StateFlow<TocUiState> = combine(
         tocLoad,
-        tocSort,
+        layout,
         selectionFlow,
         readingAndBookmarksFlow,
         resumePosition,
-    ) { load, sort, selection, reading, resume ->
-        tocState(load, sort, selection.first, selection.second, reading.first, reading.second, resume)
+    ) { load, layout, selection, reading, resume ->
+        tocState(load, layout, selection.first, selection.second, reading.first, reading.second, resume)
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), seededToc())
@@ -217,7 +234,7 @@ class BookDetailsViewModel @Inject constructor(
         val book = state.value.book
         return tocState(
             load = load,
-            sort = TocSortMode.Ascending,
+            layout = TocLayout(TocSortMode.Ascending, collapsed.value),
             selected = emptySet(),
             inSelection = false,
             chapters = chapters,
@@ -228,7 +245,7 @@ class BookDetailsViewModel @Inject constructor(
 
     private fun tocState(
         load: TocLoad,
-        sort: TocSortMode,
+        layout: TocLayout,
         selected: Set<Int>,
         inSelection: Boolean,
         chapters: ChapterReadState,
@@ -236,31 +253,37 @@ class BookDetailsViewModel @Inject constructor(
         resume: TocResumePosition,
     ): TocUiState {
         val items = (load as? TocLoad.Ready)?.items.orEmpty()
-        // Document-order numbers over the jumpable entries, and which one holds the reading position.
+        val outline = TocOutline.of(items.map { it.depth })
+        // One pass in document order: numbers over the jumpable entries, which one holds the reading
+        // position, and running read / jumpable counts so a volume's tallies are a subtraction.
         val flat = items.all { it.locatorJson == null || it.depth == 0 }
         val numbers = IntArray(items.size)
-        var jumpableCount = 0
+        val read = BooleanArray(items.size)
+        val jumpableBefore = IntArray(items.size + 1)
+        val readBefore = IntArray(items.size + 1)
         var currentUid = -1
         items.forEachIndexed { index, item ->
-            if (item.locatorJson != null) {
-                numbers[index] = ++jumpableCount
+            val jumpable = item.locatorJson != null
+            read[index] = chapters.isRead(item.id)
+            jumpableBefore[index + 1] = jumpableBefore[index] + if (jumpable) 1 else 0
+            readBefore[index + 1] = readBefore[index] + if (jumpable && read[index]) 1 else 0
+            if (jumpable) {
+                numbers[index] = jumpableBefore[index + 1]
                 if (currentUid < 0 && resume.chapterId != null && item.id == resume.chapterId) currentUid = index
             }
         }
+        val readCount = readBefore[items.size]
+        val selectableCount = jumpableBefore[items.size]
+        // Only collapsed entries that still exist and still have something under them count.
+        val collapsed = layout.collapsed.filterTo(HashSet()) { it in items.indices && outline.hasChildren(it) }
+        val shown = outline.visible(outline.order(layout.sort == TocSortMode.Descending), collapsed)
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
-        val ordered = items.withIndex().toList()
-            .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
-        var selectedCount = 0
-        var readCount = 0
-        var unreadCount = 0
-        val entries = ordered.map { (uid, it) ->
-            val isRead = chapters.isRead(it.id)
-            val isSelected = uid in selected
-            if (isSelected) selectedCount++
-            if (it.locatorJson != null) {
-                if (isRead) readCount++ else unreadCount++
-            }
-            TocEntryUi(
+        val entries = ArrayList<TocEntryUi>(shown.size)
+        for (uid in shown) {
+            val it = items[uid]
+            val children = outline.descendants[uid]
+            val subtreeEnd = uid + children + 1
+            entries += TocEntryUi(
                 uid = uid,
                 chapterId = it.id,
                 title = it.title,
@@ -270,26 +293,33 @@ class BookDetailsViewModel @Inject constructor(
                     it.locatorJson
                 },
                 depth = it.depth,
-                read = isRead,
-                selected = isSelected,
+                read = read[uid],
+                selected = uid in selected,
                 bookmarked = it.id in bookmarked,
                 percent = if (it.locatorJson == null) null else chapters.percent(it.id),
                 number = if (flat && it.locatorJson != null) numbers[uid] else null,
                 current = uid == currentUid,
+                children = children,
+                expanded = uid !in collapsed,
+                chapterCount = jumpableBefore[subtreeEnd] - jumpableBefore[uid + 1],
+                chapterReadCount = readBefore[subtreeEnd] - readBefore[uid + 1],
+                holdsCurrent = children > 0 && currentUid >= 0 && outline.isUnder(currentUid, uid),
             )
         }
         return TocUiState(
             loading = load is TocLoad.Loading,
-            sort = sort,
+            sort = layout.sort,
             selectionMode = inSelection,
             items = entries,
-            selectedCount = selectedCount,
-            selectableCount = readCount + unreadCount,
+            selectedCount = selected.count { it in items.indices },
+            selectableCount = selectableCount,
             readCount = readCount,
-            unreadCount = unreadCount,
+            unreadCount = selectableCount - readCount,
             currentNumber = numbers.getOrNull(currentUid),
             currentTitle = items.getOrNull(currentUid)?.title,
             flat = flat,
+            collapsibleCount = items.indices.count { outline.hasChildren(it) },
+            collapsedCount = collapsed.size,
         )
     }
 
@@ -303,6 +333,24 @@ class BookDetailsViewModel @Inject constructor(
     }
 
     fun onTocSortChange(sort: TocSortMode) = tocSort.update { sort }
+
+    // region Volumes (collapsible entries, by uid)
+
+    fun onToggleVolume(uid: Int) = setCollapsed { if (uid in it) it - uid else it + uid }
+
+    fun onCollapseAllVolumes() {
+        val outline = TocOutline.of(tocItems.map { it.depth })
+        setCollapsed { tocItems.indices.filterTo(HashSet()) { outline.hasChildren(it) } }
+    }
+
+    fun onExpandAllVolumes() = setCollapsed { emptySet() }
+
+    private fun setCollapsed(change: (Set<Int>) -> Set<Int>) {
+        val next = collapsed.updateAndGet(change)
+        savedState[COLLAPSED_KEY] = next.toIntArray()
+    }
+
+    // endregion
 
     // region TOC selection (keyed by per-entry uid; mapped to resource hrefs when persisting)
 
@@ -478,3 +526,8 @@ private val HTML_TAG = Regex("</?[a-zA-Z][^>]*>")
 private val BLANK_LINES = Regex("\n{3,}")
 
 private const val PRELOAD_DELAY_MS = 400L
+
+private const val COLLAPSED_KEY = "collapsedVolumes"
+
+/** How the contents are laid out: their order and which volumes are collapsed. */
+private data class TocLayout(val sort: TocSortMode, val collapsed: Set<Int>)

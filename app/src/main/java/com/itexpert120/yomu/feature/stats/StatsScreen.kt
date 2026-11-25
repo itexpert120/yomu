@@ -75,6 +75,7 @@ import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.DailyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
@@ -179,40 +180,6 @@ private fun fadeTransition(): ContentTransform {
     return remember(enter, exit) { fadeIn(enter) togetherWith fadeOut(exit) }
 }
 
-/** The figure and its chart for one period; swapped with a cross-fade when the period changes. */
-@Composable
-private fun PeriodOverview(
-    state: StatsUiState,
-    period: StatsPeriod,
-    wide: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val fade = fadeTransition()
-    AnimatedContent(
-        targetState = period,
-        transitionSpec = { fade },
-        label = "statsPeriod",
-        modifier = modifier,
-    ) { shown ->
-        Column(Modifier.fillMaxWidth()) {
-            HeroFigure(
-                summary = state.stats.summary(shown),
-                wide = wide,
-                modifier = Modifier.padding(top = if (wide) 28.dp else 22.dp),
-            )
-            val bars = state.trend.bars(shown)
-            if (bars.isNotEmpty()) {
-                TrendChart(
-                    bars = bars,
-                    period = shown,
-                    wide = wide,
-                    modifier = Modifier.padding(top = if (wide) 28.dp else 20.dp),
-                )
-            }
-        }
-    }
-}
-
 private val PinnedRowHeight = 48.dp
 
 /**
@@ -274,6 +241,7 @@ private fun PhoneStats(
     // The compact header comes in as the large title scrolls up under it.
     val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
 
+    val pager = rememberStatsPeriodPager(state.trend, period)
     // How far the sheet has arrived under the pinned period line (0 -> 1 over its first 28dp).
     val sheetArrived = { ((pinnedBottom - sheetTop()) / edgeRamp).coerceIn(0f, 1f) }
     Box(
@@ -301,7 +269,7 @@ private fun PhoneStats(
                     .statusBarsPadding(),
             ) {
                 StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = gutter, collapse = headerProgress)
-                PeriodOverview(state, period, wide = false, modifier = Modifier.padding(horizontal = gutter))
+                PeriodOverview(pager, wide = false, gutter = gutter)
                 Spacer(Modifier.height(YomuTheme.space.lg))
             }
             Column(
@@ -342,7 +310,7 @@ private fun PhoneStats(
                 },
             )
             PinnedSummary(
-                text = state.stats.summary(period).compact,
+                text = pager.current?.summary?.compact.orEmpty(),
                 gutter = gutter,
                 sheetTop = { sheetTop() - headerBottom },
                 cornerRadius = cornerRadius,
@@ -415,6 +383,7 @@ private fun WideStats(
     onBack: (() -> Unit)?,
 ) {
     val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val pager = rememberStatsPeriodPager(state.trend, period)
     val scroll = rememberScrollState()
     val headerFade = with(LocalDensity.current) { StackHeaderFadeDistance.toPx() }
     val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
@@ -435,7 +404,7 @@ private fun WideStats(
         },
         dashboard = {
             StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = 0.dp, collapse = headerProgress)
-            PeriodOverview(state, period, wide = true)
+            PeriodOverview(pager, wide = true, modifier = Modifier.padding(top = 12.dp))
             FactCards(state.stats, Modifier.padding(top = 28.dp))
             SectionHeading("Reading details", Modifier.padding(top = 32.dp, bottom = YomuTheme.space.sm))
             Box(
@@ -445,7 +414,7 @@ private fun WideStats(
                     .background(YomuTheme.stack.sheet)
                     .padding(horizontal = 20.dp, vertical = YomuTheme.space.xxs),
             ) {
-                ReadingDetailsGrid(state.stats, columns = 3)
+                ReadingDetailsGrid(state.stats, columns = 4)
             }
             Spacer(Modifier.height(navBottom + YomuTheme.space.xl))
         },
@@ -493,6 +462,7 @@ private fun WidePanes(
                 }
                 dashboardHeader?.invoke()
             }
+            val sideScroll = rememberScrollState()
             Column(
                 Modifier
                     .width(sideWidth)
@@ -500,7 +470,9 @@ private fun WidePanes(
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .clip(SideSheetShape)
                     .background(YomuTheme.stack.sheet)
-                    .verticalScroll(rememberScrollState())
+                    // Rows dissolve at the sheet's top edge once they scroll under it.
+                    .yomuScrollEdgeShadow(top = sideScroll.canScrollBackward)
+                    .verticalScroll(sideScroll)
                     .padding(horizontal = 28.dp)
                     .padding(top = YomuTheme.space.lg),
             ) { side() }
@@ -714,6 +686,8 @@ private fun previewState(): StatsUiState {
             BookReadingTime("4", "The Hound of the Baskervilles", "Arthur Conan Doyle", null, 5 * 3600L + 14 * 60, 12),
             BookReadingTime("5", "Pride and Prejudice", "Jane Austen", null, 3 * 3600L + 8 * 60, 9),
             BookReadingTime("6", "Anna Karenina", "Leo Tolstoy", null, 2 * 3600L + 20 * 60, 6),
+            BookReadingTime(null, "Removed book", null, null, 40 * 60L, 3),
+            BookReadingTime(null, "Removed book", null, null, 12 * 60L, 1),
         ),
         history = listOf(
             ReadingSessionItem("1", "The Wind in the Willows", null, at(0, 20, 12), 32 * 60L),
@@ -745,9 +719,9 @@ private fun StatsPhoneDarkPreview() = StatsPreview(previewState(), YomuThemeMode
 @Composable
 private fun StatsPhoneMonthPreview() = StatsPreview(previewState(), period = StatsPeriod.Month)
 
-@Preview(name = "Phone all, black", widthDp = 390, heightDp = 844)
+@Preview(name = "Phone month, black", widthDp = 390, heightDp = 844)
 @Composable
-private fun StatsPhoneAllPreview() = StatsPreview(previewState(), YomuThemeMode.Oled, StatsPeriod.All)
+private fun StatsPhoneMonthBlackPreview() = StatsPreview(previewState(), YomuThemeMode.Oled, StatsPeriod.Month)
 
 @Composable
 private fun StatsScrolledPreview(mode: YomuThemeMode) {
@@ -789,7 +763,7 @@ private fun StatsErrorPreview() = StatsPreview(StatsUiState(isLoading = false, e
 @Preview(name = "Sections empty", widthDp = 390, heightDp = 1100)
 @Composable
 private fun StatsSectionsEmptyPreview() = StatsPreview(
-    previewState().let { it.copy(stats = it.stats.copy(secondsLast7Days = 0), history = emptyList(), bookTimes = emptyList(), trend = it.trend.copy(week = it.trend.week.map { bar -> bar.copy(seconds = 0) })) },
+    previewState().copy(history = emptyList(), bookTimes = emptyList(), trend = buildStatsTrend(listOf(DailyReading(LocalDate.now().toString(), 0L)))),
 )
 
 @Preview(name = "Tablet", widthDp = 1200, heightDp = 800)

@@ -289,7 +289,10 @@ fun YomuNavHost(
             }
             BackPreviewFrame(backMotion) {
                 ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
-                    ReaderRoute(onBack = navController::popBackStackIfResumed)
+                    ReaderRoute(
+                        onBack = navController::popBackStackIfResumed,
+                        onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                    )
                 }
             }
         }

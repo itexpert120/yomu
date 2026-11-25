@@ -80,46 +80,6 @@ private val MaxBarWidth = 64.dp
 internal val ReadingStats.hasActivity: Boolean
     get() = sessionCount != 0 || totalReadingSeconds != 0L
 
-/** What the one figure says for each period. */
-internal data class PeriodSummary(val figure: String, val caption: String, val compact: String, val spoken: String)
-
-internal fun ReadingStats.summary(period: StatsPeriod): PeriodSummary {
-    val (seconds, window) = when (period) {
-        StatsPeriod.Week -> secondsLast7Days to "in the last 7 days"
-        StatsPeriod.Month -> secondsLast30Days to "in the last 30 days"
-        StatsPeriod.All -> totalReadingSeconds to "in total"
-    }
-    val perDay = when (period) {
-        StatsPeriod.Week -> seconds / 7
-        StatsPeriod.Month -> seconds / 30
-        StatsPeriod.All -> averageSecondsPerActiveDay
-    }
-    val caption = when {
-        seconds == 0L && period == StatsPeriod.All -> "Nothing read yet"
-        seconds == 0L -> "Nothing read $window"
-        perDay < 60L -> "read $window"
-        period == StatsPeriod.All -> "read in total · ${formatReadingTime(perDay)} on a reading day"
-        else -> "read $window · ${formatReadingTime(perDay)} a day"
-    }
-    val label = when (period) {
-        StatsPeriod.Week -> "Last 7 days"
-        StatsPeriod.Month -> "Last 30 days"
-        StatsPeriod.All -> "All time"
-    }
-    return PeriodSummary(
-        figure = formatReadingTime(seconds, zero = "0 min"),
-        caption = caption,
-        compact = "$label · ${formatReadingTime(seconds, zero = "0 min")}",
-        spoken = if (seconds == 0L) caption else "${speakReadingTime(seconds)} read $window",
-    )
-}
-
-internal fun StatsTrend.bars(period: StatsPeriod): List<TrendBar> = when (period) {
-    StatsPeriod.Week -> week
-    StatsPeriod.Month -> month
-    StatsPeriod.All -> year
-}
-
 /**
  * The screen title and the period choice beside it, on the desk. With large text the choice
  * moves under the title rather than squeezing it.
@@ -244,7 +204,6 @@ private val StatsPeriod.label: String
     get() = when (this) {
         StatsPeriod.Week -> "Week"
         StatsPeriod.Month -> "Month"
-        StatsPeriod.All -> "All"
     }
 
 /** The one figure: reading time for the period, with what it covers underneath. */
@@ -269,21 +228,21 @@ internal fun HeroFigure(summary: PeriodSummary, wide: Boolean, modifier: Modifie
 }
 
 /**
- * Minutes per day (or month) as bars on the desk: sheet-coloured bars, an ink bar for today, a
- * track sliver for days without reading. Bars grow to their height on the spatial spring, read in
- * the draw phase.
+ * Minutes per day as bars on the desk: sheet-coloured bars, an ink bar for today, a track sliver
+ * for days without reading, nothing yet for days still to come. Bars grow to their height on the
+ * spatial spring, read in the draw phase. A [dense] chart (a month) labels one bar a week.
  */
 @Composable
 internal fun TrendChart(
     bars: List<TrendBar>,
-    period: StatsPeriod,
+    heading: String,
+    dense: Boolean,
     wide: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val stack = YomuTheme.stack
     val max = bars.maxOfOrNull { it.seconds }?.coerceAtLeast(1L) ?: 1L
     val chartHeight = if (wide) 180.dp else 118.dp
-    val dense = bars.size > 12
     val gap = when {
         dense -> 3.dp
         wide -> 14.dp
@@ -291,7 +250,7 @@ internal fun TrendChart(
     }
     val barColor = if (stack.isDark) stack.track else stack.sheet
     val emptyColor = if (stack.isDark) stack.rule else stack.track
-    val description = remember(bars, period) { chartDescription(bars, period) }
+    val description = remember(bars, heading, dense) { chartDescription(bars, heading, dense) }
     val animate = yomuAnimationsEnabled()
     val growSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
     Column(modifier = modifier.clearAndSetSemantics { contentDescription = description }) {
@@ -324,6 +283,7 @@ internal fun TrendChart(
                         .weight(1f)
                         .fillMaxHeight()
                         .drawBehind {
+                            if (bar.isFuture) return@drawBehind
                             val minHeight = 4.dp.toPx()
                             val shown = if (bar.seconds == 0L) minHeight else (size.height * fraction.value).coerceAtLeast(minHeight)
                             val r = radius.toPx().coerceAtMost(shown / 2f).coerceAtLeast(2.dp.toPx())
@@ -360,7 +320,7 @@ private fun TrendLabels(bars: List<TrendBar>, wide: Boolean, dense: Boolean, gap
                             Text(
                                 text = bar.label,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (bar.isCurrent) stack.ink else stack.muted,
+                                color = labelColor(bar),
                                 fontWeight = if (bar.isCurrent) FontWeight.Bold else null,
                                 maxLines = 1,
                                 softWrap = false,
@@ -382,7 +342,7 @@ private fun TrendLabels(bars: List<TrendBar>, wide: Boolean, dense: Boolean, gap
                 Text(
                     text = if (wide) bar.label else bar.shortLabel,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (bar.isCurrent) stack.ink else stack.muted,
+                    color = labelColor(bar),
                     fontWeight = if (bar.isCurrent) FontWeight.Bold else null,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -390,6 +350,16 @@ private fun TrendLabels(bars: List<TrendBar>, wide: Boolean, dense: Boolean, gap
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun labelColor(bar: TrendBar): Color {
+    val stack = YomuTheme.stack
+    return when {
+        bar.isCurrent -> stack.ink
+        bar.isFuture -> stack.faint
+        else -> stack.muted
     }
 }
 
@@ -404,15 +374,11 @@ private fun Modifier.wrapContentWidthUnbounded(): Modifier = this.then(
     },
 )
 
-private fun chartDescription(bars: List<TrendBar>, period: StatsPeriod): String {
-    val heading = when (period) {
-        StatsPeriod.Week -> "Reading time, last 7 days"
-        StatsPeriod.Month -> "Reading time, last 30 days"
-        StatsPeriod.All -> "Reading time by month, last 12 months"
-    }
+private fun chartDescription(bars: List<TrendBar>, heading: String, dense: Boolean): String {
+    val past = bars.filter { !it.isFuture }
     // Thirty bars read aloud one by one is noise; the month chart names only the days with reading.
-    val spoken = if (period == StatsPeriod.Month) bars.filter { it.seconds > 0 } else bars
-    if (spoken.isEmpty()) return "$heading: no reading"
+    val spoken = if (dense) past.filter { it.seconds > 0 } else past
+    if (spoken.isEmpty() || spoken.all { it.seconds == 0L }) return "$heading: no reading"
     return heading + ": " + spoken.joinToString(", ") { "${it.spokenLabel} ${speakReadingTime(it.seconds)}" }
 }
 
@@ -441,14 +407,9 @@ internal fun ReadingStats.headlineFacts(): List<StatsMetric> = listOf(
 
 internal fun ReadingStats.detailMetrics(): List<StatsMetric> = listOf(
     StatsMetric(formatReadingTime(totalReadingSeconds), "in total"),
-    StatsMetric(formatReadingTime(averageSecondsPerActiveDay), "on a reading day, on average"),
     StatsMetric(formatReadingTime(longestSessionSeconds), "longest session"),
-    StatsMetric(formatReadingTime(averageSessionSeconds), "average session"),
     StatsMetric(sessionCount.toString(), if (sessionCount == 1) "reading session" else "reading sessions"),
     StatsMetric(chaptersRead.toString(), if (chaptersRead == 1) "chapter read" else "chapters read"),
-    StatsMetric(if (estimatedWordsRead > 0) "~${formatGrouped(estimatedWordsRead)}" else "—", "words, estimated"),
-    StatsMetric(booksStarted.toString(), if (booksStarted == 1) "book started" else "books started"),
-    StatsMetric(booksInLibrary.toString(), if (booksInLibrary == 1) "book in your library" else "books in your library"),
 )
 
 @Composable

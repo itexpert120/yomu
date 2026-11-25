@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -51,8 +52,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
-import com.itexpert120.yomu.core.designsystem.YomuSettingList
-import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
@@ -114,8 +113,9 @@ internal fun ReaderDefaultsScreen(
     modifier: Modifier = Modifier,
 ) {
     val stack = YomuTheme.stack
-    val controls: @Composable ColumnScope.() -> Unit = {
+    val controls: @Composable ColumnScope.(Dp) -> Unit = { gutter ->
         ReaderDefaultsControls(
+            gutter = gutter,
             settings = settings,
             customThemes = customThemes,
             customFonts = customFonts,
@@ -139,7 +139,7 @@ internal fun ReaderDefaultsScreen(
                     DefaultsColumn(gutter = gutter, endGutter = 24.dp, modifier = Modifier.weight(1f)) {
                         if (onBack == null) PaneTitle()
                         Explainer()
-                        controls()
+                        controls(gutter)
                     }
                     // Supporting pane: the preview stays put while the controls scroll beside it.
                     Column(
@@ -159,7 +159,7 @@ internal fun ReaderDefaultsScreen(
                     if (onBack == null) PaneTitle()
                     Explainer()
                     ReaderDefaultsPreview(settings = settings, modifier = Modifier.padding(top = 14.dp))
-                    controls()
+                    controls(gutter)
                 }
             }
         }
@@ -211,6 +211,7 @@ private fun Explainer() {
 /** The reader's own controls, grouped under Stack section labels. */
 @Composable
 private fun ColumnScope.ReaderDefaultsControls(
+    gutter: Dp,
     settings: ReaderSettings,
     customThemes: List<CustomReaderTheme>,
     customFonts: List<CustomFontRef>,
@@ -219,31 +220,42 @@ private fun ColumnScope.ReaderDefaultsControls(
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
     onOpenFontLibrary: () -> Unit,
 ) {
+    // The same controls, in the same order, as the in-reader Reading settings sheet.
     DefaultsSection("Theme") {
         ReaderThemeRow(settings, onUpdate, compact = true)
         if (settings.theme == ReaderThemeMode.Custom) {
-            ReaderCustomThemeRow(settings, customThemes, onOpenCustomTheme, onApplyCustomTheme)
+            ReaderCustomThemes(settings, customThemes, onOpenCustomTheme, onApplyCustomTheme)
         }
     }
-    DefaultsSection("Layout") { ReaderLayoutControl(settings, onUpdate) }
-    DefaultsSection("Font") {
-        ReaderFontRow(settings, onUpdate, customFonts = customFonts, onManageFonts = onOpenFontLibrary)
+    DefaultsSection("Font", spacing = 4.dp) {
+        // The row scrolls edge to edge, through the column's gutter.
+        ReaderFontPicker(
+            settings = settings,
+            onUpdateSettings = onUpdate,
+            customFonts = customFonts,
+            onGetFonts = onOpenFontLibrary,
+            gutter = gutter,
+            modifier = Modifier.layout { measurable, constraints ->
+                val bleed = gutter.roundToPx() * 2
+                val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + bleed, minWidth = constraints.maxWidth + bleed))
+                layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed / 2, 0) }
+            },
+        )
+        ReaderFontSizeLine(settings, onUpdate)
     }
-    DefaultsSection("Size and spacing") {
-        YomuSettingList {
-            ReaderFontSizeControl(settings, onUpdate, position = YomuSettingPosition.First)
-            ReaderTypographySliders(settings, onUpdate)
-        }
+    DefaultsSection("Page", spacing = 0.dp) {
+        ReaderLayoutLine(settings, onUpdate)
+        ReaderAlignmentLine(settings, onUpdate)
+        ReaderSpacingLines(settings, onUpdate)
     }
-    DefaultsSection("Alignment") { ReaderTextAlignControl(settings, onUpdate) }
     DefaultsSection("While reading") { ReaderChromeToggles(settings, onUpdate) }
 }
 
 @Composable
-private fun DefaultsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun DefaultsSection(title: String, spacing: Dp = 8.dp, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.padding(top = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(spacing),
     ) {
         SettingsSectionLabel(title, top = 0.dp)
         content()
