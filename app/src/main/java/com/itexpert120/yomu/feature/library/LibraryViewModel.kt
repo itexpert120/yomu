@@ -8,7 +8,9 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
+import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.PublicationIndex
@@ -40,9 +42,16 @@ import kotlinx.coroutines.launch
 import java.util.IdentityHashMap
 import javax.inject.Inject
 
-/** The pile: opened, unfinished books, most recently opened first, at most three. */
+/**
+ * The pile: books in progress (started and not finished, or set to Reading by hand), most recently
+ * opened first, at most three. A book only opened at its first page isn't in progress yet; with none,
+ * the pile area collapses and the shelf sits under the title.
+ */
 internal fun List<Book>.pileBooks(): List<Book> = asSequence()
-    .filter { it.lastOpenedAt > 0L && it.progress < 0.995f }
+    .filter { book ->
+        book.shelfStatus == ShelfStatus.Reading &&
+            (book.manualStatus == ManualStatus.Reading || book.progress < 0.995f)
+    }
     .sortedByDescending { it.lastOpenedAt }
     .take(3)
     .toList()
