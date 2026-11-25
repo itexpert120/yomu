@@ -48,6 +48,7 @@ internal object ReaderSettingsSync {
             "lineHeight",
             "pageMargins",
             "paragraphSpacing",
+            "twoPageSpread",
         ),
     )
 

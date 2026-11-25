@@ -82,7 +82,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
-import kotlin.math.roundToInt
 
 /**
  * Stack's reader top bar, in the page colour: back · book title over the chapter · bookmark, on a
@@ -242,7 +241,7 @@ internal fun ReaderFooter(
 
 /**
  * The reader menu's controls: where you are in the chapter and the book, a position slider that
- * scrubs by chapter, and the four reader actions. A sheet rising from the bottom edge on phones; a
+ * scrubs within the chapter, and the four reader actions. A sheet rising from the bottom edge on phones; a
  * centred floating card (max 640) on wider windows. Drawn in the page's colours.
  */
 @Composable
@@ -251,9 +250,8 @@ internal fun BoxScope.ReaderControlsPanel(
     colors: ReaderChromeColors,
     remainingLabel: String?,
     progressPercent: Int?,
-    chapters: List<ReaderTocItem>,
-    currentChapterIndex: Int,
-    onSelectChapter: (String) -> Unit,
+    chapterProgression: Double,
+    onSeekChapter: (Double) -> Unit,
     onContents: () -> Unit,
     onSearch: () -> Unit,
     onMarks: () -> Unit,
@@ -319,9 +317,8 @@ internal fun BoxScope.ReaderControlsPanel(
                     colors = colors,
                     remainingLabel = remainingLabel,
                     progressPercent = progressPercent,
-                    chapters = chapters,
-                    currentChapterIndex = currentChapterIndex,
-                    onSelectChapter = onSelectChapter,
+                    chapterProgression = chapterProgression,
+                    onSeekChapter = onSeekChapter,
                 )
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     ReaderPanelAction("Contents", onContents, colors.muted) {
@@ -347,28 +344,35 @@ internal fun BoxScope.ReaderControlsPanel(
 }
 
 /**
- * The caption row and position slider. The thumb shows book progress; dragging previews the
- * chapter it will land on and releasing opens that chapter. The book's progress weighting is not
- * known here, so the slider scrubs chapters evenly, like the Controls sheet's chapter slider.
+ * The caption row and position slider. The slider scrubs the chapter being read: the thumb shows
+ * how far through it you are, dragging previews how much of it would be left, and releasing goes
+ * there. Until the page reports the new place, the thumb stays where it was let go.
  */
 @Composable
 private fun ReaderPositionControl(
     colors: ReaderChromeColors,
     remainingLabel: String?,
     progressPercent: Int?,
-    chapters: List<ReaderTocItem>,
-    currentChapterIndex: Int,
-    onSelectChapter: (String) -> Unit,
+    chapterProgression: Double,
+    onSeekChapter: (Double) -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
-    var preview by remember { mutableStateOf<Int?>(null) }
-    fun chapterAt(fraction: Float): Int = if (chapters.size <= 1) 0 else (fraction.coerceIn(0f, 1f) * chapters.lastIndex).roundToInt()
-    val previewIndex = preview
+    var preview by remember { mutableStateOf<Float?>(null) }
+    var seekTarget by remember { mutableStateOf<Float?>(null) }
+    // The page has reported a new place: follow it again.
+    LaunchedEffect(chapterProgression) { seekTarget = null }
+    // A seek that lands where it started reports nothing new; don't hold the thumb for ever.
+    LaunchedEffect(seekTarget) {
+        if (seekTarget != null) {
+            delay(SeekHoldMillis)
+            seekTarget = null
+        }
+    }
+    val previewFraction = preview
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = previewIndex?.let { index -> chapters.getOrNull(index)?.title?.let { "${index + 1} · $it" } }
-                ?: remainingLabel.orEmpty(),
-            color = if (previewIndex != null) colors.ink else colors.muted,
+            text = previewFraction?.let { "${chapterPercentLeft(it.toDouble())}% of chapter left" } ?: remainingLabel.orEmpty(),
+            color = if (previewFraction != null) colors.ink else colors.muted,
             style = ReaderFigures,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -381,31 +385,34 @@ private fun ReaderPositionControl(
             modifier = Modifier.padding(start = 12.dp),
         )
     }
+    val shown = seekTarget ?: chapterProgression.toFloat().coerceIn(0f, 1f)
     ReaderChromeSlider(
-        fraction = (progressPercent ?: 0) / 100f,
+        fraction = shown,
         fill = colors.ink,
         track = colors.track,
-        contentDescription = "Position in book",
-        stateDescription = chapters.getOrNull(currentChapterIndex)?.let { "Chapter ${currentChapterIndex + 1} of ${chapters.size}" },
-        enabled = chapters.size > 1,
+        contentDescription = "Position in chapter",
+        stateDescription = "${100 - chapterPercentLeft(shown.toDouble())}% of chapter read",
         onDrag = { fraction ->
-            val index = chapterAt(fraction)
-            if (index != preview && chapters.size <= MaxTickedChapters) {
+            val step = (fraction * SeekTicks).toInt()
+            if (preview?.let { (it * SeekTicks).toInt() } != step) {
                 haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
             }
-            preview = index
+            preview = fraction
         },
         onDragEnd = { preview = null },
         onSeek = { fraction ->
             preview = null
-            chapters.getOrNull(chapterAt(fraction))?.locatorJson?.let(onSelectChapter)
+            seekTarget = fraction
+            onSeekChapter(fraction.toDouble())
         },
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
     )
 }
 
-/** Above this many chapters, per-chapter ticks become a buzz rather than feedback. */
-private const val MaxTickedChapters = 60
+/** A tick each tenth of the chapter while scrubbing. */
+private const val SeekTicks = 10
+
+private const val SeekHoldMillis = 1_500L
 
 @Composable
 private fun RowScope.ReaderPanelAction(

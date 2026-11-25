@@ -288,6 +288,8 @@ fun ReaderScreen(
             // Above a hinge there is no navigation bar to keep clear of.
             immersive && reading.settings.layout == ReaderLayout.Paged -> if (tabletop) 0.dp else pagedSafeBottom
             immersive -> 0.dp
+            // Paged with no footer: still keep the last line clear of the gesture area.
+            reading.settings.layout == ReaderLayout.Paged && !reading.settings.showFooter -> if (tabletop) 0.dp else pagedSafeBottom
             else -> baseBottomInset
         },
         animationSpec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.defaultSpatialSpec() else snap(),
@@ -295,7 +297,6 @@ fun ReaderScreen(
     )
 
     val chromeColors = remember(reading.settings) { reading.settings.chromeColors() }
-    val chapters = remember(reading.tableOfContents) { reading.tableOfContents.readerChapters() }
     val background = chromeColors.page
 
     // Page reveal: the new chapter fades in on an effects spring while travelling a short distance
@@ -489,9 +490,8 @@ fun ReaderScreen(
                                 reading.chapterProgression,
                             ),
                             progressPercent = reading.progressPercent,
-                            chapters = chapters,
-                            currentChapterIndex = chapters.currentChapterIndex(reading.currentHref),
-                            onSelectChapter = { onAction(ReaderAction.SelectChapter(it)) },
+                            chapterProgression = reading.chapterProgression,
+                            onSeekChapter = { onAction(ReaderAction.SeekInChapter(it)) },
                             onContents = { onAction(ReaderAction.OpenBrowse) },
                             onSearch = { onAction(ReaderAction.OpenSearch) },
                             onMarks = {

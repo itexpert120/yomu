@@ -1291,6 +1291,13 @@ private class ReadiumReaderSession(
         }
     }
 
+    override fun goToChapterProgression(progression: Double) {
+        val (href, resourceProgress) = position.chapterTarget(progression) ?: return
+        val link = publication.readingOrder.getOrNull(position.resourceIndexOf(href)) ?: return
+        val base = publication.locatorFromLink(link) ?: return
+        goToLocator(base.copy(locations = Locator.Locations(progression = resourceProgress)).toJSON().toString())
+    }
+
     override fun goToLocator(locatorJson: String) {
         val locator =
             runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return
