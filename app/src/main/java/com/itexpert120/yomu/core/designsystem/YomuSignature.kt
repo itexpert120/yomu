@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,48 +9,62 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.graphics.shapes.RoundedPolygon
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /*
- * The Yomu signature: the handful of decisions that make every screen read as the same app.
+ * The shared Stack vocabulary every screen is built from:
  *
- *  - Corners: one role-based grammar ([YomuShapeTokens]) — heroes and panes are extra-large, grouped
- *    content is segmented (large outer corners, tight seams), book covers always share one radius.
- *  - Surfaces: a tonal ladder ([YomuCardTone]) with no borders or shadows — page → group → raised →
- *    hero container.
- *  - Shapes: one small family of Material shape-library badges ([YomuBadgeShape]) marks hero moments
- *    and every empty/error state. Never behind running text.
- *  - Headers: one section header ([YomuSectionHeader]) and one sheet header ([YomuSheetHeader]).
+ *  - Corners: one role-based grammar ([YomuShapeTokens]) — cover 4, row/inset 16, card on the desk
+ *    24, sheet top 32, pills full.
+ *  - Surfaces: the grey desk, sheet-coloured cards (radius 24) on it, raised rows/insets inside a
+ *    sheet. No tonal ladder, no borders, no elevation (covers and floating notices carry one static
+ *    shadow).
+ *  - Ink: primary text and the primary action; colour comes from covers and reading themes only.
+ *  - Headers: one section header ([YomuSectionHeader]) and one sheet title row ([YomuSheetHeader]).
  */
 
 /** Width ÷ height of every book cover in the app. */
@@ -57,65 +72,48 @@ const val YomuBookCoverAspectRatio: Float = 1f / 1.5f
 
 /** Role-based corner grammar. Prefer these over literal `RoundedCornerShape`s in feature code. */
 object YomuShapeTokens {
-    /** Book covers, wherever they appear (Stack: 4dp, with one static shadow). */
+    /** Book covers, wherever they appear (4dp, with one static shadow). */
     val cover: Shape
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.shapes.extraSmall
 
-    /** Hero cards, contained panes, dialogs (Stack: card on desk, 24dp). */
+    /** Cards on the desk, contained panes, dialogs (24dp). */
     val hero: Shape
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.shapes.large
 
-    /** Standalone tiles and rows (Stack: row/inset, 16dp). */
+    /** Rows and insets inside a sheet (16dp). */
     val tile: Shape
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.shapes.medium
 
-    /** Small inline containers: tags, thumbnails, previews inside a row. */
+    /** Small inline containers: thumbnails, previews inside a row. */
     val inset: Shape
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.shapes.small
 
     /** Chips, value readouts, status pills. */
-    val pill: Shape = androidx.compose.foundation.shape.CircleShape
+    val pill: Shape = CircleShape
 }
 
-/** The decorative shapes Yomu uses for badges. Kept deliberately small so they stay recognisable. */
+/**
+ * Kept for source compatibility. Stack has no decorative badge shapes: [YomuShapeBadge] draws a
+ * plain circle whatever shape is asked for.
+ */
 enum class YomuBadgeShape(internal val polygon: RoundedPolygon) {
-    /** The primary Yomu mark: hero moments (library, about, book cover backdrop). */
     Cookie(MaterialShapes.Cookie12Sided),
-
-    /** Softer scallop for secondary heroes and empty states. */
     Scallop(MaterialShapes.Cookie9Sided),
-
-    /** Time and activity. */
     Sunny(MaterialShapes.Sunny),
-
-    /** Calm, four-lobed: neutral information and "nothing here yet". */
     Clover(MaterialShapes.Clover4Leaf),
-
-    /** Problems and warnings. */
     Burst(MaterialShapes.SoftBurst),
 }
 
 enum class YomuBadgeTone { Primary, Secondary, Tertiary, Neutral, Error, Solid }
 
-@Composable
-private fun YomuBadgeTone.colors(): Pair<Color, Color> = with(MaterialTheme.colorScheme) {
-    when (this@colors) {
-        YomuBadgeTone.Primary -> primaryContainer to onPrimaryContainer
-        YomuBadgeTone.Secondary -> secondaryContainer to onSecondaryContainer
-        YomuBadgeTone.Tertiary -> tertiaryContainer to onTertiaryContainer
-        YomuBadgeTone.Neutral -> surfaceContainerHighest to onSurfaceVariant
-        YomuBadgeTone.Error -> errorContainer to onErrorContainer
-        YomuBadgeTone.Solid -> primary to onPrimary
-    }
-}
-
 /**
- * An icon set in one of the Yomu badge shapes. The shared mark for hero moments and empty/error
- * states; [content] replaces the icon for custom artwork (e.g. the app logo).
+ * An icon in a raised circle (Stack has no badge shapes; [shape] is ignored). [YomuBadgeTone.Solid]
+ * is an ink circle, [YomuBadgeTone.Error] tints the icon danger. [content] replaces the icon for
+ * custom artwork (e.g. the app logo).
  */
 @Composable
 fun YomuShapeBadge(
@@ -126,14 +124,18 @@ fun YomuShapeBadge(
     tone: YomuBadgeTone = YomuBadgeTone.Primary,
     content: (@Composable () -> Unit)? = null,
 ) {
-    val (container, onContainer) = tone.colors()
-    Surface(
-        modifier = modifier.size(size),
-        shape = shape.polygon.toShape(),
-        color = container,
-        contentColor = onContainer,
+    val stack = YomuTheme.stack
+    val (container, onContainer) = when (tone) {
+        YomuBadgeTone.Solid -> stack.ink to stack.onInk
+        YomuBadgeTone.Error -> stack.raised to stack.danger
+        YomuBadgeTone.Neutral -> stack.raised to stack.muted
+        else -> stack.raised to stack.ink
+    }
+    Box(
+        modifier = modifier.size(size).clip(CircleShape).background(container),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        CompositionLocalProvider(LocalContentColor provides onContainer) {
             when {
                 content != null -> content()
                 icon != null -> Icon(icon, contentDescription = null, modifier = Modifier.size(size * 0.44f))
@@ -143,8 +145,10 @@ fun YomuShapeBadge(
 }
 
 /**
- * The one empty / error / "nothing here" state: a shape badge, an emphasized title, optional
- * supporting text and actions. [compact] suits sheets and panes; the default suits whole screens.
+ * The one empty / no-results / error state, drawing-free: a large muted symbol (48dp) — or, with
+ * [coverOutline], a cover-shaped dashed outline — then the title (20/600), an optional body (15,
+ * muted) and the action(s), usually one primary [YomuButton]. [compact] suits sheets and panes.
+ * [shape] and [tone] are ignored (Stack has no badges).
  */
 @Composable
 fun YomuEmptyState(
@@ -155,35 +159,40 @@ fun YomuEmptyState(
     shape: YomuBadgeShape = YomuBadgeShape.Clover,
     tone: YomuBadgeTone = YomuBadgeTone.Secondary,
     compact: Boolean = false,
+    coverOutline: Boolean = false,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
+    val stack = YomuTheme.stack
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = YomuTheme.space.lg, vertical = if (compact) YomuTheme.space.lg else YomuTheme.space.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
-        YomuShapeBadge(icon = icon, size = if (compact) 64.dp else 96.dp, shape = shape, tone = tone)
+        if (coverOutline) {
+            YomuCoverOutline(Modifier.size(width = if (compact) 48.dp else 56.dp, height = if (compact) 72.dp else 84.dp))
+        } else {
+            Icon(icon, contentDescription = null, tint = if (tone == YomuBadgeTone.Error) stack.danger else stack.faint, modifier = Modifier.size(if (compact) 40.dp else 48.dp))
+        }
         Text(
             text = title,
-            modifier = Modifier.padding(top = YomuTheme.space.xs).semantics { heading() },
-            style = if (compact) MaterialTheme.typography.titleMediumEmphasized else MaterialTheme.typography.headlineSmallEmphasized,
-            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = YomuTheme.space.md).semantics { heading() },
+            style = if (compact) StackType.SheetTitle else StackType.DialogTitle,
+            color = stack.ink,
             textAlign = TextAlign.Center,
         )
         if (body != null) {
             Text(
                 text = body,
-                modifier = Modifier.widthIn(max = 360.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp).widthIn(max = 360.dp),
+                style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+                color = stack.muted,
                 textAlign = TextAlign.Center,
             )
         }
         if (actions != null) {
             Row(
-                modifier = Modifier.padding(top = YomuTheme.space.xs),
+                modifier = Modifier.padding(top = YomuTheme.space.lg),
                 horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions,
@@ -192,9 +201,27 @@ fun YomuEmptyState(
     }
 }
 
+/** A cover-shaped dashed outline: the "no book here" mark in empty states. */
+@Composable
+fun YomuCoverOutline(modifier: Modifier = Modifier) {
+    val color = YomuTheme.stack.faint.copy(alpha = 0.6f)
+    Box(
+        modifier.drawBehind {
+            val stroke = 1.5.dp.toPx()
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(stroke / 2, stroke / 2),
+                size = Size(size.width - stroke, size.height - stroke),
+                cornerRadius = CornerRadius(4.dp.toPx()),
+                style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
+            )
+        },
+    )
+}
+
 /**
- * The single page-level section header: emphasized, primary-coloured title with optional supporting
- * line and a trailing action. (Inside sheets and dense panes use the smaller [YomuSectionLabel].)
+ * The page-level section header: Heading 15/600 in ink (sentence case), an optional muted
+ * supporting line and a trailing action. (Inside sheets and dense panes use [YomuSectionLabel].)
  */
 @Composable
 fun YomuSectionHeader(
@@ -212,58 +239,58 @@ fun YomuSectionHeader(
             Text(
                 text = title,
                 modifier = Modifier.semantics { heading() },
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleMediumEmphasized,
+                color = YomuTheme.stack.ink,
+                style = StackType.Heading,
             )
             if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text(text = subtitle, color = YomuTheme.stack.muted, style = StackType.Caption)
             }
         }
         trailing?.invoke()
     }
 }
 
-/** Steps of the tonal surface ladder. Cards never use borders or shadows to separate themselves. */
+/**
+ * Card tones. Stack has no tonal ladder: [Group], [Hero] and [HeroAlt] are all the sheet-coloured
+ * card on the desk; [Raised] is the raised inset for a card that sits inside a sheet.
+ */
 enum class YomuCardTone { Group, Raised, Hero, HeroAlt }
 
 /**
- * A contained surface on the tonal ladder: [YomuCardTone.Group] (the same tone as segmented rows),
- * [YomuCardTone.Raised] for cards on top of a group or sheet, and the two hero containers.
+ * A card: sheet-coloured, radius 24, no border or elevation — or, with [YomuCardTone.Raised], a
+ * raised inset (radius 16) for use inside a sheet.
  */
 @Composable
 fun YomuCard(
     modifier: Modifier = Modifier,
     tone: YomuCardTone = YomuCardTone.Group,
-    shape: Shape = if (tone == YomuCardTone.Group || tone == YomuCardTone.Raised) YomuShapeTokens.tile else YomuShapeTokens.hero,
+    shape: Shape = if (tone == YomuCardTone.Raised) YomuShapeTokens.tile else YomuShapeTokens.hero,
     onClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(YomuTheme.space.md),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val (container, onContainer) = when (tone) {
-        YomuCardTone.Group -> scheme.surfaceContainer to scheme.onSurface
-        YomuCardTone.Raised -> scheme.surfaceContainerHigh to scheme.onSurface
-        YomuCardTone.Hero -> scheme.primaryContainer to scheme.onPrimaryContainer
-        YomuCardTone.HeroAlt -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-    }
-    val body: @Composable () -> Unit = { Column(Modifier.padding(contentPadding), content = content) }
-    if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier, shape = shape, color = container, contentColor = onContainer, content = body)
-    } else {
-        Surface(modifier = modifier, shape = shape, color = container, contentColor = onContainer, content = body)
+    val stack = YomuTheme.stack
+    val container = if (tone == YomuCardTone.Raised) stack.raised else stack.sheet
+    CompositionLocalProvider(LocalContentColor provides stack.ink) {
+        Column(
+            modifier = modifier
+                .clip(shape)
+                .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick) else Modifier)
+                .background(container)
+                .padding(contentPadding),
+            content = content,
+        )
     }
 }
 
 enum class YomuNoticeTone { Neutral, Accent, Error, Floating }
 
 /**
- * A tonal message strip: inline information, warnings, and (with [YomuNoticeTone.Floating]) the
- * transient notices that replace stock snackbars. [leading] overrides the icon, e.g. with a
- * [YomuLoadingIndicator] while work is running.
+ * A notice. [YomuNoticeTone.Floating] is Stack's snackbar replacement: an ink card (radius 16, soft
+ * static shadow) with on-ink text and the optional action as an on-ink 600 label on the right; it
+ * carries no icon. The other tones are inline strips on the raised colour ([YomuNoticeTone.Error]
+ * tints the icon danger). [loading] adds the 2dp indeterminate line along the bottom; [leading]
+ * overrides the icon.
  */
 @Composable
 fun YomuNotice(
@@ -274,54 +301,69 @@ fun YomuNotice(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
+    loading: Boolean = false,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val (container, onContainer, actionColor) = when (tone) {
-        YomuNoticeTone.Neutral -> Triple(scheme.surfaceContainerHigh, scheme.onSurface, scheme.primary)
-        YomuNoticeTone.Accent -> Triple(scheme.secondaryContainer, scheme.onSecondaryContainer, scheme.onSecondaryContainer)
-        YomuNoticeTone.Error -> Triple(scheme.errorContainer, scheme.onErrorContainer, scheme.onErrorContainer)
-        YomuNoticeTone.Floating -> Triple(scheme.inverseSurface, scheme.inverseOnSurface, scheme.inversePrimary)
+    val stack = YomuTheme.stack
+    val floating = tone == YomuNoticeTone.Floating
+    val container = if (floating) stack.ink else stack.raised
+    val onContainer = if (floating) stack.onInk else stack.ink
+    val iconTint = when (tone) {
+        YomuNoticeTone.Floating -> stack.onInk
+        YomuNoticeTone.Error -> stack.danger
+        else -> stack.muted
     }
-    Surface(
-        modifier = modifier,
-        shape = YomuShapeTokens.tile,
-        color = container,
-        contentColor = onContainer,
-        shadowElevation = if (tone == YomuNoticeTone.Floating) 6.dp else 0.dp,
+    val shape = YomuShapeTokens.tile
+    Column(
+        modifier = modifier
+            .then(if (floating) Modifier.dropShadow(shape, NoticeShadow) else Modifier)
+            .clip(shape)
+            .background(container)
+            .semantics { if (floating) liveRegion = LiveRegionMode.Polite },
     ) {
         Row(
-            modifier = Modifier.padding(
-                start = YomuTheme.space.md,
-                end = if (actionLabel != null) YomuTheme.space.xxs else YomuTheme.space.md,
-                top = YomuTheme.space.xxs,
-                bottom = YomuTheme.space.xxs,
-            ),
+            modifier = Modifier
+                .heightIn(min = 52.dp)
+                .padding(
+                    start = YomuTheme.space.md,
+                    end = if (actionLabel != null) 6.dp else YomuTheme.space.md,
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
-            when {
-                leading != null -> leading()
-                icon != null -> Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            CompositionLocalProvider(LocalContentColor provides iconTint) {
+                when {
+                    leading != null -> leading()
+                    icon != null && !floating -> Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                }
             }
             Text(
                 text = text,
-                modifier = Modifier.weight(1f).padding(vertical = YomuTheme.space.sm),
-                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+                style = if (floating) StackType.Notice else MaterialTheme.typography.bodyMedium,
+                color = onContainer,
             )
             if (actionLabel != null && onAction != null) {
-                TextButton(
+                YomuPill(
                     onClick = onAction,
-                    shapes = ButtonDefaults.shapes(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
-                ) { Text(actionLabel, style = MaterialTheme.typography.labelLargeEmphasized) }
+                    container = Color.Transparent,
+                    height = 44.dp,
+                    horizontalPadding = 14.dp,
+                ) {
+                    Text(actionLabel, style = StackType.Notice.copy(fontWeight = FontWeight.SemiBold), color = onContainer)
+                }
             }
         }
+        if (loading) YomuLoadingLine(color = onContainer)
     }
 }
 
+private val NoticeShadow = Shadow(radius = 24.dp, spread = (-10).dp, offset = DpOffset(0.dp, 8.dp), color = Color(0xFF16191C).copy(alpha = 0.45f))
+
 /**
- * The one confirmation / message dialog: optional badge icon, emphasized title, and press-morphing
- * buttons. [destructive] paints the confirm action in the error role.
+ * The one confirmation / message dialog: a centred sheet-coloured card (radius 24), title 20/600,
+ * body 15, actions right-aligned — the dismiss as an ink text button, the confirm as an ink pill
+ * (a danger pill when [destructive]). The screen behind dims to 80%. Stack dialogs carry no icon;
+ * [icon] is kept for source compatibility and ignored.
  */
 @Composable
 fun YomuDialog(
@@ -338,59 +380,82 @@ fun YomuDialog(
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val backPreview = rememberYomuBackPreviewState()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = modifier.yomuBackPreview(backPreview),
-        shape = YomuShapeTokens.hero,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        icon = icon?.let {
-            {
-                YomuShapeBadge(
-                    icon = it,
-                    size = 56.dp,
-                    shape = if (destructive) YomuBadgeShape.Burst else YomuBadgeShape.Scallop,
-                    tone = if (destructive) YomuBadgeTone.Error else YomuBadgeTone.Secondary,
-                )
+    Dialog(onDismissRequest = onDismiss) {
+        YomuDialogWindowDim()
+        // Registered from inside the dialog so it uses the dialog window's back dispatcher.
+        YomuBackPreviewHandler(backPreview, onBack = onDismiss)
+        YomuDialogCard(
+            modifier = modifier.yomuBackPreview(backPreview),
+            title = title,
+            text = text,
+            confirmLabel = confirmLabel,
+            onConfirm = onConfirm,
+            onDismiss = onDismiss,
+            dismissLabel = dismissLabel,
+            destructive = destructive,
+            confirmEnabled = confirmEnabled,
+            content = content,
+        )
+    }
+}
+
+/** The dialog's card on its own (no window), for previews and the dev gallery. */
+@Composable
+fun YomuDialogCard(
+    title: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    text: String? = null,
+    dismissLabel: String? = "Cancel",
+    destructive: Boolean = false,
+    confirmEnabled: Boolean = true,
+    content: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    val stack = YomuTheme.stack
+    Column(
+        modifier = modifier
+            .widthIn(min = 280.dp, max = 400.dp)
+            .clip(YomuShapeTokens.hero)
+            .background(stack.sheet)
+            .padding(start = 22.dp, end = 12.dp, top = 22.dp, bottom = 12.dp),
+    ) {
+        Text(
+            text = title,
+            style = StackType.DialogTitle,
+            color = stack.ink,
+            modifier = Modifier.padding(end = 10.dp).semantics { heading() },
+        )
+        if (text != null || content != null) {
+            Column(
+                modifier = Modifier
+                    .padding(top = 8.dp, end = 10.dp)
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
+            ) {
+                if (text != null) Text(text, style = MaterialTheme.typography.bodyLarge, color = stack.body)
+                CompositionLocalProvider(LocalContentColor provides stack.body) { content?.invoke(this) }
             }
-        },
-        title = {
-            // Registered from inside the dialog so it uses the dialog window's back dispatcher.
-            YomuBackPreviewHandler(backPreview, onBack = onDismiss)
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-                textAlign = if (icon != null) TextAlign.Center else TextAlign.Start,
-            )
-        },
-        text = if (text != null || content != null) {
-            {
-                Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
-                    if (text != null) Text(text, style = MaterialTheme.typography.bodyMedium)
-                    content?.invoke(this)
-                }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (dismissLabel != null) {
+                YomuButton(dismissLabel, onClick = onDismiss, emphasis = YomuButtonEmphasis.Ghost, size = YomuButtonSize.Small)
             }
-        } else {
-            null
-        },
-        confirmButton = {
-            Button(
+            YomuButton(
+                confirmLabel,
                 onClick = onConfirm,
                 enabled = confirmEnabled,
-                shapes = ButtonDefaults.shapes(),
-                colors = if (destructive) {
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    )
-                } else {
-                    ButtonDefaults.buttonColors()
-                },
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = dismissLabel?.let { label ->
-            { TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) { Text(label) } }
-        },
-    )
+                emphasis = if (destructive) YomuButtonEmphasis.DangerFilled else YomuButtonEmphasis.Primary,
+                size = YomuButtonSize.Small,
+            )
+        }
+    }
 }
 
 /** How the enclosing [YomuBottomSheet] is presented; lets shared headers adapt. */
@@ -399,9 +464,10 @@ enum class YomuSheetPresentation { Sheet, Dialog }
 val LocalYomuSheetPresentation = staticCompositionLocalOf { YomuSheetPresentation.Sheet }
 
 /**
- * The shared header for every [YomuBottomSheet]: emphasized title, optional supporting line and
- * trailing actions. When the sheet is presented as a tablet dialog (no drag handle) and [onClose]
- * is given, a close button appears so there is always a visible way out.
+ * The title row for every [YomuBottomSheet]: close on the left (a chevron down on a phone sheet, a
+ * close × when the sheet is a tablet dialog), the title (17/600) with an optional muted line under
+ * it, and [trailing] actions on the right. The icon buttons bleed 12dp into the sheet's gutter so
+ * their glyphs line up with the content edge.
  */
 @Composable
 fun YomuSheetHeader(
@@ -411,33 +477,59 @@ fun YomuSheetHeader(
     onClose: (() -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
+    val stack = YomuTheme.stack
+    val dialog = LocalYomuSheetPresentation.current == YomuSheetPresentation.Dialog
     Row(
-        modifier = modifier.fillMaxWidth().padding(bottom = YomuTheme.space.xs),
+        modifier = modifier
+            .fillMaxWidth()
+            .bleedHorizontally(12.dp)
+            .heightIn(min = 52.dp)
+            .padding(bottom = YomuTheme.space.xxs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = title,
-                modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.titleLargeEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        CompositionLocalProvider(LocalContentColor provides stack.ink) {
+            if (onClose != null) {
+                YomuIconButton(
+                    icon = if (dialog) StackIcons.Close else StackIcons.KeyboardArrowDown,
+                    contentDescription = "Close",
+                    onClick = onClose,
                 )
             }
-        }
-        trailing?.invoke(this)
-        if (onClose != null && LocalYomuSheetPresentation.current == YomuSheetPresentation.Dialog) {
-            IconButton(onClick = onClose, shapes = IconButtonDefaults.shapes()) {
-                Icon(StackIcons.Close, contentDescription = "Close")
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = if (onClose != null) 4.dp else 12.dp, end = if (trailing == null) 12.dp else 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.semantics { heading() },
+                    style = StackType.SheetTitle,
+                    color = stack.ink,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(text = subtitle, style = StackType.Value, color = stack.muted)
+                }
             }
+            trailing?.invoke(this)
         }
     }
+}
+
+/** Lets a row reach [amount] past its parent's padding on both sides (for edge-aligned icon buttons). */
+internal fun Modifier.bleedHorizontally(amount: Dp): Modifier = layout { measurable, constraints ->
+    val extra = amount.roundToPx()
+    if (!constraints.hasBoundedWidth) {
+        val placeable = measurable.measure(constraints)
+        return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+    val placeable = measurable.measure(
+        constraints.copy(
+            minWidth = constraints.minWidth + extra * 2,
+            maxWidth = constraints.maxWidth + extra * 2,
+        ),
+    )
+    layout(placeable.width - extra * 2, placeable.height) { placeable.place(-extra, 0) }
 }

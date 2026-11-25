@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,9 +61,11 @@ fun YomuSheetDragHandle() {
 }
 
 /**
- * Draggable bottom sheet that slides up (Material modal sheet, restyled with Yomu colors + a
- * custom drag handle). Programmatic dismissals animate the slide-down before tearing it out of
- * composition.
+ * Stack's modal sheet: sheet-coloured, top radius 32, no drag handle (the [YomuSheetHeader] title
+ * row carries the close chevron); it rises on the sheet spring and the screen behind dims to 80%
+ * (black at 20%, no blur). Dismiss by the chevron, back, or a drag down; programmatic dismissals
+ * animate the slide-down before tearing it out of composition. From medium widths it is a centred
+ * sheet-coloured panel (radius 24) over the same dim.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,8 +98,8 @@ fun YomuBottomSheet(
         if (panelState.isIdle && !panelState.currentState && !panelState.targetState) {
             LaunchedEffect(Unit) { onDismiss() }
         }
-        // Pure-black (OLED) surfaces need a hairline to separate the panel from the dimmed page.
-        val oled = MaterialTheme.colorScheme.surface == Color.Black
+        // Pure black: a hairline separates the panel from the dimmed page.
+        val oled = YomuTheme.stack.desk == Color.Black
         Dialog(
             onDismissRequest = dismissPanel,
             properties = DialogProperties(
@@ -104,6 +107,7 @@ fun YomuBottomSheet(
                 decorFitsSystemWindows = false,
             ),
         ) {
+            YomuDialogWindowDim()
             val backPreview = rememberYomuBackPreviewState()
             YomuBackPreviewHandler(backPreview, onBack = dismissPanel)
             Box(
@@ -142,9 +146,8 @@ fun YomuBottomSheet(
                                 detectTapGestures(onTap = {})
                             },
                         shape = YomuShapeTokens.hero,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        color = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.onSurface,
-                        shadowElevation = 6.dp,
                         border = if (oled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
                     ) {
                         Column(
@@ -168,8 +171,10 @@ fun YomuBottomSheet(
                                     },
                                 )
                                 .padding(
-                                    horizontal = horizontalContentPadding ?: YomuTheme.space.lg,
-                                    vertical = YomuTheme.space.lg,
+                                    start = horizontalContentPadding ?: YomuTheme.space.lg,
+                                    end = horizontalContentPadding ?: YomuTheme.space.lg,
+                                    top = YomuTheme.space.xs,
+                                    bottom = YomuTheme.space.lg,
                                 ),
                             verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
                         ) {
@@ -203,9 +208,11 @@ fun YomuBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = SheetShape,
+        containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        dragHandle = { YomuSheetDragHandle() },
+        scrimColor = YomuScrim,
+        dragHandle = null,
         // Draw the panel edge-to-edge under the (transparent) gesture nav bar instead of reserving it
         // as bottom inset — otherwise the panel stops above the bar, leaving a coloured band. The nav
         // clearance is moved onto the content below so text/controls still sit above the bar.
@@ -250,11 +257,26 @@ fun YomuBottomSheet(
                     },
                 )
                 .padding(horizontal = horizontalContentPadding ?: YomuTheme.space.lg)
+                .padding(top = YomuTheme.space.xs)
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(bottom = YomuTheme.space.lg),
             verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
         ) {
             content(::animatedDismiss)
         }
+    }
+}
+
+private val SheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+
+/** Stack's one softening: behind a sheet or dialog the screen dims to 80% (black at 20%). */
+val YomuScrim: Color = Color.Black.copy(alpha = 0.2f)
+
+/** Sets the enclosing dialog window's dim to Stack's 80% (call inside a `Dialog`'s content). */
+@Composable
+fun YomuDialogWindowDim() {
+    val view = LocalView.current
+    SideEffect {
+        (view.parent as? DialogWindowProvider)?.window?.setDimAmount(YomuScrim.alpha)
     }
 }
