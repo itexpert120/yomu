@@ -92,6 +92,8 @@ data class ReaderSettings(
     // Immersive reading: hide the top bar + footer (with the controls) on a centre tap. Off keeps the
     // top bar visible at all times.
     val immersiveChrome: Boolean = false,
+    // Paged mode on a wide landscape window (tablet, open foldable) shows two pages side by side.
+    val twoPageSpread: Boolean = true,
 ) {
     /** Complete palette for the active theme. Custom themes derive supporting colours from the
      *  user's background/text pair so links, selections and chrome remain coherent. */

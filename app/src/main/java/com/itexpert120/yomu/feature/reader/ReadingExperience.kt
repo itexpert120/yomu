@@ -145,6 +145,9 @@ internal sealed interface ReaderNavigation {
     data object NextChapter : ReaderNavigation
     data object PreviousChapter : ReaderNavigation
     data class Locator(val locatorJson: String) : ReaderNavigation
+
+    /** [progression] (0..1) of the way through the chapter being read. */
+    data class ChapterProgression(val progression: Double) : ReaderNavigation
 }
 
 class ReadingExperienceFactory @Inject constructor(
@@ -542,6 +545,7 @@ internal class ReadingExperience(
             ReaderNavigation.NextChapter -> active.nextChapter()
             ReaderNavigation.PreviousChapter -> active.previousChapter()
             is ReaderNavigation.Locator -> active.goToLocator(target.locatorJson)
+            is ReaderNavigation.ChapterProgression -> active.goToChapterProgression(target.progression)
         }
     }
 

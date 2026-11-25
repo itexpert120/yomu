@@ -13,7 +13,7 @@ foliate-view, .yomu-stand-in {
     position: absolute;
     inset: 0;
 }
-/* Scrolled flow: the pull-to-continue badge and the scrollbar (see yomu-reader.js). */
+/* Scrolled flow: the pull-to-continue badge (placed from yomu-reader.js) and the scrollbar. */
 #yomu-pull {
     position: fixed;
     left: 50%;
@@ -28,8 +28,6 @@ foliate-view, .yomu-stand-in {
     pointer-events: none;
     transition: opacity .2s;
 }
-#yomu-pull.next { bottom: 32px; }
-#yomu-pull.prev { top: 32px; }
 #yomu-pull svg {
     width: 24px;
     height: 24px;
@@ -52,5 +50,16 @@ foliate-view, .yomu-stand-in {
 }
 /* Behind the real view; seen only while a turn enters the chapter it holds. */
 .yomu-stand-in {
+    pointer-events: none;
+}
+/* A two-page spread's gutter rule (see yomu-reader.js). */
+#yomu-gutter {
+    display: none;
+    position: fixed;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    margin-left: -0.5px;
     pointer-events: none;
 }

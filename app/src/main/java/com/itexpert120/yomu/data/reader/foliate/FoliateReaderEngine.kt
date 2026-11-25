@@ -510,8 +510,9 @@ private class FoliateReaderSession(
 
     /**
      * Scroll mode: the reader pulled past a chapter's end (or start) to read on into section
-     * [index]. Going forward is reading continuously, so it completes the chapter left behind;
-     * going back opens the previous section at its end.
+     * [index]; the page is already moving there (it animates the change itself). Going forward is
+     * reading continuously, so it completes the chapter left behind; going back opens the previous
+     * section at its end.
      */
     private fun continueReading(index: Int, forward: Boolean) {
         val href = book.readingOrder.getOrNull(index) ?: return
@@ -519,7 +520,7 @@ private class FoliateReaderSession(
             position.expectSequentialCrossing(href)
             continuing = target.optInt("index", -1) to index
         }
-        go(JSONObject().put("index", index).put("fraction", if (forward) 0 else 1))
+        target = JSONObject().put("index", index).put("fraction", if (forward) 0 else 1)
     }
 
     override fun nextChapter() = goToSection(+1)
@@ -536,6 +537,13 @@ private class FoliateReaderSession(
 
     override fun goToLocator(locatorJson: String) {
         targetFor(locatorJson)?.let(::go)
+    }
+
+    override fun goToChapterProgression(progression: Double) {
+        val (href, resourceProgress) = position.chapterTarget(progression) ?: return
+        val index = position.resourceIndexOf(href).takeIf { it in book.paths.indices } ?: return
+        // In the page's own progress terms (pages / scroll range), which only it can turn into a place.
+        go(JSONObject().put("index", index).put("progress", resourceProgress))
     }
 
     private fun go(next: JSONObject) {
@@ -651,6 +659,7 @@ private class FoliateReaderSession(
             )
             .put("tapTurns", settings.tapNavigation)
             .put("showScrollbar", settings.showScrollbar)
+            .put("spread", settings.twoPageSpread)
             .put("animated", ValueAnimator.areAnimatorsEnabled())
     }
 
