@@ -48,6 +48,7 @@ class NativeReaderPrototypeActivity : ComponentActivity() {
             return
         }
         val typeface = Typeface.createFromAsset(assets, "fonts/Lora-Regular.ttf")
+        val italic = Typeface.createFromAsset(assets, "fonts/Lora-Italic.ttf")
         var book by mutableStateOf<EpubBook?>(null)
         lifecycleScope.launch {
             book = withContext(Dispatchers.IO) { EpubBook.open(File(path)) }.also { openedBook = it }
@@ -62,6 +63,7 @@ class NativeReaderPrototypeActivity : ComponentActivity() {
                         book = opened,
                         startChapter = chapter,
                         typeface = typeface,
+                        italicTypeface = italic,
                         background = Background,
                         textColor = Ink,
                         modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars),

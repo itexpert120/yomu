@@ -64,6 +64,7 @@ fun PagedReader(
     book: EpubBook,
     startChapter: Int,
     typeface: Typeface,
+    italicTypeface: Typeface?,
     background: Color,
     textColor: Color,
     modifier: Modifier = Modifier,
@@ -71,18 +72,22 @@ fun PagedReader(
 ) {
     BoxWithConstraints(modifier.fillMaxSize().background(background).clipToBounds()) {
         val density = LocalDensity.current
-        val spec = remember(constraints.maxWidth, constraints.maxHeight, typeface, textColor) {
+        val spec = remember(constraints.maxWidth, constraints.maxHeight, typeface, italicTypeface, textColor) {
             with(density) {
                 PageSpec(
                     width = constraints.maxWidth,
                     height = constraints.maxHeight,
-                    marginHorizontal = 22.dp.roundToPx(),
+                    // Readium's defaults today: 16dp text, CSS line-height 1.5, 1em paragraph
+                    // spacing, 20dp side margins, left-aligned without hyphenation.
+                    marginHorizontal = 20.dp.roundToPx(),
                     marginTop = 20.dp.roundToPx(),
                     marginBottom = 36.dp.roundToPx(),
-                    textSizePx = 18.sp.toPx(),
-                    lineSpacing = 1.5f,
+                    textSizePx = 16.sp.toPx(),
+                    lineHeightEm = 1.5f,
+                    paragraphGapEm = 1f,
                     textColor = textColor.toArgb(),
                     typeface = typeface,
+                    italicTypeface = italicTypeface,
                 )
             }
         }

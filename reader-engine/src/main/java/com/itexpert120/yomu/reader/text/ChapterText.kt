@@ -13,6 +13,7 @@ import android.text.style.SubscriptSpan
 import android.text.style.SuperscriptSpan
 import com.itexpert120.yomu.reader.epub.EpubBook
 import org.xmlpull.v1.XmlPullParser
+import kotlin.math.roundToInt
 
 /**
  * Turns a chapter's XHTML into styled text for native layout. Supported: paragraphs and other
@@ -71,6 +72,7 @@ object ChapterText {
         private var paragraphStart = 0
         private var pendingSpace = false
         private var listDepth = 0
+        private var headingScale = 1f
 
         private val atParagraphStart get() = text.length == paragraphStart
 
@@ -99,6 +101,7 @@ object ChapterText {
             val end = text.length
             if (tag in BlockTags) {
                 if (end > start) style(tag, start, end)
+                HeadingScales[tag]?.let { headingScale = it }
                 if (tag == "ul" || tag == "ol") listDepth--
                 endParagraph()
             } else if (end > start) {
@@ -129,8 +132,9 @@ object ChapterText {
             pendingSpace = false
             if (atParagraphStart) return
             if (text.last() != '\n') text.append('\n')
-            text.setSpan(ParagraphGapSpan(PARAGRAPH_GAP_EM), paragraphStart, text.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            text.setSpan(ParagraphSpan(headingScale), paragraphStart, text.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
             paragraphStart = text.length
+            headingScale = 1f
         }
 
         private fun style(tag: String, start: Int, end: Int) {
@@ -140,9 +144,7 @@ object ChapterText {
                 "small" -> listOf(RelativeSizeSpan(0.85f))
                 "sup" -> listOf(SuperscriptSpan(), RelativeSizeSpan(0.75f))
                 "sub" -> listOf(SubscriptSpan(), RelativeSizeSpan(0.75f))
-                "h1" -> listOf(StyleSpan(Typeface.BOLD), RelativeSizeSpan(1.5f))
-                "h2" -> listOf(StyleSpan(Typeface.BOLD), RelativeSizeSpan(1.3f))
-                "h3" -> listOf(StyleSpan(Typeface.BOLD), RelativeSizeSpan(1.15f))
+                "h1", "h2", "h3" -> listOf(StyleSpan(Typeface.BOLD), RelativeSizeSpan(HeadingScales.getValue(tag)))
                 "h4", "h5", "h6" -> listOf(StyleSpan(Typeface.BOLD))
                 "blockquote" -> listOf(LeadingMarginSpan.Standard(QUOTE_INDENT_PX))
                 else -> emptyList()
@@ -151,19 +153,35 @@ object ChapterText {
         }
     }
 
-    /** Adds space below a paragraph's last line, as a fraction of its line height. */
-    class ParagraphGapSpan(private val em: Float) : LineHeightSpan {
+    /**
+     * Sets a paragraph's lines the way CSS does: every line is exactly [lineHeightEm] times the font
+     * size, the extra split evenly above and below, and the last line gets [gapEm] after it.
+     * StaticLayout may ask more than once per line, so heights are set from fixed font values, never
+     * from the metrics it hands in. [com.itexpert120.yomu.reader.layout.ChapterLayout] fills in the
+     * font values before layout; [scale] is the paragraph's own size (headings).
+     */
+    class ParagraphSpan(val scale: Float = 1f) : LineHeightSpan {
+        var fontSizePx = 16f
+        var ascentEm = -0.9f
+        var descentEm = 0.3f
+        var lineHeightEm = 1.5f
+        var gapEm = 1f
+
         override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, lineHeight: Int, fm: Paint.FontMetricsInt) {
-            val spanEnd = (text as? Spanned)?.getSpanEnd(this) ?: return
-            if (end >= spanEnd) {
-                val gap = ((fm.descent - fm.ascent) * em).toInt()
-                fm.descent += gap
-                fm.bottom += gap
-            }
+            val size = fontSizePx * scale
+            val ascent = (ascentEm * size).roundToInt()
+            val descent = (descentEm * size).roundToInt()
+            val extra = (size * lineHeightEm).roundToInt() - (descent - ascent)
+            val above = extra / 2
+            val spanEnd = (text as? Spanned)?.getSpanEnd(this) ?: end
+            val gap = if (end >= spanEnd) (size * gapEm).roundToInt() else 0
+            fm.ascent = ascent - above
+            fm.descent = descent + (extra - above) + gap
+            fm.top = fm.ascent
+            fm.bottom = fm.descent
         }
     }
 
-    private const val PARAGRAPH_GAP_EM = 0.6f
     private const val QUOTE_INDENT_PX = 48
 
     private val BlockTags = setOf(
@@ -171,6 +189,8 @@ object ChapterText {
         "h1", "h2", "h3", "h4", "h5", "h6", "li", "ul", "ol", "dl", "dt", "dd", "blockquote", "pre", "hr",
         "table", "tr", "body",
     )
+
+    private val HeadingScales = mapOf("h1" to 1.5f, "h2" to 1.3f, "h3" to 1.15f)
 
     private val SkippedTags = setOf("head", "script", "style", "title", "svg", "math", "noscript")
 
