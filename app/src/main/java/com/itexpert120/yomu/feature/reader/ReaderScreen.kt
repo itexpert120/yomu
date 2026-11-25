@@ -462,6 +462,9 @@ fun ReaderScreen(
                             chapterProgression = reading.chapterProgression,
                             settings = reading.settings,
                             onContentHeight = { footerPx = it },
+                            pageLabel = reading.pageLabel,
+                            minutesLeftInChapter = reading.minutesLeftInChapter,
+                            minutesLeftInBook = reading.minutesLeftInBook,
                             showDeviceStatus = !systemBarsShown,
                             deviceStatusActive = chromeShown,
                             modifier = Modifier
@@ -496,10 +499,16 @@ fun ReaderScreen(
                         ReaderControlsPanel(
                             visible = panelVisible,
                             colors = chromeColors,
-                            remainingLabel = chapterRemainingLabel(
-                                reading.settings.layout,
-                                reading.chapterPagesLeft,
-                                reading.chapterProgression,
+                            // "6 min left in chapter · pages 112–113", as the boards have it;
+                            // pages or percent of the chapter left until there's an estimate.
+                            remainingLabel = controlsCaption(
+                                timeLeft = ReadingTime.chapterLabel(reading.minutesLeftInChapter),
+                                pageLabel = reading.pageLabel,
+                                fallback = chapterRemainingLabel(
+                                    reading.settings.layout,
+                                    reading.chapterPagesLeft,
+                                    reading.chapterProgression,
+                                ),
                             ),
                             progressPercent = reading.progressPercent,
                             chapterProgression = reading.chapterProgression,
@@ -518,6 +527,17 @@ fun ReaderScreen(
                     } else {
                         controlsPanel(state.chrome.controlsVisible)
                     }
+
+                    // "Back to p. 112" after a jump: under the top bar while it shows, else just
+                    // below the status area.
+                    ReaderJumpBackChip(
+                        label = reading.jumpBack,
+                        colors = chromeColors,
+                        onClick = { onAction(ReaderAction.JumpBack) },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = (if (chromeShown) fullTop else pagedSafeTop) + 12.dp, start = 24.dp, end = 24.dp),
+                    )
 
                     ReaderControlsSheetWithDimPreview(
                         visible = state.chrome.displaySheetVisible,
@@ -569,6 +589,8 @@ fun ReaderScreen(
                         highlights = reading.highlights,
                         onJumpToHighlight = { onAction(ReaderAction.JumpToHighlight(it)) },
                         onDeleteHighlight = { onAction(ReaderAction.DeleteHighlight(it)) },
+                        pages = reading.pageList,
+                        onGoToPage = { onAction(ReaderAction.GoToPage(it)) },
                         onSelectTab = { onAction(ReaderAction.SelectBrowseTab(it)) },
                         onDismiss = { onAction(ReaderAction.CloseBrowse) },
                         calibreAvailable = state.annotationTransfer.calibreAvailable,
@@ -595,6 +617,14 @@ fun ReaderScreen(
                     )
 
                     FootnoteSheet(html = reading.footnoteHtml, onDismiss = { onAction(ReaderAction.CloseFootnote) })
+
+                    ReaderImageViewer(
+                        image = reading.viewedImage,
+                        message = reading.imageMessage,
+                        onSave = { onAction(ReaderAction.SaveImage) },
+                        onShare = { onAction(ReaderAction.ShareImage) },
+                        onClose = { onAction(ReaderAction.CloseImageViewer) },
+                    )
 
                     HighlightEditSheet(
                         highlight = reading.editingHighlight,

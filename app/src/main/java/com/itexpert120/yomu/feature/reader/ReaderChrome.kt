@@ -224,8 +224,9 @@ private fun footerRemainingLabel(layout: ReaderLayout, pagesLeft: Int?, chapterP
 private fun chapterPercentLeft(chapterProgression: Double): Int = ceil((1.0 - chapterProgression.coerceIn(0.0, 1.0)) * 100.0).toInt().coerceIn(0, 100)
 
 /**
- * The quiet footer under the page: battery and clock on the left, chapter remaining and book
- * progress on the right, in the page's muted ink with tabular figures.
+ * The quiet footer under the page: battery and clock on the left; on the right the printed page,
+ * chapter remaining, reading time left and book progress, in the page's muted ink with tabular
+ * figures.
  */
 @Composable
 internal fun ReaderFooter(
@@ -235,6 +236,10 @@ internal fun ReaderFooter(
     settings: ReaderSettings,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    // The printed page on screen ("112", "112–113"), for a book with a page list.
+    pageLabel: String? = null,
+    minutesLeftInChapter: Int? = null,
+    minutesLeftInBook: Int? = null,
     // False while the system status bar is showing (reader menu open): it already has both.
     showDeviceStatus: Boolean = true,
     // False while the footer is faded out (immersive chrome hidden): the clock and battery keep
@@ -259,9 +264,21 @@ internal fun ReaderFooter(
         if (showBattery) FooterBattery(color = footerInk, background = colors.page, active = deviceStatusActive)
         if (showClock) FooterClock(color = footerInk, active = deviceStatusActive)
         Spacer(Modifier.weight(1f))
+        val page = printedPageLabel(pageLabel)
+        if (settings.footerShowPageNumber && page != null) {
+            Text(text = page, color = footerInk, style = ReaderFigures, maxLines = 1)
+        }
         val remaining = footerRemainingLabel(settings.layout, chapterPagesLeft, chapterProgression)
         if (settings.footerShowPagesLeft && remaining != null) {
             Text(text = remaining, color = footerInk, style = ReaderFigures, maxLines = 1)
+        }
+        val chapterTime = ReadingTime.footerChapterLabel(minutesLeftInChapter)
+        if (settings.footerShowTimeLeft && chapterTime != null) {
+            Text(text = chapterTime, color = footerInk, style = ReaderFigures, maxLines = 1)
+        }
+        val bookTime = ReadingTime.footerBookLabel(minutesLeftInBook)
+        if (settings.footerShowBookTimeLeft && bookTime != null) {
+            Text(text = bookTime, color = footerInk, style = ReaderFigures, maxLines = 1)
         }
         if (settings.footerShowProgress) {
             Text(text = progressPercent?.let { "$it%" } ?: "", color = footerInk, style = ReaderFigures)

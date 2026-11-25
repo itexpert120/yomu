@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Base64
 import android.util.Log
 import androidx.core.view.doOnAttach
 import androidx.core.view.doOnLayout
@@ -22,10 +23,12 @@ import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
+import com.itexpert120.yomu.core.reader.ReaderImage
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
+import com.itexpert120.yomu.core.reader.ReaderPageTarget
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
@@ -340,6 +343,15 @@ private class FoliateReaderSession(
     private val _footnotes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val footnotes: SharedFlow<String> = _footnotes.asSharedFlow()
 
+    private val _pageList = MutableStateFlow<List<ReaderPageTarget>>(emptyList())
+    override val pageList: StateFlow<List<ReaderPageTarget>> = _pageList.asStateFlow()
+
+    private val _linkJumps = MutableSharedFlow<ReaderLocator>(extraBufferCapacity = 1)
+    override val linkJumps: SharedFlow<ReaderLocator> = _linkJumps.asSharedFlow()
+
+    private val _images = MutableSharedFlow<ReaderImage>(extraBufferCapacity = 1)
+    override val images: SharedFlow<ReaderImage> = _images.asSharedFlow()
+
     // The latest highlight set, drawn once the page shows (and again on a rebuilt page).
     private var highlights: List<ReaderHighlight> = emptyList()
 
@@ -461,6 +473,10 @@ private class FoliateReaderSession(
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
             "footnote" -> JSONObject(json).optString("html").takeIf { it.isNotBlank() }?.let(_footnotes::tryEmit)
+            // Emitted before the page moves, so the current position is the one left.
+            "link-jump" -> _currentLocator.value?.let(_linkJumps::tryEmit)
+            "page-list" -> _pageList.value = pageTargets(JSONObject(json).optJSONArray("pages"))
+            "image" -> onImage(JSONObject(json))
             "search-hits", "search-done" -> onSearchEvent(name, JSONObject(json))
             "continue" -> JSONObject(json).let { continueReading(it.optInt("index", -1), it.optBoolean("forward")) }
             "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
@@ -475,6 +491,7 @@ private class FoliateReaderSession(
         val total = event.optDouble("total").takeUnless { it.isNaN() }
         val cfi = event.optString("cfi").takeIf { it.isNotEmpty() && it != "null" }
         val title = event.optString("title").takeIf { it.isNotEmpty() && it != "null" }
+        val pageLabel = event.optString("pageLabel").takeIf { it.isNotEmpty() && it != "null" }
         if (event.optBoolean("scrolled")) {
             position.onScrollMeasured(href, event.optDouble("measured", fraction).takeUnless { it.isNaN() } ?: fraction)
         } else {
@@ -497,8 +514,35 @@ private class FoliateReaderSession(
             .apply { (snapshot.chapterTitle ?: title)?.let { put("title", it) } }
             .put("locations", locations)
         target = JSONObject().put("index", index).apply { if (cfi != null) put("cfi", cfi) else put("fraction", fraction) }
-        val readerLocator = snapshot.toReaderLocator(locator.toString())
+        val readerLocator = snapshot.toReaderLocator(locator.toString()).copy(pageLabel = pageLabel)
         if (readerLocator != _currentLocator.value) _currentLocator.value = readerLocator
+    }
+
+    /** The page list's entries as locators: their section's href, plus the fragment they point at. */
+    private fun pageTargets(pages: JSONArray?): List<ReaderPageTarget> {
+        pages ?: return emptyList()
+        return (0 until pages.length()).mapNotNull { i ->
+            val page = pages.optJSONObject(i) ?: return@mapNotNull null
+            val label = page.optString("label").trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val href = page.optString("href")
+            val index = book.indexOfHref(href).takeIf { it >= 0 } ?: return@mapNotNull null
+            val fragment = href.substringAfter('#', "").takeIf { it.isNotEmpty() }
+            val locations = JSONObject()
+            if (fragment != null) locations.put("fragments", JSONArray().put(fragment)) else locations.put("progression", 0.0)
+            val locator = JSONObject()
+                .put("href", book.readingOrder[index])
+                .put("type", book.mediaTypes[index])
+                .put("title", label)
+                .put("locations", locations)
+            ReaderPageTarget(label, locator.toString())
+        }
+    }
+
+    private fun onImage(event: JSONObject) {
+        val bytes = runCatching { Base64.decode(event.optString("data"), Base64.DEFAULT) }.getOrNull() ?: return
+        if (bytes.isEmpty()) return
+        val description = event.optString("description").takeIf { it.isNotBlank() && it != "null" }
+        _images.tryEmit(ReaderImage(bytes, event.optString("type").ifBlank { "image/png" }, description))
     }
 
     // endregion
@@ -759,7 +803,8 @@ private class FoliateReaderSession(
             SelectionAction.SearchInBook -> ReaderSelection.Action.SearchInBook
             SelectionAction.CopyWithCitation -> ReaderSelection.Action.CopyWithCitation
         }
-        _selections.tryEmit(ReaderSelection(readerAction, text, locator.toString()))
+        val language = selection.optString("language").takeIf { it.isNotBlank() && it != "null" }
+        _selections.tryEmit(ReaderSelection(readerAction, text, locator.toString(), language))
     }
 
     override fun applyHighlights(highlights: List<ReaderHighlight>) {
@@ -774,7 +819,11 @@ private class FoliateReaderSession(
         val list = JSONArray()
         for (highlight in highlights) {
             val locator = runCatching { JSONObject(highlight.locatorJson) }.getOrNull() ?: continue
-            val entry = JSONObject().put("id", highlight.id).put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF))
+            val entry = JSONObject()
+                .put("id", highlight.id)
+                .put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF))
+                .put("style", highlight.style.key)
+                .put("note", !highlight.note.isNullOrBlank())
             val cfi = locator.optJSONObject("locations")?.optString("cfi")?.takeIf { it.isNotEmpty() }
             val text = quotedText(locator)
             val index = book.indexOfHref(locator.optString("href"))

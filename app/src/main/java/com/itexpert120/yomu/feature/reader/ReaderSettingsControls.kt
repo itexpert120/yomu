@@ -663,6 +663,9 @@ private object ChromeIcons {
     val Clock = StackIcons.Schedule
     val Progress = StackIcons.Percent
     val ChapterLeft = StackIcons.HourglassBottom
+    val PageNumber = StackIcons.Book
+    val TimeLeft = StackIcons.HourglassEmpty
+    val BookTimeLeft = StackIcons.AutoStories
     val KeepOn = StackIcons.Lightbulb
     val Scrollbar = StackIcons.Height
     val Immersive = StackIcons.Fullscreen
@@ -763,6 +766,43 @@ internal fun ReaderChromeToggles(
             )
         }
         YomuSettingRow(
+            title = "Page number",
+            subtitle = "For books with printed page numbers",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.showFooter,
+            leadingContent = { ChromeRowIcon(ChromeIcons.PageNumber) },
+        ) {
+            YomuTogglePill(
+                checked = settings.footerShowPageNumber,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowPageNumber = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingRow(
+            title = "Time left in chapter",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.showFooter,
+            leadingContent = { ChromeRowIcon(ChromeIcons.TimeLeft) },
+        ) {
+            YomuTogglePill(
+                checked = settings.footerShowTimeLeft,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowTimeLeft = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingRow(
+            title = "Time left in book",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.showFooter,
+            leadingContent = { ChromeRowIcon(ChromeIcons.BookTimeLeft) },
+        ) {
+            YomuTogglePill(
+                checked = settings.footerShowBookTimeLeft,
+                onCheckedChange = { onUpdateSettings(settings.copy(footerShowBookTimeLeft = it)) },
+                enabled = settings.showFooter,
+            )
+        }
+        YomuSettingRow(
             title = "Keep screen on",
             position = YomuSettingPosition.Middle,
             leadingContent = { ChromeRowIcon(ChromeIcons.KeepOn) },
@@ -851,6 +891,15 @@ private fun CompactChromeToggles(
             }
             ToggleChip("Chapter left", settings.footerShowPagesLeft, settings.showFooter) {
                 onUpdateSettings(settings.copy(footerShowPagesLeft = it))
+            }
+            ToggleChip("Page number", settings.footerShowPageNumber, settings.showFooter) {
+                onUpdateSettings(settings.copy(footerShowPageNumber = it))
+            }
+            ToggleChip("Time left", settings.footerShowTimeLeft, settings.showFooter) {
+                onUpdateSettings(settings.copy(footerShowTimeLeft = it))
+            }
+            ToggleChip("Book time left", settings.footerShowBookTimeLeft, settings.showFooter) {
+                onUpdateSettings(settings.copy(footerShowBookTimeLeft = it))
             }
         }
         Text(
