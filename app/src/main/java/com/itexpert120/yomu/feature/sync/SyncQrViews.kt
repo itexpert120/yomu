@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -86,10 +87,10 @@ internal fun SyncQrCode(content: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .clip(YomuShapeTokens.hero)
+            .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
-            // Doubles as the quiet zone, and keeps the corner finders clear of the hero radius.
-            .padding(YomuTheme.space.lg),
+            // Doubles as the quiet zone, and keeps the corner finders clear of the corner radius.
+            .padding(YomuTheme.space.sm),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val cell = size.width / matrix.width
