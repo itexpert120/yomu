@@ -125,6 +125,7 @@ const readerCSS = s => {
         [align="justify"] { text-align: justify; }
         h1, h2, h3, h4, h5, h6, hgroup { text-wrap: balance; }
         pre { white-space: pre-wrap !important; }
+        img, svg image { -webkit-touch-callout: none; -webkit-user-drag: none; }
         aside[epub|type~="endnote"],
         aside[epub|type~="footnote"],
         aside[epub|type~="note"],
@@ -208,9 +209,16 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
     doc.addEventListener('click', e => {
         if (doc.getSelection()?.type === 'Range') return
         if (e.target.closest?.('a[href]')) return
+        if (longPressed) {
+            longPressed = false
+            return
+        }
         // The chapter frame is wider than the screen and scrolled from outside, so use screen x.
-        onPageTap(e.screenX)
+        const image = imageAt(e.target)
+        if (image && !turnsPageAt(e.screenX)) openImage(image)
+        else onPageTap(e.screenX)
     })
+    listenForLongPresses(doc)
 })
 
 /**
@@ -218,8 +226,11 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
  * as the book reads, so a right-to-left book turns back on the right) and the middle is the app's
  * menu. Scrolled, or with tap turns off, any tap is the menu.
  */
+const tapsTurn = () => settings.flow !== 'scrolled' && settings.tapTurns !== false
+/** Whether a tap at [x] turns the page (an outer third, paged) rather than being the menu's. */
+const turnsPageAt = x => tapsTurn() && (x < innerWidth / 3 || x > innerWidth * 2 / 3)
 const onPageTap = x => {
-    const paged = settings.flow !== 'scrolled' && settings.tapTurns !== false
+    const paged = tapsTurn()
     // foliate's own click listener (which finds a tapped highlight) runs after the chapter's, so
     // decide once it has: a tap on a highlight is the highlight's.
     highlightTapped = false
@@ -266,6 +277,7 @@ const reportLocation = detail => {
     // what's left is what's after this screen.
     const perScreen = columns()
     report('relocate', {
+        pageLabel: printedPages(detail, perScreen),
         index: detail.section?.current,
         fraction: Math.min(1, Math.max(0, fraction)),
         measured: Math.min(1, Math.max(0, measured)),
@@ -279,13 +291,70 @@ const reportLocation = detail => {
     })
 }
 
+/**
+ * The printed page(s) on screen, from the book's page list: the page the screen starts on, and
+ * across a spread the one it ends on too ("112–113"). Null when the book has no page list.
+ */
+const printedPages = (detail, perScreen) => {
+    const start = detail.pageItem?.label?.trim()
+    if (!start) return null
+    if (perScreen < 2 || !detail.range) return start
+    try {
+        const end = detail.range.cloneRange()
+        end.collapse(false)
+        const last = view.getProgressOf(detail.section?.current, end)?.pageItem?.label?.trim()
+        return last && last !== start ? `${start}–${last}` : start
+    } catch {
+        return start
+    }
+}
+
+/** The book's page list, flattened: [{ label, href }] (hrefs are paths inside the EPUB). */
+const pageList = book => {
+    const out = []
+    const walk = items => {
+        for (const item of items ?? []) {
+            const label = item.label?.trim()
+            if (label && item.href) out.push({ label, href: item.href })
+            walk(item.subitems)
+        }
+    }
+    walk(book.pageList)
+    return out
+}
+
 // --- Selection and highlights ---
 
 let highlightTapped = false
-let highlights = new Map() // cfi -> { id, cfi, color }
+let highlights = new Map() // cfi -> { id, cfi, color, style, note }
+
+const STYLES = new Set(['highlight', 'underline', 'squiggly', 'strikethrough'])
+const SVG_NS = 'http://www.w3.org/2000/svg'
+/**
+ * Draws a highlight in its style (the Overlayer function of that name), with a small dot at the
+ * end of its last line when it carries a note.
+ */
+const drawHighlight = (rects, { style, color, note }) => {
+    const line = STYLES.has(style) && style !== 'highlight'
+    const g = Overlayer[line ? style : 'highlight'](rects, line ? { color, width: 2.5 } : { color })
+    const last = rects[rects.length - 1]
+    if (!note || !last) return g
+    const group = document.createElementNS(SVG_NS, 'g')
+    const dot = document.createElementNS(SVG_NS, 'circle')
+    dot.setAttribute('cx', last.right + 4)
+    dot.setAttribute('cy', last.top + 3)
+    dot.setAttribute('r', 3.5)
+    dot.setAttribute('fill', color)
+    dot.setAttribute('stroke', settings.colors?.ink ?? 'gray')
+    dot.setAttribute('stroke-width', 1)
+    group.append(g, dot)
+    return group
+}
+const annotationOf = h => ({ value: h.cfi, color: h.color, style: h.style, note: !!h.note })
+const sameLook = (a, b) => a.color === b.color && a.style === b.style && !!a.note === !!b.note
 
 view.addEventListener('draw-annotation', ({ detail: { draw, annotation } }) => {
-    draw(Overlayer.highlight, { color: annotation.color })
+    draw(drawHighlight, { style: annotation.style, color: annotation.color, note: annotation.note })
 })
 view.addEventListener('show-annotation', ({ detail: { value } }) => {
     const highlight = highlights.get(value)
@@ -296,7 +365,7 @@ view.addEventListener('show-annotation', ({ detail: { value } }) => {
 // A chapter's highlights are drawn when it loads (foliate draws only into loaded chapters).
 view.addEventListener('create-overlay', ({ detail: { index } }) => {
     for (const h of highlights.values()) {
-        if (h.index === index) view.addAnnotation({ value: h.cfi, color: h.color }).catch(() => {})
+        if (h.index === index) view.addAnnotation(annotationOf(h)).catch(() => {})
     }
 })
 
@@ -306,7 +375,7 @@ let textHighlights = [] // [{ id, index, text: { before, highlight, after }, col
 const anchorTextHighlights = (index, doc) => textHighlights.flatMap(h => {
     if (h.index !== index) return []
     const range = findText(doc, h.text)
-    return range ? [{ id: h.id, cfi: view.getCFI(index, range), color: h.color, index }] : []
+    return range ? [{ id: h.id, cfi: view.getCFI(index, range), color: h.color, style: h.style, note: h.note, index }] : []
 })
 // 'load' comes before the chapter's overlay is made (create-overlay), which then draws these.
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -314,8 +383,9 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
 })
 
 /**
- * Replaces the drawn highlights with [list]: [{ id, cfi, color }], or [{ id, index, text, color }]
- * for one positioned by its text.
+ * Replaces the drawn highlights with [list]: [{ id, cfi, color, style, note }], or
+ * [{ id, index, text, color, style, note }] for one positioned by its text. `style` names an
+ * Overlayer drawing (highlight / underline / squiggly / strikethrough); `note` is true when it has one.
  */
 globalThis.yomuSetHighlights = list => {
     textHighlights = list.filter(h => !h.cfi && h.text?.highlight)
@@ -333,7 +403,7 @@ globalThis.yomuSetHighlights = list => {
             h.index = null
         }
         const old = highlights.get(h.cfi)
-        if (!old || old.color !== h.color) view.addAnnotation({ value: h.cfi, color: h.color }).catch(() => {})
+        if (!old || !sameLook(old, h)) view.addAnnotation(annotationOf(h)).catch(() => {})
     }
     highlights = next
 }
@@ -346,7 +416,26 @@ const textAround = (range, length = 40) => {
     return { before, after }
 }
 
-/** The current text selection: { index, cfi, text, before, after, fraction }, or null. */
+const XML_NS = 'http://www.w3.org/XML/1998/namespace'
+/**
+ * The language of [node]: the nearest `lang` / `xml:lang` around it, else the book's, as a primary
+ * subtag ("en" for "en-GB"). Null when neither says.
+ */
+const languageOf = node => {
+    let tag = null
+    for (let el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement; el && !tag; el = el.parentElement) {
+        tag = el.getAttribute('lang') || el.getAttributeNS(XML_NS, 'lang') || null
+    }
+    tag ??= view.language?.canonical ?? [view.book?.metadata?.language].flat()[0] ?? null
+    if (!tag) return null
+    try {
+        return new Intl.Locale(tag).language
+    } catch {
+        return tag.split(/[-_]/)[0].toLowerCase() || null
+    }
+}
+
+/** The current text selection: { index, cfi, text, before, after, language }, or null. */
 globalThis.yomuSelection = () => {
     for (const { doc, index } of view.renderer?.getContents() ?? []) {
         const sel = doc.getSelection()
@@ -356,6 +445,7 @@ globalThis.yomuSelection = () => {
             index,
             cfi: view.getCFI(index, range),
             text: sel.toString(),
+            language: languageOf(range.commonAncestorContainer),
             ...textAround(range),
         }
     }
@@ -445,14 +535,127 @@ const noteContent = async href => {
     return note.matches('li, aside, dd') ? note.innerHTML.trim() : note.outerHTML
 }
 
+const IMAGE_FILE = /\.(jpe?g|png|gif|webp|svg|avif|bmp)$/i
 view.addEventListener('link', e => {
     const { a, href } = e.detail
-    if (!href?.includes('#') || !isNoteReference(a)) return
+    // A picture linked to its full-size file opens in the viewer, not as a page of its own.
+    const image = a.querySelector?.('img, image')
+    if (image && IMAGE_FILE.test(href?.split('#')[0] ?? '')) {
+        e.preventDefault()
+        openImage(image)
+        return
+    }
+    if (!href?.includes('#') || !isNoteReference(a)) {
+        // foliate follows it: the app keeps where the reader was, to offer the way back.
+        report('link-jump')
+        return
+    }
     e.preventDefault()
+    const follow = () => {
+        report('link-jump')
+        view.goTo(href)
+    }
     noteContent(href)
-        .then(html => html ? report('footnote', { html }) : view.goTo(href))
-        .catch(() => view.goTo(href))
+        .then(html => html ? report('footnote', { html }) : follow())
+        .catch(follow)
 })
+
+// --- Images ---
+// A tap on a picture (where a tap isn't a page turn) or a long press on it anywhere opens it in the
+// app's viewer: its bytes go over as `image` { data (base64), type, description }. Other formats
+// (SVG, say) go as PNG, drawn at up to twice their size, so the viewer and the gallery get a bitmap.
+
+const XLINK_NS = 'http://www.w3.org/1999/xlink'
+const LONG_PRESS_MS = 450
+const LONG_PRESS_SLOP = 10
+const MAX_IMAGE_BYTES = 24 * 1024 * 1024
+const MAX_RASTER = 4096
+
+const imageAt = el => {
+    const image = el?.closest?.('img, image')
+    if (image) return image
+    return el?.closest?.('svg')?.querySelector?.('image') ?? null
+}
+const imageSource = el => el.localName === 'img'
+    ? (el.currentSrc || el.src)
+    : (el.href?.baseVal || el.getAttribute('href') || el.getAttributeNS(XLINK_NS, 'href'))
+
+const rasterize = async src => {
+    const img = new Image()
+    img.src = src
+    await img.decode()
+    const scale = Math.min(2, MAX_RASTER / Math.max(1, img.naturalWidth, img.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round((img.naturalWidth || 512) * scale))
+    canvas.height = Math.max(1, Math.round((img.naturalHeight || 512) * scale))
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+}
+
+const base64 = bytes => {
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+    }
+    return btoa(binary)
+}
+
+let openingImage = false
+const openImage = async el => {
+    if (openingImage) return
+    const src = imageSource(el)
+    if (!src) return
+    openingImage = true
+    try {
+        let blob = await (await fetch(src)).blob()
+        if (!/^image\/(jpeg|png|gif|webp)$/.test(blob.type)) blob = await rasterize(src)
+        if (!blob || blob.size > MAX_IMAGE_BYTES) return
+        const description = (el.getAttribute('alt') || el.getAttribute('title')
+            || el.closest('figure')?.querySelector('figcaption')?.textContent || '').trim()
+        report('image', {
+            data: base64(new Uint8Array(await blob.arrayBuffer())),
+            type: blob.type,
+            description: description || null,
+        })
+    } catch (e) {
+        report('error', { message: 'image: ' + String(e?.stack ?? e) })
+    } finally {
+        openingImage = false
+    }
+}
+
+// Set by a long press that opened a picture, so the click that follows it does nothing.
+let longPressed = false
+const listenForLongPresses = doc => {
+    let timer = 0
+    let start = null
+    const cancel = () => {
+        clearTimeout(timer)
+        start = null
+    }
+    doc.addEventListener('touchstart', e => {
+        cancel()
+        longPressed = false
+        const image = e.touches.length === 1 ? imageAt(e.target) : null
+        if (!image) return
+        start = { x: e.touches[0].screenX, y: e.touches[0].screenY }
+        timer = setTimeout(() => {
+            start = null
+            longPressed = true
+            openImage(image)
+        }, LONG_PRESS_MS)
+    }, { passive: true })
+    doc.addEventListener('touchmove', e => {
+        const t = e.touches[0]
+        if (start && t && Math.hypot(t.screenX - start.x, t.screenY - start.y) > LONG_PRESS_SLOP) cancel()
+    }, { passive: true })
+    doc.addEventListener('touchend', cancel, { passive: true })
+    doc.addEventListener('touchcancel', cancel, { passive: true })
+    // No system menu (or drag) for a held picture: the viewer has Save and Share.
+    doc.addEventListener('contextmenu', e => {
+        if (imageAt(e.target)) e.preventDefault()
+    })
+}
 
 // --- In-book search ---
 // foliate's own search opens every chapter with a locale-aware segmenter and is far too slow for a
@@ -993,6 +1196,8 @@ const loadBook = () => bookLoad ??= (async () => {
     await view.open(book)
     view.renderer.addEventListener('scroll', showScrollbar)
     report('view-open')
+    const pages = pageList(book)
+    if (pages.length) report('page-list', { pages })
     return book
 })()
 

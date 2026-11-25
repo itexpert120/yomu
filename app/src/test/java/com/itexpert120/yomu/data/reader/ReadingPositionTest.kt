@@ -280,6 +280,25 @@ class ReadingPositionTest {
         assertNull(ReadingPosition(listOf(section("a", 0)), listOf("x"), listOf(1), ReaderLayout.Scroll).chapterTarget(0.5))
     }
 
+    @Test
+    fun reportsTextLeftInTheChapterAndTheBook() {
+        // Two chapters: resources of 10 and 30 KB, then a 60 KB one.
+        val position = ReadingPosition(
+            listOf(section("one", 0), section("two", 2)),
+            listOf("a", "b", "c"),
+            listOf(10, 30, 60),
+            ReaderLayout.Scroll,
+        )
+        position.onScrollMeasured("b", 0.5)
+
+        val snapshot = position.onLocator("b", 0.5, null, null)
+
+        // 10 + 15 KB read; 15 KB left of chapter one; 75 KB left of the book.
+        assertEquals(25.0, snapshot.bookSizeRead!!, 0.0001)
+        assertEquals(15.0, snapshot.chapterSizeLeft!!, 0.0001)
+        assertEquals(75.0, snapshot.bookSizeLeft!!, 0.0001)
+    }
+
     private fun assertTarget(href: String, progression: Double, actual: Pair<String, Double>?) {
         assertEquals(href, actual?.first)
         assertEquals(progression, actual!!.second, 0.0001)

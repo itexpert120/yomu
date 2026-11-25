@@ -117,6 +117,9 @@ internal class ReadingPosition<T>(
             completedChapterId = completedSectionId,
             completedSharedChapterIds = completedSectionId?.let { sectionsSharingStart[it] }.orEmpty(),
             completed = metrics.completed,
+            chapterSizeLeft = metrics.sectionSizeLeft,
+            bookSizeLeft = (metrics.totalSize - metrics.coordinate).coerceAtLeast(0.0),
+            bookSizeRead = metrics.coordinate,
         )
     }
 
@@ -215,6 +218,10 @@ internal data class PositionSnapshot(
     val completedChapterId: String?,
     val completedSharedChapterIds: List<String>,
     val completed: Boolean,
+    // Resource weight (KB of text files) left in the section and the book, and before this point.
+    val chapterSizeLeft: Double? = null,
+    val bookSizeLeft: Double? = null,
+    val bookSizeRead: Double? = null,
 ) {
     fun toReaderLocator(locatorJson: String) = ReaderLocator(
         locatorJson = locatorJson,
@@ -231,6 +238,9 @@ internal data class PositionSnapshot(
         completedChapterId = completedChapterId,
         completedSharedChapterIds = completedSharedChapterIds,
         completed = completed,
+        chapterSizeLeft = chapterSizeLeft,
+        bookSizeLeft = bookSizeLeft,
+        bookSizeRead = bookSizeRead,
     )
 }
 
@@ -244,6 +254,10 @@ private data class LogicalProgress(
     val sectionIndex: Int,
     val sectionProgress: Double?,
     val completed: Boolean,
+    // Weighted position, the book's total weight, and the weight left in the section.
+    val coordinate: Double = 0.0,
+    val totalSize: Double = 0.0,
+    val sectionSizeLeft: Double? = null,
 )
 
 /** Position-weighted progress through the book and its logical sections. */
@@ -290,10 +304,17 @@ private fun calculateLogicalProgress(
             if (reachedActualEnd) 1.0 else raw.coerceAtMost(0.998)
         }
     }
+    val sectionSizeLeft = sections.getOrNull(sectionIndex)?.let {
+        val end = starts.getOrNull(sectionIndex + 1) ?: totalWeight
+        (end - coordinate).coerceAtLeast(0.0)
+    }
     return LogicalProgress(
         bookProgress = (coordinate / totalWeight).coerceIn(0.0, 1.0),
         sectionIndex = sectionIndex,
         sectionProgress = sectionProgress,
         completed = resourceIndex == weights.lastIndex && resourceProgress >= 0.999,
+        coordinate = coordinate,
+        totalSize = totalWeight,
+        sectionSizeLeft = sectionSizeLeft,
     )
 }
