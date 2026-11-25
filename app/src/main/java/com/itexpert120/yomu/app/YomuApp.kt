@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itexpert120.yomu.app.navigation.LocalYomuBottomChromeInset
+import com.itexpert120.yomu.app.navigation.LocalYomuContentReady
 import com.itexpert120.yomu.app.navigation.YomuBottomChromeInset
 import com.itexpert120.yomu.app.navigation.YomuNavHost
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
@@ -49,6 +50,8 @@ fun YomuApp(
     externalOpenViewModel: ExternalOpenViewModel,
     onResolvedThemeChange: (YomuThemeMode) -> Unit,
     onSplashThemeChange: (ThemePreference, Boolean) -> Unit,
+    // The start screen has real content to show; the splash can hand over to it.
+    onContentReady: () -> Unit = {},
 ) {
     val appearance by appViewModel.appearance.collectAsStateWithLifecycle()
     val preference = appearance.themePreference
@@ -80,7 +83,10 @@ fun YomuApp(
         ) {
             // The top-level navigation bar reports how much of the bottom it covers, so app-wide
             // notices float just above it (and drop to the gesture area while it's away).
-            CompositionLocalProvider(LocalYomuBottomChromeInset provides bottomChrome) {
+            CompositionLocalProvider(
+                LocalYomuBottomChromeInset provides bottomChrome,
+                LocalYomuContentReady provides onContentReady,
+            ) {
                 YomuNavHost(
                     appViewModel = appViewModel,
                     externalOpenViewModel = externalOpenViewModel,

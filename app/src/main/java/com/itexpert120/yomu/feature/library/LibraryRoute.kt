@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itexpert120.yomu.app.navigation.LocalYomuContentReady
 
 /**
  * Stateful entry point for the library: binds [LibraryViewModel], owns the SAF import launcher,
@@ -28,6 +29,10 @@ fun LibraryRoute(
     // Selection swaps the navigation bar for its toolbar, and search takes the whole screen.
     val barHidden = state.selectionMode || state.searchActive
     LaunchedEffect(barHidden) { onSelectionModeChange(barHidden) }
+    // The splash stays up until the library has its books, so the first frame it hands over to is
+    // the real library (pile and shelf in place) rather than a skeleton that then swaps.
+    val contentReady = LocalYomuContentReady.current
+    LaunchedEffect(state.isLoading) { if (!state.isLoading) contentReady() }
     LaunchedEffect(state.isLoading, state.continueReading?.id) {
         if (!state.isLoading) viewModel.onLibraryShown(state.continueReading?.id)
     }
