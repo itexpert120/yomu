@@ -288,6 +288,40 @@ globalThis.yomuSelection = () => {
     return null
 }
 
+/**
+ * The position on screen in a form other layouts can find again: { index, cfi, before, highlight,
+ * after } — the text at the top of the screen as it stands in the book (whitespace untouched), for
+ * an engine that anchors on text rather than CFIs. Null before the book shows.
+ */
+globalThis.yomuPortable = () => {
+    const location = view.lastLocation
+    const range = location?.range
+    if (!shown || !range || !location.cfi) return null
+    const index = view.renderer?.getContents()?.[0]?.index
+    const doc = range.startContainer.ownerDocument
+    const visible = range.toString()
+    const lead = visible.length - visible.trimStart().length
+    const highlight = visible.slice(lead, lead + 80).trimEnd()
+    if (!highlight || !doc?.body) return { index, cfi: location.cfi }
+    const preceding = doc.createRange()
+    preceding.setStart(doc.body, 0)
+    preceding.setEnd(range.startContainer, range.startOffset)
+    const before = (preceding.toString() + visible.slice(0, lead)).slice(-32)
+    const after = visible.slice(lead + highlight.length, lead + highlight.length + 32)
+    return { index, cfi: location.cfi, before, highlight, after }
+}
+
+/** Whether the page still shows a chapter: { shown, index, content }. */
+globalThis.yomuAlive = () => {
+    const contents = view.renderer?.getContents()?.[0]
+    const body = contents?.doc?.body
+    return {
+        shown,
+        index: contents?.index ?? -1,
+        content: !!body && (!!body.textContent.trim() || !!body.querySelector('img, svg, image, video')),
+    }
+}
+
 globalThis.yomuClearSelection = () => {
     for (const { doc } of view.renderer?.getContents() ?? []) doc.getSelection()?.removeAllRanges()
 }

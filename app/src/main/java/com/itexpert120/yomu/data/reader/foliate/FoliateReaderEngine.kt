@@ -58,13 +58,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 import kotlin.math.ceil
 
 /**
@@ -319,6 +322,8 @@ private class FoliateReaderSession(
 
     override val title: String = book.title ?: "Reading"
 
+    private val main = Handler(Looper.getMainLooper())
+
     private val _currentLocator = MutableStateFlow<ReaderLocator?>(null)
     override val currentLocator: StateFlow<ReaderLocator?> = _currentLocator.asStateFlow()
 
@@ -433,9 +438,12 @@ private class FoliateReaderSession(
         return created
     }
 
-    private fun onRendererGone() {
+    private fun onRendererGone() = rebuild("Reader: WebView renderer was killed; rebuilt the page view")
+
+    /** Replaces the page with a fresh one at [target] (the old one is dead or not answering). */
+    private fun rebuild(reason: String) {
         if (closed) return
-        crashLog.note("Reader: WebView renderer was killed; rebuilt the page view")
+        crashLog.note(reason)
         // A search running in the old page ends with the hits it had.
         activeSearch?.events?.close()
         reader?.close()
@@ -645,7 +653,65 @@ private class FoliateReaderSession(
 
     // endregion
 
-    override fun onForegroundResumed() = Unit
+    // region Session hooks
+
+    /**
+     * Back from the background: a killed renderer is rebuilt by [onRendererGone]; this also catches
+     * a page that no longer answers (rebuilt) or that lost its chapter (sent back to [target]).
+     */
+    override fun onForegroundResumed() {
+        val current = reader ?: return
+        if (_renderState.value !is ReaderRenderState.Ready) return
+        var answered = false
+        val unresponsive = Runnable {
+            if (answered || reader !== current) return@Runnable
+            Log.w(TAG, "Page didn't answer after returning to the foreground")
+            // Killing the renderer rebuilds through onRendererGone.
+            if (!current.terminateRenderer()) rebuild("Reader: the page stopped responding; rebuilt the page view")
+        }
+        main.postDelayed(unresponsive, ALIVE_TIMEOUT_MS)
+        current.evaluate("globalThis.yomuAlive?.()") { result ->
+            answered = true
+            main.removeCallbacks(unresponsive)
+            if (reader !== current || closed) return@evaluate
+            val state = result?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return@evaluate
+            if (state.optBoolean("shown") && !state.optBoolean("content")) {
+                Log.w(TAG, "Page lost its chapter in the background; reopening it")
+                current.goTo(target.toString())
+            }
+        }
+    }
+
+    /**
+     * The current locator plus the text at the top of the screen (`text.before/highlight/after`,
+     * as it stands in the book). The CFI already survives other screens and fonts here; the text
+     * lets an engine that anchors on text (Readium) land on the same paragraph.
+     */
+    override suspend fun portableLocator(): String? = withContext(Dispatchers.Main.immediate) {
+        val current = _currentLocator.value ?: return@withContext null
+        val reader = reader ?: return@withContext current.locatorJson
+        val result = withTimeoutOrNull(PORTABLE_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                reader.evaluate("globalThis.yomuPortable?.() ?? null") { continuation.resume(it) }
+            }
+        }
+        val portable = result?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return@withContext current.locatorJson
+        val locator = runCatching { JSONObject(current.locatorJson) }.getOrNull() ?: return@withContext current.locatorJson
+        if (book.indexOfHref(locator.optString("href")) != portable.optInt("index", -1)) return@withContext current.locatorJson
+        val highlight = portable.optString("highlight")
+        if (highlight.isEmpty()) return@withContext current.locatorJson
+        locator.optJSONObject("locations")?.put("cfi", portable.optString("cfi"))
+        locator.put(
+            "text",
+            JSONObject()
+                .put("before", portable.optString("before"))
+                .put("highlight", highlight)
+                .put("after", portable.optString("after")),
+        )
+        locator.toString().also { if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "portable $it") }
+    }
+
+    // endregion
 
     // region Selection and highlights
 
@@ -873,5 +939,9 @@ private class FoliateReaderSession(
         const val FIRST_SCAN_BLOCK = 32
         const val MAX_SCAN_BLOCK = 256
         const val SCAN_WORKERS = 4
+
+        // How long a page may take to answer before it's taken for hung (it normally takes ms).
+        const val ALIVE_TIMEOUT_MS = 4_000L
+        const val PORTABLE_TIMEOUT_MS = 1_000L
     }
 }
