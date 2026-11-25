@@ -10,8 +10,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
 import androidx.core.view.doOnLayout
 import androidx.fragment.app.FragmentContainerView
@@ -339,7 +337,6 @@ private class FoliateReaderSession(
     private var readerActivity: Activity? = null
     private var hostContainer: FragmentContainerView? = null
     private var hostFragmentManager: FragmentManager? = null
-    private var immersive = false
     private var closed = false
 
     // Where to (re)open the page: the start position, then wherever the reader last was.
@@ -383,11 +380,8 @@ private class FoliateReaderSession(
         }
     }
 
-    override fun setImmersive(immersive: Boolean) {
-        if (this.immersive == immersive) return
-        this.immersive = immersive
-        reader?.view?.let(ViewCompat::requestApplyInsets)
-    }
+    // The reader screen lays the page out around its own chrome in both modes.
+    override fun setImmersive(immersive: Boolean) = Unit
 
     override fun unhost() {
         val fragmentManager = hostFragmentManager ?: return
@@ -410,12 +404,9 @@ private class FoliateReaderSession(
         created.isLookupPhrase = isLookupPhrase
         created.onSelection = ::onSelection
         created.userFonts = userFonts(settings)
-        // Not immersive, the page sits between the system bars, as Readium's did.
-        ViewCompat.setOnApplyWindowInsetsListener(created.view) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            if (immersive) view.setPadding(0, 0, 0, 0) else view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
-        }
+        // The reader screen already reserves room for its bars around this view. Padding it again for
+        // the system bars would resize the page as they hide just after it opens, and the book would
+        // re-lay out under the reader (a visible jump from the restored page).
         // Lay the book out at the page's real size: start once the view has been laid out.
         created.view.doOnLayout {
             if (reader === created) {

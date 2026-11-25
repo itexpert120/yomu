@@ -286,7 +286,8 @@ globalThis.yomuClearSelection = () => {
     for (const { doc } of view.renderer?.getContents() ?? []) doc.getSelection()?.removeAllRanges()
 }
 
-globalThis.yomuApplySettings = next => {
+globalThis.yomuApplySettings = async next => {
+    await preloadFonts(next)
     settings = next
     applyPageColor()
     if (view.renderer) configure(view.renderer)
@@ -325,10 +326,31 @@ globalThis.yomuLoadBook = () => {
     loadBook().catch(e => report('error', { message: String(e?.stack ?? e) }))
 }
 
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve))
+const within = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))])
+
+/**
+ * Fetches the reading font's files into this page's cache, so a chapter's first layout already
+ * has them. Otherwise the chapter lays out in a fallback face, then reflows when the font arrives
+ * and foliate re-anchors: the page visibly shifts after it shows.
+ */
+const preloadFonts = s => within(Promise.all((s.font?.faces ?? []).map(f =>
+    new FontFace(s.font.family, `url("${f.src}")`, { style: f.style ?? 'normal', weight: f.weight ?? 'normal' })
+        .load().catch(() => null))), 1500)
+
+/** Waits until the shown chapter's fonts are in and foliate has re-laid it out. */
+const settled = async () => {
+    const doc = view.renderer?.getContents()?.[0]?.doc
+    if (doc?.fonts) await within(doc.fonts.ready, 1500)
+    // foliate expands and re-anchors on fonts.ready; give that a frame to land.
+    await nextFrame()
+    await nextFrame()
+}
+
 const open = async ({ start, settings: initial }) => {
     settings = initial ?? {}
     applyPageColor()
-    const book = await loadBook()
+    const [book] = await Promise.all([loadBook(), preloadFonts(settings)])
     configure(view.renderer)
     try {
         await goTo(start)
@@ -337,6 +359,8 @@ const open = async ({ start, settings: initial }) => {
         report('error', { message: 'start: ' + String(e?.stack ?? e) })
         await view.renderer.goTo({ index: start?.index ?? 0, anchor: 0 })
     }
+    // Reveal only the final layout: no reflow after the page shows.
+    await settled()
     shown = true
     if (view.lastLocation) reportLocation(view.lastLocation)
 }

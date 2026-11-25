@@ -408,7 +408,10 @@ fun ReaderScreen(
                 // Do not create reader surfaces during the initial open. Once created, keep them
                 // composed through navigator reflows so an open sheet is not dismissed and rebuilt
                 // every time an in-reader display preference changes.
-                if (readerSurfacesAvailable) {
+                // The footer is composed from the start (invisible until the page is ready) so its
+                // height is reserved before the book's first layout. Measured only after the open, it
+                // shrank the page right after it appeared and the book re-laid out under the reader.
+                run {
                     if (reading.settings.showFooter) {
                         // Keep the footer composed even while hidden so its measured height is always known —
                         // the controls bar can anchor above it on the first immersive reveal, and the EPUB
@@ -443,12 +446,13 @@ fun ReaderScreen(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .graphicsLayer {
-                                    alpha = footerAlpha.coerceIn(0f, 1f)
+                                    alpha = if (readerSurfacesAvailable) footerAlpha.coerceIn(0f, 1f) else 0f
                                     translationY = footerSlidePx
                                 },
                         )
                     }
-
+                }
+                if (readerSurfacesAvailable) {
                     // Extra-dim scrim over the whole reading surface (content + chrome) for going darker
                     // than the device minimum. Decorative only — no pointerInput, so taps pass through.
                     // The level is read while drawing, so dragging the slider only redraws this layer.
