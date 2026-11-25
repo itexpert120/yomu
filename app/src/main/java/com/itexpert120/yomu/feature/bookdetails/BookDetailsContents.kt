@@ -44,7 +44,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -175,21 +174,17 @@ internal fun Modifier.contentsTopFade(edge: ContentsEdge, color: Color): Modifie
     if (strength > 0f) drawEdgeFade(color, top = 0f, height = fade, strength = strength)
 }
 
-/** A band of [color] easing from [strength] at [top] to nothing [height] below it. */
+/**
+ * Stack's one scroll-edge treatment: a hairline in [color] at [top], shown at [strength]. [height]
+ * is only how far content must slide under before the rule is fully drawn.
+ */
+@Suppress("UNUSED_PARAMETER")
 private fun DrawScope.drawEdgeFade(color: Color, top: Float, height: Float, strength: Float) {
+    val line = 1.dp.toPx()
     drawRect(
-        brush = Brush.verticalGradient(
-            *Array(7) { step ->
-                val t = step / 6f
-                val inward = 1f - t
-                // Smoothstep, so there is no visible line where the fade ends.
-                t to color.copy(alpha = color.alpha * strength * inward * inward * (3f - 2f * inward))
-            },
-            startY = top,
-            endY = top + height,
-        ),
-        topLeft = Offset(0f, top),
-        size = Size(size.width, height),
+        color = color.copy(alpha = color.alpha * strength),
+        topLeft = Offset(0f, if (top >= size.height) top - line else top),
+        size = Size(size.width, line),
     )
 }
 
@@ -202,6 +197,7 @@ private fun ContentsHeader(
 ) {
     val stack = YomuTheme.stack
     val sheet = MaterialTheme.colorScheme.surface
+    val rule = stack.rule
     val ready = !toc.loading && toc.items.isNotEmpty()
     Row(
         // Opaque: as a pinned header, rows scrolling beneath must not show through it.
@@ -214,10 +210,10 @@ private fun ContentsHeader(
             }
             .drawWithContent {
                 drawContent()
-                // Rows passing under the pinned header fade out beneath it instead of being cut.
+                // A hairline under the pinned header once rows pass beneath it.
                 val fade = EdgeFadeHeight.toPx()
                 val strength = (edge.underHeader() / fade).coerceIn(0f, 1f)
-                if (strength > 0f) drawEdgeFade(sheet, top = size.height, height = fade, strength = strength)
+                if (strength > 0f) drawEdgeFade(rule, top = size.height, height = fade, strength = strength)
             }
             .background(sheet)
             .padding(start = gutter, end = gutter - 6.dp, top = 12.dp, bottom = 2.dp)

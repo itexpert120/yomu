@@ -71,6 +71,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -151,6 +152,7 @@ internal fun WordLookupSheetContent(
         val language = remember(state.language) { lookupLanguageName(state.language) }
 
         val lookupMotion = MaterialTheme.motionScheme
+        val bottomInset = LocalYomuSheetBottomInset.current
         val stack = YomuTheme.stack
         val activity = LocalActivity.current
         Column(
@@ -269,13 +271,15 @@ internal fun WordLookupSheetContent(
                     (target.result as? DictionaryResult.Found)?.toBlocks().orEmpty()
                 }
                 when {
-                    target.loading -> ReaderLoadingBlock("Looking up…", horizontalPadding = 0.dp)
+                    target.loading -> ReaderLoadingBlock("Looking up…", horizontalPadding = 0.dp, modifier = Modifier.padding(bottom = bottomInset))
 
                     targetBlocks.isNotEmpty() -> LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight)),
+                            .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight) + bottomInset),
                         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.lg),
+                        // Definitions scroll on down behind the gesture bar.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = bottomInset),
                     ) {
                         items(targetBlocks) { block ->
                             when (block) {
@@ -369,7 +373,7 @@ private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
     val wiki = state.wikipedia
     val stack = YomuTheme.stack
     when (val result = wiki?.result) {
-        null -> ReaderLoadingBlock("Looking up on Wikipedia…", horizontalPadding = 0.dp)
+        null -> ReaderLoadingBlock("Looking up on Wikipedia…", horizontalPadding = 0.dp, modifier = Modifier.padding(bottom = LocalYomuSheetBottomInset.current))
 
         WikipediaResult.Error -> LookupMessage(
             icon = StackIcons.CloudOff,
@@ -393,7 +397,7 @@ private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight))
+                    .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight) + LocalYomuSheetBottomInset.current)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
@@ -430,7 +434,7 @@ private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
                     text = "From Wikipedia, the free encyclopedia · Text under CC BY-SA 4.0",
                     color = stack.faint,
                     style = StackType.Caption,
-                    modifier = Modifier.padding(bottom = YomuTheme.space.xs),
+                    modifier = Modifier.padding(bottom = YomuTheme.space.xs + LocalYomuSheetBottomInset.current),
                 )
             }
         }
@@ -467,7 +471,7 @@ private fun LookupMessage(
     val stack = YomuTheme.stack
     val activity = LocalActivity.current
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = YomuTheme.space.xxs, bottom = YomuTheme.space.xs),
+        modifier = Modifier.fillMaxWidth().padding(top = YomuTheme.space.xxs, bottom = YomuTheme.space.xs + LocalYomuSheetBottomInset.current),
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {

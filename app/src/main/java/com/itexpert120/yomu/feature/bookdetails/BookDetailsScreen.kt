@@ -103,7 +103,7 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.data.collections.Organize
@@ -245,23 +245,15 @@ fun BookDetailsScreen(
             }
 
             libraryBeside -> {
-                // The library beside the pane: a tap there closes the book, as on the tablet boards.
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClickLabel = "Close book",
-                            onClick = onBack,
-                        ),
-                )
+                // List-detail: the library beside the pane is live (navigation narrows it); this
+                // page draws only the pane, so touches outside it reach the library.
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .width(bookPaneWidth(windowWidth))
                         .fillMaxHeight()
                         .padding(top = statusTop)
+                        .bookPaneEdge()
                         .clip(RoundedCornerShape(topStart = SheetCorner))
                         .background(MaterialTheme.colorScheme.surface)
                         // The pane swallows taps so they never reach the close area beneath it.
@@ -607,7 +599,7 @@ private fun SingleColumnBody(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .contentsTopFade(edge, sheet),
+                                .contentsTopFade(edge, YomuTheme.stack.rule),
                             contentPadding = PaddingValues(top = 8.dp, bottom = navBottom + 24.dp),
                         ) {
                             item {
@@ -685,7 +677,7 @@ private fun WideBody(
                                 .width(leadingWidth)
                                 .fillMaxHeight()
                                 // The details slide under the sheet's bar: fade them at that edge.
-                                .yomuScrollEdgeShadow(top = detailsScroll.canScrollBackward)
+                                .yomuScrollEdgeRule(top = detailsScroll.canScrollBackward)
                                 .verticalScroll(detailsScroll)
                                 .padding(top = 8.dp, bottom = navBottom + 24.dp),
                         )

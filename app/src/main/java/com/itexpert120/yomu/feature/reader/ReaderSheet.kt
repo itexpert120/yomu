@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuColorPicker
@@ -58,7 +59,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
@@ -137,11 +138,11 @@ internal fun ReaderControlsSheetContent(
         Column(
             modifier = Modifier
                 .weight(1f, fill = false)
-                .yomuScrollEdgeShadow(top = scroll.canScrollBackward, bottom = scroll.canScrollForward)
+                .yomuScrollEdgeRule(top = scroll.canScrollBackward)
                 .verticalScroll(scroll)
                 // Custom theme's palettes come and go; the sheet's height follows on the spring.
                 .animateContentSize(if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.defaultSpatialSpec() else snap())
-                .padding(top = YomuTheme.space.sm, bottom = YomuTheme.space.xs),
+                .padding(top = YomuTheme.space.sm, bottom = YomuTheme.space.xs + LocalYomuSheetBottomInset.current),
         ) {
             Gutter {
                 ReaderThemeRow(s, onUpdateSettings, compact = true)

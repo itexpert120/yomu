@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuEmptyState
@@ -64,7 +65,7 @@ import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.designsystem.yomuPressable
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderTocItem
@@ -170,7 +171,8 @@ internal fun ReaderBrowseSheetContent(
     // The reader's state names the tab (the menu's Marks opens on Bookmarks); the pager follows it,
     // and reports where a swipe or tap lands so the two never disagree.
     LaunchedEffect(current) {
-        if (pager.targetPage != current.ordinal) pager.scrollToPage(current.ordinal)
+        // Only follow a change made elsewhere (the menu's Marks); never jump a page the finger holds.
+        if (!pager.isScrollInProgress && pager.targetPage != current.ordinal) pager.scrollToPage(current.ordinal)
     }
     LaunchedEffect(pager) {
         snapshotFlow { pager.settledPage }.drop(1).distinctUntilChanged().collect { currentOnSelectTab(tabs[it]) }
@@ -186,6 +188,9 @@ internal fun ReaderBrowseSheetContent(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalAlignment = Alignment.Top,
             key = { tabs[it] },
+            // Keep every tab composed: a page rebuilt mid-swipe (outline of thousands of chapters, its
+            // list re-placing at the current chapter) made the incoming tab jitter as it slid in.
+            beyondViewportPageCount = tabs.size - 1,
         ) { page ->
             when (tabs[page]) {
                 BrowseTab.Contents -> ContentsPage(
@@ -273,8 +278,8 @@ private fun ContentsPage(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
+                        .yomuScrollEdgeRule(top = listState.canScrollBackward),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp + LocalYomuSheetBottomInset.current),
                 ) {
                     contentsItems(
                         rows = rows,
@@ -304,7 +309,7 @@ private fun ContentsPage(
                     if (outline.currentSection >= 0) expanded = expanded + outline.currentSection
                     revealCurrent = true
                 },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = YomuTheme.space.md),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = YomuTheme.space.md + LocalYomuSheetBottomInset.current),
             )
         }
     }
@@ -599,8 +604,8 @@ private fun <T> GroupedList(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = YomuTheme.space.lg),
+            .yomuScrollEdgeRule(top = listState.canScrollBackward),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = YomuTheme.space.lg + LocalYomuSheetBottomInset.current),
     ) {
         if (header != null) item(key = "header", contentType = "header") { header() }
         groups.forEachIndexed { groupIndex, group ->

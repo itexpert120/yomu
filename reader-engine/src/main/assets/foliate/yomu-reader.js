@@ -156,10 +156,19 @@ const gapFor = spread => {
     const gap = settings.gap ?? '6%'
     return spread ? `${(parseFloat(gap) * SPREAD_GAP_FACTOR).toFixed(2)}%` : gap
 }
+// foliate caps a column at 720px. On a wide screen that cap, not the side gap, sets the margins, so
+// the reader's Margins setting (1 = Auto) scales it too: wider margins, a narrower column.
+const BASE_COLUMN_PX = 720
+const MIN_COLUMN_PX = 280
+const maxInlineSize = () => {
+    const m = Math.max(0.25, settings.margins ?? 1)
+    return `${Math.max(MIN_COLUMN_PX, Math.round(BASE_COLUMN_PX * Math.pow(m, -0.75)))}px`
+}
 // Set before foliate lays out: from a resize listener, which runs ahead of its resize observer.
 const configureColumns = renderer => {
     const spread = spreads()
     renderer.setAttribute('gap', gapFor(spread))
+    renderer.setAttribute('max-inline-size', maxInlineSize())
     renderer.setAttribute('max-column-count', spread ? '2' : '1')
 }
 addEventListener('resize', () => {
@@ -183,22 +192,13 @@ const columns = () => {
     return r && !r.scrolled ? Math.max(1, r.heads?.length ?? 1) : 1
 }
 
-// The hairline down a spread's gutter, like a book's fold.
-const gutter = document.createElement('div')
-gutter.id = 'yomu-gutter'
-const showGutter = () => {
-    const ink = settings.colors?.ink ?? 'gray'
-    gutter.style.background = `color-mix(in srgb, ${ink} 10%, transparent)`
-    gutter.style.display = columns() === 2 ? 'block' : 'none'
-}
-
 const applyPageColor = () => {
     document.documentElement.style.background = settings.colors?.page ?? ''
 }
 applyPageColor()
 
 const view = document.createElement('foliate-view')
-document.body.append(view, gutter)
+document.body.append(view)
 
 let firstPage = true
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -274,7 +274,6 @@ const reportLocation = detail => {
     // Counted in pages, not screens: a spread shows two, and `page` is the last one in view, so
     // what's left is what's after this screen.
     const perScreen = columns()
-    showGutter()
     report('relocate', {
         index: detail.section?.current,
         fraction: Math.min(1, Math.max(0, fraction)),
