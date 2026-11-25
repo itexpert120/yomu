@@ -149,7 +149,7 @@ internal fun LibraryPile(
         PileLayout.Tall -> TallMetrics
         else -> PhoneMetrics
     }
-    val where: (LibraryBook) -> String = { book -> chapters[book.id] ?: book.title }
+    val where: (LibraryBook) -> String = { book -> chapters[book.id]?.let(::pileChapterLabel) ?: book.title }
     val covers: @Composable () -> Unit = {
         PileCovers(
             books = books,
