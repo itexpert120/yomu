@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,9 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+/** A grid item: cover (2:3, radius 4, the static cover shadow), title 13/600 and a progress line. */
 @Composable
 fun YomuBookCard(
     title: String,
@@ -33,73 +33,32 @@ fun YomuBookCard(
     coverColors: List<Color>,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(modifier = Modifier.padding(YomuTheme.space.sm)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(BookCoverAspectRatio)
-                    .clip(MaterialTheme.shapes.large)
-                    .background(Brush.verticalGradient(coverColors))
-                    .padding(YomuTheme.space.sm),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .fillMaxWidth(0.42f)
-                        .height(3.dp)
-                        .background(Color.White.copy(alpha = 0.7f)),
-                )
-                Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                    Text(
-                        text = title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(YomuTheme.space.xxs))
-                    Text(
-                        text = author,
-                        color = Color.White.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Spacer(Modifier.height(YomuTheme.space.sm))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-            ) {
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                )
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+    val stack = YomuTheme.stack
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(YomuBookCoverAspectRatio)
+                .stackCoverShadow()
+                .clip(YomuShapeTokens.cover)
+                .background(Brush.verticalGradient(coverColors)),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(text = title, style = StackType.Label, color = stack.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text = author, style = StackType.Caption, color = stack.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
+            YomuProgressBar(progress = progress, modifier = Modifier.weight(1f))
+            Text(text = "${(progress * 100).toInt()}%", color = stack.muted, style = StackType.Caption)
         }
     }
 }
 
 /**
- * A titled settings section in the M3 Expressive settings pattern: an emphasized primary-coloured
- * header sits on the surface, and the section's rows provide their own segmented containment —
- * no card-inside-card nesting. [outlined] draws a quiet boundary for sections that need one.
+ * A titled settings section in Stack's settings list: a 13/600 muted section label (sentence case)
+ * with an optional supporting line, then the section's rows, which draw their own group card
+ * (sheet-coloured, radius 24) on the desk. [outlined] wraps the whole section in a sheet card
+ * instead, for sections whose content isn't rows.
  */
 @Composable
 fun YomuSettingGroup(
@@ -109,24 +68,32 @@ fun YomuSettingGroup(
     subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val body: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
-            YomuSectionHeader(title = title, subtitle = subtitle)
-            Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm), content = content)
+    val stack = YomuTheme.stack
+    val header: @Composable () -> Unit = {
+        Column(
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp).semantics { heading() },
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(text = title, style = StackType.Label, color = stack.muted)
+            if (subtitle != null) Text(text = subtitle, style = StackType.Supporting, color = stack.muted)
         }
     }
     if (outlined) {
-        Card(
-            modifier = modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.outlinedCardColors(),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column(Modifier.padding(YomuTheme.space.md)) { body() }
+        Column(modifier = modifier.fillMaxWidth().padding(top = YomuTheme.space.md)) {
+            header()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .background(stack.sheet)
+                    .padding(YomuTheme.space.md),
+                content = content,
+            )
         }
     } else {
-        Column(modifier = modifier.fillMaxWidth().padding(top = YomuTheme.space.xs)) { body() }
+        Column(modifier = modifier.fillMaxWidth().padding(top = YomuTheme.space.md)) {
+            header()
+            Column(content = content)
+        }
     }
 }
-
-private const val BookCoverAspectRatio = 1f / 1.6f
