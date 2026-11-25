@@ -37,6 +37,7 @@ import com.itexpert120.yomu.data.reader.ReadingPosition
 import com.itexpert120.yomu.data.reader.readium.ReadiumReaderEngine
 import com.itexpert120.yomu.reader.epub.EpubBook
 import com.itexpert120.yomu.reader.web.FoliateReader
+import com.itexpert120.yomu.reader.web.SelectionAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -67,8 +68,8 @@ import kotlin.math.ceil
  * from Readium's parser (import-time cache, or [ReadiumReaderEngine.publicationCache] on a miss), so
  * chapter read marks stay keyed the same.
  *
- * Not yet ported (no-ops for now): highlights, in-book search, the text-selection menu, footnote
- * popups, and the scroll-mode chapter rubberband.
+ * Not yet ported (no-ops for now): in-book search, footnote popups, and the scroll-mode chapter
+ * rubberband.
  */
 @Singleton
 class FoliateReaderEngine @Inject constructor(
@@ -121,6 +122,7 @@ class FoliateReaderEngine @Inject constructor(
             initialLocatorJson = request.initialLocatorJson,
             initialSettings = request.initialSettings,
             crashLog = crashLog,
+            isLookupPhrase = request.isLookupPhrase,
             newReader = ::takeWarmReader,
         )
         return ReaderOpenResult(session, cache)
@@ -304,6 +306,7 @@ private class FoliateReaderSession(
     initialLocatorJson: String?,
     initialSettings: ReaderSettings,
     private val crashLog: CrashLog,
+    private val isLookupPhrase: (String) -> Boolean,
     private val newReader: (Activity, File) -> FoliateReader,
 ) : ReaderSession {
 
@@ -318,10 +321,17 @@ private class FoliateReaderSession(
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
 
-    // Not ported yet: never emit.
-    override val selections: SharedFlow<ReaderSelection> = MutableSharedFlow<ReaderSelection>().asSharedFlow()
+    private val _selections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 1)
+    override val selections: SharedFlow<ReaderSelection> = _selections.asSharedFlow()
+
+    private val _highlightTaps = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val highlightTaps: SharedFlow<String> = _highlightTaps.asSharedFlow()
+
+    // Not ported yet: never emits.
     override val footnotes: SharedFlow<String> = MutableSharedFlow<String>().asSharedFlow()
-    override val highlightTaps: SharedFlow<String> = MutableSharedFlow<String>().asSharedFlow()
+
+    // The latest highlight set, drawn once the page shows (and again on a rebuilt page).
+    private var highlights: List<ReaderHighlight> = emptyList()
 
     private var settings = initialSettings
     private var reader: FoliateReader? = null
@@ -396,6 +406,8 @@ private class FoliateReaderSession(
         created.preload(book.file)
         created.onEvent = ::onPageEvent
         created.onRendererGone = ::onRendererGone
+        created.isLookupPhrase = isLookupPhrase
+        created.onSelection = ::onSelection
         created.userFonts = userFonts(settings)
         created.pageTurns = settings.layout == ReaderLayout.Paged
         // Not immersive, the page sits between the system bars, as Readium's did.
@@ -435,7 +447,9 @@ private class FoliateReaderSession(
             "first-page" -> {
                 ReaderOpenTrace.mark("reader.first-page")
                 _renderState.value = ReaderRenderState.Ready(_currentLocator.value?.href)
+                drawHighlights()
             }
+            "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
             "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
@@ -596,8 +610,56 @@ private class FoliateReaderSession(
 
     override fun onForegroundResumed() = Unit
 
-    // Not ported yet.
-    override fun applyHighlights(highlights: List<ReaderHighlight>) = Unit
+    // region Selection and highlights
+
+    private fun onSelection(action: SelectionAction, selection: JSONObject) {
+        val index = selection.optInt("index", -1)
+        val href = book.readingOrder.getOrNull(index) ?: return
+        val text = selection.optString("text").trim()
+        if (text.isEmpty()) return
+        val locations = JSONObject().put("cfi", selection.optString("cfi"))
+        _currentLocator.value?.takeIf { it.href == href }?.chapterProgression?.let { locations.put("progression", it) }
+        val locator = JSONObject()
+            .put("href", href)
+            .put("type", book.mediaTypes[index])
+            .put("locations", locations)
+            .put(
+                "text",
+                JSONObject()
+                    .put("before", selection.optString("before"))
+                    .put("highlight", text)
+                    .put("after", selection.optString("after")),
+            )
+        val readerAction = when (action) {
+            SelectionAction.Copy -> ReaderSelection.Action.Copy
+            SelectionAction.Highlight -> ReaderSelection.Action.Highlight
+            SelectionAction.LookUp -> ReaderSelection.Action.LookUp
+            SelectionAction.SearchWeb -> ReaderSelection.Action.SearchWeb
+            SelectionAction.ReadAloud -> ReaderSelection.Action.ReadAloud
+            SelectionAction.Share -> ReaderSelection.Action.Share
+        }
+        _selections.tryEmit(ReaderSelection(readerAction, text, locator.toString()))
+    }
+
+    override fun applyHighlights(highlights: List<ReaderHighlight>) {
+        this.highlights = highlights
+        if (_renderState.value is ReaderRenderState.Ready) drawHighlights()
+    }
+
+    // Only highlights made in this engine carry a CFI to draw; Readium's are positioned by its
+    // own text search and aren't drawn here.
+    private fun drawHighlights() {
+        val reader = reader ?: return
+        val list = org.json.JSONArray()
+        for (highlight in highlights) {
+            val cfi = runCatching { JSONObject(highlight.locatorJson).optJSONObject("locations")?.optString("cfi") }
+                .getOrNull()?.takeIf { it.isNotEmpty() } ?: continue
+            list.put(JSONObject().put("id", highlight.id).put("cfi", cfi).put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF)))
+        }
+        reader.setHighlights(list.toString())
+    }
+
+    // endregion
 
     override suspend fun search(query: String): List<ReaderSearchResult> = emptyList()
 

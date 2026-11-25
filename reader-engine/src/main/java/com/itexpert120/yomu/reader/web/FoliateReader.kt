@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.ActionMode
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
@@ -49,6 +50,12 @@ class FoliateReader(
     var onEvent: (name: String, json: String) -> Unit = { _, _ -> }
     var onRendererGone: () -> Unit = {}
 
+    /** A pick from the text-selection menu, with the page's selection (`yomuSelection()`). */
+    var onSelection: (SelectionAction, JSONObject) -> Unit = { _, _ -> }
+
+    /** Selections this is true for are phrases: the menu hides "Look up". */
+    var isLookupPhrase: (String) -> Boolean = { false }
+
     @Volatile
     private var zip: ZipFile? = null
 
@@ -74,7 +81,7 @@ class FoliateReader(
         private set
 
     @SuppressLint("SetJavaScriptEnabled")
-    val webView: WebView = WebView(contextWrapper).apply {
+    val webView: WebView = ReaderWebView(contextWrapper).apply {
         settings.javaScriptEnabled = true
         settings.allowFileAccess = false
         settings.allowContentAccess = false
@@ -172,6 +179,9 @@ class FoliateReader(
     /** Opens [epub] at the start of spine item [section], with the page's default settings. */
     fun open(epub: File, section: Int) = open(epub, "{\"start\":{\"index\":$section,\"fraction\":0}}")
 
+    /** Draws [highlightsJson] (`[{ id, cfi, color }]`), replacing the drawn set. */
+    fun setHighlights(highlightsJson: String) = call("globalThis.yomuSetHighlights?.($highlightsJson)")
+
     /** Restyles the page; [settingsJson] as `settings` in [open]. */
     fun applySettings(settingsJson: String) = webView.evaluateJavascript("globalThis.yomuApplySettings?.($settingsJson)", null)
 
@@ -202,6 +212,17 @@ class FoliateReader(
             }
         }
         onEvent(name, json)
+    }
+
+    private val selectionMenu by lazy {
+        SelectionMenu(webView, onAction = { action, selection -> onSelection(action, selection) }, hideLookUp = { isLookupPhrase(it) })
+    }
+
+    /** The WebView, with the reader's own text-selection menu in place of Chromium's. */
+    private inner class ReaderWebView(context: Context) : WebView(context) {
+        override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? = super.startActionMode(callback?.let(selectionMenu::wrap), type)
+
+        override fun startActionMode(callback: ActionMode.Callback?): ActionMode? = super.startActionMode(callback?.let(selectionMenu::wrap))
     }
 
     private inner class Bridge {

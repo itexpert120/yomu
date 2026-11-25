@@ -64,6 +64,11 @@ internal class FoliatePageTurns(
     var enabled = true
 
     private val touchSlop = ViewConfiguration.get(container.context).scaledTouchSlop
+    private val longPress = ViewConfiguration.getLongPressTimeout().toLong()
+
+    // A press held still past the long-press time is text selection: its drag extends the selection.
+    private var selecting = false
+    private var downAt = 0L
     private val minFling = ViewConfiguration.get(container.context).scaledMinimumFlingVelocity
 
     init {
@@ -235,6 +240,8 @@ internal class FoliatePageTurns(
                 downX = event.x
                 downY = event.y
                 dragging = false
+                selecting = false
+                downAt = event.eventTime
                 dragTurn = null
                 velocity?.recycle()
                 velocity = VelocityTracker.obtain().also { it.addMovement(event) }
@@ -244,7 +251,13 @@ internal class FoliatePageTurns(
                 velocity?.addMovement(event)
                 val dx = event.x - downX
                 if (!dragging) {
+                    if (selecting) return false
                     val dy = event.y - downY
+                    if (abs(dx) < touchSlop && abs(dy) < touchSlop) return false
+                    if (event.eventTime - downAt >= longPress) {
+                        selecting = true
+                        return false
+                    }
                     if (abs(dx) < touchSlop || abs(dx) < abs(dy) || turn != null || event.pointerCount > 1) return false
                     dragging = true
                     dragDir = if (dx < 0) 1 else -1

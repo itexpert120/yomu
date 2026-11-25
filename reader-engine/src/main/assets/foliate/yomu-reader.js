@@ -8,6 +8,7 @@
 // yomuApplySettings / yomuGoTo.
 import './view.js'
 import { EPUB } from './epub.js'
+import { Overlayer } from './overlayer.js'
 import { installPageTurns } from './yomu-turns.js'
 import { installStandIn } from './yomu-standin.js'
 
@@ -174,9 +175,15 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
         const paged = settings.flow !== 'scrolled' && settings.tapTurns !== false
         // The chapter frame is wider than the screen and scrolled from outside, so use screen x.
         const x = e.screenX
-        if (paged && x < innerWidth / 3) report('tap', { dir: -1 })
-        else if (paged && x > innerWidth * 2 / 3) report('tap', { dir: 1 })
-        else report('center-tap')
+        // foliate's own click listener (which finds a tapped highlight) runs after this one, so
+        // decide once it has: a tap on a highlight is the highlight's.
+        highlightTapped = false
+        setTimeout(() => {
+            if (highlightTapped) return
+            if (paged && x < innerWidth / 3) report('tap', { dir: -1 })
+            else if (paged && x > innerWidth * 2 / 3) report('tap', { dir: 1 })
+            else report('center-tap')
+        })
     })
 })
 
@@ -212,6 +219,73 @@ const reportLocation = detail => {
         scrolled,
         title: detail.tocItem?.label ?? null,
     })
+}
+
+// --- Selection and highlights ---
+
+let highlightTapped = false
+let highlights = new Map() // cfi -> { id, cfi, color }
+
+view.addEventListener('draw-annotation', ({ detail: { draw, annotation } }) => {
+    draw(Overlayer.highlight, { color: annotation.color })
+})
+view.addEventListener('show-annotation', ({ detail: { value } }) => {
+    const highlight = highlights.get(value)
+    if (!highlight) return
+    highlightTapped = true
+    report('highlight-tap', { id: highlight.id })
+})
+// A chapter's highlights are drawn when it loads (foliate draws only into loaded chapters).
+view.addEventListener('create-overlay', ({ detail: { index } }) => {
+    for (const h of highlights.values()) {
+        if (h.index === index) view.addAnnotation({ value: h.cfi, color: h.color }).catch(() => {})
+    }
+})
+
+/** Replaces the drawn highlights with [list]: [{ id, cfi, color }]. */
+globalThis.yomuSetHighlights = list => {
+    const next = new Map(list.map(h => [h.cfi, h]))
+    for (const cfi of highlights.keys()) {
+        if (!next.has(cfi)) view.deleteAnnotation({ value: cfi }).catch(() => {})
+    }
+    for (const h of next.values()) {
+        try {
+            h.index = view.resolveNavigation(h.cfi)?.index
+        } catch {
+            h.index = null
+        }
+        const old = highlights.get(h.cfi)
+        if (!old || old.color !== h.color) view.addAnnotation({ value: h.cfi, color: h.color }).catch(() => {})
+    }
+    highlights = next
+}
+
+const textAround = (range, length = 40) => {
+    const before = range.startContainer.nodeType === Node.TEXT_NODE
+        ? range.startContainer.data.slice(Math.max(0, range.startOffset - length), range.startOffset) : ''
+    const after = range.endContainer.nodeType === Node.TEXT_NODE
+        ? range.endContainer.data.slice(range.endOffset, range.endOffset + length) : ''
+    return { before, after }
+}
+
+/** The current text selection: { index, cfi, text, before, after, fraction }, or null. */
+globalThis.yomuSelection = () => {
+    for (const { doc, index } of view.renderer?.getContents() ?? []) {
+        const sel = doc.getSelection()
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) continue
+        const range = sel.getRangeAt(0)
+        return {
+            index,
+            cfi: view.getCFI(index, range),
+            text: sel.toString(),
+            ...textAround(range),
+        }
+    }
+    return null
+}
+
+globalThis.yomuClearSelection = () => {
+    for (const { doc } of view.renderer?.getContents() ?? []) doc.getSelection()?.removeAllRanges()
 }
 
 globalThis.yomuApplySettings = next => {
