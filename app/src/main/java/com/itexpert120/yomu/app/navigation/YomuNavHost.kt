@@ -20,11 +20,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -48,6 +50,7 @@ import androidx.savedstate.compose.LocalSavedStateRegistryOwner
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.core.designsystem.YomuMotion
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.feature.about.AboutRoute
@@ -66,7 +69,6 @@ import com.itexpert120.yomu.feature.sync.SyncRoute
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @Composable
 fun YomuNavHost(
@@ -318,7 +320,7 @@ private fun LibraryLayer(
     val top = current?.destination
     val homeOnTop = top?.hasRoute<Home>() == true
     val shown = visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
-    val besidePane = top?.hasRoute<BookDetails>() == true && pane.openness != null
+    val besidePane = top?.hasRoute<BookDetails>() == true && pane.narrow
     val back = rememberNavigationEventDispatcherOwner(enabled = homeOnTop)
     val density = LocalDensity.current
     // The library's lifecycle is its own, not the Home entry's (which Navigation stops whenever a
@@ -337,15 +339,18 @@ private fun LibraryLayer(
         LocalSavedStateRegistryOwner provides home,
         LocalNavigationEventDispatcherOwner provides back,
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val paneWidthPx = with(density) { bookPaneWidth(maxWidth).roundToPx() }
+        // The desk shows in the gap between the library's sheet and a book pane (Stack's tablet board).
+        val desk = YomuTheme.stack.desk
+        BoxWithConstraints(Modifier.fillMaxSize().drawBehind { if (shown) drawRect(desk) }) {
+            // Beside a pane the library ends the board's gap (16dp, as its sheet keeps from the rail)
+            // short of it. Read while laying out, and it changes once per pane move.
+            val roomPx = with(density) { (bookPaneWidth(maxWidth) + BookPaneGap).roundToPx() }
             Box(
                 Modifier
                     .fillMaxSize()
                     .layout { measurable, constraints ->
                         val full = constraints.maxWidth
-                        val open = pane.openness?.invoke() ?: 0f
-                        val width = (full - (paneWidthPx * open).roundToInt()).coerceIn(0, full)
+                        val width = if (pane.narrow) (full - roomPx).coerceIn(0, full) else full
                         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
                         layout(full, placeable.height) { placeable.placeRelative(0, 0) }
                     }
@@ -355,6 +360,9 @@ private fun LibraryLayer(
         }
     }
 }
+
+/** The desk between the library's sheet and a book pane beside it. */
+private val BookPaneGap = 16.dp
 
 /** The library layer's lifecycle (see [LibraryLayer]). */
 private class LibraryLifecycleOwner : LifecycleOwner {

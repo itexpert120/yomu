@@ -45,13 +45,30 @@ import kotlinx.coroutines.launch
 internal const val SheetDim = 0.2f
 
 /**
- * How far the book pane beside the library (medium widths and up) is open: 0 closed, 1 fully in.
- * The book's frame publishes it while it is composed; the library reads it while laying out and
- * narrows its column by that share of the pane's width, so the two move as one (list-detail).
+ * Whether the library makes room for a book pane beside it (medium widths and up). The book's
+ * frame publishes it; the library reads it while laying out. It flips once per move — on as a pane
+ * starts opening, off as one starts closing (or a back gesture starts pulling it) — never per
+ * frame, so the library is laid out once per move rather than every frame of it; the pane itself
+ * moves by translation only. Only the page that set it can clear it, so a book swapped into the
+ * pane (two book pages briefly composed) never leaves the library full width.
  */
 @Stable
 internal class BookPaneSpace {
-    var openness: (() -> Float)? by mutableStateOf(null)
+    var narrow by mutableStateOf(false)
+        private set
+    private var owner: Any? = null
+
+    fun publish(by: Any, narrow: Boolean) {
+        owner = by
+        this.narrow = narrow
+    }
+
+    fun release(by: Any) {
+        if (owner === by) {
+            owner = null
+            narrow = false
+        }
+    }
 }
 
 /**
@@ -136,7 +153,6 @@ internal fun AnimatedContentScope.BookSheetFrame(
     // Which move is running is decided by navigation in the same pass, so it is read while
     // drawing: closing onto the library (also while a cancelled back gesture retraces), or
     // opening over it.
-    // (Live reads, not the composition's `leaving`: the library calls these through [openness].)
     fun leavingNow(): Boolean = transition.targetState == EnterExitState.PostExit
     fun closing(): Boolean = leavingNow() && motion.popping
     fun opening(): Boolean = !leavingNow() && motion.sheetEnter
@@ -153,13 +169,17 @@ internal fun AnimatedContentScope.BookSheetFrame(
         return if (extent <= 0f) moved else (held + (extent - held) * moved) / extent
     }
 
-    // The library beside a pane narrows with it. Only this page's own value is ever cleared, so a
-    // book swapped in place (two of these briefly composed) never leaves the library full width.
-    val openness = remember { { (1f - travel(1f)).coerceIn(0f, 1f) } }
-    DisposableEffect(paneMode) {
-        if (paneMode) pane.openness = openness
-        onDispose { if (pane.openness === openness) pane.openness = null }
+    // The library makes room as the pane starts opening (its grid reflows once, items gliding to
+    // their new places, while the pane slides into the space) and takes the room back as a close
+    // starts, a frame after the pop so that its one relayout doesn't share the pop's frame; the
+    // widened library is then uncovered as the pane slides away. A cancelled back gesture gives
+    // the room back to the pane.
+    val token = remember { Any() }
+    LaunchedEffect(paneMode, leaving) {
+        if (leaving) withFrameNanos { }
+        pane.publish(token, paneMode && !(leaving && motion.popping))
     }
+    DisposableEffect(token) { onDispose { pane.release(token) } }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val besideLibrary = paneMode && bookPaneBesideLibrary(maxWidth)
