@@ -26,7 +26,22 @@ internal class BackSlide(private val nowNanos: () -> Long = System::nanoTime) {
     private var lastNanos = 0L
     private var velocity = 0f
 
+    // The last answer: a frame can ask more than once (the book pane and the library beside it).
+    private var lastIn = Float.NaN
+    private var lastDragging = false
+    private var lastTap = false
+    private var lastOut = 0f
+
     fun position(clock: Float, dragging: Boolean, tap: Boolean): Float {
+        if (clock == lastIn && dragging == lastDragging && tap == lastTap) return lastOut
+        lastIn = clock
+        lastDragging = dragging
+        lastTap = tap
+        lastOut = compute(clock, dragging, tap)
+        return lastOut
+    }
+
+    private fun compute(clock: Float, dragging: Boolean, tap: Boolean): Float {
         val t = clock.coerceIn(0f, 1f)
         if (t <= 0f) {
             // At rest: nothing from an earlier back carries over.

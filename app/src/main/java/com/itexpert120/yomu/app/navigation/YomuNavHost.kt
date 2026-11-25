@@ -4,7 +4,12 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,11 +17,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -26,13 +37,18 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
+import androidx.savedstate.compose.LocalSavedStateRegistryOwner
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
+import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.feature.about.AboutRoute
 import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
+import com.itexpert120.yomu.feature.bookdetails.bookPaneWidth
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
 import com.itexpert120.yomu.feature.library.LibraryRoute
 import com.itexpert120.yomu.feature.reader.FontLibraryRoute
@@ -45,6 +61,7 @@ import com.itexpert120.yomu.feature.sync.SyncRoute
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun YomuNavHost(
@@ -81,14 +98,24 @@ fun YomuNavHost(
     val motionEnabled = transitions.motionEnabled
     val layoutDirection = transitions.layoutDirection
 
-    // Like Mihon, Home owns both the top-level content and its navigation chrome. The root
-    // transition therefore moves the whole Home frame—including the bar or rail—to a child screen.
     val backMotion = remember { BackMotion() }
     TrackBackMotion(backMotion, navController)
 
-    // The library as it looked when a book opened: the book sheet stands on it (BookSheetFrame).
-    val libraryUnderlay = remember { LibraryUnderlay() }
+    // How far a book pane beside the library is open; the library narrows with it.
+    val bookPane = remember { BookPaneSpace() }
     val captureScope = rememberCoroutineScope()
+
+    // A book opens over (phone) or beside (pane) the library. With a book pane already open,
+    // another book swaps into it in place instead of stacking a second one.
+    fun openDetails(bookId: String) {
+        val top = navController.currentBackStackEntry ?: return
+        if (top.destination.hasRoute<BookDetails>()) {
+            if (top.toRoute<BookDetails>().bookId == bookId) return
+            navController.navigate(BookDetails(bookId)) { popUpTo<BookDetails> { inclusive = true } }
+        } else {
+            navController.navigate(BookDetails(bookId))
+        }
+    }
 
     // Every in-app back (a back button, the book sheet's close or drag, the library beside a book
     // pane): it pops now, or — while the page is still opening — as soon as it has settled, so a
@@ -123,129 +150,189 @@ fun YomuNavHost(
         bookIsPhoneSheet = bookIsPhoneSheet,
     )
 
-    NavHost(
-        navController = navController,
-        startDestination = Home,
-        modifier = modifier,
-        enterTransition = {
-            // A book opens as a sheet over the library (BookSheetFrame moves it); everything else pushes.
-            when {
-                targetState.destination.hasRoute<BookDetails>() -> {
-                    backMotion.sheetEnter = initialState.id != targetState.id
-                    EnterTransition.None
+    // The library (Home: the top-level shell with its tabs, bar or rail) is composed once, under the
+    // NavHost, for the life of the app: Home is an empty page that only lets it show through. So the
+    // library is never torn down while a book is open, and comes back exactly as it was — no
+    // recreation work, no unsettled first frame — and a book pane can sit beside it, live.
+    Box(modifier) {
+        NavHost(
+            navController = navController,
+            startDestination = Home,
+            modifier = Modifier.fillMaxSize().zIndex(1f),
+            enterTransition = {
+                // A book opens as a sheet over the library (BookSheetFrame moves it); everything else pushes.
+                when {
+                    // Another book swapped into an open pane: the content crossfades in place.
+                    targetState.destination.hasRoute<BookDetails>() && initialState.destination.hasRoute<BookDetails>() -> {
+                        backMotion.sheetEnter = false
+                        if (motionEnabled && initialState.id != targetState.id) fadeIn(YomuMotion.scheme.defaultEffectsSpec()) else EnterTransition.None
+                    }
+                    targetState.destination.hasRoute<BookDetails>() -> {
+                        backMotion.sheetEnter = initialState.id != targetState.id
+                        EnterTransition.None
+                    }
+                    // ReaderEntranceFrame draws the Resume motion; with animations off it is a crossfade.
+                    initialState.id != targetState.id && readerEntrance(initialState.destination, targetState.destination) != null ->
+                        if (motionEnabled) EnterTransition.None else fadeIn(tween(ResumeCrossfadeMillis))
+                    else -> transitions.pushEnter(this)
                 }
-                // ReaderEntranceFrame draws the Resume motion; with animations off it is a crossfade.
-                initialState.id != targetState.id && readerEntrance(initialState.destination, targetState.destination) != null ->
-                    if (motionEnabled) EnterTransition.None else fadeIn(tween(ResumeCrossfadeMillis))
-                else -> transitions.pushEnter(this)
+            },
+            exitTransition = {
+                backMotion.forward(changesEntry = initialState.id != targetState.id)
+                when {
+                    targetState.destination.hasRoute<BookDetails>() && initialState.destination.hasRoute<BookDetails>() ->
+                        if (motionEnabled && initialState.id != targetState.id) fadeOut(YomuMotion.scheme.fastEffectsSpec()) else ExitTransition.None
+                    // The library holds still under an opening book; only the sheet moves.
+                    targetState.destination.hasRoute<BookDetails>() && initialState.id != targetState.id && motionEnabled ->
+                        ExitTransition.KeepUntilTransitionsFinished
+                    // Resume: the page underneath stays until the reader has covered it.
+                    initialState.id != targetState.id && readerEntrance(initialState.destination, targetState.destination) != null ->
+                        ExitTransition.KeepUntilTransitionsFinished
+                    else -> transitions.pushExit(this)
+                }
+            },
+            // Every back is Stack's one slide (BackPreviewFrame; the book sheet's in BookSheetFrame):
+            // the page underneath holds still, the leaving page is kept until its slide has played.
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { backPopExit(backMotion, motionEnabled, layoutDirection) },
+            predictivePopEnterTransition = { EnterTransition.None },
+            predictivePopExitTransition = { swipeEdge -> backPredictivePopExit(backMotion, swipeEdge, motionEnabled) },
+        ) {
+            // The library shows through (LibraryLayer, below).
+            composable<Home> { Box(Modifier.fillMaxSize()) }
+            composable<BookDetails> { entry ->
+                BackPreviewFrame(backMotion, slides = false) {
+                    BookSheetFrame(
+                        motion = backMotion,
+                        pane = bookPane,
+                        // Read while the page leaves: the reader it is leaving for is already on top.
+                        resuming = {
+                            val top = navController.currentBackStackEntry?.destination
+                            top != null && readerEntrance(entry.destination, top) == ReaderEntrance.BookSheet
+                        },
+                    ) { libraryBeside, resume ->
+                        val args = entry.toRoute<BookDetails>()
+                        BookDetailsRoute(
+                            onBack = { popWhenSettled(entry) },
+                            onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
+                            onEdit = { navController.navigate(EditBook(args.bookId)) },
+                            onOpenChapter = { locator ->
+                                navigateToReader(Reader(args.bookId, locator), "chapter")
+                            },
+                            libraryBeside = libraryBeside,
+                            resume = resume,
+                        )
+                    }
+                }
             }
-        },
-        exitTransition = {
-            backMotion.forward(changesEntry = initialState.id != targetState.id)
-            when {
-                // The library holds still under an opening book; only the sheet moves.
-                targetState.destination.hasRoute<BookDetails>() && initialState.id != targetState.id && motionEnabled ->
-                    ExitTransition.KeepUntilTransitionsFinished
-                // Resume: the page underneath stays until the reader has covered it.
-                initialState.id != targetState.id && readerEntrance(initialState.destination, targetState.destination) != null ->
-                    ExitTransition.KeepUntilTransitionsFinished
-                else -> transitions.pushExit(this)
+            composable<EditBook> { entry ->
+                BackPreviewFrame(backMotion) {
+                    EditBookRoute(onBack = { popWhenSettled(entry) })
+                }
             }
-        },
-        // Every back is Stack's one slide (BackPreviewFrame; the book sheet's in BookSheetFrame):
-        // the page underneath holds still, the leaving page is kept until its slide has played.
-        popEnterTransition = { EnterTransition.None },
-        popExitTransition = { backPopExit(backMotion, motionEnabled, layoutDirection) },
-        predictivePopEnterTransition = { EnterTransition.None },
-        predictivePopExitTransition = { swipeEdge -> backPredictivePopExit(backMotion, swipeEdge, motionEnabled) },
+            composable<ReaderDefaults> { entry ->
+                BackPreviewFrame(backMotion) {
+                    ReaderDefaultsRoute(
+                        onBack = { popWhenSettled(entry) },
+                        onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                    )
+                }
+            }
+            composable<FontLibrary> { entry ->
+                BackPreviewFrame(backMotion) {
+                    FontLibraryRoute(onBack = { popWhenSettled(entry) })
+                }
+            }
+            composable<About> { entry ->
+                BackPreviewFrame(backMotion) {
+                    AboutRoute(onBack = { popWhenSettled(entry) })
+                }
+            }
+            composable<Sync> { entry ->
+                BackPreviewFrame(backMotion) {
+                    SyncRoute(onBack = { popWhenSettled(entry) })
+                }
+            }
+            composable<Reader> { entry ->
+                // Where this reader was opened from, taken at its first frame (the page under it).
+                val entrance = remember { readerEntrance(navController.previousBackStackEntry?.destination, entry.destination) }
+                // The same ViewModel ReaderRoute uses (this entry owns it): its first page is laid out.
+                val reader: ReaderViewModel = hiltViewModel()
+                val pageReady = remember(reader) {
+                    reader.state.map { it.experience.failed || (it.experience.renderState is ReaderRenderState.Ready && !it.experience.loading) }
+                }
+                BackPreviewFrame(backMotion) {
+                    ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
+                        ReaderRoute(
+                            onBack = { popWhenSettled(entry) },
+                            onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                        )
+                    }
+                }
+            }
+        }
+        // Composed after the NavHost (its graph is set by then, and the library's back handlers keep
+        // their place after the NavHost's), drawn beneath it.
+        LibraryLayer(navController, bookPane) {
+            TopLevelNavigationShell(
+                appViewModel = appViewModel,
+                onOpenReader = ::navigateToReader,
+                onOpenDetails = ::openDetails,
+                onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                onOpenAbout = { navController.navigate(About) },
+                onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
+                onOpenSync = { navController.navigate(Sync) },
+            )
+        }
+    }
+}
+
+/**
+ * The library, kept composed under the root NavHost for the life of the app, in the Home entry's
+ * owners (its ViewModels, lifecycle and saved state are Home's, as when it was Home's page).
+ *
+ * - It is drawn while Home or a book is on screen (and during moves to and from them); under any
+ *   other page it is only kept, not drawn, and is hidden from accessibility.
+ * - Its back handling (search, selection, the tab host) is live only while Home is on top.
+ * - Beside a book pane its column narrows by the pane's open share, laid out each frame of the
+ *   pane's move, so the grid reflows with it (its items animate to their new places).
+ */
+@Composable
+private fun LibraryLayer(
+    navController: NavHostController,
+    pane: BookPaneSpace,
+    content: @Composable () -> Unit,
+) {
+    val current by navController.currentBackStackEntryAsState()
+    val visible by navController.visibleEntries.collectAsStateWithLifecycle()
+    val home = remember(current) { runCatching { navController.getBackStackEntry<Home>() }.getOrNull() } ?: return
+    val top = current?.destination
+    val homeOnTop = top?.hasRoute<Home>() == true
+    val shown = visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
+    val besidePane = top?.hasRoute<BookDetails>() == true && pane.openness != null
+    val back = rememberNavigationEventDispatcherOwner(enabled = homeOnTop)
+    val density = LocalDensity.current
+    CompositionLocalProvider(
+        LocalViewModelStoreOwner provides home,
+        LocalLifecycleOwner provides home,
+        LocalSavedStateRegistryOwner provides home,
+        LocalNavigationEventDispatcherOwner provides back,
     ) {
-        composable<Home> {
-            BackPreviewFrame(backMotion) {
-                LibraryPageRecorder(libraryUnderlay) { libraryLayer ->
-                    TopLevelNavigationShell(
-                        appViewModel = appViewModel,
-                        onOpenReader = ::navigateToReader,
-                        onOpenDetails = { bookId ->
-                            libraryUnderlay.capture(libraryLayer, captureScope)
-                            navController.navigate(BookDetails(bookId))
-                        },
-                        onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                        onOpenAbout = { navController.navigate(About) },
-                        onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
-                        onOpenSync = { navController.navigate(Sync) },
-                    )
-                }
-            }
-        }
-        composable<BookDetails> { entry ->
-            BackPreviewFrame(backMotion, slides = false) {
-                BookSheetFrame(
-                    motion = backMotion,
-                    underlay = libraryUnderlay,
-                    // Read while the page leaves: the reader it is leaving for is already on top.
-                    resuming = {
-                        val top = navController.currentBackStackEntry?.destination
-                        top != null && readerEntrance(entry.destination, top) == ReaderEntrance.BookSheet
-                    },
-                ) { libraryBeside, resume ->
-                    val args = entry.toRoute<BookDetails>()
-                    BookDetailsRoute(
-                        onBack = { popWhenSettled(entry) },
-                        onRead = { navigateToReader(Reader(args.bookId), "details-resume") },
-                        onEdit = { navController.navigate(EditBook(args.bookId)) },
-                        onOpenChapter = { locator ->
-                            navigateToReader(Reader(args.bookId, locator), "chapter")
-                        },
-                        libraryBeside = libraryBeside,
-                        resume = resume,
-                    )
-                }
-            }
-        }
-        composable<EditBook> { entry ->
-            BackPreviewFrame(backMotion) {
-                EditBookRoute(onBack = { popWhenSettled(entry) })
-            }
-        }
-        composable<ReaderDefaults> { entry ->
-            BackPreviewFrame(backMotion) {
-                ReaderDefaultsRoute(
-                    onBack = { popWhenSettled(entry) },
-                    onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                )
-            }
-        }
-        composable<FontLibrary> { entry ->
-            BackPreviewFrame(backMotion) {
-                FontLibraryRoute(onBack = { popWhenSettled(entry) })
-            }
-        }
-        composable<About> { entry ->
-            BackPreviewFrame(backMotion) {
-                AboutRoute(onBack = { popWhenSettled(entry) })
-            }
-        }
-        composable<Sync> { entry ->
-            BackPreviewFrame(backMotion) {
-                SyncRoute(onBack = { popWhenSettled(entry) })
-            }
-        }
-        composable<Reader> { entry ->
-            // Where this reader was opened from, taken at its first frame (the page under it).
-            val entrance = remember { readerEntrance(navController.previousBackStackEntry?.destination, entry.destination) }
-            // The same ViewModel ReaderRoute uses (this entry owns it): its first page is laid out.
-            val reader: ReaderViewModel = hiltViewModel()
-            val pageReady = remember(reader) {
-                reader.state.map { it.experience.failed || (it.experience.renderState is ReaderRenderState.Ready && !it.experience.loading) }
-            }
-            BackPreviewFrame(backMotion) {
-                ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
-                    ReaderRoute(
-                        onBack = { popWhenSettled(entry) },
-                        onOpenFontLibrary = { navController.navigate(FontLibrary) },
-                    )
-                }
-            }
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val paneWidthPx = with(density) { bookPaneWidth(maxWidth).roundToPx() }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .layout { measurable, constraints ->
+                        val full = constraints.maxWidth
+                        val open = pane.openness?.invoke() ?: 0f
+                        val width = (full - (paneWidthPx * open).roundToInt()).coerceIn(0, full)
+                        val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+                        layout(full, placeable.height) { placeable.placeRelative(0, 0) }
+                    }
+                    .drawWithContent { if (shown) drawContent() }
+                    .then(if (shown && (homeOnTop || besidePane)) Modifier else Modifier.clearAndSetSemantics { }),
+            ) { content() }
         }
     }
 }
