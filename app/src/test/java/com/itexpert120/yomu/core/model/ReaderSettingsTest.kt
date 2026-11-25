@@ -9,42 +9,42 @@ class ReaderSettingsTest {
     fun builtInThemesUseCompleteMinimalPalettes() {
         assertEquals(
             ReaderColorPalette(
-                backgroundArgb = 0xFFF7F7F5,
-                textArgb = 0xFF222426,
-                secondaryTextArgb = 0xFF62676D,
+                backgroundArgb = 0xFFFFFFFF,
+                textArgb = 0xFF24282C,
+                secondaryTextArgb = 0xFF5B636B,
                 selectionArgb = 0xFFDCE8F7,
                 linkArgb = 0xFF326EA8,
-                borderArgb = 0xFFE1E3E5,
+                borderArgb = 0xFFEDF0F2,
             ),
             ReaderSettings(theme = ReaderThemeMode.Light).colorPalette,
         )
         assertEquals(
             ReaderColorPalette(
-                backgroundArgb = 0xFFF3EBDD,
-                textArgb = 0xFF302B26,
-                secondaryTextArgb = 0xFF71685E,
+                backgroundArgb = 0xFFF5EBDA,
+                textArgb = 0xFF3B2F22,
+                secondaryTextArgb = 0xFF6E5D48,
                 selectionArgb = 0xFFDED3C2,
                 linkArgb = 0xFF456F91,
-                borderArgb = 0xFFD8CDBD,
+                borderArgb = 0xFFE3D3B6,
             ),
             ReaderSettings(theme = ReaderThemeMode.Sepia).colorPalette,
         )
         assertEquals(
             ReaderColorPalette(
-                backgroundArgb = 0xFF17191C,
-                textArgb = 0xFFD7DADE,
-                secondaryTextArgb = 0xFFAEB4BC,
+                backgroundArgb = 0xFF121416,
+                textArgb = 0xFFC9CDD1,
+                secondaryTextArgb = 0xFF9AA3AB,
                 selectionArgb = 0xFF30343A,
                 linkArgb = 0xFF82B7F5,
-                borderArgb = 0xFF2A2E34,
+                borderArgb = 0xFF2A2F34,
             ),
             ReaderSettings(theme = ReaderThemeMode.Dark).colorPalette,
         )
         assertEquals(
             ReaderColorPalette(
                 backgroundArgb = 0xFF000000,
-                textArgb = 0xFFD4D7DB,
-                secondaryTextArgb = 0xFF9DA3AB,
+                textArgb = 0xFFB9BEC3,
+                secondaryTextArgb = 0xFF8C959D,
                 selectionArgb = 0xFF25282D,
                 linkArgb = 0xFF76ADEF,
                 borderArgb = 0xFF202328,
