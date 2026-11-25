@@ -24,6 +24,9 @@ import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferHost
+import com.itexpert120.yomu.feature.annotations.rememberAnnotationImportPicker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -43,7 +46,12 @@ fun BookDetailsRoute(
     val viewModel: BookDetailsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toc by viewModel.toc.collectAsStateWithLifecycle()
+    val annotationTransfer by viewModel.annotationTransfer.collectAsStateWithLifecycle()
     var notice by remember { mutableStateOf<String?>(null) }
+    val pickAnnotationFile = rememberAnnotationImportPicker(viewModel::onAnnotationAction)
+    val onAnnotationAction: (AnnotationTransferAction) -> Unit = { action ->
+        if (action == AnnotationTransferAction.PickFile) pickAnnotationFile() else viewModel.onAnnotationAction(action)
+    }
 
     // One-shot messages (e.g. the gallery-save result) as Stack's floating notice.
     LaunchedEffect(Unit) {
@@ -52,6 +60,14 @@ fun BookDetailsRoute(
             delay(NoticeMillis)
             notice = null
         }
+    }
+    // An export or import result, in the same notice.
+    LaunchedEffect(annotationTransfer.notice) {
+        val result = annotationTransfer.notice ?: return@LaunchedEffect
+        notice = result.text
+        delay(NoticeMillis)
+        notice = null
+        viewModel.onAnnotationAction(AnnotationTransferAction.DismissNotice(result.key))
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -88,6 +104,13 @@ fun BookDetailsRoute(
             onToggleVolume = viewModel::onToggleVolume,
             onCollapseAllVolumes = viewModel::onCollapseAllVolumes,
             onExpandAllVolumes = viewModel::onExpandAllVolumes,
+            calibreHighlights = annotationTransfer.calibreAvailable,
+            onAnnotationAction = onAnnotationAction,
+        )
+        AnnotationTransferHost(
+            state = annotationTransfer,
+            onAction = onAnnotationAction,
+            shares = viewModel.annotationShares,
         )
         AnimatedVisibility(
             visible = notice != null,

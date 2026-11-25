@@ -108,6 +108,8 @@ import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.data.collections.Organize
 import com.itexpert120.yomu.data.collections.StatusChoice
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferMenuItems
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -184,6 +186,8 @@ fun BookDetailsScreen(
     onToggleVolume: (Int) -> Unit = {},
     onCollapseAllVolumes: () -> Unit = {},
     onExpandAllVolumes: () -> Unit = {},
+    calibreHighlights: Boolean = false,
+    onAnnotationAction: (AnnotationTransferAction) -> Unit = {},
 ) {
     var showCover by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
@@ -212,6 +216,8 @@ fun BookDetailsScreen(
         onExitSelection = onExitChapterSelection,
         onSelectAll = onSelectAllChapters,
         onDeselectAll = onDeselectAllChapters,
+        calibreHighlights = calibreHighlights,
+        onAnnotationAction = onAnnotationAction,
     )
     val contents = TocActions(
         onTocSortChange = onTocSortChange,
@@ -357,6 +363,8 @@ private class SheetActions(
     val onExitSelection: () -> Unit,
     val onSelectAll: () -> Unit,
     val onDeselectAll: () -> Unit,
+    val calibreHighlights: Boolean,
+    val onAnnotationAction: (AnnotationTransferAction) -> Unit,
 )
 
 /**
@@ -794,7 +802,10 @@ private fun BookOptions(hasTimeline: Boolean, canSelect: Boolean, actions: Sheet
         SheetIconButton(
             icon = StackIcons.MoreHoriz,
             contentDescription = "Book options",
-            onClick = { expanded = true },
+            onClick = {
+                expanded = true
+                actions.onAnnotationAction(AnnotationTransferAction.MenuOpened)
+            },
             background = if (expanded) stack.raised else Color.Transparent,
         )
         DropdownMenu(
@@ -805,7 +816,7 @@ private fun BookOptions(hasTimeline: Boolean, canSelect: Boolean, actions: Sheet
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp,
             shadowElevation = 8.dp,
-            modifier = Modifier.width(232.dp),
+            modifier = Modifier.width(264.dp),
         ) {
             OptionItem(StackIcons.LibraryAdd, "Organize") {
                 expanded = false
@@ -823,6 +834,11 @@ private fun BookOptions(hasTimeline: Boolean, canSelect: Boolean, actions: Sheet
                     actions.onStartSelection()
                 }
             }
+            AnnotationTransferMenuItems(
+                calibreAvailable = actions.calibreHighlights,
+                onAction = actions.onAnnotationAction,
+                closeMenu = { expanded = false },
+            )
             HorizontalDivider(Modifier.padding(vertical = 6.dp), color = stack.rule)
             OptionItem(StackIcons.Delete, "Remove book", color = stack.danger) {
                 expanded = false

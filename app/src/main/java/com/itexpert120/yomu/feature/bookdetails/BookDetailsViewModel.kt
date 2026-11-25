@@ -25,10 +25,15 @@ import com.itexpert120.yomu.data.collections.Organize
 import com.itexpert120.yomu.data.collections.StatusChoice
 import com.itexpert120.yomu.data.reader.ReaderPreloader
 import com.itexpert120.yomu.data.stats.StatsRepository
+import com.itexpert120.yomu.feature.annotations.AnnotationTransfer
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferState
+import com.itexpert120.yomu.feature.annotations.BookAnnotationsTransferPort
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -155,10 +160,20 @@ class BookDetailsViewModel @Inject constructor(
     private val chapterReading: ChapterReading,
     publications: PublicationIndex,
     private val readerPreloader: ReaderPreloader,
+    annotationPort: BookAnnotationsTransferPort,
 ) : ViewModel() {
 
     // "bookId" is the property name from the type-safe BookDetails route.
     private val bookId: String = requireNotNull(savedStateHandle["bookId"])
+
+    // Export / import of the book's highlights and notes (the ⋯ menu).
+    private val annotations = AnnotationTransfer(BookId(bookId), annotationPort, viewModelScope)
+    val annotationTransfer: StateFlow<AnnotationTransferState> = annotations.state
+
+    /** Finished exports, as share-sheet choosers for the screen to start. */
+    val annotationShares: Flow<android.content.Intent> = annotations.shares
+
+    fun onAnnotationAction(action: AnnotationTransferAction) = annotations.onAction(action)
 
     val state: StateFlow<BookDetailsState> =
         combine(
