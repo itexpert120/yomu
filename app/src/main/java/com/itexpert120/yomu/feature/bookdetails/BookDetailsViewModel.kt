@@ -100,6 +100,10 @@ data class TocEntryUi(
     val selected: Boolean,
     val bookmarked: Boolean,
     val percent: Float?,
+    // 1-based position among the contents' entries, shown only when the contents are one flat list.
+    val number: Int? = null,
+    // The entry the reading position is in (the first one, when entries share a resource).
+    val current: Boolean = false,
 ) {
     val jumpable: Boolean get() = locatorJson != null
 }
@@ -118,6 +122,11 @@ data class TocUiState(
     val selectableCount: Int = 0,
     val readCount: Int = 0,
     val unreadCount: Int = 0,
+    // Where the reading position is among the jumpable entries (1-based), if it is in the contents.
+    val currentNumber: Int? = null,
+    val currentTitle: String? = null,
+    // Every jumpable entry sits at the top level, so entries can be counted as chapters.
+    val flat: Boolean = false,
 )
 
 /** The book's reading position, as far as the TOC needs it. */
@@ -227,6 +236,17 @@ class BookDetailsViewModel @Inject constructor(
         resume: TocResumePosition,
     ): TocUiState {
         val items = (load as? TocLoad.Ready)?.items.orEmpty()
+        // Document-order numbers over the jumpable entries, and which one holds the reading position.
+        val flat = items.all { it.locatorJson == null || it.depth == 0 }
+        val numbers = IntArray(items.size)
+        var jumpableCount = 0
+        var currentUid = -1
+        items.forEachIndexed { index, item ->
+            if (item.locatorJson != null) {
+                numbers[index] = ++jumpableCount
+                if (currentUid < 0 && resume.chapterId != null && item.id == resume.chapterId) currentUid = index
+            }
+        }
         // uid = document-order index, so selection is per-entry even when hrefs repeat.
         val ordered = items.withIndex().toList()
             .let { if (sort == TocSortMode.Descending) it.asReversed() else it }
@@ -254,6 +274,8 @@ class BookDetailsViewModel @Inject constructor(
                 selected = isSelected,
                 bookmarked = it.id in bookmarked,
                 percent = if (it.locatorJson == null) null else chapters.percent(it.id),
+                number = if (flat && it.locatorJson != null) numbers[uid] else null,
+                current = uid == currentUid,
             )
         }
         return TocUiState(
@@ -265,6 +287,9 @@ class BookDetailsViewModel @Inject constructor(
             selectableCount = readCount + unreadCount,
             readCount = readCount,
             unreadCount = unreadCount,
+            currentNumber = numbers.getOrNull(currentUid),
+            currentTitle = items.getOrNull(currentUid)?.title,
+            flat = flat,
         )
     }
 
@@ -284,6 +309,12 @@ class BookDetailsViewModel @Inject constructor(
     fun onEnterChapterSelection(uid: Int) {
         selectionMode.value = true
         selectedUids.value = setOf(uid)
+    }
+
+    /** Selection mode with nothing selected yet (from the book's options menu). */
+    fun onStartChapterSelection() {
+        selectionMode.value = true
+        selectedUids.value = emptySet()
     }
 
     fun onToggleChapterSelection(uid: Int) {
@@ -354,7 +385,7 @@ class BookDetailsViewModel @Inject constructor(
             val name =
                 book.title.ifBlank { "cover" }.take(60).replace(Regex("[^A-Za-z0-9 ._-]"), "_")
             val ok = saveImageToGallery(context, File(path), name)
-            _messages.emit(if (ok) "Saved to gallery" else "Couldn't save cover")
+            _messages.emit(if (ok) "Cover saved to Pictures / Open Reader" else "Couldn't save the cover")
         }
     }
 

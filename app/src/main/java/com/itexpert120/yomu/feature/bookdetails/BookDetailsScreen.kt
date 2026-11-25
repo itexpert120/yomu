@@ -1,7 +1,4 @@
-@file:OptIn(
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
-    androidx.compose.material3.ExperimentalMaterial3Api::class,
-)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.itexpert120.yomu.feature.bookdetails
 
@@ -10,19 +7,16 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,160 +26,124 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.ZeroCornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenuGroup
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DropdownMenuPopup
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onLayoutRectChanged
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import com.itexpert120.yomu.core.designsystem.YomuAppSurface
-import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
-import com.itexpert120.yomu.core.designsystem.YomuBadgeTone
-import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuDialog
 import com.itexpert120.yomu.core.designsystem.YomuEmptyState
-import com.itexpert120.yomu.core.designsystem.YomuExtendedFloatingActionButton
-import com.itexpert120.yomu.core.designsystem.YomuFloatingToolbar
-import com.itexpert120.yomu.core.designsystem.YomuLoadingState
-import com.itexpert120.yomu.core.designsystem.YomuProgressBar
-import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
-import com.itexpert120.yomu.core.designsystem.YomuScreenTitle
-import com.itexpert120.yomu.core.designsystem.YomuSettingList
-import com.itexpert120.yomu.core.designsystem.YomuSettingRow
-import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
-import com.itexpert120.yomu.core.designsystem.YomuTwoPane
-import com.itexpert120.yomu.core.designsystem.YomuVerticalScrollIndicator
-import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
-import com.itexpert120.yomu.core.designsystem.rememberSelectionMorphShape
-import com.itexpert120.yomu.core.designsystem.supportsYomuTwoPane
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
-import com.itexpert120.yomu.core.designsystem.yomuDecorativeShape
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
-import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
-import com.itexpert120.yomu.core.designsystem.yomuPopupExit
-import com.itexpert120.yomu.core.designsystem.yomuPressable
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
-import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.data.collections.Organize
 import com.itexpert120.yomu.data.collections.StatusChoice
 import com.itexpert120.yomu.feature.collections.OrganizeSheet
-import com.itexpert120.yomu.feature.collections.icon
-import me.saket.swipe.SwipeAction
-import me.saket.swipe.SwipeableActionsBox
-import java.io.File
-
-private data class BookDetailsScrollSample(
-    val itemIndex: Int,
-    val itemOffset: Int,
-    val inProgress: Boolean,
-)
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.AnimationSpec as CoreAnimationSpec
+import androidx.compose.animation.core.animate as animateValue
 
 /** Which whole-screen state is showing; drives the fade-through between them. */
 private enum class BookDetailsContentState { Loading, Missing, Ready }
 
-private val BookDetailsFabTransformOrigin = TransformOrigin(1f, 1f)
-private val ReadFabScrollThreshold = 32.dp
+/** How far below the status bar the phone sheet starts: the library shows above it. */
+private val PhoneSheetTopGap = 50.dp
 
-/** Room kept clear at the end of a list for the floating Read button / selection toolbar. */
+/** Wide windows without the library beside the book: the sheet starts just under the status bar. */
+private val WideSheetTopGap = 24.dp
+
+private val SheetCorner = 32.dp
+
+/** Width from which the book is a pane beside the library (spec: medium and up). */
+private val PaneMinWindowWidth = 600.dp
+
+/** Expanded and up: the book pane is 400 wide (spec), half the window on medium. */
+private val ExpandedPaneWidth = 400.dp
+private val ExpandedMinWindowWidth = 840.dp
+
+/** Room kept clear at the end of a list for the selection toolbar. */
 private val FloatingActionClearance = 96.dp
 
-/** Single-pane list position of the pinned contents header (item 0 is the book header). */
-private const val SinglePaneTocHeaderIndex = 1
+/** A drag-down past this (or a downward fling) closes the phone sheet. */
+private val DismissDistance = 140.dp
+private const val DismissVelocityDp = 1100f
 
-/** Fixed-pane width from which the cover and title sit side by side instead of stacked. */
-private val SideBySideIdentityMinWidth = 380.dp
+/** The book pane's width beside the library: half the window on medium, 400dp from expanded. */
+fun bookPaneWidth(windowWidth: Dp): Dp = when {
+    windowWidth >= ExpandedMinWindowWidth -> ExpandedPaneWidth
+    else -> windowWidth / 2
+}
 
-private val TocRowMinHeight = 56.dp
-private val TocTrailingSlotSize = 48.dp
+/** Whether a window this wide shows the book as a pane beside the library. */
+fun bookPaneBesideLibrary(windowWidth: Dp): Boolean = windowWidth >= PaneMinWindowWidth
 
-/** Deeper TOC levels share the last indent so long hierarchies keep a readable line length. */
-private const val TocMaxIndentLevels = 4
-
-private const val TocRowContentType = "tocRow"
-
+/**
+ * Book details as Stack's book sheet. On a phone the sheet stands over the dimmed library (drawn
+ * by the navigation frame behind this screen), and drags down to close. With [libraryBeside] on a
+ * wide window the book is a pane at the end edge with the library beside it; a wide window without
+ * the library behind it (a restored page) gets one wide sheet with the contents in their own column.
+ */
 @Composable
 fun BookDetailsScreen(
     book: BookDetailsUi?,
@@ -207,314 +165,122 @@ fun BookDetailsScreen(
     onDeselectAllChapters: () -> Unit,
     onMarkSelectedChapters: (Boolean) -> Unit,
     onMarkPreviousRead: () -> Unit,
+    libraryBeside: Boolean = false,
+    onStartChapterSelection: () -> Unit = {},
     organize: Organize = Organize(StatusChoice.Auto, emptyList()),
     onSetStatus: (ManualStatus?) -> Unit = {},
     onSetCollection: (id: String, member: Boolean) -> Unit = { _, _ -> },
     onCreateCollection: (String) -> Unit = {},
 ) {
-    val space = YomuTheme.space
-    val navBottom =
-        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-    val listState = rememberLazyListState()
-    val detailsScrollState = rememberScrollState()
     var showCover by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showTimeline by remember { mutableStateOf(false) }
     var showOrganize by remember { mutableStateOf(false) }
-    val allChaptersSelected = toc.selectableCount > 0 &&
-        toc.selectedCount == toc.selectableCount
-    var readButtonCollapsed by remember { mutableStateOf(false) }
-    var topBarHeightPx by remember { mutableIntStateOf(0) }
-    // Where the book's own title block sits on screen versus what covers it (the app bar in one
-    // pane, the details pane's top in two), so the bar reveals the title the moment the in-page
-    // title scrolls out of view.
-    var identityBottomPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-    var detailsPaneTopPx by remember { mutableFloatStateOf(0f) }
-    var topBarBottomPx by remember { mutableFloatStateOf(0f) }
-    val density = LocalDensity.current
-    val readFabScrollThresholdPx = with(density) { ReadFabScrollThreshold.roundToPx() }
-    val topBarHeight = if (topBarHeightPx > 0) {
-        with(density) { topBarHeightPx.toDp() }
-    } else {
-        64.dp
-    }
-
-    LaunchedEffect(readFabScrollThresholdPx) {
-        readButtonCollapsed = false
-        val positions = snapshotFlow {
-            BookDetailsScrollSample(
-                itemIndex = listState.firstVisibleItemIndex,
-                itemOffset = listState.firstVisibleItemScrollOffset,
-                inProgress = listState.isScrollInProgress,
-            )
-        }
-        var previous: BookDetailsScrollSample? = null
-        var accumulatedDelta = 0
-        positions.collect { current ->
-            if (!current.inProgress) {
-                previous = current
-                accumulatedDelta = 0
-                return@collect
-            }
-
-            previous?.let { before ->
-                val delta = when {
-                    current.itemIndex > before.itemIndex -> readFabScrollThresholdPx
-                    current.itemIndex < before.itemIndex -> -readFabScrollThresholdPx
-                    else -> current.itemOffset - before.itemOffset
-                }
-                val directionChanged =
-                    (accumulatedDelta > 0 && delta < 0) ||
-                        (accumulatedDelta < 0 && delta > 0)
-                if (directionChanged) accumulatedDelta = 0
-                accumulatedDelta += delta
-                when {
-                    accumulatedDelta >= readFabScrollThresholdPx -> {
-                        readButtonCollapsed = true
-                        accumulatedDelta = 0
-                    }
-
-                    accumulatedDelta <= -readFabScrollThresholdPx -> {
-                        readButtonCollapsed = false
-                        accumulatedDelta = 0
-                    }
-                }
-            }
-            previous = current
-        }
-    }
-    // The timeline button only appears once there's at least one date to show (mirrors
-    // ReadingTimeline, which renders nothing when empty).
-    val hasTimeline = book != null &&
-        (
-            book.addedDate != null ||
-                book.startedDate != null ||
-                book.lastReadDate != null ||
-                book.finishedDate != null
-            )
-    // The Remove action opens a confirmation first; only the dialog's confirm performs the removal.
-    val requestRemove = { showRemoveConfirm = true }
-    // Chapter selection is a local mode, so it consumes ordinary back before the details route
-    // is popped. No gesture progress is exposed here.
-    BackHandler(enabled = toc.selectionMode) {
-        onExitChapterSelection()
-    }
+    // Chapter selection is a local mode, so it consumes ordinary back before the sheet closes.
+    BackHandler(enabled = toc.selectionMode) { onExitChapterSelection() }
 
     val contentState = when {
         book != null -> BookDetailsContentState.Ready
         bookLoaded -> BookDetailsContentState.Missing
         else -> BookDetailsContentState.Loading
     }
+    val hasTimeline = book != null &&
+        (book.addedDate != null || book.startedDate != null || book.lastReadDate != null || book.finishedDate != null)
 
-    YomuAppSurface {
-        // On a tablet-wide screen, split the cover/metadata/actions into a left column and the
-        // contents into a right column so the two read side by side instead of the cover sitting
-        // alone above a long scroll. Phones (and narrow medium windows) stay single-pane.
-        val widthClass = YomuWidthClass.fromWidth(maxWidth)
-        val gutter = widthClass.margin
-        val twoPane = maxWidth.supportsYomuTwoPane() && book != null
+    val actions = SheetActions(
+        onBack = onBack,
+        onEdit = onEdit,
+        onRead = onRead,
+        onOrganize = { showOrganize = true },
+        onTimeline = { showTimeline = true },
+        onRemove = { showRemoveConfirm = true },
+        onCover = { if (book?.coverImagePath != null) showCover = true },
+        onStartSelection = onStartChapterSelection,
+        onExitSelection = onExitChapterSelection,
+        onSelectAll = onSelectAllChapters,
+        onDeselectAll = onDeselectAllChapters,
+    )
+    val contents = ContentsActions(
+        onTocSortChange = onTocSortChange,
+        onOpenChapter = onOpenChapter,
+        onSetChapterRead = onSetChapterRead,
+        onEnterSelection = onEnterChapterSelection,
+        onToggleSelection = onToggleChapterSelection,
+        onToggleBookmark = onToggleChapterBookmark,
+    )
 
-        Box(Modifier.fillMaxSize()) {
-            AnimatedContent(
-                targetState = contentState,
-                modifier = Modifier.fillMaxSize(),
-                transitionSpec = { yomuFadeThroughEnter() togetherWith yomuFadeThroughExit() },
-                label = "bookDetailsContent",
-            ) { state ->
-                when (state) {
-                    BookDetailsContentState.Loading -> Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        YomuLoadingState()
-                    }
-
-                    BookDetailsContentState.Missing -> Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = topBarHeight, bottom = navBottom),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        YomuEmptyState(
-                            icon = StackIcons.Book,
-                            title = "No longer in your library",
-                            body = "This book has been removed, so there is nothing to show here.",
-                            shape = YomuBadgeShape.Clover,
-                            tone = YomuBadgeTone.Neutral,
-                            actions = {
-                                YomuButton(
-                                    text = "Go back",
-                                    onClick = onBack,
-                                    emphasis = YomuButtonEmphasis.Secondary,
-                                )
-                            },
-                        )
-                    }
-
-                    // `book` can already be null while this state fades out.
-                    BookDetailsContentState.Ready -> if (book != null) {
-                        if (twoPane) {
-                            TwoPaneDetails(
-                                book = book,
-                                toc = toc,
-                                listState = listState,
-                                detailsScrollState = detailsScrollState,
-                                navBottom = navBottom,
-                                topInset = topBarHeight,
-                                onRead = onRead,
-                                onIdentityBottom = { identityBottomPx = it },
-                                onDetailsPaneTop = { detailsPaneTopPx = it },
-                                onCoverClick = { if (book.coverImagePath != null) showCover = true },
-                                onTocSortChange = onTocSortChange,
-                                onOpenChapter = onOpenChapter,
-                                onSetChapterRead = onSetChapterRead,
-                                onEnterChapterSelection = onEnterChapterSelection,
-                                onToggleChapterSelection = onToggleChapterSelection,
-                                onToggleChapterBookmark = onToggleChapterBookmark,
-                            )
-                        } else {
-                            // The app bar overlays the list and turns opaque once scrolled, so the
-                            // pinned contents header is shifted (draw phase only) to stop just
-                            // below the bar instead of pinning underneath it.
-                            val pinnedHeaderModifier = Modifier.graphicsLayer {
-                                val headerY = listState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.index == SinglePaneTocHeaderIndex }
-                                    ?.offset
-                                    // Not reported: pinned at the top once scrolled past, otherwise
-                                    // still below the viewport.
-                                    ?: if (listState.firstVisibleItemIndex >= SinglePaneTocHeaderIndex) 0 else Int.MAX_VALUE
-                                translationY = (topBarHeightPx - headerY).coerceAtLeast(0).toFloat()
-                            }
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.TopCenter,
-                            ) {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .widthIn(max = YomuReadableMaxWidth)
-                                        .fillMaxWidth()
-                                        // The list fades into the navigation bar instead of cutting off.
-                                        .yomuScrollEdgeShadow(bottom = listState.canScrollForward),
-                                    contentPadding = PaddingValues(bottom = navBottom + space.lg),
-                                    verticalArrangement = Arrangement.Top,
-                                ) {
-                                    item {
-                                        BookHeader(
-                                            book = book,
-                                            gutter = gutter,
-                                            topInset = topBarHeight,
-                                            coverWidth = if (widthClass == YomuWidthClass.Compact) 128.dp else 160.dp,
-                                            onCoverClick = {
-                                                if (book.coverImagePath != null) showCover = true
-                                            },
-                                            identityModifier = Modifier.onWindowBounds {
-                                                identityBottomPx = it.bottom.toFloat()
-                                            },
-                                        )
-                                    }
-
-                                    tocSection(
-                                        toc = toc,
-                                        gutter = gutter,
-                                        onTocSortChange = onTocSortChange,
-                                        onOpenChapter = onOpenChapter,
-                                        onSetChapterRead = onSetChapterRead,
-                                        onEnterSelection = onEnterChapterSelection,
-                                        onToggleSelection = onToggleChapterSelection,
-                                        onToggleBookmark = onToggleChapterBookmark,
-                                        headerModifier = pinnedHeaderModifier,
-                                    )
-
-                                    // Trailing room for the floating Read button / selection toolbar
-                                    // without shifting the rows above when selection toggles.
-                                    item { Spacer(Modifier.height(FloatingActionClearance)) }
-                                }
-                                YomuVerticalScrollIndicator(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .fillMaxHeight()
-                                        .padding(
-                                            top = topBarHeight + space.xs,
-                                            end = space.xxs,
-                                            bottom = navBottom + FloatingActionClearance,
-                                        ),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Derived so scrolling only recomposes the screen when these flip, not every frame.
-            val listScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
-            val titleVisible by remember(twoPane, listState) {
-                derivedStateOf {
-                    if (twoPane) {
-                        identityBottomPx <= detailsPaneTopPx
-                    } else {
-                        listState.firstVisibleItemIndex > 0 || identityBottomPx <= topBarBottomPx
-                    }
-                }
-            }
-            BookDetailsTopBar(
-                title = book?.title.orEmpty(),
-                bookAvailable = book != null,
-                hasTimeline = hasTimeline,
-                selectionMode = toc.selectionMode,
-                selectedCount = toc.selectedCount,
-                allChaptersSelected = allChaptersSelected,
-                // In two panes nothing scrolls beneath the bar (panes start below it), so it stays
-                // flat; the title appears only once the pane's own title has scrolled away.
-                scrolled = book != null && !twoPane && listScrolled,
-                titleVisible = titleVisible,
-                onBack = onBack,
-                onEdit = onEdit,
-                onRemove = requestRemove,
-                onTimeline = { showTimeline = true },
-                onOrganize = { showOrganize = true },
-                onExitChapterSelection = onExitChapterSelection,
-                onSelectAllChapters = onSelectAllChapters,
-                onDeselectAllChapters = onDeselectAllChapters,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .onSizeChanged { topBarHeightPx = it.height }
-                    .onWindowBounds { topBarBottomPx = it.bottom.toFloat() },
-            )
-
-            // Primary action floats over the content (hidden while multi-selecting chapters). Two
-            // panes dock it in the details pane instead, so it never covers the chapter list.
-            if (book != null && !twoPane) {
-                AnimatedVisibility(
-                    visible = !toc.selectionMode,
-                    enter = yomuPopupEnter(BookDetailsFabTransformOrigin),
-                    exit = yomuPopupExit(BookDetailsFabTransformOrigin),
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                ) {
-                    FloatingReadButton(
-                        reading = book.canResume,
-                        collapsed = readButtonCollapsed,
-                        onClick = onRead,
-                        modifier = Modifier
-                            .padding(end = gutter, bottom = navBottom + space.md),
-                    )
-                }
-            }
-
-            AnimatedVisibility(
-                visible = toc.selectionMode,
-                enter = yomuChromeEnter(),
-                exit = yomuChromeExit(),
-                modifier = Modifier.align(Alignment.BottomCenter),
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+        val windowWidth = maxWidth
+        val wide = bookPaneBesideLibrary(windowWidth)
+        when {
+            !wide -> PhoneSheet(
+                top = statusTop + PhoneSheetTopGap,
+                onDismiss = onBack,
             ) {
+                SingleColumnBody(contentState, book, toc, hasTimeline, actions, contents, gutter = 24.dp, closeIcon = StackIcons.KeyboardArrowDown)
+            }
+
+            libraryBeside -> {
+                // The library beside the pane: a tap there closes the book, as on the tablet boards.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClickLabel = "Close book",
+                            onClick = onBack,
+                        ),
+                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .width(bookPaneWidth(windowWidth))
+                        .fillMaxHeight()
+                        .padding(top = statusTop)
+                        .clip(RoundedCornerShape(topStart = SheetCorner))
+                        .background(MaterialTheme.colorScheme.surface)
+                        // The pane swallows taps so they never reach the close area beneath it.
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {}),
+                ) {
+                    SingleColumnBody(contentState, book, toc, hasTimeline, actions, contents, gutter = 28.dp, closeIcon = StackIcons.Close)
+                }
+            }
+
+            else -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = statusTop + WideSheetTopGap)
+                    .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
+                    .background(MaterialTheme.colorScheme.surface),
+            ) {
+                WideBody(
+                    contentState = contentState,
+                    book = book,
+                    toc = toc,
+                    hasTimeline = hasTimeline,
+                    actions = actions,
+                    contents = contents,
+                    leadingWidth = bookPaneWidth(windowWidth),
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = toc.selectionMode,
+            enter = yomuChromeEnter(),
+            exit = yomuChromeExit(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .then(if (wide && libraryBeside) Modifier.width(bookPaneWidth(maxWidth)) else Modifier.fillMaxWidth()),
+        ) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
                 ChapterSelectionToolbar(
                     selectedCount = toc.selectedCount,
                     onMarkRead = { onMarkSelectedChapters(true) },
                     onMarkUnread = { onMarkSelectedChapters(false) },
                     onMarkPrevious = onMarkPreviousRead,
-                    modifier = Modifier,
                 )
             }
         }
@@ -531,15 +297,14 @@ fun BookDetailsScreen(
 
     if (showRemoveConfirm) {
         YomuDialog(
-            title = "Remove this book?",
-            text = "This deletes the imported file and cover from the device. It can't be undone.",
+            title = book?.title?.let { "Remove $it?" } ?: "Remove this book?",
+            text = "This deletes the imported file and cover from this device. It can't be undone.",
             confirmLabel = "Remove",
             onConfirm = {
                 showRemoveConfirm = false
                 onRemove()
             },
             onDismiss = { showRemoveConfirm = false },
-            icon = StackIcons.Delete,
             destructive = true,
         )
     }
@@ -556,1227 +321,592 @@ fun BookDetailsScreen(
     )
 
     if (book != null) {
-        YomuBottomSheet(
-            visible = showTimeline,
-            onDismiss = { showTimeline = false },
-        ) { dismiss ->
+        YomuBottomSheet(visible = showTimeline, onDismiss = { showTimeline = false }) { dismiss ->
             ReadingTimeline(book = book, onClose = dismiss)
         }
     }
 }
 
-@Composable
-private fun BookDetailsTopBar(
-    title: String,
-    bookAvailable: Boolean,
-    hasTimeline: Boolean,
-    selectionMode: Boolean,
-    selectedCount: Int,
-    allChaptersSelected: Boolean,
-    scrolled: Boolean,
-    titleVisible: Boolean,
-    onBack: () -> Unit,
-    onEdit: () -> Unit,
-    onRemove: () -> Unit,
-    onTimeline: () -> Unit,
-    onOrganize: () -> Unit,
-    onExitChapterSelection: () -> Unit,
-    onSelectAllChapters: () -> Unit,
-    onDeselectAllChapters: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showActions by remember { mutableStateOf(false) }
-    val animate = yomuAnimationsEnabled()
-    val motion = MaterialTheme.motionScheme
-    // One shared backdrop for both bars (normal and selection): transparent over the book header,
-    // opaque once content scrolls beneath. Drawn in the draw phase so the fade never recomposes.
-    val opaqueContainerColor = MaterialTheme.colorScheme.surfaceContainer
-    val containerColor = animateColorAsState(
-        targetValue = opaqueContainerColor.copy(alpha = if (scrolled) 1f else 0f),
-        animationSpec = if (animate) motion.defaultEffectsSpec<Color>() else snap<Color>(),
-        label = "bookDetailsTopBarContainer",
-    )
-    val barColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = Color.Transparent,
-        scrolledContainerColor = Color.Transparent,
-    )
-    val titleEnter = if (animate) {
-        fadeIn(motion.fastEffectsSpec()) +
-            slideInVertically(motion.fastSpatialSpec()) { fullHeight -> fullHeight / 4 }
-    } else {
-        EnterTransition.None
-    }
-    val titleExit = if (animate) {
-        fadeOut(motion.fastEffectsSpec()) +
-            slideOutVertically(motion.fastEffectsSpec()) { fullHeight -> fullHeight / 4 }
-    } else {
-        ExitTransition.None
-    }
-    Box(modifier = modifier.drawBehind { drawRect(containerColor.value) }) {
-        AnimatedVisibility(
-            visible = !selectionMode,
-            enter = yomuChromeEnter(fromBottom = false),
-            exit = yomuChromeExit(toBottom = false),
-        ) {
-            TopAppBar(
-                title = {
-                    AnimatedVisibility(
-                        visible = titleVisible,
-                        enter = titleEnter,
-                        exit = titleExit,
-                        label = "bookDetailsTopBarTitle",
-                    ) {
-                        YomuScreenTitle(text = title, maxLines = 1)
-                    }
-                },
-                navigationIcon = {
-                    HeaderIconButton(StackIcons.ArrowBack, "Back", onBack)
-                },
-                actions = {
-                    if (bookAvailable) {
-                        HeaderIconButton(
-                            icon = StackIcons.Edit,
-                            contentDescription = "Edit book",
-                            onClick = onEdit,
-                        )
-                        Box {
-                            HeaderIconButton(StackIcons.MoreVert, "Book options", { showActions = true })
-                            // M3 Expressive vertical menu: the destructive action sits in its own
-                            // group, separated by the standard group gap.
-                            DropdownMenuPopup(expanded = showActions, onDismissRequest = { showActions = false }) {
-                                val groupCount = 2
-                                DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, groupCount)) {
-                                    val itemCount = if (hasTimeline) 2 else 1
-                                    DropdownMenuItem(
-                                        text = { Text("Organize") },
-                                        shape = MenuDefaults.itemShape(0, itemCount).shape,
-                                        leadingIcon = { Icon(StackIcons.LibraryAdd, contentDescription = null) },
-                                        onClick = {
-                                            showActions = false
-                                            onOrganize()
-                                        },
-                                    )
-                                    if (hasTimeline) {
-                                        DropdownMenuItem(
-                                            text = { Text("Reading timeline") },
-                                            shape = MenuDefaults.itemShape(1, itemCount).shape,
-                                            leadingIcon = { Icon(StackIcons.History, contentDescription = null) },
-                                            onClick = {
-                                                showActions = false
-                                                onTimeline()
-                                            },
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(MenuDefaults.GroupSpacing))
-                                DropdownMenuGroup(shapes = MenuDefaults.groupShape(groupCount - 1, groupCount)) {
-                                    DropdownMenuItem(
-                                        text = { Text("Remove book", color = MaterialTheme.colorScheme.error) },
-                                        shape = MenuDefaults.itemShape(0, 1).shape,
-                                        leadingIcon = {
-                                            Icon(
-                                                StackIcons.Delete,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.error,
-                                            )
-                                        },
-                                        onClick = {
-                                            showActions = false
-                                            onRemove()
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                },
-                colors = barColors,
-            )
-        }
-        AnimatedVisibility(
-            visible = selectionMode,
-            enter = yomuChromeEnter(fromBottom = false),
-            exit = yomuChromeExit(toBottom = false),
-        ) {
-            TopAppBar(
-                navigationIcon = {
-                    HeaderIconButton(StackIcons.Close, "Exit chapter selection", onExitChapterSelection)
-                },
-                title = {
-                    YomuScreenTitle(
-                        text = if (selectedCount > 0) "$selectedCount selected" else "Select chapters",
-                        maxLines = 1,
-                    )
-                },
-                actions = {
-                    HeaderIconButton(
-                        icon = if (allChaptersSelected) StackIcons.Deselect else StackIcons.SelectAll,
-                        contentDescription = if (allChaptersSelected) {
-                            "Deselect all chapters"
-                        } else {
-                            "Select all chapters"
-                        },
-                        onClick = if (allChaptersSelected) onDeselectAllChapters else onSelectAllChapters,
-                    )
-                },
-                colors = barColors,
-            )
-        }
-    }
-}
-
-/** Header action using the platform touch target; shared by the normal and selection bars. */
-@Composable
-private fun HeaderIconButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) {
-    FilledTonalIconButton(
-        onClick = onClick,
-        shapes = IconButtonDefaults.shapes(),
-        colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = tint,
-        ),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-        )
-    }
-}
-
-/**
- * Tablet/expanded layout: cover + metadata + actions + description in a scrollable left column,
- * with the contents list in a scrollable right column, so the two read side by side. The contents
- * stays a [LazyColumn] (a book's TOC can be thousands of entries).
- */
-@Composable
-private fun TwoPaneDetails(
-    book: BookDetailsUi,
-    toc: TocUiState,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    detailsScrollState: androidx.compose.foundation.ScrollState,
-    navBottom: Dp,
-    topInset: Dp,
-    onRead: () -> Unit,
-    onIdentityBottom: (Float) -> Unit,
-    onDetailsPaneTop: (Float) -> Unit,
-    onCoverClick: () -> Unit,
-    onTocSortChange: (TocSortMode) -> Unit,
-    onOpenChapter: (String) -> Unit,
-    onSetChapterRead: (Int, Boolean) -> Unit,
-    onEnterChapterSelection: (Int) -> Unit,
-    onToggleChapterSelection: (Int) -> Unit,
-    onToggleChapterBookmark: (Int) -> Unit,
-) {
-    val space = YomuTheme.space
-    // Both panes are the same contained surface, one step above the page.
-    val paneColor = MaterialTheme.colorScheme.surfaceContainerLow
-    // Material 3 fixed-and-flexible panes: both start below the app bar as contained surfaces, so
-    // the bar never has content scrolling beneath it and each pane scrolls independently.
-    YomuTwoPane(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = topInset + space.xs),
-        startContent = {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = navBottom + space.md),
-                verticalArrangement = Arrangement.spacedBy(space.sm),
-            ) {
-                // Left pane: book identity + progress + description, independently scrollable.
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .onWindowBounds { onDetailsPaneTop(it.top.toFloat()) },
-                    shape = YomuShapeTokens.hero,
-                    color = paneColor,
-                ) {
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
-                        // Only the widest fixed pane has room for the cover beside the title; the
-                        // narrower ones stack a larger, centred cover above centred text.
-                        val sideBySide = maxWidth >= SideBySideIdentityMinWidth
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(detailsScrollState)
-                                .padding(bottom = space.lg),
-                        ) {
-                            BookHeader(
-                                book = book,
-                                gutter = space.lg,
-                                onCoverClick = onCoverClick,
-                                coverWidth = if (sideBySide) 132.dp else 160.dp,
-                                stackIdentity = !sideBySide,
-                                contained = true,
-                                identityModifier = Modifier.onWindowBounds {
-                                    onIdentityBottom(it.bottom.toFloat())
-                                },
-                            )
-                        }
-                        YomuVerticalScrollIndicator(
-                            state = detailsScrollState,
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .fillMaxHeight()
-                                .padding(vertical = space.sm, horizontal = space.xxs),
-                        )
-                    }
-                }
-                DockedReadButton(
-                    reading = book.canResume,
-                    enabled = !toc.selectionMode,
-                    onClick = onRead,
-                )
-            }
-        },
-        endContent = {
-            // Right pane: the contents list (virtualized) in its own contained surface.
-            val listBottomPadding = if (toc.selectionMode) FloatingActionClearance else 0.dp
-            Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = navBottom + space.md),
-                shape = YomuShapeTokens.hero,
-                color = paneColor,
-            ) {
-                Box(Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        // Only the floating selection toolbar overlaps this pane, so the list keeps
-                        // trailing room for it while selecting and none otherwise.
-                        contentPadding = PaddingValues(bottom = listBottomPadding),
-                        verticalArrangement = Arrangement.Top,
-                    ) {
-                        tocSection(
-                            toc = toc,
-                            gutter = space.md,
-                            onTocSortChange = onTocSortChange,
-                            onOpenChapter = onOpenChapter,
-                            onSetChapterRead = onSetChapterRead,
-                            onEnterSelection = onEnterChapterSelection,
-                            onToggleSelection = onToggleChapterSelection,
-                            onToggleBookmark = onToggleChapterBookmark,
-                            surfaceColor = paneColor,
-                        )
-                    }
-                    YomuVerticalScrollIndicator(
-                        state = listState,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight()
-                            .padding(
-                                top = space.sm,
-                                end = space.xxs,
-                                bottom = listBottomPadding + space.sm,
-                            ),
-                    )
-                }
-            }
-        },
-    )
-}
-
-/**
- * The fixed, non-list portion of the screen: cover, metadata, progress, and description.
- *
- * In a single pane the identity block is its own tonal surface that runs up under the app bar
- * ([topInset]); [contained] drops that surface because the enclosing pane already provides it.
- */
-@Composable
-private fun BookHeader(
-    book: BookDetailsUi,
-    gutter: Dp,
-    onCoverClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    topInset: Dp = 0.dp,
-    coverWidth: Dp = 128.dp,
-    stackIdentity: Boolean = false,
-    contained: Boolean = false,
-    identityModifier: Modifier = Modifier,
-) {
-    val space = YomuTheme.space
-    // Large text needs the full width for the title, so it stacks too.
-    val stacked = stackIdentity || LocalDensity.current.fontScale > 1.3f
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(if (contained) space.lg else space.md),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (contained) {
-                        Modifier
-                    } else {
-                        Modifier
-                            .clip(
-                                MaterialTheme.shapes.extraLarge.copy(
-                                    topStart = ZeroCornerSize,
-                                    topEnd = ZeroCornerSize,
-                                ),
-                            )
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    },
-                )
-                // Contained: the top inset also keeps the decorative shape behind the cover clear
-                // of the pane's clip.
-                .padding(
-                    top = topInset + if (contained) space.xl else space.lg,
-                    bottom = if (contained) 0.dp else space.lg,
-                ),
-            verticalArrangement = Arrangement.spacedBy(space.lg),
-        ) {
-            if (stacked) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = gutter)
-                        .then(identityModifier),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(space.md),
-                ) {
-                    DetailCover(
-                        book,
-                        onClick = onCoverClick,
-                        modifier = Modifier.width(coverWidth),
-                    )
-                    BookIdentityDetails(
-                        book = book,
-                        centered = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = gutter)
-                        .then(identityModifier),
-                    horizontalArrangement = Arrangement.spacedBy(space.md),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    DetailCover(
-                        book,
-                        onClick = onCoverClick,
-                        modifier = Modifier.width(coverWidth),
-                        // Inside a pane the shape tucks in so the pane's clip doesn't cut it.
-                        decorationOffsetX = if (contained) -0.14f else -0.22f,
-                    )
-                    BookIdentityDetails(
-                        book = book,
-                        centered = false,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-
-            if (book.progress > 0f) {
-                val progressLabel = "${(book.progress.coerceIn(0f, 1f) * 100).toInt()}% read"
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = gutter),
-                    verticalArrangement = Arrangement.spacedBy(space.xs),
-                ) {
-                    Text(
-                        text = progressLabel,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.titleMediumEmphasized,
-                    )
-                    DetailProgress(book.progress)
-                }
-            }
-        }
-
-        book.description?.takeIf { it.isNotBlank() }?.let { description ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = gutter),
-                verticalArrangement = Arrangement.spacedBy(space.xs),
-            ) {
-                Text(
-                    text = "About",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleLargeEmphasized,
-                )
-                ExpandableBookDescription(description = description)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BookIdentityDetails(
-    book: BookDetailsUi,
-    centered: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val textAlign = if (centered) TextAlign.Center else TextAlign.Start
-    Column(
-        modifier = modifier,
-        horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-    ) {
-        Text(
-            text = book.title,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.headlineMediumEmphasized,
-            textAlign = textAlign,
-            maxLines = 4,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = book.author,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = textAlign,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        book.series?.let { SeriesTag(it) }
-        // Status, reading time and collections wrap as whole pills, so a long reading time or many
-        // collections flow onto a new line instead of squeezing the status pill.
-        androidx.compose.foundation.layout.FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(
-                YomuTheme.space.xxs,
-                if (centered) Alignment.CenterHorizontally else Alignment.Start,
-            ),
-            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            itemVerticalAlignment = Alignment.CenterVertically,
-        ) {
-            ShelfStatusChip(book.shelfStatus)
-            book.readingTime?.let { DetailsTag(icon = StackIcons.Schedule, text = it) }
-            book.collectionNames.forEach { DetailsTag(icon = StackIcons.CollectionsBookmark, text = it) }
-        }
-    }
-}
-
-@Composable
-private fun ShelfStatusChip(status: ShelfStatus) {
-    val (containerColor, contentColor) = when (status) {
-        ShelfStatus.ToRead ->
-            MaterialTheme.colorScheme.surfaceContainerHighest to
-                MaterialTheme.colorScheme.onSurfaceVariant
-        ShelfStatus.Reading ->
-            MaterialTheme.colorScheme.secondaryContainer to
-                MaterialTheme.colorScheme.onSecondaryContainer
-        ShelfStatus.Finished ->
-            MaterialTheme.colorScheme.primaryContainer to
-                MaterialTheme.colorScheme.onPrimaryContainer
-        ShelfStatus.OnHold, ShelfStatus.Dropped ->
-            MaterialTheme.colorScheme.tertiaryContainer to
-                MaterialTheme.colorScheme.onTertiaryContainer
-    }
-    Surface(
-        shape = YomuShapeTokens.pill,
-        color = containerColor,
-        contentColor = contentColor,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xs),
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = status.icon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = status.label,
-                style = MaterialTheme.typography.labelLargeEmphasized,
-                maxLines = 1,
-            )
-        }
-    }
-}
-
-/** Reading timeline shown in the details sheet; rows with no date are omitted. */
-@Composable
-private fun ReadingTimeline(book: BookDetailsUi, onClose: () -> Unit) {
-    val rows = buildList {
-        book.addedDate?.let { add("Added" to it) }
-        book.startedDate?.let { add("Started" to it) }
-        book.lastReadDate?.let { add("Last read" to it) }
-        book.finishedDate?.let { add("Finished" to it) }
-    }
-    if (rows.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
-        YomuSheetHeader(title = "Reading timeline", onClose = onClose)
-        YomuSettingList {
-            rows.forEachIndexed { index, (label, value) ->
-                YomuSettingRow(
-                    title = label,
-                    position = yomuSettingPosition(index, rows.size),
-                    leadingContent = {
-                        Icon(
-                            imageVector = StackIcons.History,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    trailing = {
-                        Text(
-                            text = value,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.End,
-                        )
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExpandableBookDescription(description: String) {
-    var expanded by remember(description) { mutableStateOf(false) }
-    var expandable by remember(description) { mutableStateOf(false) }
-    val animate = yomuAnimationsEnabled()
-    val motion = MaterialTheme.motionScheme
-    val chevronRotation = animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = if (animate) motion.fastSpatialSpec<Float>() else snap<Float>(),
-        label = "bookDescriptionChevron",
-    )
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-    ) {
-        Text(
-            text = description,
-            modifier = Modifier.animateContentSize(
-                animationSpec = if (animate) motion.defaultSpatialSpec<IntSize>() else snap<IntSize>(),
-                alignment = Alignment.TopStart,
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = if (expanded) Int.MAX_VALUE else 5,
-            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
-            onTextLayout = { result ->
-                if (!expanded) expandable = result.hasVisualOverflow
-            },
-        )
-        if (expandable) {
-            FilledTonalButton(
-                onClick = { expanded = !expanded },
-                shapes = ButtonDefaults.shapes(),
-            ) {
-                Text(text = if (expanded) "Show less" else "Show more")
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Icon(
-                    imageVector = StackIcons.KeyboardArrowDown,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(ButtonDefaults.IconSize)
-                        .graphicsLayer { rotationZ = chevronRotation.value },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FloatingReadButton(
-    reading: Boolean,
-    collapsed: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val label = if (reading) "Resume" else "Read"
-    YomuExtendedFloatingActionButton(
-        expanded = !collapsed,
-        onClick = onClick,
-        modifier = modifier.semantics { testTagsAsResourceId = true }.testTag("book-details-read"),
-        icon = StackIcons.PlayArrowFilled,
-        label = label,
-        contentDescription = label,
-    )
-}
-
-/** Two-pane primary action, docked under the details pane instead of floating over the list. */
-@Composable
-private fun DockedReadButton(
-    reading: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val label = if (reading) "Resume" else "Read"
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        shapes = ButtonDefaults.shapes(),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .semantics { testTagsAsResourceId = true }
-            .testTag("book-details-read"),
-    ) {
-        Icon(
-            imageVector = StackIcons.PlayArrowFilled,
-            contentDescription = null,
-            modifier = Modifier.size(ButtonDefaults.IconSize),
-        )
-        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-        Text(text = label)
-    }
-}
-
-/** Contents header (with sort control) followed by the flattened, virtualized TOC entries. */
-@OptIn(ExperimentalFoundationApi::class)
-private fun LazyListScope.tocSection(
-    toc: TocUiState,
-    gutter: Dp,
-    onTocSortChange: (TocSortMode) -> Unit,
-    onOpenChapter: (String) -> Unit,
-    onSetChapterRead: (Int, Boolean) -> Unit,
-    onEnterSelection: (Int) -> Unit,
-    onToggleSelection: (Int) -> Unit,
-    onToggleBookmark: (Int) -> Unit,
-    surfaceColor: Color? = null,
-    headerModifier: Modifier = Modifier,
-) {
-    // Pin the "Contents" header + sort switcher so it stays reachable while the (potentially long)
-    // chapter list scrolls underneath, instead of scrolling away with the first rows.
-    stickyHeader {
-        ContentsHeader(
-            toc = toc,
-            gutter = gutter,
-            onTocSortChange = onTocSortChange,
-            surfaceColor = surfaceColor,
-            modifier = headerModifier,
-        )
-    }
-
-    when {
-        toc.loading -> item { TocLoading() }
-        toc.items.isEmpty() -> item { TocEmpty() }
-        // No item key: a book's TOC can legitimately repeat an href, and duplicate keys crash
-        // LazyColumn. Positional binding is fine here (sort just rebinds in place).
-        else -> items(toc.items, contentType = { TocRowContentType }) { entry ->
-            TocRow(
-                entry = entry,
-                gutter = gutter,
-                selectionMode = toc.selectionMode,
-                onTap = {
-                    when {
-                        toc.selectionMode -> if (entry.jumpable) onToggleSelection(entry.uid)
-                        entry.locatorJson != null -> onOpenChapter(entry.locatorJson)
-                    }
-                },
-                onLongPress = {
-                    if (entry.jumpable && !toc.selectionMode) onEnterSelection(entry.uid)
-                },
-                onToggleRead = { onSetChapterRead(entry.uid, !entry.read) },
-                onToggleBookmark = { onToggleBookmark(entry.uid) },
-                surfaceColor = surfaceColor,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ContentsHeader(
-    toc: TocUiState,
-    gutter: Dp,
-    onTocSortChange: (TocSortMode) -> Unit,
-    modifier: Modifier = Modifier,
-    surfaceColor: Color? = null,
-) {
-    Row(
-        // Opaque background: as a pinned sticky header, scrolling TOC rows must not show through it.
-        modifier = modifier
-            .fillMaxWidth()
-            .background(surfaceColor ?: MaterialTheme.colorScheme.background)
-            // The sort button's visible container is inset 4dp inside its touch target.
-            .padding(
-                start = gutter,
-                top = YomuTheme.space.sm,
-                end = gutter - YomuTheme.space.xxs,
-                bottom = YomuTheme.space.xs,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = if (!toc.loading && toc.items.isNotEmpty()) {
-                    val chapterCount = toc.readCount + toc.unreadCount
-                    "$chapterCount ${if (chapterCount == 1) "chapter" else "chapters"}"
-                } else {
-                    "Contents"
-                },
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleLargeEmphasized,
-            )
-            if (!toc.loading && toc.items.isNotEmpty()) {
-                Text(
-                    text = "${toc.readCount} read · ${toc.unreadCount} unread",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-        if (!toc.loading && toc.items.isNotEmpty()) {
-            val nextSort = if (toc.sort == TocSortMode.Ascending) {
-                TocSortMode.Descending
-            } else {
-                TocSortMode.Ascending
-            }
-            FilledTonalIconButton(
-                onClick = { onTocSortChange(nextSort) },
-                shapes = IconButtonDefaults.shapes(),
-            ) {
-                Icon(
-                    imageVector = if (toc.sort == TocSortMode.Ascending) {
-                        StackIcons.KeyboardArrowDown
-                    } else {
-                        StackIcons.KeyboardArrowUp
-                    },
-                    contentDescription = "Sort ${nextSort.label.lowercase()}",
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TocRow(
-    entry: TocEntryUi,
-    gutter: Dp,
-    selectionMode: Boolean,
-    onTap: () -> Unit,
-    onLongPress: () -> Unit,
-    onToggleRead: () -> Unit,
-    onToggleBookmark: () -> Unit,
-    surfaceColor: Color? = null,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val colorSpec: AnimationSpec<Color> = if (yomuAnimationsEnabled()) {
-        MaterialTheme.motionScheme.defaultEffectsSpec()
-    } else {
-        snap()
-    }
-    // Kept as State and read while drawing, so the selection fade doesn't recompose the row.
-    val containerColor = animateColorAsState(
-        targetValue = if (entry.selected) scheme.secondaryContainer else surfaceColor ?: scheme.background,
-        animationSpec = colorSpec,
-        label = "tocRowSelectionContainer",
-    )
-    val headlineColor by animateColorAsState(
-        targetValue = when {
-            entry.selected -> scheme.onSecondaryContainer
-            !entry.jumpable -> scheme.onSurfaceVariant
-            // Read chapters recede (like visited links) so unread ones stand out at a glance.
-            entry.read -> scheme.outline
-            else -> scheme.onSurface
-        },
-        animationSpec = colorSpec,
-        label = "tocRowHeadlineColor",
-    )
-    val supportingColor by animateColorAsState(
-        targetValue = if (entry.selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-        animationSpec = colorSpec,
-        label = "tocRowSupportingColor",
-    )
-
-    val rowContent: @Composable () -> Unit = {
-        TocListItem(
-            entry = entry,
-            gutter = gutter,
-            selectionMode = selectionMode,
-            onTap = onTap,
-            onLongPress = onLongPress,
-            containerColor = containerColor,
-            headlineColor = headlineColor,
-            supportingColor = supportingColor,
-        )
-    }
-
-    if (selectionMode || !entry.jumpable) {
-        rowContent()
-    } else {
-        val actionBackground = scheme.primaryContainer
-        val readAction = tocSwipeAction(
-            icon = if (entry.read) StackIcons.RemoveDone else StackIcons.CheckCircle,
-            background = actionBackground,
-            isUndo = entry.read,
-            onSwipe = onToggleRead,
-        )
-        val bookmarkAction = tocSwipeAction(
-            icon = if (entry.bookmarked) StackIcons.BookmarkFilled else StackIcons.Bookmark,
-            background = actionBackground,
-            isUndo = entry.bookmarked,
-            onSwipe = onToggleBookmark,
-        )
-        SwipeableActionsBox(
-            modifier = Modifier.clipToBounds(),
-            startActions = listOf(readAction),
-            endActions = listOf(bookmarkAction),
-            swipeThreshold = TocSwipeActionThreshold,
-            backgroundUntilSwipeThreshold = scheme.surfaceContainerHigh,
-        ) {
-            rowContent()
-        }
-    }
-}
-
-/**
- * One chapter row. A plain [Row] rather than a Material list item so the gutters can follow the
- * window margin and the row stays cheap in a list of thousands.
- */
-@Composable
-private fun TocListItem(
-    entry: TocEntryUi,
-    gutter: Dp,
-    selectionMode: Boolean,
-    onTap: () -> Unit,
-    onLongPress: () -> Unit,
-    containerColor: State<Color>,
-    headlineColor: Color,
-    supportingColor: Color,
-) {
-    val space = YomuTheme.space
-    val progress = entry.percent?.coerceIn(0f, 1f) ?: 0f
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .drawBehind { drawRect(containerColor.value) }
-            .then(
-                if (selectionMode) {
-                    Modifier.selectable(
-                        selected = entry.selected,
-                        role = Role.Checkbox,
-                        onClick = onTap,
-                    )
-                } else {
-                    Modifier.yomuPressable(
-                        onClick = onTap,
-                        onLongClick = onLongPress,
-                        role = Role.Button,
-                    )
-                },
-            )
-            .heightIn(min = TocRowMinHeight)
-            // The trailing slot is a 48dp target around a 40dp-wide mark, so it lines up with the
-            // header's sort button.
-            .padding(start = gutter, end = if (entry.jumpable) gutter - space.xxs else gutter),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = entry.title,
-            color = headlineColor,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(
-                    start = space.md * entry.depth.coerceIn(0, TocMaxIndentLevels),
-                    top = space.xs,
-                    bottom = space.xs,
-                ),
-        )
-        if (entry.jumpable) {
-            Box(
-                modifier = Modifier.size(TocTrailingSlotSize),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (selectionMode) {
-                    SelectionCheckMark(selected = entry.selected)
-                } else if (entry.read) {
-                    Icon(
-                        imageVector = StackIcons.CheckCircle,
-                        contentDescription = "Read",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                } else if (progress > 0f) {
-                    Text(
-                        text = "${(progress * 100).toInt()}%",
-                        color = if (entry.selected) supportingColor else MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelMediumEmphasized,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Selection-mode mark: an outlined circle that morphs into a filled scallop with a check. */
-@Composable
-private fun SelectionCheckMark(selected: Boolean) {
-    val shape = rememberSelectionMorphShape(
-        selected = selected,
-        unselected = MaterialShapes.Circle,
-        selectedPolygon = MaterialShapes.Cookie9Sided,
-    )
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .then(
-                if (selected) {
-                    Modifier.background(MaterialTheme.colorScheme.primary, shape)
-                } else {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.outline, shape)
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) {
-            Icon(
-                imageVector = StackIcons.Check,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-private fun tocSwipeAction(
-    icon: ImageVector,
-    background: Color,
-    isUndo: Boolean,
-    onSwipe: () -> Unit,
-): SwipeAction = SwipeAction(
-    icon = {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = contentColorFor(background),
-            modifier = Modifier.padding(YomuTheme.space.md),
-        )
-    },
-    background = background,
-    onSwipe = onSwipe,
-    isUndo = isUndo,
+/** The screen-level actions the sheet's bar, header and menu raise. */
+private class SheetActions(
+    val onBack: () -> Unit,
+    val onEdit: () -> Unit,
+    val onRead: () -> Unit,
+    val onOrganize: () -> Unit,
+    val onTimeline: () -> Unit,
+    val onRemove: () -> Unit,
+    val onCover: () -> Unit,
+    val onStartSelection: () -> Unit,
+    val onExitSelection: () -> Unit,
+    val onSelectAll: () -> Unit,
+    val onDeselectAll: () -> Unit,
 )
 
-private val TocSwipeActionThreshold = 56.dp
+private class ContentsActions(
+    val onTocSortChange: (TocSortMode) -> Unit,
+    val onOpenChapter: (String) -> Unit,
+    val onSetChapterRead: (Int, Boolean) -> Unit,
+    val onEnterSelection: (Int) -> Unit,
+    val onToggleSelection: (Int) -> Unit,
+    val onToggleBookmark: (Int) -> Unit,
+)
 
+/**
+ * The phone sheet: starts [top] down, follows a drag down (from its bar, or from the top of its
+ * list) and closes past [DismissDistance] or on a downward fling; otherwise it settles back.
+ */
 @Composable
-private fun ChapterSelectionToolbar(
-    selectedCount: Int,
-    onMarkRead: () -> Unit,
-    onMarkUnread: () -> Unit,
-    onMarkPrevious: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun PhoneSheet(
+    top: Dp,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    val hasSelection = selectedCount > 0
-    YomuFloatingToolbar(
-        vibrant = true,
-        actions = listOf(
-            YomuToolbarAction(StackIcons.CheckCircle, "Read", onMarkRead, enabled = hasSelection),
-            YomuToolbarAction(StackIcons.RemoveDone, "Unread", onMarkUnread, enabled = hasSelection),
-            YomuToolbarAction(StackIcons.PlaylistAddCheck, "To here", onMarkPrevious, enabled = hasSelection),
-        ),
-        modifier = modifier
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(bottom = YomuTheme.space.md),
-    )
-}
-
-@Composable
-private fun TocEmpty() {
-    YomuEmptyState(
-        icon = StackIcons.MenuBook,
-        title = "No table of contents",
-        body = "This book doesn't list its chapters.",
-        tone = YomuBadgeTone.Neutral,
-        compact = true,
-    )
-}
-
-/** Loading state for the contents list, with a hint that big books take a moment the first time. */
-@Composable
-private fun TocLoading() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = YomuTheme.space.lg, vertical = YomuTheme.space.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-    ) {
-        YomuLoadingState(message = "Building contents…")
-        Text(
-            text = "Large books can take a few moments the first time.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val drag = remember(scope) {
+        SheetDrag(
+            scope = scope,
+            dismissPx = with(density) { DismissDistance.toPx() },
+            flingPx = with(density) { DismissVelocityDp.dp.toPx() },
+            onDismiss = onDismiss,
+            isShown = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
         )
     }
+    drag.spec = settleSpec
+    drag.onDismiss = onDismiss
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = top)
+            .onSizeChanged { drag.height = it.height.toFloat() }
+            .graphicsLayer { translationY = drag.offset }
+            .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
+            .background(MaterialTheme.colorScheme.surface)
+            .nestedScroll(drag.connection)
+            .draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState { drag.dragBy(it) },
+                onDragStopped = { velocity -> drag.release(velocity) },
+            ),
+    ) { content() }
 }
 
-/** A small quiet pill beside the status: reading time, or a collection the book is in. */
-@Composable
-private fun DetailsTag(icon: ImageVector, text: String) {
-    Surface(
-        shape = YomuShapeTokens.pill,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xs),
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
-            Text(text = text, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+@Stable
+private class SheetDrag(
+    private val scope: CoroutineScope,
+    private val dismissPx: Float,
+    private val flingPx: Float,
+    var onDismiss: () -> Unit,
+    private val isShown: () -> Boolean,
+) {
+    var offset by mutableFloatStateOf(0f)
+    var height = 0f
+    var spec: CoreAnimationSpec<Float>? = null
+    private var dismissing = false
+    private var settle: Job? = null
+
+    fun dragBy(delta: Float) {
+        if (dismissing) return
+        settle?.cancel()
+        offset = (offset + delta).coerceAtLeast(0f)
+    }
+
+    fun release(velocity: Float) {
+        if (dismissing || offset <= 0f) return
+        val close = offset > dismissPx || velocity > flingPx
+        settle?.cancel()
+        settle = scope.launch {
+            if (close) {
+                dismissing = true
+                onDismiss()
+                animateTo(height.coerceAtLeast(offset), velocity)
+                // Nothing popped (the page was still settling): bring the sheet back.
+                if (isShown()) {
+                    dismissing = false
+                    animateTo(0f, 0f)
+                }
+            } else {
+                animateTo(0f, velocity)
+            }
+        }
+    }
+
+    private suspend fun animateTo(target: Float, velocity: Float) {
+        val animation = spec
+        if (animation == null) {
+            offset = target
+            return
+        }
+        animateValue(offset, target, velocity, animation) { value, _ -> offset = value.coerceAtLeast(0f) }
+    }
+
+    // The list scrolls first; a pull past its top moves the sheet, and scrolling back up takes the
+    // sheet back to rest before the list moves again.
+    val connection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (source != NestedScrollSource.UserInput || offset <= 0f || available.y >= 0f) return Offset.Zero
+            val used = available.y.coerceAtLeast(-offset)
+            dragBy(used)
+            return Offset(0f, used)
+        }
+
+        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+            if (source != NestedScrollSource.UserInput || available.y <= 0f || dismissing) return Offset.Zero
+            dragBy(available.y)
+            return Offset(0f, available.y)
+        }
+
+        override suspend fun onPreFling(available: Velocity): Velocity {
+            if (offset <= 0f) return Velocity.Zero
+            release(available.y)
+            return available
         }
     }
 }
 
+/** Bar + list: the phone sheet and the book pane beside the library. */
 @Composable
-private fun SeriesTag(series: String) {
-    Surface(
-        shape = YomuShapeTokens.pill,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-    ) {
-        Text(
-            text = series,
-            style = MaterialTheme.typography.labelLargeEmphasized,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xs),
-        )
-    }
-}
-
-@Composable
-private fun DetailProgress(progress: Float) {
-    // The book's headline progress uses the expressive wavy style.
-    YomuProgressBar(progress = progress, wavy = true)
-}
-
-/**
- * Text/accent colour for the generated placeholder cover. The gradient comes from the book, not
- * the theme, so pick whichever of the surface / on-surface roles contrasts with it.
- */
-@Composable
-private fun placeholderCoverContentColor(coverColors: List<Color>): Color {
-    val scheme = MaterialTheme.colorScheme
-    val surfaceIsLight = scheme.surface.luminance() > scheme.onSurface.luminance()
-    val light = if (surfaceIsLight) scheme.surface else scheme.onSurface
-    val dark = if (surfaceIsLight) scheme.onSurface else scheme.surface
-    // The title sits at the bottom of the vertical gradient.
-    val backdrop = coverColors.lastOrNull() ?: return light
-    return if (backdrop.luminance() > 0.5f) dark else light
-}
-
-@Composable
-private fun DetailCover(
-    book: BookDetailsUi,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    decorationOffsetX: Float = -0.22f,
+private fun SingleColumnBody(
+    contentState: BookDetailsContentState,
+    book: BookDetailsUi?,
+    toc: TocUiState,
+    hasTimeline: Boolean,
+    actions: SheetActions,
+    contents: ContentsActions,
+    gutter: Dp,
+    closeIcon: ImageVector,
 ) {
-    val clickable = book.coverImagePath != null
-    Box(
-        modifier = modifier
-            // Hero moment: a soft scalloped shape peeks out behind the cover.
-            .yomuDecorativeShape(
-                polygon = MaterialShapes.Cookie12Sided,
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                scale = 1.05f,
-                rotation = 12f,
-                offsetX = decorationOffsetX,
-                offsetY = -0.42f,
-            )
-            .aspectRatio(YomuBookCoverAspectRatio)
-            .clip(YomuShapeTokens.cover)
-            .then(
-                if (clickable) Modifier.yomuPressable(onClick = onClick) else Modifier,
-            )
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    ) {
-        if (book.coverImagePath != null) {
-            AsyncImage(
-                model = File(book.coverImagePath),
-                contentDescription = book.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            val contentColor = placeholderCoverContentColor(book.coverColors)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.verticalGradient(book.coverColors))
-                    .padding(YomuTheme.space.md),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .fillMaxWidth(0.42f)
-                        .height(3.dp)
-                        .background(contentColor),
-                )
-                Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                    Text(
-                        text = book.title,
-                        color = contentColor,
-                        style = MaterialTheme.typography.labelLargeEmphasized,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val revealPx = with(density) { 180.dp.toPx() }
+    val titleVisible by remember(listState) {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > revealPx }
+    }
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    Column(Modifier.fillMaxSize()) {
+        SheetBar(
+            book = book,
+            toc = toc,
+            hasTimeline = hasTimeline,
+            titleVisible = titleVisible,
+            closeIcon = closeIcon,
+            actions = actions,
+            horizontalPadding = gutter - 14.dp,
+        )
+        StateCrossfade(contentState, Modifier.weight(1f)) { state ->
+            when (state) {
+                BookDetailsContentState.Loading -> BookSheetSkeleton(gutter = gutter, coverWidth = 132.dp, modifier = Modifier.padding(top = 8.dp))
+                BookDetailsContentState.Missing -> MissingBook(onBack = actions.onBack)
+                BookDetailsContentState.Ready -> if (book != null) {
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val stacked = headerStacked(maxWidth - gutter * 2 - 152.dp)
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = navBottom + 24.dp),
+                        ) {
+                            item {
+                                BookSheetHeader(
+                                    book = book,
+                                    toc = toc,
+                                    gutter = gutter,
+                                    coverWidth = if (stacked) 148.dp else 132.dp,
+                                    stacked = stacked,
+                                    onCoverClick = actions.onCover,
+                                    onRead = actions.onRead,
+                                    onOrganize = actions.onOrganize,
+                                    modifier = Modifier.padding(bottom = 18.dp),
+                                )
+                            }
+                            tocSection(
+                                toc = toc,
+                                gutter = gutter,
+                                onTocSortChange = contents.onTocSortChange,
+                                onOpenChapter = contents.onOpenChapter,
+                                onSetChapterRead = contents.onSetChapterRead,
+                                onEnterSelection = contents.onEnterSelection,
+                                onToggleSelection = contents.onToggleSelection,
+                                onToggleBookmark = contents.onToggleBookmark,
+                            )
+                            // Room for the selection toolbar without shifting rows when selection toggles.
+                            item { Spacer(Modifier.height(FloatingActionClearance)) }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-@Preview(widthDp = 720, heightDp = 900, showBackground = true)
+/** A wide window without the library beside it: the book on the left, its contents on the right. */
 @Composable
-private fun TabletBookDetailsPreview() {
-    YomuDesignTheme {
+private fun WideBody(
+    contentState: BookDetailsContentState,
+    book: BookDetailsUi?,
+    toc: TocUiState,
+    hasTimeline: Boolean,
+    actions: SheetActions,
+    contents: ContentsActions,
+    leadingWidth: Dp,
+) {
+    val gutter = 32.dp
+    val listState: LazyListState = rememberLazyListState()
+    val detailsScroll: ScrollState = rememberScrollState()
+    val revealPx = with(LocalDensity.current) { 180.dp.toPx() }
+    val titleVisible by remember(detailsScroll) { derivedStateOf { detailsScroll.value > revealPx } }
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    Column(Modifier.fillMaxSize()) {
+        SheetBar(
+            book = book,
+            toc = toc,
+            hasTimeline = hasTimeline,
+            titleVisible = titleVisible,
+            closeIcon = StackIcons.KeyboardArrowDown,
+            actions = actions,
+            horizontalPadding = gutter - 14.dp,
+        )
+        StateCrossfade(contentState, Modifier.weight(1f)) { state ->
+            when (state) {
+                BookDetailsContentState.Loading -> BookSheetSkeleton(gutter = gutter, coverWidth = 132.dp, modifier = Modifier.padding(top = 8.dp).width(leadingWidth + gutter))
+                BookDetailsContentState.Missing -> MissingBook(onBack = actions.onBack)
+                BookDetailsContentState.Ready -> if (book != null) {
+                    Row(Modifier.fillMaxSize()) {
+                        val stacked = headerStacked(leadingWidth - gutter * 2 - 152.dp)
+                        BookSheetHeader(
+                            book = book,
+                            toc = toc,
+                            gutter = gutter,
+                            coverWidth = if (stacked) 148.dp else 132.dp,
+                            stacked = stacked,
+                            onCoverClick = actions.onCover,
+                            onRead = actions.onRead,
+                            onOrganize = actions.onOrganize,
+                            modifier = Modifier
+                                .width(leadingWidth)
+                                .fillMaxHeight()
+                                .verticalScroll(detailsScroll)
+                                .padding(top = 8.dp, bottom = navBottom + 24.dp),
+                        )
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentPadding = PaddingValues(bottom = navBottom + if (toc.selectionMode) FloatingActionClearance else 24.dp),
+                        ) {
+                            tocSection(
+                                toc = toc,
+                                gutter = gutter - 8.dp,
+                                onTocSortChange = contents.onTocSortChange,
+                                onOpenChapter = contents.onOpenChapter,
+                                onSetChapterRead = contents.onSetChapterRead,
+                                onEnterSelection = contents.onEnterSelection,
+                                onToggleSelection = contents.onToggleSelection,
+                                onToggleBookmark = contents.onToggleBookmark,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StateCrossfade(
+    state: BookDetailsContentState,
+    modifier: Modifier,
+    content: @Composable (BookDetailsContentState) -> Unit,
+) {
+    AnimatedContent(
+        targetState = state,
+        modifier = modifier.fillMaxWidth(),
+        transitionSpec = { yomuFadeThroughEnter() togetherWith yomuFadeThroughExit() },
+        label = "bookDetailsContent",
+    ) { content(it) }
+}
+
+/**
+ * The sheet's bar: close on the start, Edit and options on the end; the book's title appears in
+ * the middle once its own title has scrolled away. While choosing chapters it becomes the
+ * selection bar (exit, count, select all).
+ */
+@Composable
+private fun SheetBar(
+    book: BookDetailsUi?,
+    toc: TocUiState,
+    hasTimeline: Boolean,
+    titleVisible: Boolean,
+    closeIcon: ImageVector,
+    actions: SheetActions,
+    horizontalPadding: Dp,
+) {
+    val animate = yomuAnimationsEnabled()
+    val motion = MaterialTheme.motionScheme
+    AnimatedContent(
+        targetState = toc.selectionMode,
+        transitionSpec = {
+            if (animate) {
+                fadeIn(motion.fastEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec())
+            } else {
+                EnterTransition.None togetherWith ExitTransition.None
+            }
+        },
+        label = "bookSheetBar",
+    ) { selecting ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 58.dp)
+                .padding(start = horizontalPadding, end = horizontalPadding, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selecting) {
+                SheetIconButton(StackIcons.Close, "Exit chapter selection", actions.onExitSelection)
+                val count = toc.selectedCount
+                Text(
+                    text = if (count > 0) "$count ${if (count == 1) "chapter" else "chapters"}" else "Select chapters",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = YomuTheme.stack.ink,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() },
+                )
+                val all = toc.selectableCount > 0 && toc.selectedCount == toc.selectableCount
+                TextAction(
+                    text = if (all) "Deselect all" else "Select all",
+                    onClick = if (all) actions.onDeselectAll else actions.onSelectAll,
+                )
+            } else {
+                SheetIconButton(closeIcon, "Close book", actions.onBack)
+                Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = titleVisible && book != null,
+                        enter = if (animate) fadeIn(motion.fastEffectsSpec()) else EnterTransition.None,
+                        exit = if (animate) fadeOut(motion.fastEffectsSpec()) else ExitTransition.None,
+                    ) {
+                        Text(
+                            text = book?.title.orEmpty(),
+                            style = StackType.Heading,
+                            color = YomuTheme.stack.ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (book != null) {
+                    SheetIconButton(StackIcons.Edit, "Edit book", actions.onEdit)
+                    BookOptions(hasTimeline = hasTimeline, canSelect = toc.selectableCount > 0, actions = actions)
+                }
+            }
+        }
+    }
+}
+
+/** Book options: the everyday actions, then Remove set apart in the danger colour. */
+@Composable
+private fun BookOptions(hasTimeline: Boolean, canSelect: Boolean, actions: SheetActions) {
+    var expanded by remember { mutableStateOf(false) }
+    val stack = YomuTheme.stack
+    Box {
+        SheetIconButton(
+            icon = StackIcons.MoreVert,
+            contentDescription = "Book options",
+            onClick = { expanded = true },
+            background = if (expanded) stack.raised else Color.Transparent,
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            offset = DpOffset(0.dp, 4.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            shadowElevation = 8.dp,
+            modifier = Modifier.width(232.dp),
+        ) {
+            OptionItem(StackIcons.LibraryAdd, "Organize") {
+                expanded = false
+                actions.onOrganize()
+            }
+            if (hasTimeline) {
+                OptionItem(StackIcons.History, "Reading timeline") {
+                    expanded = false
+                    actions.onTimeline()
+                }
+            }
+            if (canSelect) {
+                OptionItem(StackIcons.PlaylistAddCheck, "Select chapters") {
+                    expanded = false
+                    actions.onStartSelection()
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 6.dp), color = stack.rule)
+            OptionItem(StackIcons.Delete, "Remove book", color = stack.danger) {
+                expanded = false
+                actions.onRemove()
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionItem(icon: ImageVector, text: String, color: Color = YomuTheme.stack.ink, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text, style = StackType.Body, color = color) },
+        leadingIcon = { Icon(icon, contentDescription = null, tint = color) },
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp),
+    )
+}
+
+@Composable
+private fun TextAction(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = StackType.Body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = YomuTheme.stack.ink)
+    }
+}
+
+/** The book was removed (maybe on another device) while this page was open. */
+@Composable
+private fun MissingBook(onBack: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(bottom = 96.dp), contentAlignment = Alignment.Center) {
+        YomuEmptyState(
+            icon = StackIcons.Book,
+            title = "No longer in your library",
+            body = "This book was removed, maybe from another of your devices.",
+            actions = { YomuButton(text = "Back to library", onClick = onBack) },
+        )
+    }
+}
+
+/** Reading timeline, stacked on the book as its own sheet; dates not reached yet say so. */
+@Composable
+private fun ReadingTimeline(book: BookDetailsUi, onClose: () -> Unit) {
+    val stack = YomuTheme.stack
+    val rows = listOf(
+        Triple(StackIcons.Add, "Added", book.addedDate),
+        Triple(StackIcons.AutoStories, "Started", book.startedDate),
+        Triple(StackIcons.Schedule, "Last read", book.lastReadDate),
+        Triple(StackIcons.CheckCircle, "Finished", book.finishedDate),
+    ).filter { (_, label, value) -> value != null || label != "Added" }
+    Column {
+        YomuSheetHeader(title = "Reading timeline", onClose = onClose)
+        rows.forEachIndexed { index, (icon, label, value) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp)
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Icon(icon, contentDescription = null, tint = stack.muted)
+                Text(label, style = StackType.Body, color = stack.ink, modifier = Modifier.weight(1f))
+                Text(
+                    text = value ?: "Not yet",
+                    style = if (value != null) StackType.Body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) else StackType.Body,
+                    color = if (value != null) stack.ink else stack.muted,
+                )
+            }
+            if (index < rows.lastIndex) HorizontalDivider(color = stack.rule)
+        }
+        book.readingTime?.let {
+            Text(
+                text = "$it of reading so far.",
+                style = StackType.Label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
+                color = stack.muted,
+                modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+// region Previews
+
+private val PreviewBook = BookDetailsUi(
+    id = "preview",
+    title = "The Wind in the Willows",
+    author = "Kenneth Grahame",
+    series = null,
+    description = "Mole leaves his spring-cleaning for the river, and with the Water Rat, Badger and the irrepressible Toad finds a life of boats, picnics, motor-cars and, at last, a battle to win back Toad Hall.",
+    progress = 0.42f,
+    readingTime = "4h 10m",
+    addedDate = "Oct 12, 2026",
+    startedDate = "Oct 14, 2026",
+    lastReadDate = "Nov 25, 2026",
+    finishedDate = null,
+    coverImagePath = null,
+    coverColors = listOf(Color(0xFF3E5641), Color(0xFF22352A)),
+    shelfStatus = ShelfStatus.Reading,
+    collectionNames = listOf("Classics", "Bedtime"),
+)
+
+private val PreviewChapters = listOf(
+    "The River Bank", "The Open Road", "The Wild Wood", "Mr. Badger", "Dulce Domum", "Mr. Toad",
+    "The Piper at the Gates of Dawn", "Toad's Adventures", "Wayfarers All", "The Further Adventures of Toad",
+    "Like Summer Tempests Came His Tears", "The Return of Ulysses",
+)
+
+private fun previewToc(selection: Boolean = false) = TocUiState(
+    loading = false,
+    selectionMode = selection,
+    items = PreviewChapters.mapIndexed { index, title ->
+        TocEntryUi(
+            uid = index,
+            chapterId = "c$index",
+            title = title,
+            locatorJson = "{}",
+            depth = 0,
+            read = index < 6,
+            selected = selection && index in 3..5,
+            bookmarked = false,
+            percent = if (index == 6) 0.38f else null,
+            number = index + 1,
+            current = index == 6,
+        )
+    },
+    selectedCount = if (selection) 3 else 0,
+    selectableCount = PreviewChapters.size,
+    readCount = 6,
+    unreadCount = 6,
+    currentNumber = 7,
+    currentTitle = PreviewChapters[6],
+    flat = true,
+)
+
+/** Stands in for the dimmed library the navigation frame draws behind the sheet. */
+@Composable
+private fun PreviewBackdrop(content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(YomuTheme.stack.desk),
+    ) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
+        content()
+    }
+}
+
+@Composable
+private fun PreviewDetails(
+    book: BookDetailsUi? = PreviewBook,
+    loaded: Boolean = true,
+    toc: TocUiState = previewToc(),
+    libraryBeside: Boolean = false,
+) {
+    PreviewBackdrop {
         BookDetailsScreen(
-            book = BookDetailsUi(
-                id = "preview",
-                title = "A long book title that should remain readable beside the cover",
-                author = "Open Reader",
-                series = "Preview collection",
-                description = "A quiet sample description for validating the tablet two-pane layout.",
-                progress = 0.42f,
-                readingTime = "2h 18m",
-                addedDate = "14 Jul 2026",
-                startedDate = "15 Jul 2026",
-                lastReadDate = "16 Jul 2026",
-                finishedDate = null,
-                coverImagePath = null,
-                coverColors = listOf(Color(0xFF284B63), Color(0xFF9B5DE5)),
-                shelfStatus = ShelfStatus.Reading,
-            ),
-            bookLoaded = true,
-            toc = TocUiState(
-                loading = false,
-                items = List(8) { index ->
-                    TocEntryUi(
-                        uid = index,
-                        chapterId = "chapter-$index",
-                        title = "Chapter ${index + 1}: A sample chapter title",
-                        locatorJson = "{}",
-                        depth = 0,
-                        read = index < 3,
-                        selected = false,
-                        bookmarked = index == 1,
-                        percent = if (index == 3) 0.42f else null,
-                    )
-                },
-            ),
+            book = book,
+            bookLoaded = loaded,
+            toc = toc,
+            libraryBeside = libraryBeside,
             onBack = {},
             onRead = {},
             onEdit = {},
@@ -1797,10 +927,74 @@ private fun TabletBookDetailsPreview() {
     }
 }
 
-/**
- * Window bounds for the app-bar title reveal. Throttled (with a trailing update) rather than
- * reported on every scroll frame like onGloballyPositioned.
- */
-private fun Modifier.onWindowBounds(onBounds: (IntRect) -> Unit): Modifier = onLayoutRectChanged(throttleMillis = WindowBoundsThrottleMs) { onBounds(it.boundsInWindow) }
+@Preview(name = "Details light", widthDp = 390, heightDp = 844)
+@Composable
+private fun BookDetailsLightPreview() {
+    YomuDesignTheme(darkTheme = false) { PreviewDetails() }
+}
 
-private const val WindowBoundsThrottleMs = 32L
+@Preview(name = "Details dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun BookDetailsDarkPreview() {
+    YomuDesignTheme(darkTheme = true) { PreviewDetails() }
+}
+
+@Preview(name = "Details new, no contents", widthDp = 390, heightDp = 844)
+@Composable
+private fun BookDetailsNewPreview() {
+    YomuDesignTheme(darkTheme = false) {
+        PreviewDetails(
+            book = PreviewBook.copy(title = "Notes from the Field", author = "Ada Lindqvist", progress = 0f, readingTime = null, shelfStatus = ShelfStatus.ToRead, collectionNames = emptyList(), description = null),
+            toc = TocUiState(loading = false),
+        )
+    }
+}
+
+@Preview(name = "Details building contents", widthDp = 390, heightDp = 844)
+@Composable
+private fun BookDetailsBuildingPreview() {
+    YomuDesignTheme(darkTheme = true) { PreviewDetails(toc = TocUiState(loading = true)) }
+}
+
+@Preview(name = "Details selecting", widthDp = 390, heightDp = 844)
+@Composable
+private fun BookDetailsSelectionPreview() {
+    YomuDesignTheme(darkTheme = false) { PreviewDetails(toc = previewToc(selection = true)) }
+}
+
+@Preview(name = "Details loading / missing", widthDp = 780, heightDp = 844)
+@Composable
+private fun BookDetailsStatesPreview() {
+    YomuDesignTheme(darkTheme = false) {
+        Row {
+            Box(Modifier.width(390.dp)) { PreviewDetails(book = null, loaded = false) }
+            Box(Modifier.width(390.dp)) { PreviewDetails(book = null, loaded = true) }
+        }
+    }
+}
+
+@Preview(name = "Details tablet pane", widthDp = 1280, heightDp = 800)
+@Composable
+private fun BookDetailsTabletPanePreview() {
+    YomuDesignTheme(darkTheme = false) { PreviewDetails(libraryBeside = true) }
+}
+
+@Preview(name = "Details foldable pane dark", widthDp = 840, heightDp = 900)
+@Composable
+private fun BookDetailsFoldPanePreview() {
+    YomuDesignTheme(darkTheme = true) { PreviewDetails(libraryBeside = true) }
+}
+
+@Preview(name = "Details wide, restored", widthDp = 1280, heightDp = 800)
+@Composable
+private fun BookDetailsWidePreview() {
+    YomuDesignTheme(darkTheme = false) { PreviewDetails() }
+}
+
+@Preview(name = "Details medium pane", widthDp = 700, heightDp = 1000)
+@Composable
+private fun BookDetailsMediumPanePreview() {
+    YomuDesignTheme(darkTheme = false) { PreviewDetails(libraryBeside = true) }
+}
+
+// endregion

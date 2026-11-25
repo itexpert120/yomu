@@ -15,19 +15,22 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -38,20 +41,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.StackColors
+import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBackPreviewHandler
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
@@ -60,6 +68,7 @@ import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuBackPreview
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -123,7 +132,10 @@ internal fun CoverViewerDialog(
         }
         val backPreview = rememberYomuBackPreviewState()
         YomuBackPreviewHandler(backPreview, onBack = close)
-        // The scrim fades; the cover and its actions materialize in place on top of it.
+        val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+        // A dark room whatever the theme: Stack's dark desk, dimmed, so the cover's colours carry.
+        val room = StackColors.Dark
+        // The backdrop fades; the cover and its actions materialize in place on top of it.
         AnimatedVisibility(
             visibleState = visibleState,
             enter = if (animate) fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) else EnterTransition.None,
@@ -132,7 +144,7 @@ internal fun CoverViewerDialog(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.92f))
+                    .background(room.desk.copy(alpha = 0.97f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -153,11 +165,16 @@ internal fun CoverViewerDialog(
                     var offset by remember { mutableStateOf(Offset.Zero) }
                     AsyncImage(
                         model = File(coverPath),
-                        contentDescription = title,
+                        contentDescription = "$title, cover",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(space.lg)
+                            .padding(
+                                start = space.lg,
+                                end = space.lg,
+                                top = statusTop + 72.dp,
+                                bottom = navBottom + 96.dp,
+                            )
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onTap = { close() },
@@ -184,34 +201,37 @@ internal fun CoverViewerDialog(
                                 translationY = offset.y
                             },
                     )
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = statusTop + space.xs, end = space.sm),
-                    ) {
-                        CircleAction(StackIcons.Download, "Save to gallery", onSave)
-                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(top = statusTop + space.xs, start = space.sm),
+                            .padding(top = statusTop + space.xs, start = space.xs)
+                            .size(48.dp)
+                            .yomuPressable(onClick = close)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .semantics { contentDescription = "Close cover" },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        CircleAction(StackIcons.Close, "Close", close)
+                        Icon(StackIcons.Close, contentDescription = null, tint = room.ink)
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = navBottom + 32.dp)
+                            .height(52.dp)
+                            .yomuPressable(onClick = onSave)
+                            .clip(CircleShape)
+                            .background(room.ink)
+                            .padding(horizontal = 22.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(StackIcons.Download, contentDescription = null, tint = room.onInk)
+                        Text("Save to gallery", style = StackType.Label.copy(fontSize = 15.sp), color = room.onInk)
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CircleAction(icon: ImageVector, description: String, onClick: () -> Unit) {
-    FilledTonalIconButton(
-        onClick = onClick,
-        modifier = Modifier.size(48.dp),
-        shapes = IconButtonDefaults.shapes(),
-    ) {
-        Icon(imageVector = icon, contentDescription = description)
     }
 }
 
