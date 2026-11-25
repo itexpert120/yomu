@@ -54,6 +54,9 @@ data class StackColors(
     val danger: Color,
     val isDark: Boolean,
 ) {
+    /** Pure black: the sheet is the desk, so sheets, cards and dialogs need a hairline edge. */
+    val flat: Boolean get() = sheet == desk
+
     companion object {
         val Light = StackColors(
             desk = Color(0xFFE9EDF0),
@@ -85,10 +88,13 @@ data class StackColors(
         )
 
         /** Pure black: the desk goes black; sheets keep a faint step so they still read as sheets. */
+        // Pure black: every large surface (desk, sheets, cards, bars) is #000 so an OLED panel is
+        // off there; sheets and cards are set apart by the rule hairline, and only small raised
+        // controls (chips, fields, tracks) keep a near-black fill.
         val Black = Dark.copy(
             desk = Color(0xFF000000),
-            sheet = Color(0xFF0E1012),
-            raised = Color(0xFF1A1D20),
+            sheet = Color(0xFF000000),
+            raised = Color(0xFF141619),
             onInk = Color(0xFF000000),
             rule = Color(0xFF22262A),
             track = Color(0xFF33393E),
