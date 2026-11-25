@@ -42,6 +42,7 @@ object DatabaseModule {
             YomuDatabase.MIGRATION_15_16,
             YomuDatabase.MIGRATION_16_17,
             YomuDatabase.MIGRATION_17_18,
+            YomuDatabase.MIGRATION_18_19,
         )
         .addCallback(BookDeletionRecovery(bookFiles))
         .build()

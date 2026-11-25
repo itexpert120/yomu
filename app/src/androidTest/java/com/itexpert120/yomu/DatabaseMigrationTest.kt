@@ -42,6 +42,7 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_15_16,
             YomuDatabase.MIGRATION_16_17,
             YomuDatabase.MIGRATION_17_18,
+            YomuDatabase.MIGRATION_18_19,
         ).close()
     }
 
@@ -111,6 +112,7 @@ class DatabaseMigrationTest {
             YomuDatabase.MIGRATION_15_16,
             YomuDatabase.MIGRATION_16_17,
             YomuDatabase.MIGRATION_17_18,
+            YomuDatabase.MIGRATION_18_19,
         ).use { database ->
             database.query("SELECT `title` FROM `books` WHERE `id` = 'book-id'").use {
                 check(it.moveToFirst())
@@ -140,6 +142,27 @@ class DatabaseMigrationTest {
             db.query("SELECT seconds FROM reading_days").use {
                 check(it.moveToFirst())
                 check(it.getLong(0) == 900L)
+            }
+        }
+    }
+
+    @Test fun highlightsKeepTheirDataAndGainDefaultNoteAndStyle() {
+        helper.createDatabase("migration-highlights", 18).apply {
+            execSQL(
+                "INSERT INTO highlights (id, bookId, locatorJson, text, colorArgb, createdAt) " +
+                    "VALUES ('h1', 'b1', '{}', 'Fear is the mind-killer.', -256, 7)",
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate("migration-highlights", 19, true, YomuDatabase.MIGRATION_18_19).use { db ->
+            db.query("SELECT text, colorArgb, createdAt, note, style, modifiedAt FROM highlights WHERE id = 'h1'").use {
+                check(it.moveToFirst())
+                check(it.getString(0) == "Fear is the mind-killer.")
+                check(it.getInt(1) == -256)
+                check(it.getLong(2) == 7L)
+                check(it.isNull(3))
+                check(it.getString(4) == "highlight")
+                check(it.getLong(5) == 0L)
             }
         }
     }

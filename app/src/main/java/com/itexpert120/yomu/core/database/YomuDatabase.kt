@@ -34,7 +34,16 @@ abstract class YomuDatabase : RoomDatabase() {
     abstract fun collectionDao(): CollectionDao
 
     companion object {
-        const val VERSION = 18
+        const val VERSION = 19
+
+        /** v19 gives highlights a note, a drawing style and a last-edited time. */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `highlights` ADD COLUMN `note` TEXT")
+                db.execSQL("ALTER TABLE `highlights` ADD COLUMN `style` TEXT NOT NULL DEFAULT '$DEFAULT_HIGHLIGHT_STYLE'")
+                db.execSQL("ALTER TABLE `highlights` ADD COLUMN `modifiedAt` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
 
         /** v18 adds user collections, book memberships, and a manual reading status per book. */
         val MIGRATION_17_18 = object : Migration(17, 18) {

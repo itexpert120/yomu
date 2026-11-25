@@ -53,7 +53,7 @@ com.itexpert120.yomu
 │   ├── model/                   # Book (+ Book.shelfStatus: ShelfStatus, the only place manual status
 │   │                            #   wins over progress), ReaderSettings, LibraryPreferences, AccentColor,
 │   │                            #   ThemePreference, CustomReaderTheme, ReadingStats, …
-│   ├── database/                # Room: YomuDatabase (v18) + BookEntity, ChapterReadEntity,
+│   ├── database/                # Room: YomuDatabase (v19) + BookEntity, ChapterReadEntity,
 │   │                            #   ReaderSettingsEntity, BookTocEntity, ReadingDayEntity,
 │   │                            #   ReadingSessionEntity, HighlightEntity, BookmarkEntity,
 │   │                            #   CollectionEntity, BookCollectionEntity,

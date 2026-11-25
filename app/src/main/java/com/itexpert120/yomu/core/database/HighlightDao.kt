@@ -13,11 +13,23 @@ interface HighlightDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(highlight: HighlightEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(highlights: List<HighlightEntity>)
+
     @Query("SELECT * FROM highlights WHERE bookId = :bookId ORDER BY createdAt DESC")
     fun observeForBook(bookId: String): Flow<List<HighlightEntity>>
 
-    @Query("UPDATE highlights SET colorArgb = :colorArgb WHERE id = :id")
-    suspend fun updateColor(id: String, colorArgb: Int)
+    @Query("SELECT * FROM highlights WHERE bookId = :bookId ORDER BY createdAt, id")
+    suspend fun forBook(bookId: String): List<HighlightEntity>
+
+    @Query("UPDATE highlights SET colorArgb = :colorArgb, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun updateColor(id: String, colorArgb: Int, modifiedAt: Long)
+
+    @Query("UPDATE highlights SET note = :note, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun updateNote(id: String, note: String?, modifiedAt: Long)
+
+    @Query("UPDATE highlights SET style = :style, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun updateStyle(id: String, style: String, modifiedAt: Long)
 
     @Query("DELETE FROM highlights WHERE id = :id")
     suspend fun deleteById(id: String)
