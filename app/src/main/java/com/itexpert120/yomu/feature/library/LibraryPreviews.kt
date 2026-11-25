@@ -79,6 +79,7 @@ private fun previewState(
         totalCount = if (empty) 0 else PreviewBooks.size,
         selectableCount = current.bookCount,
         pile = if (searchQuery == null && !empty) PreviewBooks.filter { it.progress in 0.01f..0.99f }.take(3) else emptyList(),
+        pileChapters = mapOf("0" to "Chapter VII", "1" to "Chapter 17"),
         books = current.books,
         viewMode = viewMode,
         searchActive = searchQuery != null,
@@ -94,7 +95,7 @@ private fun previewState(
 }
 
 @Composable
-private fun LibraryPreview(state: LibraryUiState, mode: YomuThemeMode = YomuThemeMode.Light) {
+private fun LibraryPreview(state: LibraryUiState, mode: YomuThemeMode = YomuThemeMode.Light, pinned: Boolean = false) {
     YomuDesignTheme(themeMode = mode) {
         LibraryScreen(
             state = state,
@@ -108,6 +109,7 @@ private fun LibraryPreview(state: LibraryUiState, mode: YomuThemeMode = YomuThem
             onOpenDetails = {},
             onImport = {},
             onHaveSyncWords = {},
+            startPinned = pinned,
         )
     }
 }
@@ -119,6 +121,22 @@ private fun LibraryPhonePreview() = LibraryPreview(previewState())
 @Preview(name = "Library dark", widthDp = 390, heightDp = 844)
 @Composable
 private fun LibraryPhoneDarkPreview() = LibraryPreview(previewState(), YomuThemeMode.Dark)
+
+@Preview(name = "Library scrolled", widthDp = 390, heightDp = 844)
+@Composable
+private fun LibraryScrolledPreview() = LibraryPreview(previewState(), pinned = true)
+
+@Preview(name = "Library scrolled dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun LibraryScrolledDarkPreview() = LibraryPreview(previewState(), YomuThemeMode.Dark, pinned = true)
+
+@Preview(name = "Pile of one", widthDp = 390, heightDp = 520)
+@Composable
+private fun LibraryPileOnePreview() = LibraryPreview(previewState().let { it.copy(pile = it.pile.take(1)) })
+
+@Preview(name = "Pile of two dark", widthDp = 390, heightDp = 520)
+@Composable
+private fun LibraryPileTwoDarkPreview() = LibraryPreview(previewState().let { it.copy(pile = it.pile.take(2)) }, YomuThemeMode.Dark)
 
 @Preview(name = "Library compact grid", widthDp = 390, heightDp = 844)
 @Composable
@@ -175,6 +193,14 @@ private fun LibraryLandscapePreview() = LibraryPreview(previewState())
 @Preview(name = "Tablet", widthDp = 1200, heightDp = 800)
 @Composable
 private fun LibraryTabletPreview() = LibraryPreview(previewState())
+
+@Preview(name = "Tablet library column (beside a book pane)", widthDp = 752, heightDp = 768)
+@Composable
+private fun LibraryTabletColumnPreview() = LibraryPreview(previewState())
+
+@Preview(name = "Tablet portrait", widthDp = 720, heightDp = 1248)
+@Composable
+private fun LibraryTabletPortraitPreview() = LibraryPreview(previewState())
 
 @Preview(name = "Arrange sheet", widthDp = 390, heightDp = 844)
 @Composable

@@ -142,7 +142,8 @@ fun YomuNavigationRail(
     WideNavigationRail(
         windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Vertical + WindowInsetsSides.Start),
         modifier = modifier,
-        arrangement = Arrangement.Center,
+        // Items from the top, as on the tablet board.
+        arrangement = Arrangement.Top,
         colors = WideNavigationRailDefaults.colors(containerColor = Color.Transparent),
         content = content,
     )

@@ -4,8 +4,8 @@
 //
 // The page loads before the app knows which book (so it can be made ahead of a tap) and reports
 // `shell-ready`; the app then calls yomuStart({ start, settings }). `start` is { cfi } | { href } |
-// { index, fraction }; `settings` is described at readerCSS. Later changes come through
-// yomuApplySettings / yomuGoTo.
+// { index, fraction } | { index, progress } (see progressAnchor); `settings` is described at
+// readerCSS. Later changes come through yomuApplySettings / yomuGoTo.
 import './view.js'
 import { EPUB } from './epub.js'
 import { Overlayer } from './overlayer.js'
@@ -134,14 +134,62 @@ const readerCSS = s => {
     `
 }
 
+// foliate's space above and below the text. Paged, the app already keeps the page clear of its bars
+// and the screen's safe area, so this is only breathing room (foliate's 48px default, on top of
+// those insets, wasted a band at each end). Scrolled, it is the space before a chapter's first line
+// and after its last.
+const PAGED_MARGIN = '16px'
+const SCROLLED_MARGIN = '48px'
+
+// Two pages side by side (a spread, like an open book) when paged on a landscape page wide enough for
+// two comfortable columns: at least 840 px and 56em of the reading size (two ~25em columns with
+// their margins and gutter). Portrait, and phones held upright, read one page. `settings.spread`
+// false turns it off.
+const SPREAD_MIN_WIDTH = 840
+const SPREAD_MIN_EMS = 56
+// A spread's gutter and outer margins are wider than a single page's side margins.
+const SPREAD_GAP_FACTOR = 1.8
+const spreads = () => settings.flow !== 'scrolled' && settings.spread !== false
+    && innerWidth > innerHeight
+    && innerWidth >= Math.max(SPREAD_MIN_WIDTH, SPREAD_MIN_EMS * 16 * (settings.fontScale ?? 1))
+const gapFor = spread => {
+    const gap = settings.gap ?? '6%'
+    return spread ? `${(parseFloat(gap) * SPREAD_GAP_FACTOR).toFixed(2)}%` : gap
+}
+// Set before foliate lays out: from a resize listener, which runs ahead of its resize observer.
+const configureColumns = renderer => {
+    const spread = spreads()
+    renderer.setAttribute('gap', gapFor(spread))
+    renderer.setAttribute('max-column-count', spread ? '2' : '1')
+}
+addEventListener('resize', () => {
+    if (view.renderer) configureColumns(view.renderer)
+})
+
 const configure = renderer => {
-    renderer.setAttribute('flow', settings.flow === 'scrolled' ? 'scrolled' : 'paginated')
+    const scrolled = settings.flow === 'scrolled'
+    renderer.setAttribute('flow', scrolled ? 'scrolled' : 'paginated')
+    renderer.setAttribute('margin', scrolled ? SCROLLED_MARGIN : PAGED_MARGIN)
     // foliate's slide, unless the system has animations off.
     if (settings.animated === false) renderer.removeAttribute('animated')
     else renderer.setAttribute('animated', '')
-    renderer.setAttribute('gap', settings.gap ?? '6%')
-    renderer.setAttribute('max-column-count', '1')
+    configureColumns(renderer)
     renderer.setStyles(readerCSS(settings))
+}
+
+/** How many pages show side by side: 2 in a spread, else 1. */
+const columns = () => {
+    const r = view.renderer
+    return r && !r.scrolled ? Math.max(1, r.heads?.length ?? 1) : 1
+}
+
+// The hairline down a spread's gutter, like a book's fold.
+const gutter = document.createElement('div')
+gutter.id = 'yomu-gutter'
+const showGutter = () => {
+    const ink = settings.colors?.ink ?? 'gray'
+    gutter.style.background = `color-mix(in srgb, ${ink} 10%, transparent)`
+    gutter.style.display = columns() === 2 ? 'block' : 'none'
 }
 
 const applyPageColor = () => {
@@ -150,7 +198,7 @@ const applyPageColor = () => {
 applyPageColor()
 
 const view = document.createElement('foliate-view')
-document.body.append(view)
+document.body.append(view, gutter)
 
 let firstPage = true
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -166,24 +214,35 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
         doc.head.append(external)
         setTimeout(() => report('csp-test', { bookScriptsRan: globalThis.__bookScripts }), 500)
     }
-    // Paged: the outer thirds turn the page (the app draws the turn) and the middle is the app's
-    // menu. Scrolled, or with tap turns off, any tap is the menu.
     doc.addEventListener('click', e => {
         if (doc.getSelection()?.type === 'Range') return
         if (e.target.closest?.('a[href]')) return
-        const paged = settings.flow !== 'scrolled' && settings.tapTurns !== false
         // The chapter frame is wider than the screen and scrolled from outside, so use screen x.
-        const x = e.screenX
-        // foliate's own click listener (which finds a tapped highlight) runs after this one, so
-        // decide once it has: a tap on a highlight is the highlight's.
-        highlightTapped = false
-        setTimeout(() => {
-            if (highlightTapped) return
-            if (paged && x < innerWidth / 3) view.prev()
-            else if (paged && x > innerWidth * 2 / 3) view.next()
-            else report('center-tap')
-        })
+        onPageTap(e.screenX)
     })
+})
+
+/**
+ * A tap at [x] (CSS px from the page's left). Paged: the outer thirds turn the page (left and right
+ * as the book reads, so a right-to-left book turns back on the right) and the middle is the app's
+ * menu. Scrolled, or with tap turns off, any tap is the menu.
+ */
+const onPageTap = x => {
+    const paged = settings.flow !== 'scrolled' && settings.tapTurns !== false
+    // foliate's own click listener (which finds a tapped highlight) runs after the chapter's, so
+    // decide once it has: a tap on a highlight is the highlight's.
+    highlightTapped = false
+    setTimeout(() => {
+        if (highlightTapped) return
+        if (paged && x < innerWidth / 3) view.goLeft()
+        else if (paged && x > innerWidth * 2 / 3) view.goRight()
+        else report('center-tap')
+    })
+}
+// A tap beside the text (the page is wider than its column or spread) lands on this page, not the
+// chapter's.
+document.addEventListener('click', e => {
+    if (!hasSelection()) onPageTap(e.clientX)
 })
 
 // Positions count only once the start position is on screen: before its chapter loads, foliate
@@ -201,25 +260,30 @@ const reportLocation = detail => {
     }
     const r = view.renderer
     const scrolled = r.scrolled
-    // Progress within the chapter, as foliate measures it: paged has a blank padding page at
-    // each end of a chapter, so text pages are 1 .. pages - 2.
-    const textPages = Math.max(1, r.pages - 2)
-    const page = Math.min(textPages - 1, Math.max(0, r.page - 1))
+    // Progress within the chapter, as foliate measures it: paged has a blank padding page (or
+    // spread) at each end of a chapter, so text screens are 1 .. pages - 2.
+    const textScreens = Math.max(1, r.pages - 2)
+    const screen = Math.min(textScreens - 1, Math.max(0, r.page - 1))
     const fraction = scrolled
         ? (r.viewSize > 0 ? r.start / r.viewSize : 0)
-        : (textPages > 1 ? page / (textPages - 1) : 0)
+        : (textScreens > 1 ? screen / (textScreens - 1) : 0)
     // How far through the scrollable range: 1 at the chapter's end (`fraction` measures the top of
     // the screen, so it never gets there).
     const scrollRange = r.viewSize - r.size
     const measured = scrolled ? (scrollRange > 1 ? r.start / scrollRange : 1) : fraction
+    // Counted in pages, not screens: a spread shows two, and `page` is the last one in view, so
+    // what's left is what's after this screen.
+    const perScreen = columns()
+    showGutter()
     report('relocate', {
         index: detail.section?.current,
         fraction: Math.min(1, Math.max(0, fraction)),
         measured: Math.min(1, Math.max(0, measured)),
         total: detail.fraction,
         cfi: detail.cfi,
-        page,
-        pages: textPages,
+        page: screen * perScreen + perScreen - 1,
+        pages: textScreens * perScreen,
+        columns: perScreen,
         scrolled,
         title: detail.tocItem?.label ?? null,
     })
@@ -603,13 +667,35 @@ view.addEventListener('create-overlay', ({ detail: { index } }) => Promise.resol
 }))
 
 // --- Scrolled flow: continuing into the adjacent chapter, and the scrollbar ---
-// Each chapter scrolls on its own. Pulling on past either end and letting go continues into the
-// adjacent chapter: reported as `continue` { index, forward } for the app to navigate (so it can
-// count the chapter as read through). A badge with an arrow grows with the pull and fills once
-// letting go will continue.
+// Each chapter scrolls on its own. Pulling on past either end drags the chapter with the finger,
+// against a growing resistance, and a badge with an arrow grows in the gap it leaves, filling once
+// letting go will continue. Letting go short of that springs the chapter back. Letting go past it
+// carries the chapter on out the way it was pulled, and the adjacent chapter arrives from the same
+// side (rising into place going forward, settling down going back). The page navigates itself and
+// reports `continue` { index, forward } first, so the app counts the chapter as read through.
 
 // CSS px of finger travel past the edge; well beyond a scrolling flick's overshoot.
 const PULL = 140
+// The chapter follows the finger less and less, approaching this many px.
+const PULL_TRAVEL = 200
+const pullOffset = distance => PULL_TRAVEL * (1 - Math.exp(-distance / PULL_TRAVEL))
+// Leaving: how much further the chapter goes; arriving: how far the next one travels into place
+// (the reader's chapter reveal travels the same 40).
+const EXIT_TRAVEL = 64
+const ENTER_TRAVEL = 40
+// The Material 3 motion curves: emphasized accelerate to leave, emphasized decelerate to arrive,
+// and a decelerating spring-like curve to settle back.
+const EASE_EXIT = 'cubic-bezier(0.3, 0, 0.8, 0.15)'
+const EASE_ENTER = 'cubic-bezier(0.05, 0.7, 0.1, 1)'
+const EASE_SETTLE = 'cubic-bezier(0.2, 0, 0, 1)'
+
+// The part of the page under the system bars or a display cutout, in CSS px (set by the app;
+// `env(safe-area-inset-*)` is 0 in an Android WebView).
+let safeArea = { top: 0, bottom: 0 }
+globalThis.yomuSetSafeArea = area => {
+    safeArea = { top: Math.max(0, area?.top ?? 0), bottom: Math.max(0, area?.bottom ?? 0) }
+}
+
 const isScrolled = () => settings.flow === 'scrolled' && view.renderer?.scrolled
 const adjacentIndex = dir => {
     const current = view.renderer?.getContents()?.[0]?.index
@@ -639,12 +725,43 @@ pullHint.append(pullArrow)
 document.body.append(pullHint)
 
 const pull = { active: false, dir: 0, from: 0, last: 0, distance: 0 }
+// True from letting go past the threshold until the next chapter has arrived.
+let continuing = false
+
+// Where the chapter is drawn: moved by a pull, and by the move into the next chapter.
+const pose = { y: 0, opacity: 1 }
+let poseMotion = null
+const poseStyle = ({ y, opacity }) => ({ transform: `translateY(${y}px)`, opacity: String(opacity) })
+const setPose = next => {
+    poseMotion?.cancel()
+    poseMotion = null
+    Object.assign(pose, next)
+    view.style.transform = pose.y ? `translateY(${pose.y}px)` : ''
+    view.style.opacity = pose.opacity === 1 ? '' : String(pose.opacity)
+}
+/** Animates the chapter to [next] (and leaves it there); instant with animations off. */
+const animatePose = async (next, duration, easing) => {
+    const from = { ...pose }
+    setPose(next)
+    if (settings.animated === false) return
+    const motion = poseMotion = view.animate([poseStyle(from), poseStyle(pose)], { duration, easing })
+    try {
+        await motion.finished
+    } catch {
+        // Replaced by a newer pose.
+    }
+}
 
 const showPull = () => {
     const progress = Math.min(1, pull.distance / PULL)
     const armed = pull.distance >= PULL
     const ink = settings.colors?.ink ?? 'gray'
+    // Centred in the gap the chapter leaves, kept clear of the system bars and cutout.
+    const inset = pull.dir > 0 ? safeArea.bottom : safeArea.top
+    const center = Math.max(inset + 28, (inset + Math.abs(pose.y)) / 2)
     pullHint.className = pull.dir > 0 ? 'next' : 'prev'
+    pullHint.style.top = pull.dir > 0 ? 'auto' : `${center - 24}px`
+    pullHint.style.bottom = pull.dir > 0 ? `${center - 24}px` : 'auto'
     pullHint.style.transition = 'none'
     pullHint.style.opacity = String(progress)
     pullHint.style.scale = String(0.6 + 0.4 * progress)
@@ -655,9 +772,13 @@ const hidePull = () => {
     pullHint.style.transition = ''
     pullHint.style.opacity = '0'
 }
+const settleBack = () => {
+    hidePull()
+    if (pose.y) animatePose({ y: 0, opacity: 1 }, 350, EASE_SETTLE)
+}
 
 const onPullStart = e => {
-    pull.active = isScrolled() && e.touches.length === 1
+    pull.active = !continuing && isScrolled() && e.touches.length === 1
     pull.dir = 0
     pull.distance = 0
     pull.last = e.touches[0]?.screenY ?? 0
@@ -666,7 +787,8 @@ const onPullMove = e => {
     if (!pull.active) return
     if (e.touches.length > 1) {
         pull.active = false
-        hidePull()
+        pull.dir = 0
+        settleBack()
         return
     }
     const y = e.touches[0].screenY
@@ -681,7 +803,10 @@ const onPullMove = e => {
         }
         return
     }
+    // The chapter is being dragged, not scrolled.
+    if (e.cancelable) e.preventDefault()
     pull.distance = Math.max(0, (pull.from - y) * pull.dir)
+    setPose({ y: -pull.dir * pullOffset(pull.distance), opacity: 1 })
     if (pull.distance === 0) {
         // Pulled back to where it started: scrolling again, not continuing.
         pull.dir = 0
@@ -693,16 +818,45 @@ const onPullMove = e => {
 const onPullEnd = () => {
     if (!pull.active) return
     pull.active = false
-    hidePull()
-    const index = pull.dir && pull.distance >= PULL ? adjacentIndex(pull.dir) : null
-    if (index != null) report('continue', { index, forward: pull.dir > 0 })
+    const dir = pull.dir
+    const index = dir && pull.distance >= PULL ? adjacentIndex(dir) : null
     pull.dir = 0
+    if (index != null) continueInto(index, dir)
+    else settleBack()
 }
+// The system took the gesture (say, a back swipe): never continue.
+const onPullCancel = () => {
+    if (!pull.active) return
+    pull.active = false
+    pull.dir = 0
+    settleBack()
+}
+
+/** Carries on out of this chapter (the way it was pulled) and brings in section [index]. */
+const continueInto = async (index, dir) => {
+    continuing = true
+    hidePull()
+    report('continue', { index, forward: dir > 0 })
+    try {
+        await animatePose({ y: pose.y - dir * EXIT_TRAVEL, opacity: 0 }, 150, EASE_EXIT)
+        await view.renderer.goTo({ index, anchor: dir > 0 ? 0 : 1 })
+        await settled()
+        setPose({ y: dir * ENTER_TRAVEL, opacity: 0 })
+        await animatePose({ y: 0, opacity: 1 }, 450, EASE_ENTER)
+    } catch (e) {
+        report('error', { message: 'continue: ' + String(e?.stack ?? e) })
+    } finally {
+        setPose({ y: 0, opacity: 1 })
+        continuing = false
+    }
+}
+
 const listenForPulls = target => {
     target.addEventListener('touchstart', onPullStart, { passive: true })
-    target.addEventListener('touchmove', onPullMove, { passive: true })
+    // Not passive: while the chapter is dragged, the page mustn't scroll as well.
+    target.addEventListener('touchmove', onPullMove, { passive: false })
     target.addEventListener('touchend', onPullEnd, { passive: true })
-    target.addEventListener('touchcancel', onPullEnd, { passive: true })
+    target.addEventListener('touchcancel', onPullCancel, { passive: true })
 }
 // Below a short chapter the touches land on this page rather than the chapter's.
 listenForPulls(document)
@@ -793,7 +947,28 @@ const findText = (doc, { before = '', highlight, after = '' } = {}) => {
     return range
 }
 
+/**
+ * The anchor for [progress] of a section in the terms `relocate` reports it: the last page in
+ * view's (page + 1) / pages when paged (two pages to a spread), how far through the scrollable
+ * range when scrolled. Decided once the section is laid out.
+ */
+const progressAnchor = progress => () => {
+    const r = view.renderer
+    const p = Math.min(1, Math.max(0, progress))
+    if (r.scrolled) {
+        const range = r.viewSize - r.size
+        return range > 1 && r.viewSize > 0 ? p * range / r.viewSize : 0
+    }
+    const textScreens = Math.max(1, r.pages - 2)
+    if (textScreens <= 1) return 0
+    const perScreen = columns()
+    const pages = textScreens * perScreen
+    const page = Math.min(pages - 1, Math.max(0, Math.round(p * pages - 1)))
+    return Math.floor(page / perScreen) / (textScreens - 1)
+}
+
 const goTo = target => {
+    if (target?.progress != null) return view.renderer.goTo({ index: target.index ?? 0, anchor: progressAnchor(target.progress) })
     if (target?.cfi) return view.goTo(target.cfi)
     if (target?.href) return view.goTo(target.href)
     // A position quoted by its text (from the Readium engine): found once the chapter loads, else

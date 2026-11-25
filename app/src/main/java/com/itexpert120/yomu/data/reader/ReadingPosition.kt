@@ -142,6 +142,38 @@ internal class ReadingPosition<T>(
         return sections.getOrNull(index + delta)?.target
     }
 
+    /**
+     * The place [fraction] (0..1) of the way through the current section: the reading-order href
+     * and the progression within it. A section spanning several resources is measured by their
+     * weights, as its progress is; null before a position or outside any section.
+     */
+    fun chapterTarget(fraction: Double): Pair<String, Double>? {
+        val href = currentHref ?: return null
+        val index = metrics(href, currentProgression, page).sectionIndex
+        val section = sections.getOrNull(index) ?: return null
+        if (section.resourceIndex !in weights.indices) return null
+        val prefix = weightPrefix
+        fun coordinate(resource: Int, progression: Double) = prefix[resource] + progression.coerceIn(0.0, 1.0) * weights[resource].coerceAtLeast(1)
+        val start = coordinate(section.resourceIndex, section.startProgression)
+        val end = sections.getOrNull(index + 1)
+            ?.takeIf { it.resourceIndex in weights.indices }
+            ?.let { coordinate(it.resourceIndex, it.startProgression) }
+            ?: prefix.last().toDouble()
+        if (end <= start) return readingOrder[section.resourceIndex] to section.startProgression
+        val at = start + fraction.coerceIn(0.0, 1.0) * (end - start)
+        // The resource holding [at]; a point on a boundary belongs to the end of the earlier one.
+        var resource = section.resourceIndex
+        while (resource < weights.lastIndex && prefix[resource + 1] < at) resource++
+        val progression = (at - prefix[resource]) / weights[resource].coerceAtLeast(1)
+        return readingOrder[resource] to progression.coerceIn(0.0, 1.0)
+    }
+
+    private val weightPrefix: IntArray by lazy {
+        IntArray(weights.size + 1).also { prefix ->
+            weights.forEachIndexed { i, weight -> prefix[i + 1] = prefix[i] + weight.coerceAtLeast(1) }
+        }
+    }
+
     /** Whether [progression] of resource [href] is at or after the current position. */
     fun isForward(href: String, progression: Double?): Boolean = metrics(href, progression, null).bookProgress >= currentBookProgress()
 

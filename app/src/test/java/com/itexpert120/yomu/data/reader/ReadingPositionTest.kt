@@ -230,4 +230,58 @@ class ReadingPositionTest {
         assertTrue(position.isForward("r13.xhtml", 0.0))
         assertFalse(position.isForward("r9.xhtml", 0.0))
     }
+
+    @Test
+    fun chapterTargetScrubsWithinAOneResourceChapter() {
+        val position = yenPress(ReaderLayout.Scroll)
+        position.onLocator("r5.xhtml", 0.2, null, null)
+
+        assertTarget("r5.xhtml", 0.0, position.chapterTarget(0.0))
+        assertTarget("r5.xhtml", 0.6, position.chapterTarget(0.6))
+        assertTarget("r5.xhtml", 1.0, position.chapterTarget(1.0))
+        // Chapter 4 runs to the end of the book.
+        position.onLocator("r15.xhtml", 0.2, null, null)
+        assertTarget("r39.xhtml", 1.0, position.chapterTarget(1.0))
+    }
+
+    @Test
+    fun chapterTargetCrossesTheResourcesOfAChapterByWeight() {
+        // Chapter 1 is resources 9 (weight 3) and 10 (weight 1).
+        val position = yenPress(ReaderLayout.Scroll, weights = List(40) { if (it == 9) 3 else 1 })
+        position.onLocator("r10.xhtml", 0.5, null, null)
+
+        assertTarget("r9.xhtml", 0.5, position.chapterTarget(0.375))
+        assertTarget("r10.xhtml", 0.5, position.chapterTarget(0.875))
+        // The chapter's end is the end of its last resource, not the start of the next chapter.
+        assertTarget("r10.xhtml", 1.0, position.chapterTarget(1.0))
+    }
+
+    @Test
+    fun chapterTargetInvertsChapterProgression() {
+        val position = yenPress(ReaderLayout.Scroll, weights = List(40) { if (it == 9) 3 else 1 })
+        position.onLocator("r9.xhtml", 0.1, null, null)
+        val (href, progression) = position.chapterTarget(0.7)!!
+        position.onScrollMeasured(href, progression)
+
+        assertEquals(0.7, position.onLocator(href, progression, null, null).chapterProgression!!, 0.0001)
+    }
+
+    @Test
+    fun chapterTargetStartsAtASectionsOffsetInItsResource() {
+        val position = ReadingPosition(
+            listOf(section("a", 0), section("b", 0, start = 0.5)),
+            listOf("x"),
+            listOf(4),
+            ReaderLayout.Scroll,
+        )
+        position.onLocator("x", 0.6, null, null)
+
+        assertTarget("x", 0.75, position.chapterTarget(0.5))
+        assertNull(ReadingPosition(listOf(section("a", 0)), listOf("x"), listOf(1), ReaderLayout.Scroll).chapterTarget(0.5))
+    }
+
+    private fun assertTarget(href: String, progression: Double, actual: Pair<String, Double>?) {
+        assertEquals(href, actual?.first)
+        assertEquals(progression, actual!!.second, 0.0001)
+    }
 }

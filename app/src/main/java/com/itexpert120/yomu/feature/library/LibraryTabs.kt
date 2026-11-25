@@ -74,6 +74,8 @@ internal fun LibraryTabRow(
     onEditTabs: () -> Unit,
     horizontalInset: Dp,
     modifier: Modifier = Modifier,
+    // Space between tab words (22 on phones, 26 on tablets).
+    gap: Dp = TabGap,
     // Actions at the row's end, outside the scrolling strip (e.g. search once the shelf has pinned).
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
@@ -155,7 +157,7 @@ internal fun LibraryTabRow(
                         cornerRadius = CornerRadius(line / 2),
                     )
                 },
-            horizontalArrangement = Arrangement.spacedBy(TabGap),
+            horizontalArrangement = Arrangement.spacedBy(gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEachIndexed { index, tab ->

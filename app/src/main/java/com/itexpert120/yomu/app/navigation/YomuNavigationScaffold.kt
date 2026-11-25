@@ -3,18 +3,31 @@ package com.itexpert120.yomu.app.navigation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,23 +35,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuNavigationBar
 import com.itexpert120.yomu.core.designsystem.YomuNavigationBarItem
-import com.itexpert120.yomu.core.designsystem.YomuNavigationRail
 import com.itexpert120.yomu.core.designsystem.YomuNavigationRailItem
+import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
-import kotlin.math.abs
 
 internal enum class YomuTopLevelDestination(
     val label: String,
@@ -62,13 +73,27 @@ class YomuBottomChromeInset {
 
 val LocalYomuBottomChromeInset = staticCompositionLocalOf { YomuBottomChromeInset() }
 
-/** Finger travel in one direction before the bar hides or comes back, so small corrections don't flicker it. */
-private val BarToggleTravel = 24.dp
+/** Below this height (a landscape phone) the rail narrows and centres its items. */
+private val ShortRailHeight = 480.dp
+
+/**
+ * Whether the bottom navigation bar is showing under this content: the content then ends above the
+ * bar (which pads itself for the gesture area), so it doesn't pad for the gesture area again.
+ * False on wide screens (the rail) and while a contextual toolbar has replaced the bar.
+ */
+val LocalYomuNavigationBarShown = compositionLocalOf { false }
+
+/**
+ * Called by the start screen once its first frame shows real content (not a loading placeholder),
+ * so the platform splash can hand over straight to it. A no-op outside the app shell.
+ */
+val LocalYomuContentReady = staticCompositionLocalOf<() -> Unit> { {} }
 
 /**
  * Stack's navigation: bar A on phones (icon + label, active in ink with a filled icon), a rail on
- * medium and wider screens. The bar hides as the content scrolls down and returns as it scrolls back
- * up; a contextual toolbar (library selection, search) replaces it via [barVisible].
+ * medium and wider screens. The bar stays put while the content scrolls (the screens pin a compact
+ * header at the top instead); a contextual toolbar (library selection, search) replaces it via
+ * [barVisible].
  */
 @Composable
 internal fun YomuTopLevelNavigation(
@@ -81,8 +106,29 @@ internal fun YomuTopLevelNavigation(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val wide = YomuWidthClass.fromWidth(maxWidth).isWide
         if (wide) {
+            // The boards' rail lies on the desk (no surface of its own): 80dp wide with its items from
+            // 20dp under the status bar on tablets, centred on a landscape phone (the board narrows it
+            // to 72dp, but "Statistics" doesn't fit an item that narrow).
+            val short = maxHeight < ShortRailHeight
             Row(Modifier.fillMaxSize()) {
-                YomuNavigationRail(modifier = Modifier.fillMaxHeight()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .windowInsetsPadding(
+                            WindowInsets.systemBarsIgnoringVisibility
+                                .union(WindowInsets.displayCutout)
+                                .only(WindowInsetsSides.Vertical + WindowInsetsSides.Start),
+                        )
+                        .width(80.dp)
+                        .padding(top = if (short) 0.dp else 20.dp)
+                        .selectableGroup(),
+                    verticalArrangement = if (short) {
+                        Arrangement.spacedBy(4.dp, Alignment.CenterVertically)
+                    } else {
+                        Arrangement.spacedBy(6.dp)
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     YomuTopLevelDestination.entries.forEach { destination ->
                         YomuNavigationRailItem(
                             selected = selected == destination,
@@ -101,33 +147,7 @@ internal fun YomuTopLevelNavigation(
             }
         } else {
             val density = LocalDensity.current
-            val toggleTravel = with(density) { BarToggleTravel.toPx() }
-            var scrolledAway by remember { mutableStateOf(false) }
-            // A new destination, or the contextual toolbar giving the bar back, always shows it again.
-            LaunchedEffect(selected, barVisible) { scrolledAway = false }
-            // Reads the finger's direction before anything consumes it (the library's sheet lift eats
-            // the first part of a scroll), and never consumes anything itself.
-            val scrollWatcher = remember(toggleTravel) {
-                object : NestedScrollConnection {
-                    private var travel = 0f
-
-                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        val dy = available.y
-                        if (dy == 0f || abs(available.x) > abs(dy)) return Offset.Zero
-                        if ((travel > 0f && dy < 0f) || (travel < 0f && dy > 0f)) travel = 0f
-                        travel += dy
-                        if (travel <= -toggleTravel) {
-                            scrolledAway = true
-                            travel = 0f
-                        } else if (travel >= toggleTravel) {
-                            scrolledAway = false
-                            travel = 0f
-                        }
-                        return Offset.Zero
-                    }
-                }
-            }
-            val showBar = barVisible && !scrolledAway
+            val showBar = barVisible
             val inset = LocalYomuBottomChromeInset.current
             var barHeight by remember { mutableStateOf(0.dp) }
             // While the bar is away nothing covers the bottom but the system gesture area.
@@ -138,10 +158,11 @@ internal fun YomuTopLevelNavigation(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        .nestedScroll(scrollWatcher),
+                        .fillMaxWidth(),
                 ) {
-                    content(Modifier.fillMaxSize())
+                    CompositionLocalProvider(LocalYomuNavigationBarShown provides showBar) {
+                        content(Modifier.fillMaxSize())
+                    }
                 }
                 // Contextual toolbars (e.g. library selection) replace the bar rather than stack on it.
                 AnimatedVisibility(
@@ -169,3 +190,30 @@ internal fun YomuTopLevelNavigation(
         }
     }
 }
+
+@Composable
+private fun ShellPreview(mode: YomuThemeMode) {
+    YomuDesignTheme(themeMode = mode) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(YomuTheme.stack.desk),
+        ) {
+            YomuTopLevelNavigation(selected = YomuTopLevelDestination.Library, onSelected = {}) { modifier ->
+                Box(modifier.background(YomuTheme.stack.desk))
+            }
+        }
+    }
+}
+
+@Preview(name = "Rail", widthDp = 1280, heightDp = 800)
+@Composable
+private fun RailPreview() = ShellPreview(YomuThemeMode.Light)
+
+@Preview(name = "Rail, landscape phone, dark", widthDp = 844, heightDp = 390)
+@Composable
+private fun ShortRailPreview() = ShellPreview(YomuThemeMode.Dark)
+
+@Preview(name = "Bar", widthDp = 390, heightDp = 300)
+@Composable
+private fun BarPreview() = ShellPreview(YomuThemeMode.Light)

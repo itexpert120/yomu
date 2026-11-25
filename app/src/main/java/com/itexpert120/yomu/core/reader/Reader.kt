@@ -235,6 +235,12 @@ interface ReaderSession : ReaderNavigator {
     fun goToLocator(locatorJson: String)
 
     /**
+     * Jumps to [progression] (0..1) of the way through the chapter being read, as
+     * [ReaderLocator.chapterProgression] measures it (the reader's position slider).
+     */
+    fun goToChapterProgression(progression: Double) = Unit
+
+    /**
      * The current position in a form that survives a different screen size, font, or layout: the
      * first visible element (selector + surrounding text) with the chapter progression as fallback.
      * Used to resume on other devices. Null when the navigator can't tell yet.

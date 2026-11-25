@@ -15,6 +15,9 @@ sealed interface ReaderAction {
     data object OpenDisplay : ReaderAction
     data object CloseDisplay : ReaderAction
     data class SelectChapter(val locatorJson: String) : ReaderAction
+
+    /** The controls panel's slider: go to [progression] (0..1) of the chapter being read. */
+    data class SeekInChapter(val progression: Double) : ReaderAction
     data object NextChapter : ReaderAction
     data object PreviousChapter : ReaderAction
     data class UpdateSettings(val settings: ReaderSettings) : ReaderAction
@@ -116,6 +119,7 @@ internal fun reduceChrome(state: ReaderChromeState, action: ReaderAction): Reade
 internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when (this) {
     ReaderAction.RetryOpen -> ReadingExperienceAction.RetryOpen
     is ReaderAction.SelectChapter -> navigateTo(locatorJson)
+    is ReaderAction.SeekInChapter -> ReadingExperienceAction.Navigate(ReaderNavigation.ChapterProgression(progression))
     ReaderAction.NextChapter -> ReadingExperienceAction.Navigate(ReaderNavigation.NextChapter)
     ReaderAction.PreviousChapter -> ReadingExperienceAction.Navigate(ReaderNavigation.PreviousChapter)
     is ReaderAction.UpdateSettings -> ReadingExperienceAction.ApplySettings(settings)

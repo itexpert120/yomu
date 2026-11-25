@@ -16,7 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
@@ -42,7 +45,8 @@ import androidx.compose.ui.unit.dp
  * Apply this EARLY in the modifier chain (before `clip`/`background`/`border`) so the whole surface —
  * fill, border, and content — scales together rather than just the inner content.
  *
- * Keyboard focus draws Stack's 2dp ink ring and a mouse/stylus hover an 8% ink tint, both in
+ * Keyboard focus (reached by keys, never touch or the window's initial focus) draws Stack's 2dp
+ * ink ring and a mouse/stylus hover an 8% ink tint, both in
  * [shape] — pass the element's own shape (`CircleShape` for round buttons, a pill for pills and
  * chips) so they follow its outline. The indication only answers presses; hover and focus are ours.
  */
@@ -67,6 +71,11 @@ fun Modifier.yomuPressable(
     val pressed by interaction.collectIsPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
     val hovered by interaction.collectIsHoveredAsState()
+    // The ring is for keyboard navigation only: it shows once a key has reached the element while
+    // it is focused (a Tab or arrow press lands its key-up on the element it moved focus to), never
+    // for focus given on touch or the window's initial focus.
+    var keyed by remember { mutableStateOf(false) }
+    LaunchedEffect(focused) { if (!focused) keyed = false }
     val motionEnabled = yomuAnimationsEnabled()
     val scale = animateFloatAsState(
         targetValue = if (motionEnabled && pressed && enabled) pressedScale else 1f,
@@ -93,7 +102,7 @@ fun Modifier.yomuPressable(
             if (hovered && enabled) {
                 drawOutline(shape.createOutline(size, layoutDirection, this), color = focusColor.copy(alpha = HoverAlpha))
             }
-            if (focused) {
+            if (focused && keyed) {
                 // Inset by half the stroke so the whole ring lands inside the element's bounds.
                 val stroke = 2.dp.toPx()
                 val inner = Size(size.width - stroke, size.height - stroke)
@@ -103,6 +112,10 @@ fun Modifier.yomuPressable(
             }
         }
         .indication(presses, remember(shape, pressOutset, pressColor) { YomuPressIndication(shape, pressOutset, pressColor) })
+        .onPreviewKeyEvent {
+            if (focused) keyed = true
+            false
+        }
         .combinedClickable(
             interactionSource = interaction,
             indication = null,

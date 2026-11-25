@@ -51,7 +51,6 @@ fun SettingsRoute(
     val sync by syncViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    var themeSheetVisible by rememberSaveable { mutableStateOf(false) }
     var pageName by rememberSaveable { mutableStateOf(SettingsPage.Home.name) }
     val page = SettingsPage.valueOf(pageName)
     var paneName by rememberSaveable { mutableStateOf(SettingsPane.Appearance.name) }
@@ -84,9 +83,8 @@ fun SettingsRoute(
                 selectedPane = selectedPane,
                 actions = SettingsActions(
                     onOpenPane = { paneName = it.name },
-                    onOpenTheme = { paneName = SettingsPane.Appearance.name },
+                    onSelectTheme = appViewModel::onSelectTheme,
                     onToggleOled = appViewModel::onSetOledDark,
-                    onUpdateReaderSettings = readerDefaultsViewModel::onUpdate,
                     onSendFeedback = { sendFeedback(context) },
                 ),
             ) { pane ->
@@ -121,12 +119,12 @@ fun SettingsRoute(
                                         onOpenReaderDefaults?.invoke() ?: run { pageName = SettingsPage.ReadingDefaults.name }
                                     SettingsPane.Fonts -> onOpenFontLibrary()
                                     SettingsPane.About -> onOpenAbout()
-                                    SettingsPane.Appearance -> themeSheetVisible = true
+                                    // Appearance is inline on the phone list; there is no page to open.
+                                    SettingsPane.Appearance -> Unit
                                 }
                             },
-                            onOpenTheme = { themeSheetVisible = true },
+                            onSelectTheme = appViewModel::onSelectTheme,
                             onToggleOled = appViewModel::onSetOledDark,
-                            onUpdateReaderSettings = readerDefaultsViewModel::onUpdate,
                             onSendFeedback = { sendFeedback(context) },
                         ),
                     )
@@ -137,14 +135,6 @@ fun SettingsRoute(
         }
     }
 
-    ThemeSheet(
-        visible = themeSheetVisible,
-        selectedTheme = appearance.themePreference,
-        oledDark = appearance.oledDark,
-        onSelectTheme = appViewModel::onSelectTheme,
-        onToggleOled = appViewModel::onSetOledDark,
-        onDismiss = { themeSheetVisible = false },
-    )
     SaveFailureNotice(readerDefaults.settingsError, readerDefaultsViewModel::onRetrySettings)
     CustomThemeSheet(
         visible = readerDefaults.customSheetVisible,

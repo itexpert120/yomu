@@ -1,14 +1,15 @@
 package com.itexpert120.yomu.feature.settings
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,9 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -48,18 +50,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.BuildConfig
+import com.itexpert120.yomu.core.designsystem.StackCompactHeader
+import com.itexpert120.yomu.core.designsystem.StackCompactHeaderHeight
+import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
+import com.itexpert120.yomu.core.designsystem.StackTitleRow
 import com.itexpert120.yomu.core.designsystem.StackType
+import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import com.itexpert120.yomu.core.model.ThemePreference
-import com.itexpert120.yomu.feature.reader.ReaderChromeToggles
 import com.itexpert120.yomu.feature.sync.SyncStatusCard
 import com.itexpert120.yomu.feature.sync.SyncUiState
 
@@ -78,9 +85,8 @@ internal data class SettingsUiState(
 /** What the Settings list asks for; navigation targets are resolved by the Route. */
 internal class SettingsActions(
     val onOpenPane: (SettingsPane) -> Unit,
-    val onOpenTheme: () -> Unit,
+    val onSelectTheme: (ThemePreference) -> Unit,
     val onToggleOled: (Boolean) -> Unit,
-    val onUpdateReaderSettings: (ReaderSettings) -> Unit,
     val onSendFeedback: () -> Unit,
 )
 
@@ -92,6 +98,12 @@ private val ReaderThemeMode.stackName: String
         ReaderThemeMode.Black -> "Black"
         ReaderThemeMode.Custom -> "Custom"
     }
+
+/** "Lora · Paper": the font and page theme every book starts with (the phone list's value). */
+internal fun ReaderSettings.defaultsShortSummary(): String = listOf(
+    customFont?.family ?: font.displayName,
+    theme.stackName,
+).joinToString(" · ")
 
 /** "Lora · 100% · Paper": the font, size and page theme every book starts with. */
 internal fun ReaderSettings.defaultsSummary(): String = listOf(
@@ -106,17 +118,39 @@ private val VersionText = "Open Reader ${BuildConfig.VERSION_NAME} · build ${Bu
 
 /**
  * Stack's Settings on a phone: the title and sync status lie on the desk; the grouped list is a
- * sheet over them. Appearance, Reading, While reading, then help, About and the version.
+ * sheet over them. Appearance (theme inline, pure black), Reading, then help, About and the
+ * version. Scrolled, the title gives way to the compact header and the list slides under it.
  */
 @Composable
-internal fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
+internal fun SettingsScreen(
+    state: SettingsUiState,
+    actions: SettingsActions,
+    scroll: ScrollState = rememberScrollState(),
+) {
     val stack = YomuTheme.stack
-    val scroll = rememberScrollState()
+    val density = LocalDensity.current
     var deskHeight by remember { mutableIntStateOf(0) }
-    Box(Modifier.fillMaxSize()) {
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val headerBottom = with(density) { (statusTop + StackCompactHeaderHeight).toPx() }
+    val headerFade = with(density) { StackHeaderFadeDistance.toPx() }
+    val sheetRadius = with(density) { 32.dp.toPx() }
+    // All read in layer/draw blocks, so scrolling never recomposes the list.
+    val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
+    val sheetTop = { (deskHeight - scroll.value).toFloat() }
+    Box(
+        Modifier
+            .fillMaxSize()
+            // Desk above the sheet, sheet below it, behind the scrolling column: what the edge fade
+            // dissolves content into under the compact header.
+            .drawBehind {
+                drawRect(stack.desk)
+                drawRect(stack.sheet, topLeft = Offset(0f, sheetTop().coerceAtLeast(0f)))
+            },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .stackPinnedEdgeFade(edge = { headerBottom }, strength = headerProgress)
                 .background(stack.sheet)
                 .verticalScroll(scroll),
         ) {
@@ -127,23 +161,26 @@ internal fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                     .background(stack.desk)
                     .statusBarsPadding(),
             ) {
-                Text(
-                    text = "Settings",
-                    style = StackType.Display,
-                    color = stack.ink,
-                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
-                )
+                StackTitleRow(title = "Settings", collapse = headerProgress)
                 SyncStatusCard(
                     state = state.sync,
                     onClick = { actions.onOpenPane(SettingsPane.Sync) },
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
+                    // The board's card sits 18dp under the 38dp title (8 under the shared 48dp row) and
+                    // the sheet 4dp under the card.
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
                 )
             }
             Box(
                 Modifier
                     .fillMaxWidth()
                     .background(stack.desk)
-                    .background(stack.sheet, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
+                    .graphicsLayer {
+                        // The corners square off as the sheet slides under the compact header.
+                        val radius = sheetRadius * ((sheetTop() - headerBottom) / sheetRadius).coerceIn(0f, 1f)
+                        shape = RoundedCornerShape(topStart = radius, topEnd = radius)
+                        clip = true
+                    }
+                    .background(stack.sheet),
                 contentAlignment = Alignment.TopCenter,
             ) {
                 Column(
@@ -154,19 +191,13 @@ internal fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                         .padding(top = 4.dp, bottom = 24.dp),
                 ) {
                     SettingsSectionLabel("Appearance")
-                    SettingsRow(
-                        title = "Theme",
-                        icon = StackIcons.Contrast,
-                        value = state.selectedTheme.stackLabel,
-                        chevron = true,
-                        onClick = actions.onOpenTheme,
-                    )
+                    ThemeChoiceRow(selected = state.selectedTheme, onSelect = actions.onSelectTheme)
                     PureBlackRow(state, actions, divider = false)
 
                     SettingsSectionLabel("Reading")
                     SettingsRow(
                         title = "Reading defaults",
-                        subtitle = state.readerSettings.defaultsSummary(),
+                        value = state.readerSettings.defaultsShortSummary(),
                         icon = StackIcons.AutoStories,
                         chevron = true,
                         onClick = { actions.onOpenPane(SettingsPane.ReadingDefaults) },
@@ -179,24 +210,6 @@ internal fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                         divider = false,
                         onClick = { actions.onOpenPane(SettingsPane.Fonts) },
                     )
-
-                    SettingsSectionLabel("While reading")
-                    Spacer(Modifier.height(8.dp))
-                    // The shared toggles draw as a grouped card with its own 16dp inset; on this sheet the
-                    // card is invisible, so widen it by that inset to line its rows up with the others.
-                    Box(
-                        Modifier.layout { measurable, constraints ->
-                            val inset = 16.dp.roundToPx()
-                            val wide = constraints.copy(
-                                minWidth = constraints.minWidth + inset * 2,
-                                maxWidth = constraints.maxWidth + inset * 2,
-                            )
-                            val placeable = measurable.measure(wide)
-                            layout(constraints.maxWidth, placeable.height) { placeable.place(-inset, 0) }
-                        },
-                    ) {
-                        ReaderChromeToggles(state.readerSettings, actions.onUpdateReaderSettings)
-                    }
 
                     SettingsSectionLabel("Help")
                     SettingsRow(
@@ -225,26 +238,35 @@ internal fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                 }
             }
         }
-        // Behind the status bar: the desk at rest, the sheet once the list has scrolled up under it.
-        // Read while drawing, so scrolling never recomposes the screen.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .windowInsetsTopHeight(WindowInsets.statusBars)
-                .drawBehind {
-                    val sheetUnder = scroll.value >= deskHeight - size.height
-                    drawRect(if (sheetUnder) stack.sheet else stack.desk)
-                },
+        StackCompactHeader(title = "Settings", progress = headerProgress)
+    }
+}
+
+/** Theme as an inline choice on its row: Light / Dark / Auto as one compact segmented control. */
+@Composable
+private fun ThemeChoiceRow(selected: ThemePreference, onSelect: (ThemePreference) -> Unit) {
+    SettingsRow(title = "Theme", icon = StackIcons.Contrast) {
+        YomuConnectedChoiceGroup(
+            options = ThemeOrder,
+            selected = selected,
+            label = { it.stackLabel },
+            onSelect = onSelect,
+            height = 38.dp,
+            modifier = Modifier.width(ThemeChoiceWidth),
         )
     }
 }
+
+/** The board's segmented choice: three 13/600 words with 12dp sides in a 3dp track. */
+private val ThemeChoiceWidth = 192.dp
 
 @Composable
 private fun PureBlackRow(state: SettingsUiState, actions: SettingsActions, divider: Boolean) {
     val allowed = state.selectedTheme.allowsPureBlack()
     SettingsSwitchRow(
         title = "Pure black at night",
-        subtitle = if (allowed) "For OLED screens" else "Available with the Dark or Auto theme",
+        // Only said when it can't be switched on.
+        subtitle = if (allowed) null else "Available with the Dark or Auto theme",
         icon = StackIcons.DarkMode,
         checked = state.oledDark && allowed,
         enabled = allowed,
@@ -276,16 +298,12 @@ internal fun TabletSettingsLayout(
                 .width(360.dp)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 16.dp, top = 16.dp)
+                .padding(start = 24.dp, end = 16.dp)
                 .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility.only(WindowInsetsSides.Bottom))
                 .padding(bottom = 24.dp),
         ) {
-            Text(
-                text = "Settings",
-                style = StackType.Display,
-                color = stack.ink,
-                modifier = Modifier.padding(start = 8.dp, bottom = 18.dp),
-            )
+            // The shared title row, so "Settings" sits where "Library" and "Statistics" do (32dp in).
+            StackTitleRow(title = "Settings", gutter = 8.dp, modifier = Modifier.padding(bottom = 18.dp))
             SyncStatusCard(
                 state = state.sync,
                 onClick = { actions.onOpenPane(SettingsPane.Sync) },
@@ -416,7 +434,7 @@ internal fun AppearancePane(
     }
 }
 
-private val PreviewActions = SettingsActions({}, {}, {}, {}, {})
+private val PreviewActions = SettingsActions({}, {}, {}, {})
 
 private val PreviewState = SettingsUiState(
     selectedTheme = ThemePreference.System,
@@ -443,6 +461,22 @@ private fun SettingsDarkPreview() {
 @Composable
 private fun SettingsBlackPreview() {
     YomuDesignTheme(themeMode = YomuThemeMode.Oled) { SettingsScreen(PreviewState.copy(oledDark = true), PreviewActions) }
+}
+
+@Preview(name = "Scrolled", widthDp = 390, heightDp = 560)
+@Composable
+private fun SettingsScrolledPreview() {
+    YomuDesignTheme(themeMode = YomuThemeMode.Light) {
+        SettingsScreen(PreviewState, PreviewActions, rememberScrollState(420))
+    }
+}
+
+@Preview(name = "Scrolled dark", widthDp = 390, heightDp = 560)
+@Composable
+private fun SettingsScrolledDarkPreview() {
+    YomuDesignTheme(themeMode = YomuThemeMode.Dark) {
+        SettingsScreen(PreviewState, PreviewActions, rememberScrollState(420))
+    }
 }
 
 @Preview(widthDp = 1200, heightDp = 800)

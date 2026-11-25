@@ -20,6 +20,8 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -122,7 +124,11 @@ class FoliateReader(
     /** The reader's view: the WebView with the native page-turn layer over it. */
     val view: FrameLayout = FrameLayout(contextWrapper).apply { addView(webView) }
 
+    // The page's own safe area (see updateSafeArea), last sent, in px.
+    private var safeArea: Pair<Int, Int>? = null
+
     init {
+        webView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateSafeArea() }
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
             .apply { pageParams.forEach { (key, value) -> appendQueryParameter(key, value) } }
             .build()
@@ -158,6 +164,25 @@ class FoliateReader(
             zip = ZipFile(epub)
         }
         call("globalThis.yomuStart($configJson)")
+    }
+
+    /**
+     * Tells the page how much of its top and bottom lies under the system bars (shown or not) or a
+     * display cutout, as `env(safe-area-inset-*)` would if WebViews reported it. Things the page
+     * draws at its edges keep clear of it.
+     */
+    private fun updateSafeArea() {
+        val insets = ViewCompat.getRootWindowInsets(webView) ?: return
+        val unsafe = insets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars())
+        val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+        val location = IntArray(2).also(webView::getLocationInWindow)
+        val windowHeight = webView.rootView.height
+        val top = (maxOf(unsafe.top, cutout.top) - location[1]).coerceAtLeast(0)
+        val bottom = (maxOf(unsafe.bottom, cutout.bottom) - (windowHeight - location[1] - webView.height)).coerceAtLeast(0)
+        if (safeArea == top to bottom) return
+        safeArea = top to bottom
+        val density = webView.resources.displayMetrics.density
+        call("globalThis.yomuSetSafeArea?.({top:${top / density},bottom:${bottom / density}})")
     }
 
     private fun call(js: String) {

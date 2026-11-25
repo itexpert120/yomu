@@ -8,6 +8,7 @@ import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -73,6 +74,41 @@ class SyncWireGoldenTest {
         HighlightPayload.serializer(),
         """{"sha256":"abc","locator":"{}","text":"Fear is the mind-killer.","color":-256,"createdAt":1700000000000}""",
     )
+
+    @Test
+    fun highlightWithNoteAndStyle() = assertRoundTrip(
+        HighlightPayload.serializer(),
+        """{"sha256":"abc","locator":"{}","text":"Fear is the mind-killer.","color":-256,"createdAt":1700000000000,""" +
+            """"note":"Litany.","style":"squiggly","modifiedAt":1700000005000}""",
+    )
+
+    @Test
+    fun unannotatedHighlightEncodesAsOlderVersionsWroteIt() = assertEquals(
+        """{"sha256":"abc","locator":"{}","text":"Fear","color":-256,"createdAt":1700000000000}""",
+        SyncJson.encodeToString(HighlightPayload.serializer(), HighlightPayload("abc", "{}", "Fear", -256, 1_700_000_000_000)),
+    )
+
+    @Test
+    fun highlightFromOlderVersionsDecodesToDefaults() {
+        val older = SyncJson.decodeFromString(
+            HighlightPayload.serializer(),
+            """{"sha256":"abc","locator":"{}","text":"Fear","color":-256,"createdAt":1700000000000}""",
+        )
+        assertEquals(HighlightPayload("abc", "{}", "Fear", -256, 1_700_000_000_000, note = null, style = "highlight", modifiedAt = 0), older)
+    }
+
+    /** The payload exactly as builds before notes declared it; they decode with this build's [SyncJson] settings. */
+    @Serializable
+    private data class OlderHighlightPayload(val sha256: String, val locator: String, val text: String, val color: Int, val createdAt: Long)
+
+    @Test
+    fun olderVersionsStillReadAnAnnotatedHighlight() {
+        val wire = SyncJson.encodeToString(
+            HighlightPayload.serializer(),
+            HighlightPayload("abc", "{}", "Fear", -256, 1_700_000_000_000, note = "Litany.", style = "underline", modifiedAt = 5),
+        )
+        assertEquals(OlderHighlightPayload("abc", "{}", "Fear", -256, 1_700_000_000_000), SyncJson.decodeFromString(OlderHighlightPayload.serializer(), wire))
+    }
 
     @Test
     fun shelf() {

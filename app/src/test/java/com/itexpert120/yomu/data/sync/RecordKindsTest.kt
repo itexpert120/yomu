@@ -177,6 +177,25 @@ class RecordKindsTest {
     }
 
     @Test
+    fun highlightWithNoteAndStyle() {
+        bothHaveBook()
+        a.highlights["h1"] = HighlightEntity("h1", "a1", "{}", "Fear is the mind-killer.", -256, 7, note = "Litany.", style = "squiggly", modifiedAt = 9)
+        assertFixedPoint("highlight")
+        val synced = b.highlights.getValue("h1")
+        assertEquals("Litany.", synced.note)
+        assertEquals("squiggly", synced.style)
+        assertEquals(9L, synced.modifiedAt)
+    }
+
+    @Test
+    fun aStyleFromANewerBuildRoundTrips() {
+        bothHaveBook()
+        a.highlights["h1"] = HighlightEntity("h1", "a1", "{}", "Fear", -256, 7, style = "glow")
+        assertFixedPoint("highlight")
+        assertEquals("glow", b.highlights.getValue("h1").style)
+    }
+
+    @Test
     fun recordForABookNotHereWaits() = runBlocking {
         a.addBook("a1", "sha")
         a.bookmarks["bm1"] = BookmarkEntity("bm1", "a1", "{}", null, null, 0.25, 7)
