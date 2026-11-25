@@ -37,9 +37,9 @@ import java.util.zip.ZipFile
  * time (on the application context) and adopted later with [attachTo] and [open], so opening a
  * book skips the WebView's creation and the page's script loading.
  *
- * Page turns are drawn natively over the WebView (see [FoliatePageTurns]); they need an Activity,
- * so a reader must be [attachTo]'d one before it's shown. [onEvent] gets the page's events
- * (`relocate`, `first-page`, `center-tap`, …) on the main thread.
+ * Page turns are foliate's own. A reader built ahead must be [attachTo]'d an Activity before it's
+ * shown. [onEvent] gets the page's events (`relocate`, `first-page`, `center-tap`, …) on the main
+ * thread.
  */
 class FoliateReader(
     context: Context,
@@ -120,20 +120,6 @@ class FoliateReader(
     /** The reader's view: the WebView with the native page-turn layer over it. */
     val view: FrameLayout = FrameLayout(contextWrapper).apply { addView(webView) }
 
-    private val turns = FoliatePageTurns(
-        container = view,
-        webView = webView,
-        jump = { dir, id -> webView.evaluateJavascript("globalThis.yomuJump($dir, $id)", null) },
-        log = { Log.i(TAG, it) },
-    )
-
-    /** Native page turns (paged layout). Off in scrolled layout, where the page scrolls itself. */
-    var pageTurns: Boolean
-        get() = turns.enabled
-        set(value) {
-            turns.enabled = value
-        }
-
     init {
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
             .apply { pageParams.forEach { (key, value) -> appendQueryParameter(key, value) } }
@@ -188,12 +174,11 @@ class FoliateReader(
     /** Jumps to [targetJson]: `{ cfi }`, `{ href }` or `{ index, fraction }`. */
     fun goTo(targetJson: String) = webView.evaluateJavascript("globalThis.yomuGoTo?.($targetJson)", null)
 
-    fun next() = turns.tap(1)
+    fun next() = call("document.querySelector('foliate-view')?.next()")
 
-    fun prev() = turns.tap(-1)
+    fun prev() = call("document.querySelector('foliate-view')?.prev()")
 
     override fun close() {
-        turns.release()
         (view.parent as? ViewGroup)?.removeView(view)
         webView.destroy()
         zip?.close()
@@ -202,9 +187,6 @@ class FoliateReader(
 
     private fun onPageEvent(name: String, json: String) {
         when (name) {
-            "tap" -> turns.tap(JSONObject(json).getInt("dir"))
-            "jumped" -> JSONObject(json).let { turns.onJumped(it.getInt("id"), it.getBoolean("moved")) }
-            "settled" -> turns.onSettled(JSONObject(json).getInt("seq"))
             "shell-ready" -> {
                 pageReady = true
                 pendingCalls.forEach { webView.evaluateJavascript(it, null) }

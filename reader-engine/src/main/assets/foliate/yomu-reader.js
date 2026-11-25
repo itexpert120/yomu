@@ -1,6 +1,6 @@
 // Open Reader's glue around foliate-js: the book is read file by file from the app (never as one
-// big blob), styled from the app's reader settings, and every position is reported to Kotlin,
-// which also draws the page turns.
+// big blob), styled from the app's reader settings, and every position is reported to Kotlin.
+// Page turns are foliate's own (its finger-following swipe and slide).
 //
 // The page loads before the app knows which book (so it can be made ahead of a tap) and reports
 // `shell-ready`; the app then calls yomuStart({ start, settings }). `start` is { cfi } | { href } |
@@ -9,8 +9,6 @@
 import './view.js'
 import { EPUB } from './epub.js'
 import { Overlayer } from './overlayer.js'
-import { installPageTurns } from './yomu-turns.js'
-import { installStandIn } from './yomu-standin.js'
 
 const host = globalThis.YomuHost
 const t0 = performance.now()
@@ -137,7 +135,9 @@ const readerCSS = s => {
 
 const configure = renderer => {
     renderer.setAttribute('flow', settings.flow === 'scrolled' ? 'scrolled' : 'paginated')
-    // No 'animated': foliate jumps between pages and the app draws the turn.
+    // foliate's slide, unless the system has animations off.
+    if (settings.animated === false) renderer.removeAttribute('animated')
+    else renderer.setAttribute('animated', '')
     renderer.setAttribute('gap', settings.gap ?? '6%')
     renderer.setAttribute('max-column-count', '1')
     renderer.setStyles(readerCSS(settings))
@@ -150,8 +150,6 @@ applyPageColor()
 
 const view = document.createElement('foliate-view')
 document.body.append(view)
-const turns = installPageTurns(view, report)
-let standIn = null
 
 let firstPage = true
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -180,8 +178,8 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
         highlightTapped = false
         setTimeout(() => {
             if (highlightTapped) return
-            if (paged && x < innerWidth / 3) report('tap', { dir: -1 })
-            else if (paged && x > innerWidth * 2 / 3) report('tap', { dir: 1 })
+            if (paged && x < innerWidth / 3) view.prev()
+            else if (paged && x > innerWidth * 2 / 3) view.next()
             else report('center-tap')
         })
     })
@@ -292,7 +290,6 @@ globalThis.yomuApplySettings = next => {
     settings = next
     applyPageColor()
     if (view.renderer) configure(view.renderer)
-    standIn?.refresh()
 }
 
 const goTo = target => {
@@ -342,10 +339,6 @@ const open = async ({ start, settings: initial }) => {
     }
     shown = true
     if (view.lastLocation) reportLocation(view.lastLocation)
-    if (!params.has('nostandin')) {
-        standIn = installStandIn(view, book, configure)
-        turns.setStandIn(standIn)
-    }
 }
 
 let started = false

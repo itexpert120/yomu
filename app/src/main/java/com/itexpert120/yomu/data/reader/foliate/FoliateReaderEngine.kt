@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.data.reader.foliate
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.ComponentCallbacks2
 import android.content.Context
@@ -409,7 +410,6 @@ private class FoliateReaderSession(
         created.isLookupPhrase = isLookupPhrase
         created.onSelection = ::onSelection
         created.userFonts = userFonts(settings)
-        created.pageTurns = settings.layout == ReaderLayout.Paged
         // Not immersive, the page sits between the system bars, as Readium's did.
         ViewCompat.setOnApplyWindowInsetsListener(created.view) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -536,7 +536,6 @@ private class FoliateReaderSession(
         position.layout = settings.layout
         reader?.let {
             it.userFonts = userFonts(settings)
-            it.pageTurns = settings.layout == ReaderLayout.Paged
             it.applySettings(settingsJson(settings).toString())
         }
     }
@@ -602,6 +601,7 @@ private class FoliateReaderSession(
                 },
             )
             .put("tapTurns", settings.tapNavigation)
+            .put("animated", ValueAnimator.areAnimatorsEnabled())
     }
 
     private fun css(argb: Long): String = "#%06X".format(argb and 0xFFFFFF)
