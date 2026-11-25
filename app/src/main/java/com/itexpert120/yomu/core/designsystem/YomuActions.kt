@@ -1,27 +1,23 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FloatingToolbarDefaults
-import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailDefaults
 import androidx.compose.material3.WideNavigationRailItem
@@ -29,18 +25,26 @@ import androidx.compose.material3.WideNavigationRailItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
-/** Shared labeled action used by reader chrome, selection bars, and compact toolbars. */
+/**
+ * A labelled icon action (reader chrome, compact toolbars): the icon over a 12/600 label, in
+ * [contentColor] (ink by default). [containerColor] sets it on a pill of that colour.
+ */
 @Composable
 fun YomuLabeledIconAction(
     label: String,
@@ -49,52 +53,27 @@ fun YomuLabeledIconAction(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     selected: Boolean = false,
-    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
-    containerColor: androidx.compose.ui.graphics.Color? = null,
+    contentColor: Color = YomuTheme.stack.ink,
+    containerColor: Color? = null,
 ) {
-    if (containerColor != null) {
-        androidx.compose.material3.FilledTonalButton(
-            onClick = onClick,
-            enabled = enabled,
-            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                containerColor = containerColor,
-                contentColor = contentColor,
-            ),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 12.dp),
-            modifier = modifier.semantics { this.selected = selected },
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(icon, contentDescription = null)
-                Text(label, style = MaterialTheme.typography.labelLarge)
-            }
-        }
-        return
-    }
-    val resolvedColor = if (enabled) {
-        contentColor
-    } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    }
     Column(
         modifier = modifier
             .widthIn(min = 64.dp)
             .heightIn(min = 48.dp)
-            .yomuPressable(
-                onClick = onClick,
-                enabled = enabled,
-                role = Role.Button,
-            )
+            .alpha(if (enabled) 1f else 0.4f)
+            .clip(if (containerColor != null) RoundedCornerShape(16.dp) else CircleShape)
+            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button)
             .semantics(mergeDescendants = true) {
                 this.contentDescription = label
                 this.selected = selected
             }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .then(if (containerColor != null) Modifier.background(containerColor) else Modifier)
+            .padding(horizontal = 8.dp, vertical = if (containerColor != null) 10.dp else 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = resolvedColor)
-        Text(text = label, color = resolvedColor, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+        Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+        Text(text = label, color = contentColor, style = MaterialTheme.typography.labelMedium, maxLines = 1)
     }
 }
 
@@ -217,59 +196,49 @@ data class YomuToolbarAction(
 )
 
 /**
- * M3 Expressive floating toolbar for contextual page actions. [vibrant] switches to the
- * high-emphasis colour scheme that marks a temporary mode (e.g. selection); standard keeps focus on
- * the content underneath. Actions stay labelled — icon-only bulk actions tested worse for clarity.
+ * Stack's floating toolbar for selection and contextual actions: an ink pill floating above the
+ * gesture area, each action an on-ink icon + 13/600 label (48dp tall). It replaces the nav bar while
+ * a temporary mode (selection) is active. [vibrant] is kept for source compatibility; surfaces
+ * themed by something other than the app (the reader page) pass their own colours.
  */
 @Composable
 fun YomuFloatingToolbar(
     actions: List<YomuToolbarAction>,
     modifier: Modifier = Modifier,
     vibrant: Boolean = false,
-    // Surfaces themed by something other than the app scheme (the reader page) pass their own.
-    containerColor: androidx.compose.ui.graphics.Color? = null,
-    contentColor: androidx.compose.ui.graphics.Color? = null,
+    containerColor: Color? = null,
+    contentColor: Color? = null,
 ) {
-    val base = if (vibrant) {
-        FloatingToolbarDefaults.vibrantFloatingToolbarColors()
-    } else {
-        FloatingToolbarDefaults.standardFloatingToolbarColors()
-    }
-    val colors = base.copy(
-        toolbarContainerColor = containerColor ?: base.toolbarContainerColor,
-        toolbarContentColor = contentColor ?: base.toolbarContentColor,
-    )
-    HorizontalFloatingToolbar(
-        expanded = true,
-        colors = colors,
-        modifier = modifier,
+    val stack = YomuTheme.stack
+    val container = containerColor ?: stack.ink
+    val content = contentColor ?: stack.onInk
+    Row(
+        modifier = modifier
+            .dropShadow(CircleShape, ToolbarShadow)
+            .clip(CircleShape)
+            .background(container)
+            .padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         actions.forEach { action ->
-            val contentColor = colors.toolbarContentColor
-            if (action.selected) {
-                FilledTonalButton(
-                    onClick = action.onClick,
-                    enabled = action.enabled,
-                    shapes = ButtonDefaults.shapes(),
-                    contentPadding = PaddingValues(horizontal = 14.dp),
-                    modifier = Modifier.semantics { this.selected = true },
-                ) { ToolbarActionContent(action) }
-            } else {
-                TextButton(
-                    onClick = action.onClick,
-                    enabled = action.enabled,
-                    shapes = ButtonDefaults.shapes(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
-                    contentPadding = PaddingValues(horizontal = 14.dp),
-                ) { ToolbarActionContent(action) }
+            Row(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .alpha(if (action.enabled) 1f else 0.4f)
+                    .clip(CircleShape)
+                    .yomuPressable(onClick = action.onClick, enabled = action.enabled, role = Role.Button)
+                    .semantics { this.selected = action.selected }
+                    .then(if (action.selected) Modifier.background(content.copy(alpha = 0.14f)) else Modifier)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(action.icon, contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+                Text(action.label, style = StackType.Label, color = content, maxLines = 1)
             }
         }
     }
 }
 
-@Composable
-private fun ToolbarActionContent(action: YomuToolbarAction) {
-    Icon(action.icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-    Text(action.label, style = MaterialTheme.typography.labelLargeEmphasized, maxLines = 1)
-}
+private val ToolbarShadow = Shadow(radius = 24.dp, spread = (-10).dp, offset = DpOffset(0.dp, 8.dp), color = Color(0xFF16191C).copy(alpha = 0.45f))

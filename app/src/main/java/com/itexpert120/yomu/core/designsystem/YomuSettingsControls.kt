@@ -1,22 +1,33 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.ListItemShapes
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -26,12 +37,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.onClick as onClickLabel
 
+/** Where a row sits in its group card: the ends take the card's corners, the rest share dividers. */
 enum class YomuSettingPosition { Single, First, Middle, Last }
 
-/**
- * Material 3 Expressive switch: the handle carries a check/close icon so on and off read at a
- * glance, not just by colour.
- */
+/** Stack's switch: 52×32, ink track with a white thumb when on, the grey track when off. */
 @Composable
 fun YomuTogglePill(
     checked: Boolean,
@@ -62,9 +71,12 @@ fun YomuTogglePill(
 }
 
 /**
- * A settings row. With a [position] it renders as an expressive segmented list item — rounded
- * outer corners on the group ends, tight inner corners between neighbours — and morphs toward the
- * selected shape when [selected]. Without a position it is a plain, uncontained list item.
+ * A Stack settings row: 56dp tall, optional 24dp muted leading icon, the title in Body 15, an
+ * optional supporting line (12.5 muted) and a trailing slot that reads in the muted value style
+ * (13) — put a value, a chevron, a switch or a check there. With a [position] the row is a piece of
+ * a sheet-coloured group card (radius 24 at the group's ends) on the desk, with rule-coloured
+ * dividers between neighbours; on a sheet the card disappears into it and only the dividers show.
+ * Without a position it is a plain row with no container.
  */
 @Composable
 fun YomuSettingRow(
@@ -77,82 +89,78 @@ fun YomuSettingRow(
     leadingContent: (@Composable () -> Unit)? = null,
     position: YomuSettingPosition? = null,
     role: Role = Role.Button,
-    // Destructive actions carry the error role on their title.
+    // Destructive actions carry the danger colour on their title.
     destructive: Boolean = false,
     trailing: @Composable () -> Unit,
 ) {
-    val headline: @Composable () -> Unit = {
-        Text(
-            text = title,
-            color = if (destructive) MaterialTheme.colorScheme.error else Color.Unspecified,
-            style = if (selected) {
-                MaterialTheme.typography.bodyLargeEmphasized
-            } else {
-                MaterialTheme.typography.bodyLarge
-            },
-        )
-    }
-    val supporting: (@Composable () -> Unit)? = subtitle?.let { text ->
-        { Text(text = text, style = MaterialTheme.typography.bodyMedium) }
-    }
-    val semanticsModifier = modifier
-        .fillMaxWidth()
-        .semantics {
-            this.selected = selected
-            this.role = role
+    val stack = YomuTheme.stack
+    val shape = position?.cardShape() ?: RectangleShapeCompat
+    val divider = position == YomuSettingPosition.First || position == YomuSettingPosition.Middle
+    val rule = stack.rule
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                this.selected = selected
+                this.role = role
+            }
+            .clip(shape)
+            .then(if (position != null) Modifier.background(stack.sheet) else Modifier)
+            .then(
+                if (onClick != null) Modifier.yomuPressable(onClick = onClick, enabled = enabled, role = role, pressedScale = 1f) else Modifier,
+            )
+            .then(
+                if (divider) {
+                    Modifier.drawBehind {
+                        val inset = RowHorizontalPadding.toPx()
+                        val y = size.height - 0.5.dp.toPx()
+                        drawLine(rule, Offset(inset, y), Offset(size.width - inset, y), strokeWidth = 1.dp.toPx())
+                    }
+                } else {
+                    Modifier
+                },
+            )
+            .heightIn(min = 56.dp)
+            .padding(horizontal = if (position != null) RowHorizontalPadding else 0.dp, vertical = 8.dp)
+            .alpha(if (enabled) 1f else 0.4f),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        if (leadingContent != null) {
+            CompositionLocalProvider(LocalContentColor provides stack.muted) { leadingContent() }
         }
-
-    if (position == null) {
-        ListItem(
-            supportingContent = supporting,
-            leadingContent = leadingContent,
-            trailingContent = { trailing() },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            modifier = semanticsModifier.then(
-                if (onClick != null) Modifier.yomuPressable(onClick = onClick, enabled = enabled, role = role) else Modifier,
-            ),
-            content = headline,
-        )
-        return
-    }
-
-    val shapes = position.segmentedShapes()
-    if (onClick != null) {
-        SegmentedListItem(
-            selected = selected,
-            onClick = onClick,
-            shapes = shapes,
-            modifier = semanticsModifier,
-            enabled = enabled,
-            leadingContent = leadingContent,
-            trailingContent = { trailing() },
-            supportingContent = supporting,
-            colors = yomuSegmentedColors(),
-            content = headline,
-        )
-    } else {
-        SegmentedListItem(
-            shapes = shapes,
-            modifier = semanticsModifier,
-            enabled = enabled,
-            leadingContent = leadingContent,
-            trailingContent = { trailing() },
-            supportingContent = supporting,
-            colors = yomuSegmentedColors(),
-            content = headline,
-        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                color = if (destructive) stack.danger else stack.ink,
+                style = if (selected) MaterialTheme.typography.bodyLargeEmphasized else MaterialTheme.typography.bodyLarge,
+            )
+            if (subtitle != null) {
+                Text(text = subtitle, style = StackType.Supporting, color = stack.muted)
+            }
+        }
+        CompositionLocalProvider(
+            LocalContentColor provides stack.muted,
+            LocalTextStyle provides StackType.Value,
+        ) {
+            Box(contentAlignment = Alignment.CenterEnd) { trailing() }
+        }
     }
 }
 
-@Composable
-private fun YomuSettingPosition.segmentedShapes(): ListItemShapes = when (this) {
-    YomuSettingPosition.Single -> ListItemDefaults.segmentedShapes(index = 0, count = 1)
-    YomuSettingPosition.First -> ListItemDefaults.segmentedShapes(index = 0, count = 3)
-    YomuSettingPosition.Middle -> ListItemDefaults.segmentedShapes(index = 1, count = 3)
-    YomuSettingPosition.Last -> ListItemDefaults.segmentedShapes(index = 2, count = 3)
+private val RowHorizontalPadding = 16.dp
+private val RectangleShapeCompat: Shape = RoundedCornerShape(0.dp)
+
+private val GroupCorner = 24.dp
+
+private fun YomuSettingPosition.cardShape(): Shape = when (this) {
+    YomuSettingPosition.Single -> RoundedCornerShape(GroupCorner)
+    YomuSettingPosition.First -> RoundedCornerShape(topStart = GroupCorner, topEnd = GroupCorner)
+    YomuSettingPosition.Middle -> RectangleShapeCompat
+    YomuSettingPosition.Last -> RoundedCornerShape(bottomStart = GroupCorner, bottomEnd = GroupCorner)
 }
 
-/** Maps a row's index in a group of [count] to its segmented position. */
+/** Maps a row's index in a group of [count] to its position in the group card. */
 fun yomuSettingPosition(index: Int, count: Int): YomuSettingPosition = when {
     count <= 1 -> YomuSettingPosition.Single
     index == 0 -> YomuSettingPosition.First
@@ -160,14 +168,10 @@ fun yomuSettingPosition(index: Int, count: Int): YomuSettingPosition = when {
     else -> YomuSettingPosition.Middle
 }
 
-@Composable
-private fun yomuSegmentedColors() = ListItemDefaults.segmentedColors(
-    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-)
-
 /**
- * A segmented container for controls that aren't list rows (sliders, pickers, previews). It shares
- * the segmented list item shape and surface, so mixed groups of rows and controls read as one unit.
+ * A piece of a group card for controls that aren't list rows (sliders, pickers, previews): the same
+ * sheet colour and corners as [YomuSettingRow], so mixed groups of rows and controls read as one
+ * card.
  */
 @Composable
 fun YomuSettingContainer(
@@ -177,33 +181,45 @@ fun YomuSettingContainer(
     dense: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = position.segmentedShapes().shape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = if (dense) 10.dp else 14.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(if (dense) 4.dp else 8.dp),
-            content = content,
-        )
-    }
+    val stack = YomuTheme.stack
+    val rule = stack.rule
+    val divider = position == YomuSettingPosition.First || position == YomuSettingPosition.Middle
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(position.cardShape())
+            .background(stack.sheet)
+            .then(
+                if (divider) {
+                    Modifier.drawBehind {
+                        val inset = RowHorizontalPadding.toPx()
+                        val y = size.height - 0.5.dp.toPx()
+                        drawLine(rule, Offset(inset, y), Offset(size.width - inset, y), strokeWidth = 1.dp.toPx())
+                    }
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = RowHorizontalPadding, vertical = if (dense) 10.dp else 14.dp),
+        verticalArrangement = Arrangement.spacedBy(if (dense) 4.dp else 8.dp),
+        content = content,
+    )
 }
 
-/** Primary, emphasized label that heads a cluster of controls inside sheets and panes. */
+/** Stack's section label: 13/600 muted, sentence case — heads a cluster of rows or controls. */
 @Composable
 fun YomuSectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        color = MaterialTheme.colorScheme.primary,
-        style = MaterialTheme.typography.labelLargeEmphasized,
-        modifier = modifier.padding(start = 4.dp, top = 8.dp),
+        color = YomuTheme.stack.muted,
+        style = StackType.Label,
+        modifier = modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
     )
 }
 
 /**
- * A compact value readout that doubles as a reset: tinted while a custom value is set, and tapping
- * it returns the setting to its default.
+ * A compact value readout that doubles as a reset: the muted value (13) at rest; while a custom
+ * value is set it becomes a raised chip in ink, and tapping it returns the setting to its default.
  */
 @Composable
 fun YomuValueChip(
@@ -212,23 +228,33 @@ fun YomuValueChip(
     onReset: () -> Unit,
     resetLabel: String,
 ) {
-    Surface(
-        onClick = onReset,
-        enabled = customized,
-        shape = androidx.compose.foundation.shape.CircleShape,
-        color = if (customized) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,
-        contentColor = if (customized) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.semantics { if (customized) onClickLabel(resetLabel, action = null) },
+    val stack = YomuTheme.stack
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .then(
+                if (customized) {
+                    Modifier
+                        .yomuPressable(onClick = onReset)
+                        .semantics { onClickLabel(resetLabel, action = null) }
+                        .background(stack.raised)
+                } else {
+                    Modifier
+                },
+            )
+            .heightIn(min = 28.dp)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            style = if (customized) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = if (customized) StackType.Chip else StackType.Value,
+            color = if (customized) stack.ink else stack.muted,
         )
     }
 }
 
-/** A contiguous segmented list: rows separated by the M3 Expressive segmented gap. */
+/** A group card's rows, stacked with no gap: each row's position draws the card and dividers. */
 @Composable
 fun YomuSettingList(
     modifier: Modifier = Modifier,
@@ -236,16 +262,16 @@ fun YomuSettingList(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         content = content,
     )
 }
 
-/** Divider used between related rows in uncontained lists. */
+/** Divider between related rows in uncontained lists (rule colour). */
 @Composable
 fun YomuSettingDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.outlineVariant,
+        thickness = 1.dp,
+        color = YomuTheme.stack.rule,
     )
 }
