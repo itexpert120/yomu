@@ -76,7 +76,12 @@ com.itexpert120.yomu
 │   ├── reader/readium/          # ReadiumReaderEngine (+ PagePresentation, ReadiumMetadataExtractor,
 │   │                            #   ReadiumRestoreGuard, RendererGoneGuard) — the ONLY package that imports Readium
 │   ├── settings/                # AppSettingsRepository, LibraryPrefsRepository, ReaderSettingsRepository
-│   ├── highlights/              # HighlightRepository + RoomHighlightRepository
+│   ├── highlights/              # HighlightRepository + RoomHighlightRepository (colour, note, style:
+│   │                            #   highlight/underline/squiggly/strikethrough; edits stamp modifiedAt)
+│   ├── annotations/             # BookAnnotations: export one book's highlights/notes/bookmarks by TOC
+│   │                            #   chapter in reading order (Markdown, HTML, versioned Open Reader JSON
+│   │                            #   keyed by the EPUB sha256; share via the cache/shared FileProvider) and
+│   │                            #   import that JSON (preview + merge without duplicates)
 │   ├── bookmarks/               # BookmarkRepository + RoomBookmarkRepository
 │   ├── collections/             # LibraryCatalog.observe(): Catalog (books + collection ids) with tabs(),
 │   │                            #   organize(), entry(); organize writes stamp edits. "Shelf" survives only
