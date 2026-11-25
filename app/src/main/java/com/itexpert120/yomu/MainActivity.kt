@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.animation.PathInterpolator
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -36,6 +37,9 @@ class MainActivity : FragmentActivity() {
     private val externalOpenViewModel: ExternalOpenViewModel by viewModels()
     private val splashThemeStore by lazy { SplashThemeStore(this) }
 
+    // Set once the start screen has its content (or a restored state needs no waiting).
+    @Volatile private var contentReady = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashTheme = splashThemeStore.read()
         setTheme(splashTheme.styleRes)
@@ -46,7 +50,15 @@ class MainActivity : FragmentActivity() {
         // death can be re-instantiated during restore instead of crashing; the reader replaces it.
         ReaderEngine.installRestoreGuard(this)
         super.onCreate(savedInstanceState)
-        splashScreen.setKeepOnScreenCondition { !appViewModel.appearance.value.isLoaded }
+        // Hold the splash until the theme is known and the library has its books, so the splash
+        // fades straight into the real first frame (no skeleton swap, no sheet glide); capped so a
+        // slow disk never holds the splash for long. A restored activity doesn't wait for content.
+        val splashStart = SystemClock.uptimeMillis()
+        contentReady = savedInstanceState != null
+        splashScreen.setKeepOnScreenCondition {
+            !appViewModel.appearance.value.isLoaded ||
+                (!contentReady && SystemClock.uptimeMillis() - splashStart < SPLASH_CONTENT_WAIT_MS)
+        }
         enableYomuEdgeToEdge()
         preferNativeRefreshRate()
         // Cold start from an external "Open with"/share.
@@ -57,6 +69,7 @@ class MainActivity : FragmentActivity() {
                 externalOpenViewModel = externalOpenViewModel,
                 onResolvedThemeChange = { updateYomuSystemBarIcons(it) },
                 onSplashThemeChange = ::updateSplashTheme,
+                onContentReady = { contentReady = true },
             )
         }
     }
@@ -114,6 +127,9 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val SPLASH_EXIT_DURATION_MS = 220L
+
+        // The longest the splash waits for the library's first content after the theme is known.
+        const val SPLASH_CONTENT_WAIT_MS = 900L
     }
 }
 

@@ -232,12 +232,14 @@ fun ManageTabsSheet(
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     YomuBottomSheet(visible = visible, onDismiss = onDismiss) { dismiss ->
-        YomuSheetHeader(
-            title = "Shelves",
-            subtitle = "Move to reorder · switch to hide",
-            onClose = dismiss,
-        )
+        YomuSheetHeader(title = "Shelves", onClose = dismiss)
         Column {
+            Text(
+                text = "Move to reorder, switch to hide.",
+                color = YomuTheme.stack.muted,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = YomuTheme.space.xs),
+            )
             tabs.forEachIndexed { index, tab ->
                 ShelfRow(
                     tab = tab,

@@ -9,7 +9,9 @@ import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.BookRepository
+import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.collections.Catalog
 import com.itexpert120.yomu.data.collections.LibraryCatalog
 import com.itexpert120.yomu.data.collections.LibraryTabKeys
@@ -20,18 +22,41 @@ import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.IdentityHashMap
 import javax.inject.Inject
+
+/** The pile: opened, unfinished books, most recently opened first, at most three. */
+internal fun List<Book>.pileBooks(): List<Book> = asSequence()
+    .filter { it.lastOpenedAt > 0L && it.progress < 0.995f }
+    .sortedByDescending { it.lastOpenedAt }
+    .take(3)
+    .toList()
+
+/** Where a pile book is, to name its chapter. */
+private data class PilePosition(val id: BookId, val chapterId: String?, val href: String?) {
+    /** The contents entry the book is in (by chapter id, else by the resource it is reading). */
+    fun chapterIn(toc: List<ReaderTocItem>): String? {
+        val byId = chapterId?.let { id -> toc.firstOrNull { it.id == id } }
+        val resource = href?.substringBefore('#')
+        val item = byId ?: resource?.let { r -> toc.firstOrNull { it.resourceHref.substringBefore('#') == r } }
+        return item?.title?.trim()?.takeIf { it.isNotEmpty() }
+    }
+}
 
 /** Transient search state — intentionally not persisted across launches. */
 private data class SearchState(val active: Boolean = false, val query: String = "")
@@ -64,6 +89,7 @@ class LibraryViewModel @Inject constructor(
     private val importBooks: ImportBooksUseCase,
     private val readerPreloader: ReaderPreloader,
     private val recentSearches: RecentLibrarySearches,
+    private val publicationIndex: PublicationIndex,
 ) : ViewModel() {
 
     private val search = MutableStateFlow(SearchState())
@@ -83,9 +109,22 @@ class LibraryViewModel @Inject constructor(
     // Only touched from the serial state pipeline below.
     private var projections = IdentityHashMap<Book, LibraryBook>()
 
+    // The chapter each pile book is in, from its already-indexed contents (never parses an EPUB).
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val pileChapters = catalog.observe()
+        .map { catalog -> catalog.entries.map { it.book }.pileBooks().map { PilePosition(it.id, it.currentChapterId, it.currentHref) } }
+        .distinctUntilChanged()
+        .mapLatest { positions ->
+            positions.mapNotNull { position ->
+                val toc = publicationIndex.publicationCache(position.id)?.toc ?: return@mapNotNull null
+                position.chapterIn(toc)?.let { position.id.value to it }
+            }.toMap()
+        }
+        .onStart { emit(emptyMap()) }
+
     val state: StateFlow<LibraryUiState> =
-        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches) { d, prefs, i, recent ->
-            buildState(d, prefs, i, recent)
+        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches, pileChapters) { d, prefs, i, recent, chapters ->
+            buildState(d, prefs, i, recent).copy(pileChapters = chapters)
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
@@ -322,12 +361,7 @@ class LibraryViewModel @Inject constructor(
             null
         }
         val pile = if (query.isBlank()) {
-            entries.asSequence().map { it.book }
-                .filter { it.lastOpenedAt > 0L && it.progress < 0.995f }
-                .sortedByDescending { it.lastOpenedAt }
-                .take(3)
-                .map { projected.getValue(it) }
-                .toList()
+            entries.map { it.book }.pileBooks().map { projected.getValue(it) }
         } else {
             emptyList()
         }

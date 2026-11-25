@@ -41,6 +41,7 @@ import com.itexpert120.yomu.core.designsystem.YomuEmptyState
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.data.collections.LibraryTabKeys
 
 /**
@@ -98,7 +99,9 @@ internal fun LibrarySearchResults(
         } else {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .yomuScrollEdgeShadow(top = listState.canScrollBackward),
                 contentPadding = PaddingValues(start = gutter, end = gutter, bottom = bottomPadding),
             ) {
                 items(books, key = { it.id }) { book ->

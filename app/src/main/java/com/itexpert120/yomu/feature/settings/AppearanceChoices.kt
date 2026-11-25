@@ -29,9 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackColors
 import com.itexpert120.yomu.core.designsystem.StackType
-import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
-import com.itexpert120.yomu.core.designsystem.YomuSheetHeader
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
@@ -46,35 +44,12 @@ internal val ThemePreference.stackLabel: String
     }
 
 /** Light, Dark, Auto: the order the choices read in. */
-private val ThemeOrder = listOf(ThemePreference.Light, ThemePreference.Dark, ThemePreference.System)
+internal val ThemeOrder = listOf(ThemePreference.Light, ThemePreference.Dark, ThemePreference.System)
 
 /** Pure black applies only once the app is dark, so it's offered with Dark and Auto. */
 internal fun ThemePreference.allowsPureBlack(): Boolean = this != ThemePreference.Light
 
-/** Settings → Theme: the three modes as miniature screens, and the pure-black switch under them. */
-@Composable
-internal fun ThemeSheet(
-    visible: Boolean,
-    selectedTheme: ThemePreference,
-    oledDark: Boolean,
-    onSelectTheme: (ThemePreference) -> Unit,
-    onToggleOled: (Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    YomuBottomSheet(visible = visible, onDismiss = onDismiss) { dismiss ->
-        Column {
-            YomuSheetHeader(title = "Theme", onClose = dismiss)
-            AppearanceControls(
-                selectedTheme = selectedTheme,
-                oledDark = oledDark,
-                onSelectTheme = onSelectTheme,
-                onToggleOled = onToggleOled,
-            )
-        }
-    }
-}
-
-/** The theme options plus the pure-black row; the body of the Theme sheet and the tablet pane. */
+/** The theme options as miniatures plus the pure-black row: the tablet Appearance pane. */
 @Composable
 internal fun AppearanceControls(
     selectedTheme: ThemePreference,
