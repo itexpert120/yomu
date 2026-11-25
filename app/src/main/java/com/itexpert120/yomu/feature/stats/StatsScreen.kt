@@ -1,26 +1,20 @@
-@file:OptIn(
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
-    androidx.compose.material3.ExperimentalMaterial3Api::class,
-)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.itexpert120.yomu.feature.stats
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,130 +23,142 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
+import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
-import com.itexpert120.yomu.core.designsystem.YomuBadgeShape
-import com.itexpert120.yomu.core.designsystem.YomuBadgeTone
-import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
-import com.itexpert120.yomu.core.designsystem.YomuCard
-import com.itexpert120.yomu.core.designsystem.YomuCardTone
-import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuEmptyState
-import com.itexpert120.yomu.core.designsystem.YomuLoadingState
-import com.itexpert120.yomu.core.designsystem.YomuNotice
-import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
-import com.itexpert120.yomu.core.designsystem.YomuPaneSpacer
-import com.itexpert120.yomu.core.designsystem.YomuScreenHeader
-import com.itexpert120.yomu.core.designsystem.YomuScreenScaffold
-import com.itexpert120.yomu.core.designsystem.YomuSectionHeader
-import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
-import com.itexpert120.yomu.core.designsystem.YomuSettingList
-import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
-import com.itexpert120.yomu.core.designsystem.YomuSettingRow
-import com.itexpert120.yomu.core.designsystem.YomuShapeBadge
-import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
-import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
-import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
-import com.itexpert120.yomu.core.designsystem.yomuLeadingPaneWidth
-import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.BookReadingTime
+import com.itexpert120.yomu.core.model.DailyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
-import java.io.File
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAccessor
-import java.util.Locale
 
+/**
+ * [onOpenLibrary] is the "no reading yet" state's way out; the state shows no button without it.
+ */
 @Composable
-fun StatsRoute(onBack: (() -> Unit)?) {
+fun StatsRoute(onBack: (() -> Unit)?, onOpenLibrary: (() -> Unit)? = null) {
     val viewModel: StatsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    StatsScreen(state = state, onBack = onBack)
+    var period by rememberSaveable { mutableStateOf(StatsPeriod.Week) }
+    StatsScreen(
+        state = state,
+        period = period,
+        onPeriodChange = { period = it },
+        onBack = onBack,
+        onRetry = viewModel::retry,
+        onOpenLibrary = onOpenLibrary,
+    )
 }
 
-private enum class StatsPhase { Loading, Error, Content }
+private enum class StatsPhase { Loading, Error, Empty, Content }
 
 private val StatsUiState.phase: StatsPhase
     get() = when {
         isLoading -> StatsPhase.Loading
         error != null -> StatsPhase.Error
+        !stats.hasActivity && bookTimes.isEmpty() && history.isEmpty() -> StatsPhase.Empty
         else -> StatsPhase.Content
     }
 
+/**
+ * Stack's statistics: the title, the one figure for the chosen period and its chart lie on the
+ * desk; every other figure, time by book and recent history are on a white sheet. On a phone the
+ * sheet scrolls up over the desk and a compact line of the figure pins at the top; from expanded
+ * width the dashboard stays on the desk and the books and history become a sheet on the right.
+ */
 @Composable
-fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Stats is information-dense, so per Material 3 it stays single-pane until expanded width.
-        if (YomuWidthClass.fromWidth(maxWidth).isExpanded) {
-            TabletStatsLayout(state = state, onBack = onBack)
-        } else {
-            YomuScreenScaffold(
-                title = "Statistics",
-                onBack = onBack,
-                showScrollEdgeShadow = false,
-                maxContentWidth = YomuContentMaxWidth,
-            ) {
-                AnimatedContent(
-                    targetState = state.phase,
-                    transitionSpec = { yomuFadeThroughEnter() togetherWith yomuFadeThroughExit() },
-                    label = "statsPhase",
-                ) { phase ->
-                    when (phase) {
-                        StatsPhase.Loading -> StatsLoading(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = YomuTheme.space.xxl),
-                        )
+fun StatsScreen(
+    state: StatsUiState,
+    period: StatsPeriod,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    onBack: (() -> Unit)?,
+    onRetry: () -> Unit = {},
+    onOpenLibrary: (() -> Unit)? = null,
+) {
+    YomuAppSurface {
+        val widthClass = YomuWidthClass.fromWidth(maxWidth)
+        // Stats is information-dense, so it stays single-pane until expanded width.
+        val wide = widthClass.isExpanded
+        val gutter = if (widthClass == YomuWidthClass.Compact) YomuTheme.space.lg else YomuTheme.space.xl
+        val viewport = maxHeight
+        val fade = fadeTransition()
+        AnimatedContent(
+            targetState = state.phase,
+            transitionSpec = { fade },
+            label = "statsPhase",
+        ) { phase ->
+            when (phase) {
+                StatsPhase.Loading -> if (wide) {
+                    WideSkeleton(period, onPeriodChange, onBack)
+                } else {
+                    PhoneSkeleton(period, onPeriodChange, onBack, gutter)
+                }
 
-                        StatsPhase.Error -> StatsError(state.error)
+                StatsPhase.Error -> StatsStatePane(onBack, gutter) {
+                    YomuEmptyState(
+                        icon = StackIcons.CloudOff,
+                        title = "Couldn’t load your reading history",
+                        body = "Your books and progress are safe. Try again in a moment.",
+                        actions = { YomuButton(text = "Try again", onClick = onRetry) },
+                    )
+                }
 
-                        StatsPhase.Content -> Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
-                        ) {
-                            Dashboard(stats = state.stats, bookTimes = state.bookTimes)
-                            // With no activity the dashboard already explains the empty state.
-                            if (state.stats.hasActivity && state.history.isNotEmpty()) {
-                                History(state.history)
-                            }
-                        }
-                    }
+                StatsPhase.Empty -> StatsStatePane(onBack, gutter) {
+                    YomuEmptyState(
+                        icon = StackIcons.HourglassBottom,
+                        title = "No reading time yet",
+                        body = "Minutes, streaks and how long each book takes will show up here once you start reading.",
+                        actions = onOpenLibrary?.let { open -> { YomuButton(text = "Open your library", onClick = open) } },
+                    )
+                }
+
+                StatsPhase.Content -> if (wide) {
+                    WideStats(state, period, onPeriodChange, onBack)
+                } else {
+                    PhoneStats(state, period, onPeriodChange, onBack, gutter, viewport)
                 }
             }
         }
@@ -160,576 +166,520 @@ fun StatsScreen(state: StatsUiState, onBack: (() -> Unit)?) {
 }
 
 @Composable
-private fun TabletStatsLayout(state: StatsUiState, onBack: (() -> Unit)?) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    YomuAppSurface {
-        Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-            YomuScreenHeader(title = "Statistics", onBack = onBack, scrollBehavior = scrollBehavior)
-            AnimatedContent(
-                targetState = state.phase,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                transitionSpec = { yomuFadeThroughEnter() togetherWith yomuFadeThroughExit() },
-                label = "statsPhase",
-            ) { phase ->
-                when (phase) {
-                    StatsPhase.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        StatsLoading()
-                    }
+private fun fadeTransition(): ContentTransform {
+    val enter = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val exit = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    return remember(enter, exit) { fadeIn(enter) togetherWith fadeOut(exit) }
+}
 
-                    StatsPhase.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        StatsError(state.error)
-                    }
-
-                    StatsPhase.Content -> TabletStatsPanes(
-                        stats = state.stats,
-                        history = state.history,
-                        bookTimes = state.bookTimes,
-                    )
-                }
+/** The figure and its chart for one period; swapped with a cross-fade when the period changes. */
+@Composable
+private fun PeriodOverview(
+    state: StatsUiState,
+    period: StatsPeriod,
+    wide: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val fade = fadeTransition()
+    AnimatedContent(
+        targetState = period,
+        transitionSpec = { fade },
+        label = "statsPeriod",
+        modifier = modifier,
+    ) { shown ->
+        Column(Modifier.fillMaxWidth()) {
+            HeroFigure(
+                summary = state.stats.summary(shown),
+                wide = wide,
+                modifier = Modifier.padding(top = if (wide) 28.dp else 22.dp),
+            )
+            val bars = state.trend.bars(shown)
+            if (bars.isNotEmpty()) {
+                TrendChart(
+                    bars = bars,
+                    period = shown,
+                    wide = wide,
+                    modifier = Modifier.padding(top = if (wide) 28.dp else 20.dp),
+                )
             }
         }
+    }
+}
+
+private val PinnedRowHeight = 48.dp
+
+@Composable
+private fun PhoneStats(
+    state: StatsUiState,
+    period: StatsPeriod,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    onBack: (() -> Unit)?,
+    gutter: Dp,
+    viewport: Dp,
+) {
+    val stack = YomuTheme.stack
+    val density = LocalDensity.current
+    val scroll = rememberScrollState()
+    var deskHeight by remember { mutableIntStateOf(0) }
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    val sheetRadius = with(density) { 32.dp.toPx() }
+    // Where the sheet's top edge is on screen; read only in layer and draw blocks, so scrolling
+    // never recomposes the dashboard.
+    val sheetTop = { (deskHeight - scroll.value).toFloat() }
+    // The corners square off over the last stretch before the sheet reaches the top of the screen.
+    val cornerRadius = { sheetRadius * (sheetTop() / sheetRadius).coerceIn(0f, 1f) }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(scroll),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { deskHeight = it.height }
+                    .statusBarsPadding(),
+            ) {
+                StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = gutter)
+                PeriodOverview(state, period, wide = false, modifier = Modifier.padding(horizontal = gutter))
+                Spacer(Modifier.height(YomuTheme.space.lg))
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    // Tall enough to reach the pinned line, so the sheet can always scroll up to it.
+                    .heightIn(min = viewport - statusTop - PinnedRowHeight)
+                    .graphicsLayer {
+                        val radius = cornerRadius()
+                        shape = RoundedCornerShape(topStart = radius, topEnd = radius)
+                        clip = true
+                    }
+                    .background(stack.sheet)
+                    .padding(horizontal = gutter)
+                    .padding(top = 22.dp, bottom = navBottom + YomuTheme.space.lg),
+            ) {
+                FactsRow(state.stats)
+                SectionHeading("Reading details", Modifier.padding(top = 26.dp))
+                ReadingDetailsGrid(state.stats, columns = 2)
+                BookTimeSection(state.bookTimes, Modifier.padding(top = 26.dp))
+                HistorySection(
+                    history = state.history,
+                    historicalDetailIncomplete = state.stats.historicalSessionDetailIncomplete,
+                    modifier = Modifier.padding(top = 26.dp),
+                )
+            }
+        }
+        PinnedSummary(
+            text = state.stats.summary(period).compact,
+            gutter = gutter,
+            sheetTop = sheetTop,
+            cornerRadius = cornerRadius,
+            pinnedBottom = with(density) { (statusTop + PinnedRowHeight).toPx() },
+        )
     }
 }
 
 /**
- * Dashboard in the wide flexible pane (capped and centred), session history in the narrower fixed
- * pane on the trailing side. Same margins and spacer as `YomuTwoPane`, with the fixed pane last.
+ * The compact figure that stays at the top once the sheet has covered the desk. It paints the
+ * sheet only where the sheet already is (same corners), so the sheet's content slides under it
+ * without a band appearing over the desk; its text fades in as the sheet arrives.
  */
 @Composable
-private fun TabletStatsPanes(
-    stats: ReadingStats,
-    history: List<ReadingSessionItem>,
-    bookTimes: List<BookReadingTime>,
+private fun PinnedSummary(
+    text: String,
+    gutter: Dp,
+    sheetTop: () -> Float,
+    cornerRadius: () -> Float,
+    pinnedBottom: Float,
 ) {
-    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-    val bottomPadding = navBottom + YomuTheme.space.lg
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val historyWidth = yomuLeadingPaneWidth(maxWidth)
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = YomuPaneSpacer),
-            horizontalArrangement = Arrangement.spacedBy(YomuPaneSpacer),
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(top = YomuTheme.space.xs)
-                    .verticalScroll(rememberScrollState()),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = YomuContentMaxWidth)
-                        .fillMaxWidth()
-                        .padding(bottom = bottomPadding),
-                    verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
-                ) {
-                    Dashboard(stats = stats, bookTimes = bookTimes)
-                }
-            }
-            Column(
-                modifier = Modifier
-                    .width(historyWidth)
-                    .fillMaxHeight()
-                    .padding(top = YomuTheme.space.xs)
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = bottomPadding),
-                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
-            ) {
-                if (history.isEmpty()) {
-                    YomuSectionHeader(title = "Recent history")
-                    YomuCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
-                        YomuEmptyState(
-                            icon = StackIcons.History,
-                            title = "No sessions yet",
-                            body = "Your reading sessions will appear here.",
-                            compact = true,
-                        )
-                    }
-                } else {
-                    History(history)
-                }
-            }
-        }
-    }
-}
-
-private val ReadingStats.hasActivity: Boolean
-    get() = sessionCount != 0 || totalReadingSeconds != 0L
-
-/** Hero total, headline metrics, time by book and the detail grid — shared by phone and tablet. */
-@Composable
-private fun ColumnScope.Dashboard(stats: ReadingStats, bookTimes: List<BookReadingTime>) {
-    HistoricalDetailNotice(stats)
-    YomuSectionHeader(title = "At a glance", subtitle = "A quick view of your reading.")
-    AtAGlanceCard(stats)
-    BookTimeHeaderAndList(bookTimes)
-    if (stats.hasActivity) {
-        YomuSectionHeader(title = "Reading details", subtitle = "The small signals behind your routine.")
-        DetailsGrid(stats)
-    } else {
-        EmptyActivityCard()
-    }
-}
-
-@Composable
-private fun ReadingMetricGrid(metrics: List<DetailMetric>) {
-    if (metrics.isEmpty()) return
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val fontScale = LocalDensity.current.fontScale
-        val maxColumns = (maxWidth.value / (160f * fontScale)).toInt().coerceIn(1, 5)
-        // Balance the rows (five tiles in a four-wide pane become 3 + 2, not 4 + 1); a short last
-        // row stretches to the full width, so on two-column phones an odd tile spans the row.
-        val rows = (metrics.size + maxColumns - 1) / maxColumns
-        val columns = (metrics.size + rows - 1) / rows
-        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
-            metrics.chunked(columns).forEach { row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-                ) {
-                    row.forEach { metric ->
-                        ReadingMetricCard(
-                            metric,
-                            Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReadingMetricCard(metric: DetailMetric, modifier: Modifier = Modifier) {
-    val tileModifier = modifier.heightIn(min = 96.dp)
-    // Highlighted metrics borrow an accent container; the rest stay on the neutral group surface so
-    // the accents keep their pull.
-    val body: @Composable ColumnScope.() -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs)) {
-            if (metric.icon != null) {
-                YomuShapeBadge(
-                    icon = metric.icon,
-                    size = 36.dp,
-                    shape = metric.shape,
-                    tone = when (metric.accent) {
-                        MetricAccent.None -> YomuBadgeTone.Neutral
-                        MetricAccent.Secondary -> YomuBadgeTone.Tertiary
-                        MetricAccent.Tertiary -> YomuBadgeTone.Secondary
-                    },
-                )
-            }
-            Text(
-                text = metric.value,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-            )
-            Text(
-                text = metric.label,
-                color = if (metric.accent == MetricAccent.None) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    LocalContentColor.current
-                },
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
-    when (metric.accent) {
-        MetricAccent.None -> YomuCard(modifier = tileModifier, tone = YomuCardTone.Group, content = body)
-
-        MetricAccent.Tertiary -> YomuCard(
-            modifier = tileModifier,
-            tone = YomuCardTone.HeroAlt,
-            shape = YomuShapeTokens.tile,
-            content = body,
-        )
-
-        // The card ladder has no secondary-container step, so this tile sets its surface directly.
-        MetricAccent.Secondary -> Surface(
-            modifier = tileModifier,
-            shape = YomuShapeTokens.tile,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ) {
-            Column(Modifier.padding(YomuTheme.space.md), content = body)
-        }
-    }
-}
-
-@Composable
-private fun BookTimeHeaderAndList(bookTimes: List<BookReadingTime>) {
-    if (bookTimes.isEmpty()) return
-    val total = bookTimes.sumOf { it.seconds }
-    YomuSectionHeader(
-        title = "Time by book",
-        subtitle = "${formatReadingTime(total)} across ${bookTimes.size} " +
-            "${if (bookTimes.size == 1) "book" else "books"}.",
-    )
-    BookTimeSection(books = bookTimes, formatTime = ::formatReadingTime)
-}
-
-@Composable
-private fun HistoricalDetailNotice(stats: ReadingStats) {
-    if (stats.historicalSessionDetailIncomplete) {
-        YomuNotice(
-            text = "Older session details were previously removed. Session and per-book figures include only " +
-                "recoverable history; total reading time is preserved.",
-            modifier = Modifier.fillMaxWidth(),
-            icon = StackIcons.Info,
-            tone = YomuNoticeTone.Neutral,
-        )
-    }
-}
-
-@Composable
-private fun StatsLoading(modifier: Modifier = Modifier) {
-    YomuLoadingState(modifier = modifier, message = "Gathering your reading history…")
-}
-
-@Composable
-private fun StatsError(message: String?) {
-    YomuEmptyState(
-        icon = StackIcons.Error,
-        title = message ?: "Statistics couldn't be loaded.",
-        shape = YomuBadgeShape.Burst,
-        tone = YomuBadgeTone.Error,
-    )
-}
-
-@Composable
-private fun AtAGlanceCard(stats: ReadingStats) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
-        // Hero moment: editorial display type plus the sunny time badge, on the brightest accent.
-        YomuCard(
-            modifier = Modifier.fillMaxWidth(),
-            tone = YomuCardTone.Hero,
-            contentPadding = PaddingValues(YomuTheme.space.lg),
-        ) {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                // The badge shares a row with the text, so a long total wraps instead of running
-                // under it; on very narrow cards it shrinks, then steps aside entirely.
-                val badgeSize = when {
-                    maxWidth < 240.dp -> null
-                    maxWidth < 320.dp -> 56.dp
-                    else -> 72.dp
-                }
-                val roomy = maxWidth >= 400.dp
-                Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.md)) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-                    ) {
-                        Text("Total reading time", style = MaterialTheme.typography.titleMediumEmphasized)
-                        Text(
-                            formatReadingTime(stats.totalReadingSeconds),
-                            style = if (roomy) {
-                                MaterialTheme.typography.displayLargeEmphasized
-                            } else {
-                                MaterialTheme.typography.displayMediumEmphasized
-                            },
-                        )
-                        Text("Across your reading sessions", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (badgeSize != null) {
-                        YomuShapeBadge(
-                            icon = StackIcons.Schedule,
-                            size = badgeSize,
-                            shape = YomuBadgeShape.Sunny,
-                            tone = YomuBadgeTone.Solid,
-                        )
-                    }
-                }
-            }
-        }
-        ReadingMetricGrid(
-            listOf(
-                DetailMetric(
-                    formatDays(stats.currentStreakDays),
-                    "Current streak",
-                    icon = StackIcons.LocalFireDepartment,
-                    shape = YomuBadgeShape.Sunny,
-                    accent = MetricAccent.Tertiary,
-                ),
-                DetailMetric(
-                    formatReadingTime(stats.secondsLast7Days),
-                    "Last 7 days",
-                    icon = StackIcons.DateRange,
-                    shape = YomuBadgeShape.Scallop,
-                    accent = MetricAccent.Secondary,
-                ),
-                DetailMetric(stats.booksInLibrary.toString(), "Library items", icon = StackIcons.LibraryBooks),
-                DetailMetric(stats.booksFinished.toString(), "Completed books", icon = StackIcons.TaskAlt),
-                DetailMetric(formatReadingTime(stats.secondsLast30Days), "Last 30 days", icon = StackIcons.CalendarMonth),
-            ),
-        )
-    }
-}
-
-@Composable
-private fun EmptyActivityCard() {
-    YomuCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
-        YomuEmptyState(
-            icon = StackIcons.Bookmark,
-            title = "No reading activity yet",
-            body = "Open a book to start building your reading history.",
-            compact = true,
-        )
-    }
-}
-
-private enum class MetricAccent { None, Secondary, Tertiary }
-
-private data class DetailMetric(
-    val value: String,
-    val label: String,
-    val icon: ImageVector? = null,
-    val shape: YomuBadgeShape = YomuBadgeShape.Clover,
-    val accent: MetricAccent = MetricAccent.None,
-)
-
-@Composable
-private fun DetailsGrid(stats: ReadingStats) {
-    val metrics = listOf(
-        DetailMetric(stats.chaptersRead.toString(), "Chapters read"),
-        DetailMetric(stats.sessionCount.toString(), "Reading sessions"),
-        DetailMetric(stats.daysRead.toString(), "Active days"),
-        DetailMetric(formatDays(stats.longestStreakDays), "Longest streak"),
-        DetailMetric(formatReadingTime(stats.averageSessionSeconds), "Average session"),
-        DetailMetric(formatReadingTime(stats.longestSessionSeconds), "Longest session"),
-        DetailMetric(formatReadingTime(stats.averageSecondsPerActiveDay), "Average per day"),
-        DetailMetric(stats.booksStarted.toString(), "Books started"),
-        DetailMetric(formatCount(stats.estimatedWordsRead), "Estimated words"),
-    )
-    ReadingMetricGrid(metrics)
-}
-
-@Composable
-private fun History(history: List<ReadingSessionItem>) {
-    val consolidated = remember(history) { consolidateSessions(history) }
-    val totalSessions = consolidated.sumOf { it.sessionCount }
-    val totalSeconds = consolidated.sumOf { it.seconds }
-    var visibleCount by remember { mutableIntStateOf(HistoryPage) }
-    val byDay = consolidated.take(visibleCount).groupBy { session ->
-        Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
-    }
-    Column(
-        modifier = Modifier
+    val stack = YomuTheme.stack
+    Box(
+        Modifier
             .fillMaxWidth()
-            .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-    ) {
-        YomuSectionHeader(
-            title = "Recent history",
-            subtitle = "$totalSessions ${if (totalSessions == 1) "session" else "sessions"} · " +
-                "${formatReadingTime(totalSeconds)} read.",
-        )
-        byDay.forEach { (day, sessions) -> HistoryDay(day, sessions) }
-        if (consolidated.size > visibleCount) {
-            FilledTonalButton(
-                onClick = { visibleCount += HistoryPage },
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = YomuTheme.space.xxs),
-            ) {
-                Icon(
-                    imageVector = StackIcons.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(text = "Show more")
+            .clipToBounds()
+            .drawBehind {
+                val top = sheetTop()
+                if (top < size.height) {
+                    val radius = cornerRadius()
+                    drawRoundRect(
+                        color = stack.sheet,
+                        topLeft = Offset(0f, top.coerceAtLeast(0f)),
+                        size = Size(size.width, size.height + radius * 2),
+                        cornerRadius = CornerRadius(radius, radius),
+                    )
+                }
             }
-        }
-    }
-}
-
-/** One day of sessions: a label line, then the same segmented list idiom as "Time by book". */
-@Composable
-private fun HistoryDay(day: LocalDate, sessions: List<ReadingSessionItem>) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
+            .clearAndSetSemantics { },
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
+            Modifier
+                .statusBarsPadding()
+                .fillMaxWidth()
+                .height(PinnedRowHeight)
+                .padding(horizontal = gutter)
+                .graphicsLayer {
+                    // Clear while the sheet is below the line, fully there once it reaches the top.
+                    alpha = ((pinnedBottom - sheetTop()) / pinnedBottom.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                },
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            YomuSectionLabel(formatDayHeader(day))
             Text(
-                text = formatSessionSummary(sessions),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = YomuTheme.space.xxs),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = TextAlign.End,
+                text = text,
+                style = StackType.Heading,
+                color = stack.ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        YomuSettingList {
-            sessions.forEachIndexed { index, session ->
-                HistoryRow(session, yomuSettingPosition(index, sessions.size))
+    }
+}
+
+/** Expanded and wider: the dashboard on the desk, books and history as a sheet on the right. */
+@Composable
+private fun WideStats(
+    state: StatsUiState,
+    period: StatsPeriod,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    onBack: (() -> Unit)?,
+) {
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+    WidePanes(
+        dashboard = {
+            StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = 0.dp)
+            PeriodOverview(state, period, wide = true)
+            FactCards(state.stats, Modifier.padding(top = 28.dp))
+            SectionHeading("Reading details", Modifier.padding(top = 32.dp, bottom = YomuTheme.space.sm))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .background(YomuTheme.stack.sheet)
+                    .padding(horizontal = 20.dp, vertical = YomuTheme.space.xxs),
+            ) {
+                ReadingDetailsGrid(state.stats, columns = 3)
+            }
+            Spacer(Modifier.height(navBottom + YomuTheme.space.xl))
+        },
+        side = {
+            BookTimeSection(state.bookTimes)
+            HistorySection(
+                history = state.history,
+                historicalDetailIncomplete = state.stats.historicalSessionDetailIncomplete,
+                modifier = Modifier.padding(top = 28.dp),
+                thumbWidth = 28.dp,
+            )
+            Spacer(Modifier.height(navBottom + YomuTheme.space.lg))
+        },
+    )
+}
+
+private val SideSheetShape: Shape = RoundedCornerShape(topStart = 32.dp)
+
+@Composable
+private fun WidePanes(
+    dashboard: @Composable () -> Unit,
+    side: @Composable () -> Unit,
+    dashboardScrollable: Boolean = true,
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val sideWidth = (maxWidth * 0.36f).coerceIn(360.dp, 440.dp)
+        Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .then(if (dashboardScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                    .statusBarsPadding()
+                    .padding(horizontal = YomuTheme.space.xl),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { dashboard() }
+            }
+            Column(
+                Modifier
+                    .width(sideWidth)
+                    .fillMaxHeight()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .clip(SideSheetShape)
+                    .background(YomuTheme.stack.sheet)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 28.dp)
+                    .padding(top = YomuTheme.space.lg),
+            ) { side() }
+        }
+    }
+}
+
+/** Error and "no reading yet": the title on the desk, then the one empty state. */
+@Composable
+private fun StatsStatePane(onBack: (() -> Unit)?, gutter: Dp, content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .statusBarsPadding(),
+    ) {
+        StatsTitleRow(onBack = onBack, period = null, onPeriodChange = {}, startPadding = gutter)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 120.dp, start = gutter - YomuTheme.space.lg, end = gutter - YomuTheme.space.lg),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(Modifier.widthIn(max = 480.dp)) { content() }
+        }
+    }
+}
+
+// --- Loading: skeleton blocks shaped like what's coming (track on the desk, raised on the sheet) ---
+
+@Composable
+private fun Modifier.skeleton(onSheet: Boolean, shape: Shape = RoundedCornerShape(8.dp)): Modifier {
+    val stack = YomuTheme.stack
+    return clip(shape).background(if (onSheet) stack.raised else stack.track.copy(alpha = 0.6f))
+}
+
+@Composable
+private fun DeskSkeleton(wide: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Box(
+            Modifier
+                .padding(top = if (wide) 30.dp else 26.dp)
+                .size(width = if (wide) 300.dp else 230.dp, height = if (wide) 60.dp else 44.dp)
+                .skeleton(onSheet = false),
+        )
+        Box(
+            Modifier
+                .padding(top = 12.dp)
+                .size(width = 170.dp, height = 14.dp)
+                .skeleton(onSheet = false),
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 22.dp)
+                .height(if (wide) 156.dp else 94.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (wide) 14.dp else 8.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            listOf(0.6f, 0.4f, 0.8f, 0.5f, 0.3f, 0.9f, 0.7f).forEach { fraction ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight(fraction)
+                        .skeleton(onSheet = false),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun HistoryRow(session: ReadingSessionItem, position: YomuSettingPosition) {
-    YomuSettingRow(
-        title = session.bookTitle,
-        subtitle = formatClock(session.startedAt),
-        position = position,
-        leadingContent = { CoverThumbnail(session.coverImagePath) },
-    ) {
-        Surface(
-            shape = YomuShapeTokens.pill,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ) {
-            Text(
-                text = formatMinutesRead(session.seconds),
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(horizontal = YomuTheme.space.sm, vertical = YomuTheme.space.xxs),
-            )
-        }
-    }
-}
-
-@Composable
-private fun CoverThumbnail(path: String?) {
+private fun SheetRowsSkeleton(rows: Int, thumbWidth: Dp) {
     Box(
-        modifier = Modifier
-            .width(40.dp)
-            .aspectRatio(YomuBookCoverAspectRatio)
-            .clip(YomuShapeTokens.cover)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    ) {
-        if (path != null) {
-            AsyncImage(
-                model = File(path),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
-private fun formatDays(days: Int): String = "$days ${if (days == 1) "day" else "days"}"
-
-private fun formatSessionSummary(sessions: List<ReadingSessionItem>): String {
-    val count = sessions.sumOf { it.sessionCount }
-    val totalSeconds = sessions.sumOf { it.seconds }
-    return "$count ${if (count == 1) "session" else "sessions"} · ${formatReadingTime(totalSeconds)} read"
-}
-
-private fun consolidateSessions(history: List<ReadingSessionItem>): List<ReadingSessionItem> {
-    if (history.size < 2) return history
-    val merged = mutableListOf<ReadingSessionItem>()
-    var current = history.first()
-    for (next in history.drop(1)) {
-        val gapSeconds = current.startedAt / 1000 - (next.startedAt / 1000 + next.seconds)
-        val bothShort = current.seconds <= ShortSessionSeconds && next.seconds <= ShortSessionSeconds
-        current = if (
-            current.bookId != null &&
-            current.bookId == next.bookId &&
-            bothShort &&
-            gapSeconds <= MergeGapSeconds
+        Modifier
+            .size(width = 120.dp, height = 16.dp)
+            .skeleton(onSheet = true),
+    )
+    repeat(rows) {
+        Row(
+            Modifier.padding(top = YomuTheme.space.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            current.copy(
-                seconds = current.seconds + next.seconds,
-                sessionCount = current.sessionCount + next.sessionCount,
+            Box(
+                Modifier
+                    .size(width = thumbWidth, height = thumbWidth * 1.5f)
+                    .skeleton(onSheet = true, shape = ThumbShape),
             )
-        } else {
-            merged += current
-            next
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(14.dp)
+                    .skeleton(onSheet = true),
+            )
         }
     }
-    merged += current
-    return merged
 }
 
-private fun formatReadingTime(seconds: Long): String {
-    val totalMinutes = seconds / 60
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return when {
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m"
-        seconds > 0 -> "<1m"
-        else -> "—"
+@Composable
+private fun PhoneSkeleton(
+    period: StatsPeriod,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    onBack: (() -> Unit)?,
+    gutter: Dp,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .clearAndSetSemantics { },
+    ) {
+        StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = gutter)
+        DeskSkeleton(wide = false, Modifier.padding(horizontal = gutter))
+        Column(
+            Modifier
+                .padding(top = YomuTheme.space.lg)
+                .fillMaxSize()
+                .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+                .background(YomuTheme.stack.sheet)
+                .padding(horizontal = gutter, vertical = 26.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
+                listOf(0.7f, 0.4f, 0.5f).forEach { fraction ->
+                    Column(Modifier.weight(1f)) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(fraction)
+                                .height(26.dp)
+                                .skeleton(onSheet = true),
+                        )
+                        Box(
+                            Modifier
+                                .padding(top = YomuTheme.space.xs)
+                                .fillMaxWidth(0.8f)
+                                .height(12.dp)
+                                .skeleton(onSheet = true),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(30.dp))
+            SheetRowsSkeleton(rows = 2, thumbWidth = 44.dp)
+        }
     }
 }
 
-private fun formatMinutesRead(seconds: Long): String {
-    val minutes = seconds / 60
-    return if (minutes > 0) "$minutes min" else "<1 min"
-}
-
-private val ClockFormat = LocaleDateFormatter("h:mm a")
-private val DayHeaderFormat = LocaleDateFormatter("MMM d, yyyy")
-
-/** A [DateTimeFormatter] built once per default locale instead of once per history row. */
-private class LocaleDateFormatter(private val pattern: String) {
-    @Volatile
-    private var cached: Pair<Locale, DateTimeFormatter>? = null
-
-    fun format(value: TemporalAccessor): String {
-        val locale = Locale.getDefault()
-        val formatter = cached?.takeIf { it.first == locale }?.second
-            ?: DateTimeFormatter.ofPattern(pattern, locale).also { cached = locale to it }
-        return formatter.format(value)
+@Composable
+private fun WideSkeleton(
+    period: StatsPeriod,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    onBack: (() -> Unit)?,
+) {
+    Box(Modifier.clearAndSetSemantics { }) {
+        WidePanes(
+            dashboardScrollable = false,
+            dashboard = {
+                StatsTitleRow(onBack = onBack, period = period, onPeriodChange = onPeriodChange, startPadding = 0.dp)
+                DeskSkeleton(wide = true)
+                Row(Modifier.padding(top = 28.dp), horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.md)) {
+                    repeat(3) {
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(88.dp)
+                                .clip(MaterialTheme.shapes.large)
+                                .background(YomuTheme.stack.sheet),
+                        )
+                    }
+                }
+            },
+            side = { SheetRowsSkeleton(rows = 4, thumbWidth = 44.dp) },
+        )
     }
 }
 
-private fun formatClock(millis: Long): String = ClockFormat.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
+// --- Previews ---
 
-private fun formatDayHeader(day: LocalDate): String {
+private fun previewState(): StatsUiState {
     val today = LocalDate.now()
-    return when (day) {
-        today -> "Today"
-        today.minusDays(1) -> "Yesterday"
-        else -> DayHeaderFormat.format(day)
-    }
+    val zone = ZoneId.systemDefault()
+    val minutes = listOf(42, 25, 58, 30, 0, 64, 52)
+    val days = (0 until 340).map { back ->
+        val date = today.minusDays(back.toLong())
+        val seconds = if (back < 7) minutes[6 - back] * 60L else ((back * 37) % 70).let { if (it < 12) 0L else it * 60L }
+        DailyReading(date.toString(), seconds)
+    }.reversed()
+    fun at(daysBack: Long, hour: Int, minute: Int) = today.minusDays(daysBack).atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()
+    return StatsUiState(
+        isLoading = false,
+        stats = ReadingStats(
+            totalReadingSeconds = 38 * 3600L + 12 * 60,
+            currentStreakDays = 2,
+            longestStreakDays = 14,
+            booksInLibrary = 24,
+            booksStarted = 9,
+            booksFinished = 2,
+            chaptersRead = 63,
+            estimatedWordsRead = 412_000,
+            sessionCount = 104,
+            averageSessionSeconds = 22 * 60L,
+            longestSessionSeconds = 112 * 60L,
+            daysRead = 61,
+            averageSecondsPerActiveDay = 37 * 60L,
+            secondsLast7Days = 4 * 3600L + 21 * 60,
+            secondsLast30Days = 16 * 3600L + 5 * 60,
+        ),
+        bookTimes = listOf(
+            BookReadingTime("1", "The Wind in the Willows", "Kenneth Grahame", null, 11 * 3600L + 5 * 60, 31),
+            BookReadingTime("2", "Mrs. Dalloway", "Virginia Woolf", null, 6 * 3600L + 52 * 60, 18),
+            BookReadingTime("3", "Frankenstein", "Mary Shelley", null, 6 * 3600L + 6 * 60, 17),
+            BookReadingTime("4", "The Hound of the Baskervilles", "Arthur Conan Doyle", null, 5 * 3600L + 14 * 60, 12),
+            BookReadingTime("5", "Pride and Prejudice", "Jane Austen", null, 3 * 3600L + 8 * 60, 9),
+            BookReadingTime("6", "Anna Karenina", "Leo Tolstoy", null, 2 * 3600L + 20 * 60, 6),
+        ),
+        history = listOf(
+            ReadingSessionItem("1", "The Wind in the Willows", null, at(0, 20, 12), 32 * 60L),
+            ReadingSessionItem("3", "Frankenstein", null, at(0, 7, 30), 20 * 60L),
+            ReadingSessionItem("1", "The Wind in the Willows", null, at(1, 21, 40), 44 * 60L),
+            ReadingSessionItem("5", "Pride and Prejudice", null, at(3, 15, 5), 21 * 60L, sessionCount = 3),
+            ReadingSessionItem("1", "The Wind in the Willows", null, at(3, 10, 2), 43 * 60L),
+        ),
+        trend = buildStatsTrend(days),
+    )
 }
 
-private fun formatCount(value: Long): String = when {
-    value >= 1_000_000 -> String.format(Locale.US, "%.1fM", value / 1_000_000.0)
-    value >= 1_000 -> String.format(Locale.US, "%.1fk", value / 1_000.0)
-    else -> value.toString()
-}
-
-private const val HistoryPage = 12
-private const val MergeGapSeconds = 20 * 60L
-private const val ShortSessionSeconds = 3 * 60L
-
-@Preview(widthDp = 720, heightDp = 900, showBackground = true)
 @Composable
-private fun TabletStatsPreview() {
-    com.itexpert120.yomu.core.designsystem.YomuDesignTheme {
-        StatsScreen(
-            state = StatsUiState(isLoading = false),
-            onBack = {},
-        )
+private fun StatsPreview(state: StatsUiState, mode: YomuThemeMode = YomuThemeMode.Light, period: StatsPeriod = StatsPeriod.Week) {
+    YomuDesignTheme(themeMode = mode) {
+        StatsScreen(state = state, period = period, onPeriodChange = {}, onBack = null, onOpenLibrary = {})
     }
 }
 
-@Preview(widthDp = 1280, heightDp = 900, showBackground = true)
+@Preview(name = "Phone", widthDp = 390, heightDp = 1500)
 @Composable
-private fun WideStatsPreview() {
-    com.itexpert120.yomu.core.designsystem.YomuDesignTheme {
-        StatsScreen(
-            state = StatsUiState(isLoading = false),
-            onBack = {},
-        )
-    }
-}
+private fun StatsPhonePreview() = StatsPreview(previewState())
+
+@Preview(name = "Phone dark", widthDp = 390, heightDp = 1500)
+@Composable
+private fun StatsPhoneDarkPreview() = StatsPreview(previewState(), YomuThemeMode.Dark)
+
+@Preview(name = "Phone month", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsPhoneMonthPreview() = StatsPreview(previewState(), period = StatsPeriod.Month)
+
+@Preview(name = "Phone all, black", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsPhoneAllPreview() = StatsPreview(previewState(), YomuThemeMode.Oled, StatsPeriod.All)
+
+@Preview(name = "Loading", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsLoadingPreview() = StatsPreview(StatsUiState())
+
+@Preview(name = "Empty", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsEmptyPreview() = StatsPreview(StatsUiState(isLoading = false))
+
+@Preview(name = "Error dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun StatsErrorPreview() = StatsPreview(StatsUiState(isLoading = false, error = "x"), YomuThemeMode.Dark)
+
+@Preview(name = "Sections empty", widthDp = 390, heightDp = 1100)
+@Composable
+private fun StatsSectionsEmptyPreview() = StatsPreview(
+    previewState().let { it.copy(stats = it.stats.copy(secondsLast7Days = 0), history = emptyList(), bookTimes = emptyList(), trend = it.trend.copy(week = it.trend.week.map { bar -> bar.copy(seconds = 0) })) },
+)
+
+@Preview(name = "Tablet", widthDp = 1200, heightDp = 800)
+@Composable
+private fun StatsTabletPreview() = StatsPreview(previewState())
+
+@Preview(name = "Tablet dark", widthDp = 1200, heightDp = 800)
+@Composable
+private fun StatsTabletDarkPreview() = StatsPreview(previewState(), YomuThemeMode.Dark)
+
+@Preview(name = "Tablet loading", widthDp = 1200, heightDp = 800)
+@Composable
+private fun StatsTabletLoadingPreview() = StatsPreview(StatsUiState())
