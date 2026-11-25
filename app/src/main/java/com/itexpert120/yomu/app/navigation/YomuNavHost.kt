@@ -300,6 +300,7 @@ private fun TopLevelNavigationShell(
                     onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
                     onOpenDetails = onOpenDetails,
                     onSelectionModeChange = { librarySelecting = it },
+                    onHaveSyncWords = onOpenSync,
                 )
             }
             composable<Stats> {

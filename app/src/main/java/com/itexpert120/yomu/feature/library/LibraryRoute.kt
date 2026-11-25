@@ -20,6 +20,7 @@ fun LibraryRoute(
     onOpenReader: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
     onSelectionModeChange: (Boolean) -> Unit = {},
+    onHaveSyncWords: (() -> Unit)? = null,
 ) {
     val viewModel: LibraryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -50,6 +51,7 @@ fun LibraryRoute(
     }
 
     LibraryScreen(
+        onHaveSyncWords = onHaveSyncWords,
         state = state,
         onSearchToggle = viewModel::onSearchToggle,
         onSearchQueryChange = viewModel::onSearchQueryChange,
