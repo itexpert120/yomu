@@ -156,10 +156,19 @@ const gapFor = spread => {
     const gap = settings.gap ?? '6%'
     return spread ? `${(parseFloat(gap) * SPREAD_GAP_FACTOR).toFixed(2)}%` : gap
 }
+// foliate caps a column at 720px. On a wide screen that cap, not the side gap, sets the margins, so
+// the reader's Margins setting (1 = Auto) scales it too: wider margins, a narrower column.
+const BASE_COLUMN_PX = 720
+const MIN_COLUMN_PX = 280
+const maxInlineSize = () => {
+    const m = Math.max(0.25, settings.margins ?? 1)
+    return `${Math.max(MIN_COLUMN_PX, Math.round(BASE_COLUMN_PX * Math.pow(m, -0.75)))}px`
+}
 // Set before foliate lays out: from a resize listener, which runs ahead of its resize observer.
 const configureColumns = renderer => {
     const spread = spreads()
     renderer.setAttribute('gap', gapFor(spread))
+    renderer.setAttribute('max-inline-size', maxInlineSize())
     renderer.setAttribute('max-column-count', spread ? '2' : '1')
 }
 addEventListener('resize', () => {
