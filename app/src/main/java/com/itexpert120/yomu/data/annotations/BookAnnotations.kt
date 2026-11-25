@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.room.withTransaction
 import com.itexpert120.yomu.core.database.BookDao
+import com.itexpert120.yomu.core.database.BookEntity
 import com.itexpert120.yomu.core.database.BookmarkDao
 import com.itexpert120.yomu.core.database.BookmarkEntity
 import com.itexpert120.yomu.core.database.HighlightDao
@@ -18,6 +19,7 @@ import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.PublicationIndex
 import com.itexpert120.yomu.data.books.TocLoad
 import com.itexpert120.yomu.data.highlights.toReaderHighlight
+import com.itexpert120.yomu.reader.epub.EpubBook
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -33,7 +35,7 @@ data class AnnotationExport(val text: String, val fileName: String, val mimeType
 
 /**
  * Exports a book's highlights, notes and bookmarks (Markdown, HTML or Open Reader JSON) and imports
- * them back (Open Reader JSON). Imports
+ * them back (Open Reader JSON, or the Calibre annotations inside the book's own EPUB). Imports
  * merge without duplicates; their writes reach sync like any other highlight or bookmark edit,
  * since sync diffs the tables.
  */
@@ -107,6 +109,18 @@ class BookAnnotations @Inject constructor(
         is AnnotationFileParse.NewerVersion -> AnnotationImportCheck.NewerVersion(parsed.version)
     }
 
+    /**
+     * The Calibre highlights and bookmarks stored inside [bookId]'s EPUB, checked for import; null
+     * when the book has none.
+     */
+    suspend fun checkCalibreImport(bookId: BookId): AnnotationImportCheck? {
+        val book = withContext(Dispatchers.IO) { bookDao.getBook(bookId.value) } ?: return AnnotationImportCheck.BookMissing
+        val readingOrder = outline(bookId).second.ifEmpty { spineHrefs(book) }
+        val file = withContext(Dispatchers.IO) { CalibreAnnotations.read(File(book.storagePath), readingOrder) } ?: return null
+        // They come from the book itself.
+        return check(bookId, file.copy(book = AnnotationFileBook(book.sha256, book.title, book.author)))
+    }
+
     /** Merges [file] into [bookId] in one transaction; null if the book is gone. */
     suspend fun applyImport(bookId: BookId, file: AnnotationFile): AnnotationImportResult? = withContext(Dispatchers.IO) {
         database.withTransaction {
@@ -141,6 +155,11 @@ class BookAnnotations @Inject constructor(
         val toc = (publications.observeToc(bookId).first { it is TocLoad.Ready } as TocLoad.Ready).items
         return toc to emptyList()
     }
+
+    // Without cached weights, the spine from the package document, percent-encoded as Readium writes hrefs.
+    private fun spineHrefs(book: BookEntity): List<String> = runCatching {
+        EpubBook.open(File(book.storagePath)).use { epub -> epub.spine.map { Uri.encode(it.path, "/") } }
+    }.getOrDefault(emptyList())
 }
 
 private fun BookmarkEntity.toReaderBookmark(): ReaderBookmark {
