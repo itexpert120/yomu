@@ -251,8 +251,61 @@ document.addEventListener('click', e => {
 // reports from its empty frame (one page, no progress).
 let shown = false
 view.addEventListener('relocate', ({ detail }) => {
-    if (shown) reportLocation(detail)
+    if (!shown) return
+    followCrossing(detail)
+    reportLocation(detail)
 })
+
+// --- Paged: turning into the adjacent section ---
+// foliate turns a page by sliding its columns; at a section's last (or first) page the turn slides
+// on to the blank padding page past the text and then swaps the section in, which used to pop in
+// where the slide left off. Here the swap happens off-screen: once the outgoing page has slid away,
+// the page is moved a screen over (the padding page is blank, so nothing visibly moves), the next
+// section loads and lays out there, and then slides in from the side the turn came from at
+// foliate's speed and easing, so the crossing reads as one turn. Animations off: an instant swap.
+
+const TURN_MS = 300
+// foliate's page-turn curve (easeOutQuad).
+const EASE_TURN = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+// A crossing that hasn't arrived by then (it failed, or went nowhere) puts the page back.
+const CROSSING_TIMEOUT_MS = 2500
+let crossing = null // { from, shift, timer }
+let lastSection = null
+
+const followCrossing = detail => {
+    const r = view.renderer
+    const index = detail.section?.current
+    if (crossing) {
+        if (index !== crossing.from && r.page >= 1 && r.page <= r.pages - 2) finishCrossing(crossing)
+    } else if (!r.scrolled && index === lastSection && r.pages > 2 && (r.page <= 0 || r.page >= r.pages - 1)) {
+        beginCrossing(r.page <= 0 ? -1 : 1, index)
+    }
+    lastSection = index
+}
+
+const beginCrossing = (dir, from) => {
+    if (settings.animated === false) return
+    // Forward, the next page comes in from the right (from the left in a right-to-left book).
+    const shift = dir * (view.book?.dir === 'rtl' ? -1 : 1) * innerWidth
+    const c = { from, shift }
+    c.timer = setTimeout(() => {
+        if (crossing !== c) return
+        crossing = null
+        view.style.transform = ''
+    }, CROSSING_TIMEOUT_MS)
+    crossing = c
+    view.style.transform = `translateX(${shift}px)`
+}
+
+const finishCrossing = async c => {
+    clearTimeout(c.timer)
+    // Only the final layout slides in: fonts in, and foliate re-anchored.
+    await settled()
+    if (crossing !== c) return
+    crossing = null
+    view.style.transform = ''
+    view.animate([{ transform: `translateX(${c.shift}px)` }, { transform: 'translateX(0)' }], { duration: TURN_MS, easing: EASE_TURN })
+}
 
 const reportLocation = detail => {
     if (firstPage) {
@@ -869,9 +922,14 @@ view.addEventListener('create-overlay', ({ detail: { index } }) => Promise.resol
 
 // CSS px of finger travel past the edge; well beyond a scrolling flick's overshoot.
 const PULL = 140
-// The chapter follows the finger less and less, approaching this many px.
+// The chapter follows the finger less and less, approaching this many px beyond the system bar (or
+// cutout) at that edge: that much travel opens a gap there before any of it is clear of the bar.
 const PULL_TRAVEL = 200
-const pullOffset = distance => PULL_TRAVEL * (1 - Math.exp(-distance / PULL_TRAVEL))
+const pullOffset = (distance, inset) => PULL_TRAVEL * (1 - Math.exp(-distance / PULL_TRAVEL))
+    + inset * Math.min(1, distance / PULL)
+// The badge's size (CSS px) and the space it keeps from the text.
+const BADGE = 48
+const BADGE_MARGIN = 8
 // Leaving: how much further the chapter goes; arriving: how far the next one travels into place
 // (the reader's chapter reveal travels the same 40).
 const EXIT_TRAVEL = 64
@@ -949,15 +1007,22 @@ const showPull = () => {
     const progress = Math.min(1, pull.distance / PULL)
     const armed = pull.distance >= PULL
     const ink = settings.colors?.ink ?? 'gray'
-    // Centred in the gap the chapter leaves, kept clear of the system bars and cutout.
+    const scale = 0.6 + 0.4 * progress
+    // Placed in the gap the chapter leaves at the edge it's pulled from (measured from that edge):
+    // centred in the part clear of the system bar and cutout once that is big enough, else as far
+    // from the edge as the gap allows. Never over the text.
     const inset = pull.dir > 0 ? safeArea.bottom : safeArea.top
-    const center = Math.max(inset + 28, (inset + Math.abs(pose.y)) / 2)
+    const gap = Math.abs(pose.y)
+    const half = BADGE / 2 * scale
+    const center = gap - inset >= 2 * (half + BADGE_MARGIN)
+        ? (inset + gap) / 2
+        : Math.max(gap / 2, gap - half - BADGE_MARGIN)
     pullHint.className = pull.dir > 0 ? 'next' : 'prev'
-    pullHint.style.top = pull.dir > 0 ? 'auto' : `${center - 24}px`
-    pullHint.style.bottom = pull.dir > 0 ? `${center - 24}px` : 'auto'
+    pullHint.style.top = pull.dir > 0 ? 'auto' : `${center - BADGE / 2}px`
+    pullHint.style.bottom = pull.dir > 0 ? `${center - BADGE / 2}px` : 'auto'
     pullHint.style.transition = 'none'
     pullHint.style.opacity = String(progress)
-    pullHint.style.scale = String(0.6 + 0.4 * progress)
+    pullHint.style.scale = String(scale)
     pullHint.style.color = armed ? (settings.colors?.page ?? 'white') : ink
     pullHint.style.background = armed ? ink : `color-mix(in srgb, ${ink} 16%, transparent)`
 }
@@ -999,7 +1064,7 @@ const onPullMove = e => {
     // The chapter is being dragged, not scrolled.
     if (e.cancelable) e.preventDefault()
     pull.distance = Math.max(0, (pull.from - y) * pull.dir)
-    setPose({ y: -pull.dir * pullOffset(pull.distance), opacity: 1 })
+    setPose({ y: -pull.dir * pullOffset(pull.distance, pull.dir > 0 ? safeArea.bottom : safeArea.top), opacity: 1 })
     if (pull.distance === 0) {
         // Pulled back to where it started: scrolling again, not continuing.
         pull.dir = 0

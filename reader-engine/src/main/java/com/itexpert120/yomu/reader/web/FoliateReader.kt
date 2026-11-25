@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.MutableContextWrapper
+import android.content.pm.ApplicationInfo
 import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
@@ -128,7 +129,16 @@ class FoliateReader(
     private var safeArea: Pair<Int, Int>? = null
 
     init {
+        // Debug builds: the page can be inspected from chrome://inspect.
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
         webView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateSafeArea() }
+        // The view can also move without changing size (its container settling after an
+        // animation), which changes how much of it the bars cover.
+        webView.viewTreeObserver.addOnGlobalLayoutListener { updateSafeArea() }
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+            view.post { updateSafeArea() }
+            ViewCompat.onApplyWindowInsets(view, insets)
+        }
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
             .apply { pageParams.forEach { (key, value) -> appendQueryParameter(key, value) } }
             .build()
