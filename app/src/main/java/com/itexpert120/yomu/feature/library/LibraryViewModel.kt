@@ -172,13 +172,8 @@ class LibraryViewModel @Inject constructor(
         launchSafely { libraryPrefs.setTabHidden(key, hidden) }
     }
 
-    /** Moves any tab (status or collection) one place; the whole order is then remembered. */
-    fun onMoveTab(key: String, up: Boolean) {
-        val order = state.value.allTabs.map { it.key }.toMutableList()
-        val from = order.indexOf(key)
-        val to = if (up) from - 1 else from + 1
-        if (from < 0 || to !in order.indices) return
-        order.add(to, order.removeAt(from))
+    /** Remembers the tab order the Shelves sheet's drag settled on. */
+    fun onReorderTabs(order: List<String>) {
         launchSafely { libraryPrefs.setTabOrder(order) }
     }
 

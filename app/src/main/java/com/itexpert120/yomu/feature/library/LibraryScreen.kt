@@ -125,7 +125,7 @@ fun LibraryScreen(
     onCreateCollection: (name: String, addSelected: Boolean) -> Unit = { _, _ -> },
     onRenameCollection: (id: String, name: String) -> Unit = { _, _ -> },
     onDeleteCollection: (String) -> Unit = {},
-    onMoveTab: (key: String, up: Boolean) -> Unit = { _, _ -> },
+    onReorderTabs: (order: List<String>) -> Unit = {},
     onSetTabHidden: (key: String, hidden: Boolean) -> Unit = { _, _ -> },
     onSetSelectedInCollection: (id: String, member: Boolean) -> Unit = { _, _ -> },
     onSetSelectedStatus: (ManualStatus?) -> Unit = {},
@@ -406,7 +406,7 @@ fun LibraryScreen(
             onCreate = { onCreateCollection(it, false) },
             onRename = onRenameCollection,
             onDelete = onDeleteCollection,
-            onMove = onMoveTab,
+            onReorder = onReorderTabs,
             onSetHidden = onSetTabHidden,
             onDismiss = { showManageCollections = false },
         )

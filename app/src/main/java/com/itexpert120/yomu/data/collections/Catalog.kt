@@ -43,7 +43,7 @@ class Catalog(val entries: List<CatalogEntry>, val collections: List<BookCollect
                     inIt == selected.size -> Membership.All
                     else -> Membership.Some
                 }
-                OrganizeCollection(collection.id, collection.name, membership)
+                OrganizeCollection(collection.id, collection.name, membership, members = inIt, of = selected.size)
             },
         )
     }
@@ -65,8 +65,8 @@ class Catalog(val entries: List<CatalogEntry>, val collections: List<BookCollect
     }
 
     /**
-     * Every tab, shown or not, in the user's [order]: All and the status tabs then collections by
-     * default, with tabs the order doesn't mention (a new collection) keeping their default place.
+     * Every tab, shown or not: All first, then the status tabs, then the collections, each group in
+     * the user's [order]; tabs the order doesn't mention (a new collection) keep their default place.
      */
     private fun allTabs(order: List<String>): List<LibraryTab> {
         fun count(key: String) = entries.count { it.belongsTo(key) }
@@ -77,7 +77,13 @@ class Catalog(val entries: List<CatalogEntry>, val collections: List<BookCollect
             }
         val rank = order.withIndex().associate { (index, key) -> key to index }
         return defaults.withIndex()
-            .sortedWith(compareBy({ rank[it.value.key] ?: (order.size + it.index) }, { it.index }))
+            .sortedWith(
+                compareBy(
+                    { tabGroup(it.value.key) },
+                    { rank[it.value.key] ?: (order.size + it.index) },
+                    { it.index },
+                ),
+            )
             .map { it.value }
     }
 
@@ -131,8 +137,15 @@ private val StatusTabs: List<Pair<String, ShelfStatus?>> = listOf(
     LibraryTabKeys.DROPPED to ShelfStatus.Dropped,
 )
 
-/** Status tabs the user may turn off; All always stays. */
-fun isHideableTab(key: String) = key != LibraryTabKeys.ALL && StatusTabs.any { it.first == key }
+/** Tabs the user may turn off: every status tab and collection; All always stays. */
+fun isHideableTab(key: String) = key != LibraryTabKeys.ALL
+
+/** All, then the status tabs, then the collections: the order only moves tabs within their group. */
+private fun tabGroup(key: String): Int = when {
+    key == LibraryTabKeys.ALL -> 0
+    LibraryTabKeys.collectionId(key) == null -> 1
+    else -> 2
+}
 
 /** On hold / Dropped only show while they hold a book. */
 private fun isOptionalTab(key: String) = key == LibraryTabKeys.ON_HOLD || key == LibraryTabKeys.DROPPED
@@ -143,28 +156,34 @@ data class Organize(val status: StatusChoice, val collections: List<OrganizeColl
 /** Whether all, some, or none of the organized books are in a collection. */
 enum class Membership { None, Some, All }
 
-/** One collection in the Organize sheet. */
-data class OrganizeCollection(val id: String, val name: String, val membership: Membership)
+/** One collection in the Organize sheet; [members] of the [of] organized books are in it. */
+data class OrganizeCollection(
+    val id: String,
+    val name: String,
+    val membership: Membership,
+    val members: Int = 0,
+    val of: Int = 0,
+)
 
 /** The status choice for the books being organized; [Mixed] when they disagree (none is checked). */
 enum class StatusChoice(val label: String, val status: ManualStatus?) {
     Auto("Auto", null),
+    ToRead(ShelfStatus.ToRead.label, ManualStatus.ToRead),
+    Reading(ShelfStatus.Reading.label, ManualStatus.Reading),
+    Finished(ShelfStatus.Finished.label, ManualStatus.Finished),
     OnHold(ShelfStatus.OnHold.label, ManualStatus.OnHold),
     Dropped(ShelfStatus.Dropped.label, ManualStatus.Dropped),
     Mixed("Mixed", null),
     ;
 
     companion object {
-        val Options = listOf(Auto, OnHold, Dropped)
+        val Options = listOf(Auto, ToRead, Reading, Finished, OnHold, Dropped)
 
         fun of(statuses: Collection<ManualStatus?>): StatusChoice {
             val distinct = statuses.toSet()
             if (distinct.size > 1) return Mixed
-            return when (distinct.singleOrNull()) {
-                ManualStatus.OnHold -> OnHold
-                ManualStatus.Dropped -> Dropped
-                null -> Auto
-            }
+            val status = distinct.singleOrNull() ?: return Auto
+            return entries.first { it.status == status }
         }
     }
 }

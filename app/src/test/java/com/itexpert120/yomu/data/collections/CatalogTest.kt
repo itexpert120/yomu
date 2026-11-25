@@ -61,20 +61,20 @@ class CatalogTest {
     }
 
     @Test
-    fun userOrderAppliesToEveryTabAndNewOnesFollowIt() {
-        val order = listOf(LibraryTabKeys.collection("c1"), LibraryTabKeys.FINISHED, LibraryTabKeys.ALL)
+    fun userOrderAppliesWithinEachGroupAndNewOnesFollowIt() {
+        val order = listOf(LibraryTabKeys.collection("c2"), LibraryTabKeys.FINISHED, LibraryTabKeys.ALL)
         val tabs = catalog(finished).tabs(order, emptySet(), LibraryTabKeys.ALL)
         assertEquals(
-            listOf(LibraryTabKeys.collection("c1"), "finished", "all", "reading", "toRead", LibraryTabKeys.collection("c2")),
+            listOf("all", "finished", "reading", "toRead", LibraryTabKeys.collection("c2"), LibraryTabKeys.collection("c1")),
             tabs.keys(),
         )
     }
 
     @Test
-    fun hiddenStatusTabsLeaveTheStripButAllAndCollectionsCannotBeHidden() {
+    fun hiddenTabsLeaveTheStripButAllCannotBeHidden() {
         val hidden = setOf(LibraryTabKeys.FINISHED, LibraryTabKeys.ALL, LibraryTabKeys.collection("c1"))
         val tabs = catalog(finished, collections = listOf(fantasy)).tabs(emptyList(), hidden, LibraryTabKeys.FINISHED)
-        assertEquals(listOf("all", "reading", "toRead", LibraryTabKeys.collection("c1")), tabs.keys())
+        assertEquals(listOf("all", "reading", "toRead"), tabs.keys())
         assertEquals(LibraryTabKeys.ALL, tabs.selected)
         assertFalse(tabs.all.first { it.key == LibraryTabKeys.ALL }.hideable)
         assertTrue(tabs.all.first { it.key == LibraryTabKeys.FINISHED }.hideable)
@@ -85,7 +85,10 @@ class CatalogTest {
         val organize = catalog(reading, dropped).organize(listOf(BookId("reading"), BookId("dropped")))
         assertEquals(StatusChoice.Mixed, organize.status)
         assertEquals(
-            listOf(OrganizeCollection("c1", "Fantasy", Membership.All), OrganizeCollection("c2", "Club", Membership.Some)),
+            listOf(
+                OrganizeCollection("c1", "Fantasy", Membership.All, members = 2, of = 2),
+                OrganizeCollection("c2", "Club", Membership.Some, members = 1, of = 2),
+            ),
             organize.collections,
         )
     }
@@ -113,6 +116,8 @@ class CatalogTest {
         assertEquals(StatusChoice.Auto, StatusChoice.of(listOf(null, null)))
         assertEquals(StatusChoice.OnHold, StatusChoice.of(listOf(ManualStatus.OnHold, ManualStatus.OnHold)))
         assertEquals(StatusChoice.Mixed, StatusChoice.of(listOf(ManualStatus.OnHold, null)))
+        assertEquals(StatusChoice.Finished, StatusChoice.of(listOf(ManualStatus.Finished)))
+        assertEquals(StatusChoice.Mixed, StatusChoice.of(listOf(ManualStatus.ToRead, ManualStatus.Reading)))
         assertEquals(StatusChoice.Auto, StatusChoice.of(emptyList()))
     }
 }

@@ -65,6 +65,13 @@ interface BookDao {
         editedAt: Long,
     )
 
+    /** Reading moved the book on: an unpinned manual status (To read / Reading / Finished) lapses. */
+    @Query(
+        "UPDATE books SET manualStatus = NULL, shelfEditedAt = :editedAt WHERE id = :id " +
+            "AND manualStatus IN ('ToRead', 'Reading', 'Finished') AND progress != :progress",
+    )
+    suspend fun clearUnpinnedStatusOnProgress(id: String, progress: Float, editedAt: Long)
+
     @Query(
         "UPDATE books SET progress = :progress, totalProgression = :totalProgression, " +
             "locatorJson = :locatorJson, syncLocatorJson = :syncLocatorJson, " +

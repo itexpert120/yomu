@@ -1,15 +1,28 @@
 package com.itexpert120.yomu.feature.library
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuDialogCard
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
 import com.itexpert120.yomu.data.collections.LibraryTab
 import com.itexpert120.yomu.data.collections.LibraryTabKeys
+import com.itexpert120.yomu.data.collections.Membership
+import com.itexpert120.yomu.data.collections.OrganizeCollection
+import com.itexpert120.yomu.data.collections.StatusChoice
+import com.itexpert120.yomu.feature.collections.ManageTabsSheet
+import com.itexpert120.yomu.feature.collections.OrganizeSheet
 
 private val PreviewTitles = listOf(
     "The Wind in the Willows" to "Kenneth Grahame",
@@ -224,3 +237,88 @@ private fun ArrangeSheetPreview() {
 @Preview(name = "Tablet dark", widthDp = 752, heightDp = 1000)
 @Composable
 private fun LibraryTabletDarkPreview() = LibraryPreview(previewState(), YomuThemeMode.Dark)
+
+private val PreviewOrganizeCollections = listOf(
+    OrganizeCollection("1", "Classics", Membership.All, members = 3, of = 3),
+    OrganizeCollection("2", "Bedtime", Membership.Some, members = 1, of = 3),
+    OrganizeCollection("3", "Summer 2026", Membership.None, members = 0, of = 3),
+)
+
+@Composable
+private fun OrganizeSheetPreview(mode: YomuThemeMode) {
+    YomuDesignTheme(themeMode = mode) {
+        OrganizeSheet(
+            visible = true,
+            title = "Organize",
+            status = StatusChoice.Auto,
+            collections = PreviewOrganizeCollections,
+            onSetStatus = {},
+            onSetCollection = { _, _ -> },
+            onCreateCollection = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview(name = "Organize sheet", widthDp = 390, heightDp = 844)
+@Composable
+private fun OrganizeSheetLightPreview() = OrganizeSheetPreview(YomuThemeMode.Light)
+
+@Preview(name = "Organize sheet dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun OrganizeSheetDarkPreview() = OrganizeSheetPreview(YomuThemeMode.Dark)
+
+@Composable
+private fun ShelvesSheetPreview(mode: YomuThemeMode) {
+    YomuDesignTheme(themeMode = mode) {
+        ManageTabsSheet(
+            visible = true,
+            tabs = PreviewTabs.filterNot { it.isCollection } + listOf(
+                LibraryTab(LibraryTabKeys.ON_HOLD, "On hold", 0, status = ShelfStatus.OnHold),
+                LibraryTab(LibraryTabKeys.DROPPED, "Dropped", 0, status = ShelfStatus.Dropped),
+            ) + PreviewTabs.filter { it.isCollection } +
+                LibraryTab(LibraryTabKeys.collection("c2"), "Bedtime", 1, isCollection = true),
+            hiddenKeys = setOf(LibraryTabKeys.ON_HOLD, LibraryTabKeys.DROPPED),
+            onCreate = {},
+            onRename = { _, _ -> },
+            onDelete = {},
+            onReorder = {},
+            onSetHidden = { _, _ -> },
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview(name = "Shelves sheet", widthDp = 390, heightDp = 844)
+@Composable
+private fun ShelvesSheetLightPreview() = ShelvesSheetPreview(YomuThemeMode.Light)
+
+@Preview(name = "Shelves sheet dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun ShelvesSheetDarkPreview() = ShelvesSheetPreview(YomuThemeMode.Dark)
+
+@Composable
+private fun RemoveDialogPreview(mode: YomuThemeMode) {
+    YomuDesignTheme(themeMode = mode) {
+        Box(Modifier.fillMaxSize().background(YomuTheme.stack.desk), contentAlignment = Alignment.Center) {
+            YomuDialogCard(
+                title = "Remove 3 books?",
+                text = "The Wind in the Willows, Mrs. Dalloway and Moby Dick will be removed from this device, " +
+                    "with their file, cover and reading progress. This can't be undone.",
+                confirmLabel = "Remove",
+                onConfirm = {},
+                onDismiss = {},
+                destructive = true,
+                modifier = Modifier.padding(horizontal = YomuTheme.space.lg),
+            )
+        }
+    }
+}
+
+@Preview(name = "Remove dialog", widthDp = 390, heightDp = 844)
+@Composable
+private fun RemoveDialogLightPreview() = RemoveDialogPreview(YomuThemeMode.Light)
+
+@Preview(name = "Remove dialog dark", widthDp = 390, heightDp = 844)
+@Composable
+private fun RemoveDialogDarkPreview() = RemoveDialogPreview(YomuThemeMode.Dark)
