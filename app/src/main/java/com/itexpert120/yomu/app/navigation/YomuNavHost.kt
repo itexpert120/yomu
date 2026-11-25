@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -385,112 +386,46 @@ private fun TopLevelNavigationShell(
     onOpenSync: () -> Unit,
     onLeaveLibrary: () -> Unit,
 ) {
-    val navController = rememberNavController()
-    val currentDestination = navController.currentBackStackEntryAsState().value?.destination
-    val selected = when {
-        currentDestination?.hasRoute<Stats>() == true -> YomuTopLevelDestination.Statistics
-        currentDestination?.hasRoute<Settings>() == true -> YomuTopLevelDestination.Settings
-        else -> YomuTopLevelDestination.Library
+    var selected by rememberSaveable { mutableStateOf(YomuTopLevelDestination.Library) }
+    fun select(destination: YomuTopLevelDestination) {
+        if (destination == selected) return
+        selected = destination
+        onLeaveLibrary()
     }
-    val transitions = rememberYomuScreenTransitions()
-    // A back between tabs (gesture, back key) is Stack's one slide, like any page; a tap on a tab in
-    // the bar keeps the tab switch's fade-through slide, even when navigation runs it as a pop.
-    val backMotion = remember { BackMotion() }
-    TrackBackMotion(backMotion, navController)
-    val tabTap = remember { booleanArrayOf(false) }
 
     var librarySelecting by remember { mutableStateOf(false) }
     YomuTopLevelNavigation(
         selected = selected,
-        onSelected = { destination ->
-            if (destination != selected && navController.navigateTopLevel(destination)) {
-                tabTap[0] = true
-                onLeaveLibrary()
-            }
-        },
+        onSelected = ::select,
         barVisible = !librarySelecting,
     ) { hostModifier ->
-        NavHost(
-            navController = navController,
-            startDestination = Library,
+        TopLevelTabs(
+            selected = selected,
+            onSelectedChange = { selected = it },
             modifier = hostModifier,
-            enterTransition = transitions.enter,
-            exitTransition = {
-                tabTap[0] = false
-                backMotion.forward(changesEntry = initialState.id != targetState.id)
-                transitions.exit(this)
-            },
-            popEnterTransition = { if (tabTap[0]) transitions.popEnter(this) else EnterTransition.None },
-            popExitTransition = {
-                if (tabTap[0]) {
-                    tabTap[0] = false
-                    backMotion.forward(changesEntry = false)
-                    transitions.popExit(this)
-                } else {
-                    backPopExit(backMotion, transitions.motionEnabled, transitions.layoutDirection)
-                }
-            },
-            predictivePopEnterTransition = { EnterTransition.None },
-            predictivePopExitTransition = { swipeEdge -> backPredictivePopExit(backMotion, swipeEdge, transitions.motionEnabled) },
-        ) {
-            composable<Library> {
-                BackPreviewFrame(backMotion) {
-                    LibraryRoute(
-                        onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
-                        onOpenDetails = onOpenDetails,
-                        onSelectionModeChange = { librarySelecting = it },
-                        onHaveSyncWords = onOpenSync,
-                    )
-                }
-            }
-            composable<Stats> {
-                BackPreviewFrame(backMotion) {
-                    StatsRoute(
-                        onBack = null,
-                        onOpenLibrary = { if (navController.navigateTopLevel(YomuTopLevelDestination.Library)) tabTap[0] = true },
-                    )
-                }
-            }
-            composable<Settings> {
-                BackPreviewFrame(backMotion) {
-                    SettingsRoute(
-                        appViewModel = appViewModel,
-                        onBack = null,
-                        onOpenFontLibrary = onOpenFontLibrary,
-                        onOpenAbout = onOpenAbout,
-                        onOpenReaderDefaults = onOpenReaderDefaults,
-                        onOpenSync = onOpenSync,
-                    )
-                }
+        ) { tab ->
+            when (tab) {
+                YomuTopLevelDestination.Library -> LibraryRoute(
+                    onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
+                    onOpenDetails = onOpenDetails,
+                    onSelectionModeChange = { librarySelecting = it },
+                    onHaveSyncWords = onOpenSync,
+                )
+                YomuTopLevelDestination.Statistics -> StatsRoute(
+                    onBack = null,
+                    onOpenLibrary = { select(YomuTopLevelDestination.Library) },
+                )
+                YomuTopLevelDestination.Settings -> SettingsRoute(
+                    appViewModel = appViewModel,
+                    onBack = null,
+                    onOpenFontLibrary = onOpenFontLibrary,
+                    onOpenAbout = onOpenAbout,
+                    onOpenReaderDefaults = onOpenReaderDefaults,
+                    onOpenSync = onOpenSync,
+                )
             }
         }
     }
-}
-
-/** Switches tab; false when nothing happened (the current tab is still settling). */
-private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination): Boolean {
-    if (currentBackStackEntry?.lifecycle?.currentState != Lifecycle.State.RESUMED) return false
-
-    when (destination) {
-        YomuTopLevelDestination.Library -> navigate(Library) {
-            popUpTo<Library> { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-
-        YomuTopLevelDestination.Statistics -> navigate(Stats) {
-            popUpTo<Library> { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-
-        YomuTopLevelDestination.Settings -> navigate(Settings) {
-            popUpTo<Library> { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-    }
-    return true
 }
 
 /** With animations off the Resume motion is a short crossfade into the reader. */
