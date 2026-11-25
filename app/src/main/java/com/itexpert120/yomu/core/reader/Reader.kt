@@ -8,8 +8,12 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 
 /** Immutable publication metadata that can be reused when opening a book. */
@@ -52,12 +56,15 @@ sealed interface ReaderRenderState {
     data class Ready(val href: String?) : ReaderRenderState
 }
 
-/** An action picked from the text-selection menu, with the selected text and its position. */
+/**
+ * An action picked from the text-selection menu, with the selected text and its position.
+ * [language] is the selection's language as a primary subtag ("en", "fr"): the nearest `lang` /
+ * `xml:lang` around it, else the book's; null when neither says.
+ */
 data class ReaderSelection(
     val action: Action,
     val text: String,
     val locatorJson: String,
-    // The selection's language as a BCP 47 tag (the element's `lang`, else the book's), if known.
     val language: String? = null,
 ) {
     enum class Action { Copy, Highlight, LookUp, SearchWeb, ReadAloud, Share, SearchInBook, CopyWithCitation }
@@ -94,7 +101,30 @@ data class ReaderLocator(
     val completedSharedChapterIds: List<String> = emptyList(),
     // True only when the actual final page/end of the publication has been reached.
     val completed: Boolean = false,
+    // The printed page on screen, from the book's page list: "112", or "112–113" across a spread.
+    // Null when the book has no page list (or the engine can't place one).
+    val pageLabel: String? = null,
+    // How much text is left in the chapter and in the book, and how much lies before this point,
+    // in KB of the book's text files (markup included): the unit reading-time estimates use.
+    val chapterSizeLeft: Double? = null,
+    val bookSizeLeft: Double? = null,
+    val bookSizeRead: Double? = null,
 )
+
+/** An entry of the book's page list (its printed page numbers): the [label] and where it starts. */
+data class ReaderPageTarget(val label: String, val locatorJson: String)
+
+/** An image the reader picked from the page (to view, save or share): its bytes and type. */
+class ReaderImage(
+    val bytes: ByteArray,
+    val mimeType: String,
+    // The image's alt text or title, when it has one.
+    val description: String?,
+)
+
+private val NoPages: StateFlow<List<ReaderPageTarget>> = MutableStateFlow(emptyList<ReaderPageTarget>()).asStateFlow()
+private val NoLocators: SharedFlow<ReaderLocator> = MutableSharedFlow<ReaderLocator>().asSharedFlow()
+private val NoImages: SharedFlow<ReaderImage> = MutableSharedFlow<ReaderImage>().asSharedFlow()
 
 /**
  * A flattened TOC entry. [id] identifies a logical section, including its fragment when present;
@@ -219,6 +249,18 @@ interface ReaderSession : ReaderNavigator {
 
     /** Emits the id of an on-page highlight the user tapped, so the UI can edit/delete it. */
     val highlightTaps: SharedFlow<String>
+
+    /** The book's page list (printed page numbers), in reading order; empty when it has none. */
+    val pageList: StateFlow<List<ReaderPageTarget>> get() = NoPages
+
+    /**
+     * Emits where the reader was when they followed a link in the text, which the engine follows
+     * itself: the caller's own jumps (contents, search, bookmarks) it knows about already.
+     */
+    val linkJumps: SharedFlow<ReaderLocator> get() = NoLocators
+
+    /** Emits an image the reader opened from the page (a tap on it, or a long press). */
+    val images: SharedFlow<ReaderImage> get() = NoImages
 
     /** Applies reading preferences (layout/theme/font/size). Safe to call before/after hosting. */
     fun applySettings(settings: ReaderSettings)

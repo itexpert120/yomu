@@ -140,11 +140,15 @@ fun ReaderScreen(
     // the reader instead of the first swipe only revealing hidden bars. Otherwise reading is full-screen.
     val systemBarsShown = state.chrome.controlsVisible
     val currentSystemBarsShown by rememberUpdatedState(systemBarsShown)
+    // Navigation holds the window takeover back until the reader's entrance has settled, so the
+    // page it opened over never relayouts (bars hiding) while it is still on screen.
+    val windowReady = LocalReaderWindowReady.current
     // Hide both system bars for full-screen reading. Android re-shows the bars whenever the window
     // loses and regains focus (returning from background, multi-window, etc.), so this must be
     // re-applied on every ON_RESUME — not just once. A one-shot effect here is why content used to
     // reappear below the status bar after the app came back from the background.
-    DisposableEffect(view) {
+    DisposableEffect(view, windowReady) {
+        if (!windowReady) return@DisposableEffect onDispose { }
         val window = view.context.findActivity()?.window
         val restoreWindow = window?.let { captureReaderWindow(it, view) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -186,13 +190,15 @@ fun ReaderScreen(
             restoreWindow?.invoke()
         }
     }
-    LaunchedEffect(systemBarsShown) {
+    LaunchedEffect(systemBarsShown, windowReady) {
+        if (!windowReady) return@LaunchedEffect
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
         if (systemBarsShown) showReaderSystemBars(window, view) else hideReaderSystemBars(window, view)
     }
     // Colour the system bars to the reading background so the status area matches the page on every
     // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).
-    LaunchedEffect(reading.settings.backgroundArgb, reading.settings.isLightBackground) {
+    LaunchedEffect(reading.settings.backgroundArgb, reading.settings.isLightBackground, windowReady) {
+        if (!windowReady) return@LaunchedEffect
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
         val controller = WindowCompat.getInsetsController(window, view)
         val barColor = Color(reading.settings.backgroundArgb).toArgb()
@@ -462,6 +468,9 @@ fun ReaderScreen(
                             chapterProgression = reading.chapterProgression,
                             settings = reading.settings,
                             onContentHeight = { footerPx = it },
+                            pageLabel = reading.pageLabel,
+                            minutesLeftInChapter = reading.minutesLeftInChapter,
+                            minutesLeftInBook = reading.minutesLeftInBook,
                             showDeviceStatus = !systemBarsShown,
                             deviceStatusActive = chromeShown,
                             modifier = Modifier
@@ -496,10 +505,16 @@ fun ReaderScreen(
                         ReaderControlsPanel(
                             visible = panelVisible,
                             colors = chromeColors,
-                            remainingLabel = chapterRemainingLabel(
-                                reading.settings.layout,
-                                reading.chapterPagesLeft,
-                                reading.chapterProgression,
+                            // "6 min left in chapter · pages 112–113", as the boards have it;
+                            // pages or percent of the chapter left until there's an estimate.
+                            remainingLabel = controlsCaption(
+                                timeLeft = ReadingTime.chapterLabel(reading.minutesLeftInChapter),
+                                pageLabel = reading.pageLabel,
+                                fallback = chapterRemainingLabel(
+                                    reading.settings.layout,
+                                    reading.chapterPagesLeft,
+                                    reading.chapterProgression,
+                                ),
                             ),
                             progressPercent = reading.progressPercent,
                             chapterProgression = reading.chapterProgression,
@@ -518,6 +533,17 @@ fun ReaderScreen(
                     } else {
                         controlsPanel(state.chrome.controlsVisible)
                     }
+
+                    // "Back to p. 112" after a jump: under the top bar while it shows, else just
+                    // below the status area.
+                    ReaderJumpBackChip(
+                        label = reading.jumpBack,
+                        colors = chromeColors,
+                        onClick = { onAction(ReaderAction.JumpBack) },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = (if (chromeShown) fullTop else pagedSafeTop) + 12.dp, start = 24.dp, end = 24.dp),
+                    )
 
                     ReaderControlsSheetWithDimPreview(
                         visible = state.chrome.displaySheetVisible,
@@ -569,6 +595,8 @@ fun ReaderScreen(
                         highlights = reading.highlights,
                         onJumpToHighlight = { onAction(ReaderAction.JumpToHighlight(it)) },
                         onDeleteHighlight = { onAction(ReaderAction.DeleteHighlight(it)) },
+                        pages = reading.pageList,
+                        onGoToPage = { onAction(ReaderAction.GoToPage(it)) },
                         onSelectTab = { onAction(ReaderAction.SelectBrowseTab(it)) },
                         onDismiss = { onAction(ReaderAction.CloseBrowse) },
                         calibreAvailable = state.annotationTransfer.calibreAvailable,
@@ -595,6 +623,14 @@ fun ReaderScreen(
                     )
 
                     FootnoteSheet(html = reading.footnoteHtml, onDismiss = { onAction(ReaderAction.CloseFootnote) })
+
+                    ReaderImageViewer(
+                        image = reading.viewedImage,
+                        message = reading.imageMessage,
+                        onSave = { onAction(ReaderAction.SaveImage) },
+                        onShare = { onAction(ReaderAction.ShareImage) },
+                        onClose = { onAction(ReaderAction.CloseImageViewer) },
+                    )
 
                     HighlightEditSheet(
                         highlight = reading.editingHighlight,
@@ -746,6 +782,12 @@ private val ChapterRevealTravel = 40.dp
  * the book sheet turns into the reader (Stack's Resume motion); 0 elsewhere, where it fades in.
  */
 val LocalReaderOpeningRise = compositionLocalOf { 0.dp }
+
+/**
+ * Whether the reader may take the window over (hide and colour the system bars, cutout mode):
+ * false while navigation is still bringing the reader in over the page it opened from.
+ */
+val LocalReaderWindowReady = compositionLocalOf { true }
 
 private fun applyReaderCutoutMode(window: android.view.Window) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

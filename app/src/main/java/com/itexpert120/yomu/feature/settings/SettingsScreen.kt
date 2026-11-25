@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.itexpert120.yomu.feature.settings
 
 import androidx.compose.animation.AnimatedContent
@@ -19,8 +21,7 @@ import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -124,7 +125,7 @@ internal fun SettingsScreen(
     val stack = YomuTheme.stack
     val density = LocalDensity.current
     var deskHeight by remember { mutableIntStateOf(0) }
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val headerBottom = with(density) { (statusTop + StackCompactHeaderHeight).toPx() }
     val headerFade = with(density) { StackHeaderFadeDistance.toPx() }
     val sheetRadius = with(density) { 32.dp.toPx() }
@@ -153,7 +154,7 @@ internal fun SettingsScreen(
                     .fillMaxWidth()
                     .onSizeChanged { deskHeight = it.height }
                     .background(stack.desk)
-                    .statusBarsPadding(),
+                    .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
             ) {
                 StackTitleRow(title = "Settings", collapse = headerProgress)
                 SyncStatusCard(
@@ -283,7 +284,7 @@ internal fun TabletSettingsLayout(
         Modifier
             .fillMaxSize()
             .background(stack.desk)
-            .statusBarsPadding(),
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
     ) {
         Column(
             Modifier

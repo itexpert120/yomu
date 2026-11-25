@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.background
@@ -9,7 +11,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +59,7 @@ internal fun LibrarySelectionToolbar(
 ) {
     val stack = YomuTheme.stack
     // A gesture bar (~24dp) fits under the 28dp gap; taller three-button bars push the pill up.
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
     Row(
         modifier = modifier
             .padding(start = 16.dp, end = 16.dp, bottom = maxOf(ToolbarBottom, navBottom + 4.dp))

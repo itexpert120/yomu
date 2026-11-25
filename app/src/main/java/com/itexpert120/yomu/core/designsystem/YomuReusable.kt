@@ -229,6 +229,8 @@ private fun BoxScope.BottomSheetPanel(
             .graphicsLayer { translationY = size.height * motion.travel }
             .clip(SheetShape)
             .background(MaterialTheme.colorScheme.surface)
+            // Pure black: the sheet is as black as the dimmed page, so a hairline marks its edge.
+            .then(if (YomuTheme.stack.flat) Modifier.border(1.dp, YomuTheme.stack.rule, SheetShape) else Modifier)
             .nestedScroll(motion.connection)
             .draggable(
                 orientation = Orientation.Vertical,

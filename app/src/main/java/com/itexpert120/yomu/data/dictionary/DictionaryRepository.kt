@@ -87,12 +87,15 @@ class DictionaryRepository @Inject constructor() {
         val senses = entries.flatMap { it.senses }
         if (senses.isEmpty() || senses.any { sense -> sense.tags.none { it == "form of" } }) return null
         val definition = senses.first().definition.trim().trimEnd('.')
-        val target = definition.substringAfterLast(" of ", "").trim()
-        if (target.isEmpty() || target.contains(' ')) return null
+        // "comparative form of scary: more scary" → "scary": the base word is the first word after
+        // the last " of ", whatever explanation follows it.
+        val target = BaseWord.find(definition.substringAfterLast(" of ", "").trim())?.value.orEmpty()
+        if (target.isEmpty()) return null
         return target to definition.substringBeforeLast(" of ").trim()
     }
 
     private companion object {
+        val BaseWord = Regex("""^[\p{L}\p{M}'’-]+""")
         const val ENDPOINT = "https://freedictionaryapi.com/api/v1/entries/"
         const val TIMEOUT_MS = 8_000
     }

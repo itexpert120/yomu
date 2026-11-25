@@ -8,11 +8,13 @@ import com.itexpert120.yomu.core.reader.HighlightStyle
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderEngine
 import com.itexpert120.yomu.core.reader.ReaderHighlight
+import com.itexpert120.yomu.core.reader.ReaderImage
 import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderNavigator
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
+import com.itexpert120.yomu.core.reader.ReaderPageTarget
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderSelection
@@ -51,6 +53,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -135,6 +138,17 @@ data class ReadingExperienceState(
     val searchPerformed: Boolean = false,
     // A newer position synced from another device, offered rather than applied.
     val syncOffer: SyncOfferUi? = null,
+    // The printed page on screen ("112", "112–113") and the book's page list, for Go to page.
+    val pageLabel: String? = null,
+    val pageList: List<ReaderPageTarget> = emptyList(),
+    // Estimated minutes of reading left in the chapter and in the book; null while unknown.
+    val minutesLeftInChapter: Int? = null,
+    val minutesLeftInBook: Int? = null,
+    // "Back to p. 112": the way back after a jump, while it's on offer.
+    val jumpBack: String? = null,
+    // A picture opened from the page, and what became of saving it.
+    val viewedImage: ReaderImage? = null,
+    val imageMessage: String? = null,
     val undo: AnnotationUndo? = null,
 ) {
     val currentPageBookmarked: Boolean
@@ -169,6 +183,10 @@ internal sealed interface ReadingExperienceAction {
     data object CloseEditingHighlight : ReadingExperienceAction
     data object AcceptSyncOffer : ReadingExperienceAction
     data object DismissSyncOffer : ReadingExperienceAction
+    data object JumpBack : ReadingExperienceAction
+    data object CloseImage : ReadingExperienceAction
+    data object SaveImage : ReadingExperienceAction
+    data object ShareImage : ReadingExperienceAction
 
     data class ApplySettings(val settings: ReaderSettings) : ReadingExperienceAction
     data class Navigate(val target: ReaderNavigation) : ReadingExperienceAction
@@ -196,6 +214,8 @@ internal sealed interface ReadingExperienceAction {
 internal sealed interface ReaderNavigation {
     data object NextChapter : ReaderNavigation
     data object PreviousChapter : ReaderNavigation
+
+    /** A jump to a position (contents, search, a bookmark or highlight, a page number). */
     data class Locator(val locatorJson: String) : ReaderNavigation
 
     /** [progression] (0..1) of the way through the chapter being read. */
@@ -215,6 +235,8 @@ class ReadingExperienceFactory @Inject constructor(
     private val readingWrites: ReadingWriteQueue,
     private val sync: SyncRepository,
     private val selectionOutlet: AndroidSelectionOutlet,
+    private val imageOutlet: AndroidImageOutlet,
+    private val screenShape: ReaderScreenShape,
     @ApplicationContext private val context: Context,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
@@ -225,11 +247,16 @@ class ReadingExperienceFactory @Inject constructor(
     ): ReadingExperience = ReadingExperience(
         bookId = bookId,
         initialLocatorJson = initialLocatorJson,
-        settings = settings.effective(bookId),
+        // Layout Auto resolves for the screen here, so everything downstream sees scroll or paged.
+        settings = combine(settings.effective(bookId), screenShape.phonePortrait) { stored, phonePortrait ->
+            stored.forScreen(phonePortrait)
+        },
         persistSettings = { settings.setForBook(bookId, it) },
         resetSettings = { settings.clearForBook(bookId) },
         lookupWord = { word, language -> dictionary.lookup(word, language) },
         selectionOutlet = selectionOutlet,
+        imageOutlet = imageOutlet,
+        readingSeconds = stats.bookReadingSeconds(bookId),
         readAloud = AndroidReadAloud(context),
         engine = engine,
         books = books,
@@ -271,6 +298,10 @@ internal class ReadingExperience(
     private val readyTimeoutMillis: Long = READY_TIMEOUT_MS,
     private val syncOffer: Flow<ProgressOffer?> = emptyFlow(),
     private val clearSyncOffer: suspend () -> Unit = {},
+    private val imageOutlet: ImageOutlet? = null,
+    // Time spent reading this book so far (Stats), for the reader's own reading speed.
+    private val readingSeconds: Flow<Long> = emptyFlow(),
+    private val jumpBackTimeoutMillis: Long = JUMP_BACK_TIMEOUT_MS,
     private val lookupWikipedia: suspend (text: String, language: String?) -> WikipediaResult = { _, _ -> WikipediaResult.NotFound },
 ) {
     private val lifetimeJob = SupervisorJob(ownerScope.coroutineContext[Job])
@@ -309,6 +340,11 @@ internal class ReadingExperience(
     private var portableJob: Job? = null
     private val lookupStack = ArrayDeque<LookupEntry>()
     private val lookupCache = mutableMapOf<String, DictionaryResult>()
+
+    private val jumps = JumpHistory()
+    private var jumpBackJob: Job? = null
+    private var bookReadingSeconds: Long? = null
+    private var imageJob: Job? = null
     private val wikipediaCache = mutableMapOf<String, WikipediaResult>()
     private var bookAuthor: String? = null
     private var undoKey = 0L
@@ -344,6 +380,12 @@ internal class ReadingExperience(
         scope.launch {
             bookmarks.observeForBook(bookId).collect { list ->
                 _state.update { it.copy(bookmarks = list) }
+            }
+        }
+        scope.launch {
+            readingSeconds.collect { seconds ->
+                bookReadingSeconds = seconds
+                lastLocator?.let { locator -> _state.update { it.withTimeLeft(locator) } }
             }
         }
         scope.launch {
@@ -386,6 +428,13 @@ internal class ReadingExperience(
             is ReadingExperienceAction.DeleteBookmark -> deleteBookmark(action.id)
             is ReadingExperienceAction.DeleteHighlight -> deleteHighlight(action.id)
             is ReadingExperienceAction.SetEditingHighlightColor -> setEditingHighlightColor(action.colorArgb)
+            ReadingExperienceAction.JumpBack -> jumpBack()
+            ReadingExperienceAction.CloseImage -> {
+                imageJob?.cancel()
+                _state.update { it.copy(viewedImage = null, imageMessage = null) }
+            }
+            ReadingExperienceAction.SaveImage -> saveImage()
+            ReadingExperienceAction.ShareImage -> shareImage()
             is ReadingExperienceAction.SetEditingHighlightStyle -> setEditingHighlightStyle(action.style)
             is ReadingExperienceAction.SetHighlightNote -> setHighlightNote(action.id, action.note)
             ReadingExperienceAction.CopyEditingHighlight -> _state.value.editingHighlight?.let { selectionOutlet.copy(it.text) }
@@ -413,6 +462,76 @@ internal class ReadingExperience(
         session?.close()
         session = null
         _state.update { it.copy(navigator = null) }
+    }
+
+    // region Back to where you were
+
+    private fun recordJump(coalesce: Boolean = false) {
+        val origin = lastLocator ?: return
+        jumps.recordJump(origin, coalesce)
+        showJumpBack()
+    }
+
+    private fun showJumpBack() {
+        val back = jumps.back
+        _state.update { it.copy(jumpBack = back?.let { origin -> jumpBackLabel(origin, origin.chapterId?.let(tocTitles::get)) }) }
+        jumpBackJob?.cancel()
+        if (back == null) return
+        jumpBackJob = scope.launch {
+            delay(jumpBackTimeoutMillis)
+            jumps.clear()
+            _state.update { it.copy(jumpBack = null) }
+        }
+    }
+
+    private fun jumpBack() {
+        val active = session ?: return
+        val origin = jumps.pop() ?: return
+        active.goToLocator(origin.locatorJson)
+        showJumpBack()
+    }
+
+    // endregion
+
+    // region Pictures
+
+    private fun saveImage() {
+        val image = _state.value.viewedImage ?: return
+        val outlet = imageOutlet ?: return
+        imageJob?.cancel()
+        imageJob = scope.launch {
+            val saved = outlet.save(image, imageName())
+            if (_state.value.viewedImage !== image) return@launch
+            _state.update { it.copy(imageMessage = if (saved) "Saved to Pictures / Open Reader" else "Couldn't save the picture") }
+            delay(IMAGE_MESSAGE_MS)
+            _state.update { if (it.viewedImage === image) it.copy(imageMessage = null) else it }
+        }
+    }
+
+    private fun shareImage() {
+        val image = _state.value.viewedImage ?: return
+        val outlet = imageOutlet ?: return
+        scope.launch { runCatching { outlet.share(image, imageName()) } }
+    }
+
+    /** "Book Title - 20261126-142305", safe as a file name. */
+    private fun imageName(): String {
+        val title = _state.value.title.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), " ").trim().take(60).ifBlank { "Open Reader" }
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date(nowMillis()))
+        return "$title - $stamp"
+    }
+
+    // endregion
+
+    /** [locator]'s reading-time estimates, at the reader's speed in this book. */
+    private fun ReadingExperienceState.withTimeLeft(locator: ReaderLocator): ReadingExperienceState {
+        // The session under way counts too: its progress is already in the position.
+        val current = if (readingStartedAt != null) (elapsedMillis() - readingStartedElapsed) / 1_000L else 0L
+        val speed = ReadingTime.kbPerMinute(bookReadingSeconds?.plus(current), locator.bookSizeRead)
+        return copy(
+            minutesLeftInChapter = ReadingTime.minutesLeft(locator.chapterSizeLeft, speed),
+            minutesLeftInBook = ReadingTime.minutesLeft(locator.bookSizeLeft, speed),
+        )
     }
 
     private fun retry() {
@@ -566,6 +685,21 @@ internal class ReadingExperience(
                     }
                 }
                 launch {
+                    opened.linkJumps.collect { origin ->
+                        jumps.recordJump(origin)
+                        showJumpBack()
+                    }
+                }
+                launch {
+                    opened.pageList.collect { pages -> _state.update { it.copy(pageList = pages) } }
+                }
+                launch {
+                    opened.images.collect { image ->
+                        imageJob?.cancel()
+                        _state.update { it.copy(viewedImage = image, imageMessage = null) }
+                    }
+                }
+                launch {
                     opened.highlightTaps.collect { id ->
                         val target = _state.value.highlights.firstOrNull { it.id == id }
                         if (target != null) {
@@ -585,7 +719,7 @@ internal class ReadingExperience(
             ReaderSelection.Action.SearchWeb -> selectionOutlet.searchWeb(text)
             ReaderSelection.Action.ReadAloud -> speak(text)
             ReaderSelection.Action.SearchInBook -> _events.tryEmit(ReadingExperienceEvent.SearchInBook(text))
-            ReaderSelection.Action.CopyWithCitation -> selectionOutlet.copy(formatCitation(text, bookAuthor, _state.value.title))
+            ReaderSelection.Action.CopyWithCitation -> selectionOutlet.copy(formatCitation(text, bookAuthor, _state.value.title, _state.value.pageLabel?.substringBefore('–')))
             // A short phrase is looked up on Wikipedia in the sheet. The menu hides "Look up" for
             // longer ones, but one that hasn't re-prepared yet can still fire it: those go to the web.
             ReaderSelection.Action.LookUp -> when (val term = LookupTerm.of(text)) {
@@ -621,8 +755,15 @@ internal class ReadingExperience(
         when (target) {
             ReaderNavigation.NextChapter -> active.nextChapter()
             ReaderNavigation.PreviousChapter -> active.previousChapter()
-            is ReaderNavigation.Locator -> active.goToLocator(target.locatorJson)
-            is ReaderNavigation.ChapterProgression -> active.goToChapterProgression(target.progression)
+            is ReaderNavigation.Locator -> {
+                recordJump()
+                active.goToLocator(target.locatorJson)
+            }
+            is ReaderNavigation.ChapterProgression -> {
+                // Scrubbing several times goes back to where the first scrub started.
+                recordJump(coalesce = true)
+                active.goToChapterProgression(target.progression)
+            }
         }
     }
 
@@ -943,6 +1084,10 @@ internal class ReadingExperience(
     private fun onLocator(opened: ReaderSession, locator: ReaderLocator) {
         if (session !== opened) return
         lastLocator = locator
+        if (jumps.onLocator(locator, elapsedMillis())) {
+            jumpBackJob?.cancel()
+            _state.update { it.copy(jumpBack = null) }
+        }
         val progression = locator.bookProgress
         val resolved = locator.chapterTitle ?: locator.chapterId?.let { tocTitles[it] }
         if (!resolved.isNullOrBlank()) lastChapterTitle = resolved
@@ -958,7 +1103,8 @@ internal class ReadingExperience(
                 hasPreviousChapter = locator.hasPreviousChapter,
                 hasNextChapter = locator.hasNextChapter,
                 currentHref = locator.chapterId ?: locator.href,
-            )
+                pageLabel = locator.pageLabel,
+            ).withTimeLeft(locator)
         }
 
         val chapterChanged = currentChapterId != null && locator.chapterId != currentChapterId
@@ -1086,6 +1232,10 @@ internal class ReadingExperience(
         const val PROGRESS_SAVE_INTERVAL_MS = 4_000L
         const val PORTABLE_CAPTURE_DELAY_MS = 600L
         const val READY_TIMEOUT_MS = 8_000L
+
+        // How long "Back to …" stays on offer without being taken or read past.
+        const val JUMP_BACK_TIMEOUT_MS = 20_000L
+        const val IMAGE_MESSAGE_MS = 2_500L
     }
 }
 

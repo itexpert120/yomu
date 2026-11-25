@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -35,6 +38,7 @@ import com.itexpert120.yomu.feature.bookdetails.BookSheetCorner
 import com.itexpert120.yomu.feature.bookdetails.BookSheetResumeScroll
 import com.itexpert120.yomu.feature.bookdetails.bookSheetTop
 import com.itexpert120.yomu.feature.reader.LocalReaderOpeningRise
+import com.itexpert120.yomu.feature.reader.LocalReaderWindowReady
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -78,6 +82,9 @@ internal suspend fun awaitFirstPage(pageReady: Flow<Boolean>, graceMillis: Long)
  */
 private const val OpeningGraceMillis = 650L
 
+/** How far the reader rises as it fades in, opened from the library's play button. */
+private val LibraryEntranceRise = 48.dp
+
 /**
  * The reader's side of Stack's Resume motion. The reader page arrives inside a sheet that rises
  * into it: from the book sheet ([ReaderEntrance.BookSheet]; [BookSheetFrame] moves that sheet up on
@@ -98,6 +105,7 @@ private const val OpeningGraceMillis = 650L
 internal fun AnimatedContentScope.ReaderEntranceFrame(
     entrance: ReaderEntrance?,
     pageReady: Flow<Boolean>,
+    space: ReaderEntranceSpace,
     content: @Composable () -> Unit,
 ) {
     val motionEnabled = yomuAnimationsEnabled()
@@ -117,11 +125,31 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
     }
     val pageIn = remember { Animatable(if (active) 0f else 1f) }
     var rising by remember { mutableStateOf(active) }
+    // The entrance has finished: the page is fully in and its move has settled. Until then the
+    // reader leaves the window (system bars) alone, and from the library the library stays drawn,
+    // dimmed, under it.
+    var arrived by remember { mutableStateOf(!active && transition.currentState != EnterExitState.PreEnter) }
+    val token = remember { Any() }
+    if (active && fromLibrary && !arrived) {
+        DisposableEffect(token) {
+            space.libraryUnder(token, true)
+            onDispose { space.libraryUnder(token, false) }
+        }
+    }
     LaunchedEffect(Unit) {
-        if (!active) return@LaunchedEffect
+        if (!active) {
+            // A reader pushed in (from a book pane) or restored: the window waits for its move to settle.
+            if (!arrived) {
+                snapshotFlow { transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible }.first { it }
+                arrived = true
+            }
+            return@LaunchedEffect
+        }
         launch {
             awaitFirstPage(pageReady, OpeningGraceMillis)
-            pageIn.animateTo(1f, effects)
+            pageIn.animateTo(1f, if (fromLibrary) scheme.slowEffectsSpec() else effects)
+            snapshotFlow { transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible }.first { it }
+            arrived = true
         }
         // The chapter's rise belongs to this first open only, not to a later reopen of the page.
         pageReady.first { it }
@@ -133,6 +161,7 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         bookSheetTop(WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()).toPx()
     }
     val cornerPx = with(density) { BookSheetCorner.toPx() }
+    val libraryRisePx = with(density) { LibraryEntranceRise.toPx() }
     val sheetColor = MaterialTheme.colorScheme.surface
 
     // Navigation keeps the page underneath until this page's move has settled.
@@ -142,29 +171,65 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         Modifier
             .fillMaxSize()
             .drawBehind {
-                // From the library: it dims under the rising sheet as it does under an open book.
-                if (active && fromLibrary && !settled()) drawRect(Color.Black, alpha = SheetDim * rise.value.coerceIn(0f, 1f))
+                // From the library: it dims as the reader comes in, and stays dimmed under it until
+                // the page has fully arrived (it is opaque by then; the library stops drawing).
+                if (active && fromLibrary && !arrived) drawRect(Color.Black, alpha = SheetDim * rise.value.coerceIn(0f, 1f))
             }
             .graphicsLayer {
                 val r = rise.value.coerceIn(0f, 1f)
                 val s = square.value.coerceIn(0f, 1f)
                 if (!active || (r >= 1f && s >= 1f)) {
                     clip = false
+                    translationY = 0f
+                    alpha = 1f
                     return@graphicsLayer
                 }
-                val startTop = if (fromLibrary) size.height else sheetTopPx
-                shape = RisingSheetShape(top = startTop * (1f - r), corner = cornerPx * (1f - s))
+                if (fromLibrary) {
+                    // From the library: no sheet travelling the whole screen up from the bottom; the
+                    // page itself rises a little as it fades in, once its first page is laid out.
+                    clip = false
+                    translationY = libraryRisePx * (1f - pageIn.value.coerceIn(0f, 1f))
+                    return@graphicsLayer
+                }
+                shape = RisingSheetShape(top = sheetTopPx * (1f - r), corner = cornerPx * (1f - s))
                 clip = true
             }
             .drawBehind {
                 // The sheet itself, under the page until the page has faded in. From the book it is
                 // drawn only once that sheet has gone (it is the same blank sheet by then), so the
                 // book info can be seen leaving (it has faded long before the sheet tops out).
-                if (active && pageIn.value < 1f && (fromLibrary || settled() || rise.value >= 0.999f)) drawRect(sheetColor)
+                if (active && !fromLibrary && pageIn.value < 1f && (settled() || rise.value >= 0.999f)) drawRect(sheetColor)
             },
     ) {
-        CompositionLocalProvider(LocalReaderOpeningRise provides if (active && rising) BookSheetResumeScroll else 0.dp) {
+        // The chapter's own first rise belongs to the book sheet's scroll; from the library the whole
+        // page makes the short rise.
+        val chapterRise = if (fromLibrary) 0.dp else BookSheetResumeScroll
+        CompositionLocalProvider(
+            LocalReaderOpeningRise provides if (active && rising) chapterRise else 0.dp,
+            LocalReaderWindowReady provides arrived,
+        ) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = pageIn.value }) { content() }
+        }
+    }
+}
+
+/**
+ * Whether a reader opening from the library still needs the library drawn under it. The reader's
+ * entrance sets it while its page fades in; the library layer reads it. Only the setter clears it.
+ */
+@Stable
+internal class ReaderEntranceSpace {
+    var libraryUnder by mutableStateOf(false)
+        private set
+    private var owner: Any? = null
+
+    fun libraryUnder(by: Any, under: Boolean) {
+        if (under) {
+            owner = by
+            libraryUnder = true
+        } else if (owner === by) {
+            owner = null
+            libraryUnder = false
         }
     }
 }

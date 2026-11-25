@@ -37,6 +37,7 @@ import com.itexpert120.yomu.core.reader.ReaderLocator
 import com.itexpert120.yomu.core.reader.ReaderOpenRequest
 import com.itexpert120.yomu.core.reader.ReaderOpenResult
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
+import com.itexpert120.yomu.core.reader.ReaderPageTarget
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
@@ -88,6 +89,7 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.epub.pageList
 import org.readium.r2.shared.publication.services.search.SearchIterator
 import org.readium.r2.shared.publication.services.search.search
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -98,6 +100,7 @@ import org.readium.r2.shared.util.toUrl
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -386,6 +389,23 @@ private class ReadiumReaderSession(
     private val _highlightTaps = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val highlightTaps: SharedFlow<String> = _highlightTaps.asSharedFlow()
 
+    private val _linkJumps = MutableSharedFlow<ReaderLocator>(extraBufferCapacity = 1)
+    override val linkJumps: SharedFlow<ReaderLocator> = _linkJumps.asSharedFlow()
+
+    // The page list for "Go to page". Which printed page is on screen isn't tracked here (it would
+    // need each page anchor's position), so locators carry no page label under this engine.
+    override val pageList: StateFlow<List<ReaderPageTarget>> = MutableStateFlow(
+        publication.pageList.mapNotNull { link ->
+            val label = link.title?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val locator = publication.locatorFromLink(link) ?: return@mapNotNull null
+            ReaderPageTarget(label, locator.toJSON().toString())
+        },
+    ).asStateFlow()
+
+    // The book's language as a primary subtag, for selections (Readium doesn't say per element).
+    private val bookLanguage: String? = publication.metadata.languages.firstOrNull()
+        ?.let { Locale.forLanguageTag(it).language.takeIf(String::isNotEmpty) ?: it.substringBefore('-') }
+
     // Latest highlight set; remembered so it can be re-applied once the navigator is hosted.
     private var pendingHighlights: List<ReaderHighlight> = emptyList()
 
@@ -477,7 +497,12 @@ private class ReadiumReaderSession(
             link: Link,
             context: HyperlinkNavigator.LinkContext?,
         ): Boolean {
-            val footnote = context as? HyperlinkNavigator.FootnoteContext ?: return true
+            val footnote = context as? HyperlinkNavigator.FootnoteContext
+            if (footnote == null) {
+                // The navigator follows it: keep where the reader was, to offer the way back.
+                _currentLocator.value?.let(_linkJumps::tryEmit)
+                return true
+            }
             _footnotes.tryEmit(footnote.noteContent)
             return false
         }
@@ -558,6 +583,8 @@ private class ReadiumReaderSession(
                 // the engine-level guard the InputListener.onDrag swallow couldn't provide. Paged
                 // mode is untouched — the flag only gates scroll-mode swipes.
                 disablePageTurnsWhileScrolling = true
+                // Highlights in the squiggly and strikethrough styles draw with templates of ours.
+                decorationTemplates = readerDecorationTemplates()
                 // Compose already reserves the top bar/cutout (or the immersive safe area).
                 // Readium reads the decor view's cutout directly, bypassing AndroidView's adjusted
                 // insets, so enabling this would reserve the same space again inside the page.
@@ -632,7 +659,7 @@ private class ReadiumReaderSession(
                                     else -> ReaderSelection.Action.Highlight
                                 }
                                 _selections.tryEmit(
-                                    ReaderSelection(action, text, locator.toJSON().toString()),
+                                    ReaderSelection(action, text, locator.toJSON().toString(), bookLanguage),
                                 )
                             }
                             mode?.finish()
@@ -877,7 +904,7 @@ private class ReadiumReaderSession(
             Decoration(
                 id = highlight.id,
                 locator = locator,
-                style = Decoration.Style.Highlight(tint = highlight.colorArgb),
+                style = highlightDecorationStyle(highlight.style, highlight.colorArgb),
             )
         }
         scope.launch { nav.applyDecorations(decorations, HIGHLIGHTS_GROUP) }

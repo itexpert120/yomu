@@ -26,9 +26,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -479,7 +479,7 @@ private fun StackedLibrary(
     val density = LocalDensity.current
     val stack = YomuTheme.stack
     val animate = yomuAnimationsEnabled()
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     // The tabs pin under the compact header, which sits under the status bar.
     val collapsedTop = with(density) { (statusTop + StackCompactHeaderHeight).toPx() }
     val headerFade = with(density) { StackHeaderFadeDistance.toPx() }
@@ -548,7 +548,7 @@ private fun StackedLibrary(
             Modifier
                 .fillMaxWidth()
                 .onSizeChanged { deskHeight = it.height }
-                .statusBarsPadding(),
+                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
         ) {
             when {
                 state.selectionMode -> LibrarySelectionHeader(
@@ -672,7 +672,7 @@ private fun SideBySideLibrary(
     Row(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding(),
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
     ) {
         Box(Modifier.fillMaxHeight()) {
             LibraryPile(

@@ -92,11 +92,13 @@ internal fun ReaderSettings.chromeColors(): ReaderChromeColors {
     val light = isLightBackground
     return ReaderChromeColors(
         page = page,
-        panel = if (light) page else lerp(page, ink, 0.05f),
+        // Dark pages (Night, Black) need clear steps: the panel visibly above the page, and the
+        // rule and slider track readable on it — a near-black panel and track vanished on Black.
+        panel = if (light) page else lerp(page, ink, 0.09f),
         ink = ink,
         muted = Color(colorPalette.secondaryTextArgb),
-        rule = Color(colorPalette.borderArgb),
-        track = lerp(page, ink, if (light) 0.13f else 0.2f),
+        rule = if (light) Color(colorPalette.borderArgb) else lerp(page, ink, 0.18f),
+        track = lerp(page, ink, if (light) 0.13f else 0.3f),
         isLight = light,
     )
 }

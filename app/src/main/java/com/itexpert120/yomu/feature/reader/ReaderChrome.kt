@@ -103,18 +103,15 @@ internal fun ReaderTopBar(
 ) {
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val wide = YomuWidthClass.fromWidth(windowWidth).isWide
-    val chapterTitle = chapter.ifBlank { "Reading" }
-    val book = bookTitle?.takeIf { it.isNotBlank() }
-    val (caption, title) = if (wide) {
-        (if (book != null) chapterTitle else null) to (book ?: chapterTitle)
-    } else {
-        chapterTitleParts(chapterTitle)?.let { (label, name) -> label to name } ?: (book to chapterTitle)
-    }
+    // One quiet line: the chapter as the book names it ("Chapter I. Down the Rabbit-Hole").
+    val title = chapter.ifBlank { bookTitle?.takeIf { it.isNotBlank() } ?: "Reading" }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .onSizeChanged { onContentHeight(it.height) }
-            .background(colors.panel),
+            // The page's own colour, with no line under it: the bar is part of the page, not a band
+            // over it.
+            .background(colors.page),
     ) {
         // The navigator draws edge-to-edge: keep the cutout/status area solid bar colour.
         Spacer(
@@ -125,12 +122,8 @@ internal fun ReaderTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (wide) ReaderTopBarWideHeight else ReaderTopBarHeight)
-                .padding(
-                    start = if (wide) 16.dp else 6.dp,
-                    end = if (wide) 16.dp else 6.dp,
-                    top = if (wide) 0.dp else 14.dp,
-                ),
+                .height(ReaderTopBarHeight)
+                .padding(horizontal = if (wide) 16.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
@@ -140,30 +133,17 @@ internal fun ReaderTopBar(
             ) {
                 Icon(StackIcons.ArrowBack, contentDescription = "Back")
             }
-            Column(
+            Text(
+                text = title,
+                color = colors.ink,
+                style = StackType.Heading,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 4.dp)
-                    .semantics(mergeDescendants = true) { heading() },
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                val captionText: @Composable () -> Unit = {
-                    caption?.let {
-                        Text(text = it, color = colors.muted, style = StackType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                val titleText: @Composable () -> Unit = {
-                    Text(text = title, color = colors.ink, style = StackType.Heading, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                // Phone: the label above the name. Wide: the book above the chapter.
-                if (wide) {
-                    titleText()
-                    captionText()
-                } else {
-                    captionText()
-                    titleText()
-                }
-            }
+                    .semantics { heading() },
+            )
             IconToggleButton(
                 checked = isBookmarked,
                 onCheckedChange = { onToggleBookmark() },
@@ -179,23 +159,11 @@ internal fun ReaderTopBar(
                 )
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.rule))
     }
 }
 
-// Below the status area: 14 of air over a 62 row on a phone; a 64 row across a spread.
-private val ReaderTopBarHeight = 76.dp
-private val ReaderTopBarWideHeight = 64.dp
-
-private val ChapterLabel = Regex(
-    """^((?:chapter|part|book|volume|vol\.|section|act|episode)\s+[\p{L}\p{N}.]+)\s*[:.\-–—]\s*(.+)$""",
-    RegexOption.IGNORE_CASE,
-)
-
-/** "Chapter 3: Melissa" as ("Chapter 3", "Melissa"); null when the title has no such label. */
-internal fun chapterTitleParts(title: String): Pair<String, String>? = ChapterLabel.matchEntire(title.trim())?.let {
-    it.groupValues[1] to it.groupValues[2].trim()
-}?.takeIf { it.second.isNotEmpty() }
+// One 56dp row below the status area, on phones and across a spread alike.
+private val ReaderTopBarHeight = 56.dp
 
 /** "3 pages left in chapter" (paged) or "12% of chapter left" (scroll); null while unknown. */
 internal fun chapterRemainingLabel(layout: ReaderLayout, pagesLeft: Int?, chapterProgression: Double): String? = when (layout) {
@@ -224,8 +192,9 @@ private fun footerRemainingLabel(layout: ReaderLayout, pagesLeft: Int?, chapterP
 private fun chapterPercentLeft(chapterProgression: Double): Int = ceil((1.0 - chapterProgression.coerceIn(0.0, 1.0)) * 100.0).toInt().coerceIn(0, 100)
 
 /**
- * The quiet footer under the page: battery and clock on the left, chapter remaining and book
- * progress on the right, in the page's muted ink with tabular figures.
+ * The quiet footer under the page: battery and clock on the left; on the right the printed page,
+ * chapter remaining, reading time left and book progress, in the page's muted ink with tabular
+ * figures.
  */
 @Composable
 internal fun ReaderFooter(
@@ -235,6 +204,10 @@ internal fun ReaderFooter(
     settings: ReaderSettings,
     onContentHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    // The printed page on screen ("112", "112–113"), for a book with a page list.
+    pageLabel: String? = null,
+    minutesLeftInChapter: Int? = null,
+    minutesLeftInBook: Int? = null,
     // False while the system status bar is showing (reader menu open): it already has both.
     showDeviceStatus: Boolean = true,
     // False while the footer is faded out (immersive chrome hidden): the clock and battery keep
@@ -259,9 +232,21 @@ internal fun ReaderFooter(
         if (showBattery) FooterBattery(color = footerInk, background = colors.page, active = deviceStatusActive)
         if (showClock) FooterClock(color = footerInk, active = deviceStatusActive)
         Spacer(Modifier.weight(1f))
+        val page = printedPageLabel(pageLabel)
+        if (settings.footerShowPageNumber && page != null) {
+            Text(text = page, color = footerInk, style = ReaderFigures, maxLines = 1)
+        }
         val remaining = footerRemainingLabel(settings.layout, chapterPagesLeft, chapterProgression)
         if (settings.footerShowPagesLeft && remaining != null) {
             Text(text = remaining, color = footerInk, style = ReaderFigures, maxLines = 1)
+        }
+        val chapterTime = ReadingTime.footerChapterLabel(minutesLeftInChapter)
+        if (settings.footerShowTimeLeft && chapterTime != null) {
+            Text(text = chapterTime, color = footerInk, style = ReaderFigures, maxLines = 1)
+        }
+        val bookTime = ReadingTime.footerBookLabel(minutesLeftInBook)
+        if (settings.footerShowBookTimeLeft && bookTime != null) {
+            Text(text = bookTime, color = footerInk, style = ReaderFigures, maxLines = 1)
         }
         if (settings.footerShowProgress) {
             Text(text = progressPercent?.let { "$it%" } ?: "", color = footerInk, style = ReaderFigures)

@@ -85,6 +85,11 @@ data class ReaderSettings(
     val footerShowProgress: Boolean = true,
     // Remaining chapter amount in the footer: visual pages in paged mode, percentage in scroll mode.
     val footerShowPagesLeft: Boolean = false,
+    // The printed page number ("p. 112"), for books with a page list (others have none to show).
+    val footerShowPageNumber: Boolean = true,
+    // Estimated reading time left in the chapter, and in the book, from the reader's own speed.
+    val footerShowTimeLeft: Boolean = false,
+    val footerShowBookTimeLeft: Boolean = false,
     // Keep the display awake while reading (on by default).
     val keepScreenOn: Boolean = true,
     // Show the native vertical scrollbar in scroll mode (on by default; scroll-mode only).
@@ -94,7 +99,17 @@ data class ReaderSettings(
     val immersiveChrome: Boolean = false,
     // Paged mode on a wide landscape window (tablet, open foldable) shows two pages side by side.
     val twoPageSpread: Boolean = true,
+    // Layout "Auto": scroll on a phone held upright, paged everywhere else (a phone on its side, a
+    // tablet, an open foldable). Picking Scroll or Paged turns it off and [layout] is used as is.
+    val layoutFollowsScreen: Boolean = true,
 ) {
+    /** These settings with [layout] resolved for the screen when it follows the screen. */
+    fun forScreen(phonePortrait: Boolean): ReaderSettings = if (layoutFollowsScreen) {
+        copy(layout = if (phonePortrait) ReaderLayout.Scroll else ReaderLayout.Paged)
+    } else {
+        this
+    }
+
     /** Complete palette for the active theme. Custom themes derive supporting colours from the
      *  user's background/text pair so links, selections and chrome remain coherent. */
     val colorPalette: ReaderColorPalette

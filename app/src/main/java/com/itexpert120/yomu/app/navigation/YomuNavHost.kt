@@ -18,13 +18,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -48,6 +51,7 @@ import androidx.savedstate.compose.LocalSavedStateRegistryOwner
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
 import com.itexpert120.yomu.core.designsystem.YomuMotion
+import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
 import com.itexpert120.yomu.core.reader.ReaderRenderState
 import com.itexpert120.yomu.feature.about.AboutRoute
@@ -66,7 +70,6 @@ import com.itexpert120.yomu.feature.sync.SyncRoute
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @Composable
 fun YomuNavHost(
@@ -108,6 +111,9 @@ fun YomuNavHost(
 
     // How far a book pane beside the library is open; the library narrows with it.
     val bookPane = remember { BookPaneSpace() }
+
+    // A reader opening from the library keeps the library drawn under it until it has arrived.
+    val readerEntrance = remember { ReaderEntranceSpace() }
     val captureScope = rememberCoroutineScope()
 
     // A book opens over (phone) or beside (pane) the library. With a book pane already open,
@@ -267,7 +273,7 @@ fun YomuNavHost(
                     reader.state.map { it.experience.failed || (it.experience.renderState is ReaderRenderState.Ready && !it.experience.loading) }
                 }
                 BackPreviewFrame(backMotion) {
-                    ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
+                    ReaderEntranceFrame(entrance = entrance, pageReady = pageReady, space = readerEntrance) {
                         ReaderRoute(
                             onBack = { popWhenSettled(entry) },
                             onOpenFontLibrary = { navController.navigate(FontLibrary) },
@@ -278,7 +284,7 @@ fun YomuNavHost(
         }
         // Composed after the NavHost (its graph is set by then, and the library's back handlers keep
         // their place after the NavHost's), drawn beneath it.
-        LibraryLayer(navController, bookPane) {
+        LibraryLayer(navController, bookPane, readerEntrance) {
             TopLevelNavigationShell(
                 appViewModel = appViewModel,
                 onOpenReader = ::navigateToReader,
@@ -310,6 +316,7 @@ fun YomuNavHost(
 private fun LibraryLayer(
     navController: NavHostController,
     pane: BookPaneSpace,
+    readerEntrance: ReaderEntranceSpace,
     content: @Composable () -> Unit,
 ) {
     val current by navController.currentBackStackEntryAsState()
@@ -317,8 +324,8 @@ private fun LibraryLayer(
     val home = remember(current) { runCatching { navController.getBackStackEntry<Home>() }.getOrNull() } ?: return
     val top = current?.destination
     val homeOnTop = top?.hasRoute<Home>() == true
-    val shown = visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
-    val besidePane = top?.hasRoute<BookDetails>() == true && pane.openness != null
+    val shown = readerEntrance.libraryUnder || visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
+    val besidePane = top?.hasRoute<BookDetails>() == true && pane.narrow
     val back = rememberNavigationEventDispatcherOwner(enabled = homeOnTop)
     val density = LocalDensity.current
     // The library's lifecycle is its own, not the Home entry's (which Navigation stops whenever a
@@ -337,15 +344,18 @@ private fun LibraryLayer(
         LocalSavedStateRegistryOwner provides home,
         LocalNavigationEventDispatcherOwner provides back,
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val paneWidthPx = with(density) { bookPaneWidth(maxWidth).roundToPx() }
+        // The desk shows in the gap between the library's sheet and a book pane (Stack's tablet board).
+        val desk = YomuTheme.stack.desk
+        BoxWithConstraints(Modifier.fillMaxSize().drawBehind { if (shown) drawRect(desk) }) {
+            // Beside a pane the library ends the board's gap (16dp, as its sheet keeps from the rail)
+            // short of it. Read while laying out, and it changes once per pane move.
+            val roomPx = with(density) { (bookPaneWidth(maxWidth) + BookPaneGap).roundToPx() }
             Box(
                 Modifier
                     .fillMaxSize()
                     .layout { measurable, constraints ->
                         val full = constraints.maxWidth
-                        val open = pane.openness?.invoke() ?: 0f
-                        val width = (full - (paneWidthPx * open).roundToInt()).coerceIn(0, full)
+                        val width = if (pane.narrow) (full - roomPx).coerceIn(0, full) else full
                         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
                         layout(full, placeable.height) { placeable.placeRelative(0, 0) }
                     }
@@ -355,6 +365,9 @@ private fun LibraryLayer(
         }
     }
 }
+
+/** The desk between the library's sheet and a book pane beside it. */
+private val BookPaneGap = 16.dp
 
 /** The library layer's lifecycle (see [LibraryLayer]). */
 private class LibraryLifecycleOwner : LifecycleOwner {
@@ -377,112 +390,46 @@ private fun TopLevelNavigationShell(
     onOpenSync: () -> Unit,
     onLeaveLibrary: () -> Unit,
 ) {
-    val navController = rememberNavController()
-    val currentDestination = navController.currentBackStackEntryAsState().value?.destination
-    val selected = when {
-        currentDestination?.hasRoute<Stats>() == true -> YomuTopLevelDestination.Statistics
-        currentDestination?.hasRoute<Settings>() == true -> YomuTopLevelDestination.Settings
-        else -> YomuTopLevelDestination.Library
+    var selected by rememberSaveable { mutableStateOf(YomuTopLevelDestination.Library) }
+    fun select(destination: YomuTopLevelDestination) {
+        if (destination == selected) return
+        selected = destination
+        onLeaveLibrary()
     }
-    val transitions = rememberYomuScreenTransitions()
-    // A back between tabs (gesture, back key) is Stack's one slide, like any page; a tap on a tab in
-    // the bar keeps the tab switch's fade-through slide, even when navigation runs it as a pop.
-    val backMotion = remember { BackMotion() }
-    TrackBackMotion(backMotion, navController)
-    val tabTap = remember { booleanArrayOf(false) }
 
     var librarySelecting by remember { mutableStateOf(false) }
     YomuTopLevelNavigation(
         selected = selected,
-        onSelected = { destination ->
-            if (destination != selected && navController.navigateTopLevel(destination)) {
-                tabTap[0] = true
-                onLeaveLibrary()
-            }
-        },
+        onSelected = ::select,
         barVisible = !librarySelecting,
     ) { hostModifier ->
-        NavHost(
-            navController = navController,
-            startDestination = Library,
+        TopLevelTabs(
+            selected = selected,
+            onSelectedChange = { selected = it },
             modifier = hostModifier,
-            enterTransition = transitions.enter,
-            exitTransition = {
-                tabTap[0] = false
-                backMotion.forward(changesEntry = initialState.id != targetState.id)
-                transitions.exit(this)
-            },
-            popEnterTransition = { if (tabTap[0]) transitions.popEnter(this) else EnterTransition.None },
-            popExitTransition = {
-                if (tabTap[0]) {
-                    tabTap[0] = false
-                    backMotion.forward(changesEntry = false)
-                    transitions.popExit(this)
-                } else {
-                    backPopExit(backMotion, transitions.motionEnabled, transitions.layoutDirection)
-                }
-            },
-            predictivePopEnterTransition = { EnterTransition.None },
-            predictivePopExitTransition = { swipeEdge -> backPredictivePopExit(backMotion, swipeEdge, transitions.motionEnabled) },
-        ) {
-            composable<Library> {
-                BackPreviewFrame(backMotion) {
-                    LibraryRoute(
-                        onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
-                        onOpenDetails = onOpenDetails,
-                        onSelectionModeChange = { librarySelecting = it },
-                        onHaveSyncWords = onOpenSync,
-                    )
-                }
-            }
-            composable<Stats> {
-                BackPreviewFrame(backMotion) {
-                    StatsRoute(
-                        onBack = null,
-                        onOpenLibrary = { if (navController.navigateTopLevel(YomuTopLevelDestination.Library)) tabTap[0] = true },
-                    )
-                }
-            }
-            composable<Settings> {
-                BackPreviewFrame(backMotion) {
-                    SettingsRoute(
-                        appViewModel = appViewModel,
-                        onBack = null,
-                        onOpenFontLibrary = onOpenFontLibrary,
-                        onOpenAbout = onOpenAbout,
-                        onOpenReaderDefaults = onOpenReaderDefaults,
-                        onOpenSync = onOpenSync,
-                    )
-                }
+        ) { tab ->
+            when (tab) {
+                YomuTopLevelDestination.Library -> LibraryRoute(
+                    onOpenReader = { bookId -> onOpenReader(Reader(bookId), "resume") },
+                    onOpenDetails = onOpenDetails,
+                    onSelectionModeChange = { librarySelecting = it },
+                    onHaveSyncWords = onOpenSync,
+                )
+                YomuTopLevelDestination.Statistics -> StatsRoute(
+                    onBack = null,
+                    onOpenLibrary = { select(YomuTopLevelDestination.Library) },
+                )
+                YomuTopLevelDestination.Settings -> SettingsRoute(
+                    appViewModel = appViewModel,
+                    onBack = null,
+                    onOpenFontLibrary = onOpenFontLibrary,
+                    onOpenAbout = onOpenAbout,
+                    onOpenReaderDefaults = onOpenReaderDefaults,
+                    onOpenSync = onOpenSync,
+                )
             }
         }
     }
-}
-
-/** Switches tab; false when nothing happened (the current tab is still settling). */
-private fun NavHostController.navigateTopLevel(destination: YomuTopLevelDestination): Boolean {
-    if (currentBackStackEntry?.lifecycle?.currentState != Lifecycle.State.RESUMED) return false
-
-    when (destination) {
-        YomuTopLevelDestination.Library -> navigate(Library) {
-            popUpTo<Library> { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-
-        YomuTopLevelDestination.Statistics -> navigate(Stats) {
-            popUpTo<Library> { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-
-        YomuTopLevelDestination.Settings -> navigate(Settings) {
-            popUpTo<Library> { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-    }
-    return true
 }
 
 /** With animations off the Resume motion is a short crossfade into the reader. */

@@ -148,7 +148,7 @@ class SyncWireGoldenTest {
     private val readerGolden =
         """{"layout":"Paged","theme":"Custom","customBackground":4294967295,"customText":4278190080,"font":"Karla","customFont":"Inter",""" +
             """"textAlign":"Justify","tapNavigation":false,"showFooter":true,"footerShowBattery":false,"footerShowClock":true,""" +
-            """"footerShowProgress":true,"footerShowPagesLeft":true,"showScrollbar":false,"immersiveChrome":true}"""
+            """"footerShowProgress":true,"footerShowPagesLeft":true,"footerShowPageNumber":true,"footerShowTimeLeft":false,"footerShowBookTimeLeft":false,"showScrollbar":false,"immersiveChrome":true}"""
 
     @Test
     fun readerSettings() {

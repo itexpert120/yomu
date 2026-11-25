@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -294,6 +295,7 @@ fun YomuCard(
                 .clip(shape)
                 .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick, shape = shape) else Modifier)
                 .background(container)
+                .then(if (stack.flat && tone != YomuCardTone.Raised) Modifier.border(1.dp, stack.rule, shape) else Modifier)
                 .padding(contentPadding),
             content = content,
         )
@@ -437,6 +439,7 @@ fun YomuDialogCard(
             .widthIn(min = 280.dp, max = 400.dp)
             .clip(YomuShapeTokens.hero)
             .background(stack.sheet)
+            .then(if (stack.flat) Modifier.border(1.dp, stack.rule, YomuShapeTokens.hero) else Modifier)
             .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp),
     ) {
         Text(

@@ -276,6 +276,10 @@ class View {
                 // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
                 // until the bug is fixed we can at least account for font load
                 doc.fonts.ready.then(() => this.expand())
+                // Open Reader: a picture that overflows a zero-size box (see expand) doesn't resize
+                // the observed body when it loads, so measure again once each one has.
+                for (const img of doc.images) if (!img.complete)
+                    img.addEventListener('load', () => this.expand(), { once: true })
 
                 resolve()
             }, { once: true })
@@ -389,7 +393,17 @@ class View {
         } else {
             const side = this.#vertical ? 'width' : 'height'
             const otherSide = this.#vertical ? 'height' : 'width'
-            const contentSize = documentElement.getBoundingClientRect()[side]
+            // Open Reader: content can overflow a zero-height box (a title page whose section is
+            // `height: 0` around its picture); the root's own box then measures 0 and the frame
+            // collapsed to nothing. The body's scroll size includes that overflow (the root's
+            // can't be used: it never drops below the frame's current size).
+            const rootRect = documentElement.getBoundingClientRect()
+            const body = this.document.body
+            const bodyRect = body?.getBoundingClientRect()
+            const overflow = !body ? 0 : this.#vertical
+                ? bodyRect.left - rootRect.left + body.scrollWidth
+                : bodyRect.top - rootRect.top + body.scrollHeight
+            const contentSize = Math.max(rootRect[side], overflow || 0)
             const expandedSize = contentSize
             const { margin } = this.#layout
             const padding = this.#vertical ? `0 ${margin}px` : `${margin}px 0`
@@ -851,8 +865,11 @@ export class Paginator extends HTMLElement {
         this.scrollBy(dx, dy)
     }
     #onTouchEnd() {
+        // Open Reader: only a drag needs snapping to a page. After a tap, the snap (a frame later)
+        // caught the tap's own page turn just starting and slid it back to the page it left.
+        const dragged = this.#touchScrolled
         this.#touchScrolled = false
-        if (this.scrolled) return
+        if (this.scrolled || !dragged) return
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at

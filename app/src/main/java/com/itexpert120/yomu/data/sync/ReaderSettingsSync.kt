@@ -34,6 +34,9 @@ internal object ReaderSettingsSync {
             "footerShowClock",
             "footerShowProgress",
             "footerShowPagesLeft",
+            "footerShowPageNumber",
+            "footerShowTimeLeft",
+            "footerShowBookTimeLeft",
             "showScrollbar",
             "immersiveChrome",
         ),
@@ -49,6 +52,7 @@ internal object ReaderSettingsSync {
             "pageMargins",
             "paragraphSpacing",
             "twoPageSpread",
+            "layoutFollowsScreen",
         ),
     )
 
