@@ -140,11 +140,15 @@ fun ReaderScreen(
     // the reader instead of the first swipe only revealing hidden bars. Otherwise reading is full-screen.
     val systemBarsShown = state.chrome.controlsVisible
     val currentSystemBarsShown by rememberUpdatedState(systemBarsShown)
+    // Navigation holds the window takeover back until the reader's entrance has settled, so the
+    // page it opened over never relayouts (bars hiding) while it is still on screen.
+    val windowReady = LocalReaderWindowReady.current
     // Hide both system bars for full-screen reading. Android re-shows the bars whenever the window
     // loses and regains focus (returning from background, multi-window, etc.), so this must be
     // re-applied on every ON_RESUME — not just once. A one-shot effect here is why content used to
     // reappear below the status bar after the app came back from the background.
-    DisposableEffect(view) {
+    DisposableEffect(view, windowReady) {
+        if (!windowReady) return@DisposableEffect onDispose { }
         val window = view.context.findActivity()?.window
         val restoreWindow = window?.let { captureReaderWindow(it, view) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -186,13 +190,15 @@ fun ReaderScreen(
             restoreWindow?.invoke()
         }
     }
-    LaunchedEffect(systemBarsShown) {
+    LaunchedEffect(systemBarsShown, windowReady) {
+        if (!windowReady) return@LaunchedEffect
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
         if (systemBarsShown) showReaderSystemBars(window, view) else hideReaderSystemBars(window, view)
     }
     // Colour the system bars to the reading background so the status area matches the page on every
     // Android version (on API 35+ the bar is transparent and the chrome backdrop shows through).
-    LaunchedEffect(reading.settings.backgroundArgb, reading.settings.isLightBackground) {
+    LaunchedEffect(reading.settings.backgroundArgb, reading.settings.isLightBackground, windowReady) {
+        if (!windowReady) return@LaunchedEffect
         val window = view.context.findActivity()?.window ?: return@LaunchedEffect
         val controller = WindowCompat.getInsetsController(window, view)
         val barColor = Color(reading.settings.backgroundArgb).toArgb()
@@ -776,6 +782,12 @@ private val ChapterRevealTravel = 40.dp
  * the book sheet turns into the reader (Stack's Resume motion); 0 elsewhere, where it fades in.
  */
 val LocalReaderOpeningRise = compositionLocalOf { 0.dp }
+
+/**
+ * Whether the reader may take the window over (hide and colour the system bars, cutout mode):
+ * false while navigation is still bringing the reader in over the page it opened from.
+ */
+val LocalReaderWindowReady = compositionLocalOf { true }
 
 private fun applyReaderCutoutMode(window: android.view.Window) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

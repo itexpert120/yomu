@@ -111,6 +111,9 @@ fun YomuNavHost(
 
     // How far a book pane beside the library is open; the library narrows with it.
     val bookPane = remember { BookPaneSpace() }
+
+    // A reader opening from the library keeps the library drawn under it until it has arrived.
+    val readerEntrance = remember { ReaderEntranceSpace() }
     val captureScope = rememberCoroutineScope()
 
     // A book opens over (phone) or beside (pane) the library. With a book pane already open,
@@ -270,7 +273,7 @@ fun YomuNavHost(
                     reader.state.map { it.experience.failed || (it.experience.renderState is ReaderRenderState.Ready && !it.experience.loading) }
                 }
                 BackPreviewFrame(backMotion) {
-                    ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
+                    ReaderEntranceFrame(entrance = entrance, pageReady = pageReady, space = readerEntrance) {
                         ReaderRoute(
                             onBack = { popWhenSettled(entry) },
                             onOpenFontLibrary = { navController.navigate(FontLibrary) },
@@ -281,7 +284,7 @@ fun YomuNavHost(
         }
         // Composed after the NavHost (its graph is set by then, and the library's back handlers keep
         // their place after the NavHost's), drawn beneath it.
-        LibraryLayer(navController, bookPane) {
+        LibraryLayer(navController, bookPane, readerEntrance) {
             TopLevelNavigationShell(
                 appViewModel = appViewModel,
                 onOpenReader = ::navigateToReader,
@@ -313,6 +316,7 @@ fun YomuNavHost(
 private fun LibraryLayer(
     navController: NavHostController,
     pane: BookPaneSpace,
+    readerEntrance: ReaderEntranceSpace,
     content: @Composable () -> Unit,
 ) {
     val current by navController.currentBackStackEntryAsState()
@@ -320,7 +324,7 @@ private fun LibraryLayer(
     val home = remember(current) { runCatching { navController.getBackStackEntry<Home>() }.getOrNull() } ?: return
     val top = current?.destination
     val homeOnTop = top?.hasRoute<Home>() == true
-    val shown = visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
+    val shown = readerEntrance.libraryUnder || visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
     val besidePane = top?.hasRoute<BookDetails>() == true && pane.narrow
     val back = rememberNavigationEventDispatcherOwner(enabled = homeOnTop)
     val density = LocalDensity.current

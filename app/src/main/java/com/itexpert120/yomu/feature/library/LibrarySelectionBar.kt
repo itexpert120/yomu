@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.itexpert120.yomu.feature.library
 
 import androidx.compose.foundation.background
@@ -8,7 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -54,7 +56,7 @@ internal fun LibrarySelectionToolbar(
     val stack = YomuTheme.stack
     Row(
         modifier = modifier
-            .windowInsetsPadding(WindowInsets.navigationBars)
+            .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
             .padding(start = 16.dp, end = 16.dp, bottom = 28.dp)
             .widthIn(max = 520.dp)
             .fillMaxWidth()
