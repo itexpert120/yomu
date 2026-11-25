@@ -7,6 +7,8 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderThemeMode
+import com.itexpert120.yomu.data.books.ChapterReadState
+import com.itexpert120.yomu.data.books.ChapterReading
 import com.itexpert120.yomu.data.fonts.FontRepository
 import com.itexpert120.yomu.data.settings.ReaderSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +25,8 @@ data class ReaderUiState(
     val chrome: ReaderChromeState = ReaderChromeState(),
     val customThemes: List<CustomReaderTheme> = emptyList(),
     val installedFonts: List<CustomFontRef> = emptyList(),
+    /** Which chapters are read, for the Browse sheet's contents. */
+    val chapterReads: ChapterReadState = ChapterReadState.Empty,
 )
 
 @HiltViewModel
@@ -31,6 +35,7 @@ class ReaderViewModel @Inject constructor(
     experienceFactory: ReadingExperienceFactory,
     private val settingsRepository: ReaderSettingsRepository,
     fonts: FontRepository,
+    chapterReading: ChapterReading,
 ) : ViewModel() {
     private val bookId = BookId(requireNotNull(savedStateHandle["bookId"]))
     private val readingExperience = experienceFactory.create(
@@ -45,6 +50,9 @@ class ReaderViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             fonts.installed.collect { list -> _state.update { it.copy(installedFonts = list) } }
+        }
+        viewModelScope.launch {
+            chapterReading.observe(bookId).collect { reads -> _state.update { it.copy(chapterReads = reads) } }
         }
         viewModelScope.launch {
             settingsRepository.customThemes.collect { themes ->
