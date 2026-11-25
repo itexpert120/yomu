@@ -85,6 +85,9 @@ fun BookDetailsRoute(
             onSetStatus = viewModel::onSetStatus,
             onSetCollection = viewModel::onSetCollection,
             onCreateCollection = viewModel::onCreateCollection,
+            onToggleVolume = viewModel::onToggleVolume,
+            onCollapseAllVolumes = viewModel::onCollapseAllVolumes,
+            onExpandAllVolumes = viewModel::onExpandAllVolumes,
         )
         AnimatedVisibility(
             visible = notice != null,

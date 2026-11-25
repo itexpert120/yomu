@@ -192,12 +192,17 @@ class StatsRepository internal constructor(
     }
 
     /**
-     * Seconds read on each day from the first of the month eleven months back up to today, oldest
-     * first and zero-filled, for the dashboard's week / month / twelve-month charts.
+     * Seconds read on each day from the first day with reading (or today) up to today, oldest first
+     * and zero-filled, for the dashboard's week and month pages.
      */
     val dailyReading: Flow<List<DailyReading>> = combine(dao.observeReadingDays(), dates) { days, today ->
         val byDate = days.associate { it.date to it.seconds }
-        val start = today.withDayOfMonth(1).minusMonths(11)
+        val start = days.asSequence()
+            .filter { it.seconds > 0L }
+            .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+            .minOrNull()
+            ?.takeIf { it.isBefore(today) }
+            ?: today
         generateSequence(start) { it.plusDays(1) }
             .takeWhile { !it.isAfter(today) }
             .map { date -> date.toString().let { DailyReading(it, byDate[it] ?: 0L) } }

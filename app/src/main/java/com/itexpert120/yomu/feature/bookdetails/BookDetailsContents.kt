@@ -2,6 +2,7 @@ package com.itexpert120.yomu.feature.bookdetails
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,21 +29,33 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -58,7 +72,7 @@ import com.itexpert120.yomu.core.designsystem.yomuPressable
 import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
 
-private val TocRowMinHeight = 52.dp
+internal val TocRowMinHeight = 52.dp
 private val TocNumberWidth = 34.dp
 
 /** Deeper TOC levels share the last indent so long hierarchies keep a readable line length. */
@@ -66,58 +80,146 @@ private const val TocMaxIndentLevels = 4
 
 private const val TocRowContentType = "tocRow"
 
-/** Contents header (pinned, with the order toggle) followed by the virtualized chapter rows. */
+/** What the contents list raises. */
+internal class TocActions(
+    val onTocSortChange: (TocSortMode) -> Unit,
+    val onOpenChapter: (String) -> Unit,
+    val onSetChapterRead: (Int, Boolean) -> Unit,
+    val onEnterSelection: (Int) -> Unit,
+    val onToggleSelection: (Int) -> Unit,
+    val onToggleBookmark: (Int) -> Unit,
+    val onToggleVolume: (Int) -> Unit,
+    val onCollapseAllVolumes: () -> Unit,
+    val onExpandAllVolumes: () -> Unit,
+)
+
+/**
+ * Contents header (pinned, with the order toggle) followed by the virtualized chapter rows.
+ * Volumes open and close through [motion]; [edge] draws the fade under the pinned header.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 internal fun LazyListScope.tocSection(
     toc: TocUiState,
     gutter: Dp,
-    onTocSortChange: (TocSortMode) -> Unit,
-    onOpenChapter: (String) -> Unit,
-    onSetChapterRead: (Int, Boolean) -> Unit,
-    onEnterSelection: (Int) -> Unit,
-    onToggleSelection: (Int) -> Unit,
-    onToggleBookmark: (Int) -> Unit,
+    actions: TocActions,
+    motion: TocVolumeMotion,
+    edge: ContentsEdge,
 ) {
     // Pinned so the order toggle stays reachable while a long contents list scrolls beneath it.
-    stickyHeader { ContentsHeader(toc = toc, gutter = gutter, onTocSortChange = onTocSortChange) }
+    stickyHeader { ContentsHeader(toc = toc, gutter = gutter, actions = actions, edge = edge) }
 
     when {
         toc.loading -> item { TocBuilding(gutter) }
         toc.items.isEmpty() -> item { TocEmpty(gutter) }
         // No item key: a book's TOC can legitimately repeat an href, and duplicate keys crash
         // LazyColumn. Positional binding is fine here (sort just rebinds in place).
-        else -> items(toc.items, contentType = { TocRowContentType }) { entry ->
-            TocRow(
-                entry = entry,
-                gutter = gutter,
-                selectionMode = toc.selectionMode,
-                onTap = {
-                    when {
-                        toc.selectionMode -> if (entry.jumpable) onToggleSelection(entry.uid)
-                        entry.locatorJson != null -> onOpenChapter(entry.locatorJson)
-                    }
-                },
-                onLongPress = { if (entry.jumpable && !toc.selectionMode) onEnterSelection(entry.uid) },
-                onToggleRead = { onSetChapterRead(entry.uid, !entry.read) },
-                onToggleBookmark = { onToggleBookmark(entry.uid) },
-            )
+        else -> items(motion.rows(toc.items), contentType = { TocRowContentType }) { entry ->
+            // A slot rebound to another entry (after a sort or a volume closing) starts afresh
+            // rather than animating the previous entry's colours into this one.
+            key(entry.uid) {
+                TocRow(
+                    entry = entry,
+                    gutter = gutter,
+                    selectionMode = toc.selectionMode,
+                    expanded = motion.showsExpanded(entry),
+                    onTap = {
+                        when {
+                            toc.selectionMode -> if (entry.jumpable) actions.onToggleSelection(entry.uid)
+                            entry.locatorJson != null -> actions.onOpenChapter(entry.locatorJson)
+                            entry.children > 0 -> motion.toggle(entry, actions.onToggleVolume)
+                        }
+                    },
+                    onLongPress = { if (entry.jumpable && !toc.selectionMode) actions.onEnterSelection(entry.uid) },
+                    onToggleRead = { actions.onSetChapterRead(entry.uid, !entry.read) },
+                    onToggleBookmark = { actions.onToggleBookmark(entry.uid) },
+                    onToggleVolume = { motion.toggle(entry, actions.onToggleVolume) },
+                    modifier = Modifier.tocVolumeReveal(motion, entry.uid),
+                )
+            }
         }
     }
+}
+
+/**
+ * Where the contents' pinned header is, for the soft fade where rows slide under an edge: under
+ * the sheet's bar while the book's details scroll away, then under the pinned header once rows
+ * pass beneath it. Both fades are read in the draw phase from the list's scroll position.
+ */
+@Stable
+internal class ContentsEdge(private val listState: LazyListState, private val headerIndex: Int) {
+    // The header's top and bottom within the list, from its last placement.
+    var headerTop by mutableFloatStateOf(Float.MAX_VALUE)
+    var headerBottom by mutableFloatStateOf(0f)
+
+    /** How far the list has scrolled past its top, in px (large once the first item is gone). */
+    fun scrolled(): Float = if (listState.firstVisibleItemIndex > 0) Float.MAX_VALUE else listState.firstVisibleItemScrollOffset.toFloat()
+
+    /** How far rows have slid under the pinned header, in px. */
+    fun underHeader(): Float = when {
+        listState.firstVisibleItemIndex > headerIndex -> Float.MAX_VALUE
+        listState.firstVisibleItemIndex == headerIndex -> listState.firstVisibleItemScrollOffset.toFloat()
+        else -> 0f
+    }
+}
+
+private val EdgeFadeHeight = 28.dp
+
+/**
+ * The fade at the list's top edge, while the book's details scroll under the sheet's bar. It
+ * thins out as the contents header arrives there, so it never lies over the header.
+ */
+internal fun Modifier.contentsTopFade(edge: ContentsEdge, color: Color): Modifier = drawWithContent {
+    drawContent()
+    val fade = EdgeFadeHeight.toPx()
+    val strength = (edge.scrolled() / fade).coerceIn(0f, 1f) * (edge.headerTop / fade).coerceIn(0f, 1f)
+    if (strength > 0f) drawEdgeFade(color, top = 0f, height = fade, strength = strength)
+}
+
+/** A band of [color] easing from [strength] at [top] to nothing [height] below it. */
+private fun DrawScope.drawEdgeFade(color: Color, top: Float, height: Float, strength: Float) {
+    drawRect(
+        brush = Brush.verticalGradient(
+            *Array(7) { step ->
+                val t = step / 6f
+                val inward = 1f - t
+                // Smoothstep, so there is no visible line where the fade ends.
+                t to color.copy(alpha = color.alpha * strength * inward * inward * (3f - 2f * inward))
+            },
+            startY = top,
+            endY = top + height,
+        ),
+        topLeft = Offset(0f, top),
+        size = Size(size.width, height),
+    )
 }
 
 @Composable
 private fun ContentsHeader(
     toc: TocUiState,
     gutter: Dp,
-    onTocSortChange: (TocSortMode) -> Unit,
+    actions: TocActions,
+    edge: ContentsEdge,
 ) {
     val stack = YomuTheme.stack
+    val sheet = MaterialTheme.colorScheme.surface
     val ready = !toc.loading && toc.items.isNotEmpty()
     Row(
         // Opaque: as a pinned header, rows scrolling beneath must not show through it.
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .onPlaced {
+                val top = it.positionInParent().y
+                edge.headerTop = top
+                edge.headerBottom = top + it.size.height
+            }
+            .drawWithContent {
+                drawContent()
+                // Rows passing under the pinned header fade out beneath it instead of being cut.
+                val fade = EdgeFadeHeight.toPx()
+                val strength = (edge.underHeader() / fade).coerceIn(0f, 1f)
+                if (strength > 0f) drawEdgeFade(sheet, top = size.height, height = fade, strength = strength)
+            }
+            .background(sheet)
             .padding(start = gutter, end = gutter - 6.dp, top = 12.dp, bottom = 2.dp)
             .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -133,15 +235,37 @@ private fun ContentsHeader(
                 )
             }
         }
+        if (ready && toc.collapsibleCount > 0) {
+            // Anything collapsed → open everything; nothing collapsed → close every volume.
+            val anyCollapsed = toc.collapsedCount > 0
+            HeaderTextAction(
+                text = if (anyCollapsed) "Expand all" else "Collapse all",
+                onClick = if (anyCollapsed) actions.onExpandAllVolumes else actions.onCollapseAllVolumes,
+            )
+        }
         if (ready) {
             val next = if (toc.sort == TocSortMode.Ascending) TocSortMode.Descending else TocSortMode.Ascending
             SheetIconButton(
                 icon = StackIcons.SwapVert,
                 contentDescription = "Sort ${next.label.lowercase()}",
-                onClick = { onTocSortChange(next) },
+                onClick = { actions.onTocSortChange(next) },
                 iconSize = 20.dp,
             )
         }
+    }
+}
+
+/** A quiet text button in the contents header (48dp tall target). */
+@Composable
+private fun HeaderTextAction(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .yomuPressable(onClick = onClick, shape = RoundedCornerShape(24.dp))
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = text, style = StackType.Label, color = YomuTheme.stack.body, maxLines = 1)
     }
 }
 
@@ -150,10 +274,13 @@ private fun TocRow(
     entry: TocEntryUi,
     gutter: Dp,
     selectionMode: Boolean,
+    expanded: Boolean,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onToggleRead: () -> Unit,
     onToggleBookmark: () -> Unit,
+    onToggleVolume: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val stack = YomuTheme.stack
     val sheet = MaterialTheme.colorScheme.surface
@@ -171,6 +298,8 @@ private fun TocRow(
     val titleColor by animateColorAsState(
         targetValue = when {
             entry.selected || entry.current -> stack.ink
+            // A volume's title heads its chapters, so it stays ink unless it is a read chapter itself.
+            entry.children > 0 && !entry.jumpable -> stack.ink
             // Read chapters recede (like visited links) so unread ones stand out at a glance.
             !entry.jumpable || entry.read -> stack.muted
             else -> stack.ink
@@ -184,43 +313,50 @@ private fun TocRow(
             entry = entry,
             gutter = gutter,
             selectionMode = selectionMode,
+            expanded = expanded,
             onTap = onTap,
             onLongPress = onLongPress,
+            onToggleVolume = onToggleVolume,
             background = sheet,
             highlight = highlight,
             titleColor = titleColor,
         )
     }
 
-    if (selectionMode || !entry.jumpable) {
-        row()
-    } else {
-        SwipeableActionsBox(
-            modifier = Modifier.clipToBounds(),
-            startActions = listOf(
-                tocSwipeAction(if (entry.read) StackIcons.RemoveDone else StackIcons.DoneAll, stack.raised, stack.ink, entry.read, onToggleRead),
-            ),
-            endActions = listOf(
-                tocSwipeAction(if (entry.bookmarked) StackIcons.BookmarkFilled else StackIcons.Bookmark, stack.raised, stack.ink, entry.bookmarked, onToggleBookmark),
-            ),
-            swipeThreshold = 56.dp,
-            backgroundUntilSwipeThreshold = stack.raised,
-        ) { row() }
+    Box(modifier) {
+        if (selectionMode || !entry.jumpable) {
+            row()
+        } else {
+            SwipeableActionsBox(
+                modifier = Modifier.clipToBounds(),
+                startActions = listOf(
+                    tocSwipeAction(if (entry.read) StackIcons.RemoveDone else StackIcons.DoneAll, stack.raised, stack.ink, entry.read, onToggleRead),
+                ),
+                endActions = listOf(
+                    tocSwipeAction(if (entry.bookmarked) StackIcons.BookmarkFilled else StackIcons.Bookmark, stack.raised, stack.ink, entry.bookmarked, onToggleBookmark),
+                ),
+                swipeThreshold = 56.dp,
+                backgroundUntilSwipeThreshold = stack.raised,
+            ) { row() }
+        }
     }
 }
 
 /**
- * One chapter row: number column, title, and a quiet trailing mark. The current chapter sits on a
- * raised inset; the others are divided by hairline rules. A plain [Row] so it stays cheap in a
- * list of thousands.
+ * One contents row: number column, title, and a quiet trailing mark. The current chapter sits on a
+ * raised inset; the others are divided by hairline rules. A volume (an entry with chapters under
+ * it) adds its tally under the title and a chevron that opens or closes it. A plain [Row] so it
+ * stays cheap in a list of thousands.
  */
 @Composable
 private fun TocListItem(
     entry: TocEntryUi,
     gutter: Dp,
     selectionMode: Boolean,
+    expanded: Boolean,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
+    onToggleVolume: () -> Unit,
     background: Color,
     highlight: State<Color>,
     titleColor: Color,
@@ -228,6 +364,7 @@ private fun TocListItem(
     val stack = YomuTheme.stack
     val progress = entry.percent?.coerceIn(0f, 1f) ?: 0f
     val insetPx = 10.dp
+    val volume = entry.children > 0
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -260,7 +397,7 @@ private fun TocListItem(
                 },
             )
             .heightIn(min = TocRowMinHeight)
-            .padding(start = gutter + 4.dp, end = gutter),
+            .padding(start = gutter + 4.dp, end = if (volume) gutter - 12.dp else gutter),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val indent = 16.dp * entry.depth.coerceIn(0, TocMaxIndentLevels)
@@ -273,19 +410,34 @@ private fun TocListItem(
                 modifier = Modifier.width(TocNumberWidth),
             )
         }
-        Text(
-            text = entry.title,
-            color = titleColor,
-            style = if (entry.current && !selectionMode) StackType.Body.copy(fontWeight = FontWeight.SemiBold) else StackType.Body,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
+        Column(
+            Modifier
                 .weight(1f)
                 .padding(start = indent, top = 8.dp, bottom = 8.dp, end = 8.dp),
-        )
+        ) {
+            Text(
+                text = entry.title,
+                color = titleColor,
+                style = if ((entry.current && !selectionMode) || volume) StackType.Body.copy(fontWeight = FontWeight.SemiBold) else StackType.Body,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (volume && entry.chapterCount > 0) {
+                Text(
+                    text = volumeTally(entry, expanded),
+                    style = StackType.Caption,
+                    color = stack.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 1.dp),
+                )
+            }
+        }
         if (entry.jumpable) {
             when {
                 selectionMode -> SelectionBox(selected = entry.selected)
+
+                volume -> Unit
 
                 entry.read -> Icon(
                     imageVector = StackIcons.Check,
@@ -301,6 +453,48 @@ private fun TocListItem(
                 )
             }
         }
+        if (volume) VolumeChevron(expanded = expanded, title = entry.title, onClick = onToggleVolume)
+    }
+}
+
+/** "40 chapters · 12 read", and where the reading position is while the volume is closed. */
+private fun volumeTally(entry: TocEntryUi, expanded: Boolean): String {
+    val chapters = "${entry.chapterCount} ${if (entry.chapterCount == 1) "chapter" else "chapters"}"
+    val read = when (entry.chapterReadCount) {
+        0 -> null
+        entry.chapterCount -> "all read"
+        else -> "${entry.chapterReadCount} read"
+    }
+    val here = if (entry.holdsCurrent && !expanded) "you're here" else null
+    return listOfNotNull(chapters, read, here).joinToString(" · ")
+}
+
+/** Opens or closes a volume; the chevron turns on the spatial spring, read in the draw phase. */
+@Composable
+private fun VolumeChevron(expanded: Boolean, title: String, onClick: () -> Unit) {
+    val turn = animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.defaultSpatialSpec() else snap(),
+        label = "volumeChevron",
+    )
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .yomuPressable(onClick = onClick, shape = RoundedCornerShape(24.dp))
+            .semantics {
+                contentDescription = "${if (expanded) "Collapse" else "Expand"} $title"
+                stateDescription = if (expanded) "Expanded" else "Collapsed"
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = StackIcons.KeyboardArrowDown,
+            contentDescription = null,
+            tint = YomuTheme.stack.body,
+            modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer { rotationZ = turn.value },
+        )
     }
 }
 

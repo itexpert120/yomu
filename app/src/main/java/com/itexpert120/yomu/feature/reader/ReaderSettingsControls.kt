@@ -8,49 +8,63 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
-import com.itexpert120.yomu.core.designsystem.YomuColorSwatch
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
-import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
-import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
-import com.itexpert120.yomu.core.designsystem.YomuSettingGroup
 import com.itexpert120.yomu.core.designsystem.YomuSettingList
 import com.itexpert120.yomu.core.designsystem.YomuSettingPosition
 import com.itexpert120.yomu.core.designsystem.YomuSettingRow
-import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuTogglePill
-import com.itexpert120.yomu.core.designsystem.YomuValueChip
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderFont
@@ -58,13 +72,57 @@ import com.itexpert120.yomu.core.model.ReaderLayout
 import com.itexpert120.yomu.core.model.ReaderSettings
 import com.itexpert120.yomu.core.model.ReaderTextAlign
 import com.itexpert120.yomu.core.model.ReaderThemeMode
+import java.io.File
 import java.util.Locale
 import kotlin.math.round
 import kotlin.math.roundToInt
+import androidx.compose.ui.text.font.FontFamily as ComposeFontFamily
+
+/*
+ * The reading controls shared by the in-reader Reading settings sheet and the Reading defaults
+ * screen, so the two can't drift. They sit on one grid: a label column of [ReaderLabelWidth] on the
+ * left and the control filling the rest, every control the same height ([ReaderControlHeight]), so
+ * labels and controls line up row to row.
+ */
+
+/** The label column of a settings line. */
+internal val ReaderLabelWidth = 104.dp
+
+/** Height of the segmented choices and steppers, so every control on the grid lines up. */
+internal val ReaderControlHeight = 44.dp
+
+/** A settings line: [label] in the label column, the control in the rest, centred on one baseline. */
+@Composable
+internal fun ReaderSettingLine(
+    label: String,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().heightIn(min = 56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = YomuTheme.stack.body,
+            style = StackType.BodySmall,
+            maxLines = 2,
+            modifier = Modifier.width(ReaderLabelWidth).padding(end = 8.dp),
+        )
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            content = content,
+        )
+    }
+}
+
+// region Theme
 
 /**
- * Page themes share the grouped settings treatment in defaults and reading controls. [compact]
- * renders a single row of "Aa" tiles instead of one list row per theme (used by the reader sheet).
+ * Page themes. [compact] (the sheet and Reading defaults) is one row of "Aa" tiles; the long form
+ * is a list row per theme.
  */
 @Composable
 internal fun ReaderThemeRow(
@@ -82,22 +140,12 @@ internal fun ReaderThemeRow(
             YomuSettingRow(
                 title = mode.displayName,
                 selected = settings.theme == mode,
-                role = androidx.compose.ui.semantics.Role.RadioButton,
+                role = Role.RadioButton,
                 onClick = { onUpdateSettings(palette) },
                 position = when (index) {
                     0 -> YomuSettingPosition.First
                     ReaderThemeOrder.lastIndex -> YomuSettingPosition.Last
                     else -> YomuSettingPosition.Middle
-                },
-                leadingContent = {
-                    androidx.compose.material3.Surface(
-                        color = Color(palette.backgroundArgb),
-                        contentColor = Color(palette.textArgb),
-                        shape = YomuShapeTokens.tile,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    ) {
-                        Text("Aa", modifier = Modifier.padding(YomuTheme.space.sm), style = MaterialTheme.typography.titleMediumEmphasized)
-                    }
                 },
             ) {
                 androidx.compose.material3.RadioButton(selected = settings.theme == mode, onClick = null)
@@ -175,7 +223,7 @@ private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (Reader
                 Text(
                     text = mode.displayName,
                     color = content,
-                    style = StackType.Caption.copy(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                    style = StackType.Caption.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                 )
             }
@@ -183,147 +231,419 @@ private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (Reader
     }
 }
 
-/** Saved custom palettes + the "Customise" entry; only meaningful when the Custom theme is active. */
+/** The Custom theme's saved palettes as chips, then the way into the theme editor. */
 @Composable
-internal fun ReaderCustomThemeRow(
+internal fun ReaderCustomThemes(
     settings: ReaderSettings,
     customThemes: List<CustomReaderTheme>,
     onOpenCustomTheme: () -> Unit,
     onApplyCustomTheme: (CustomReaderTheme) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    if (customThemes.isNotEmpty()) {
-        YomuSectionLabel("Saved")
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-        ) {
-            customThemes.forEach { theme ->
-                YomuColorSwatch(
-                    name = theme.name,
-                    color = Color(theme.background),
-                    selected = settings.customBackground == theme.background && settings.customText == theme.text,
-                    onClick = { onApplyCustomTheme(theme) },
-                )
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
+        if (customThemes.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            ) {
+                customThemes.forEach { theme ->
+                    SavedThemeChip(
+                        theme = theme,
+                        selected = settings.customBackground == theme.background && settings.customText == theme.text,
+                        onApply = { onApplyCustomTheme(theme) },
+                    )
+                }
             }
         }
-    }
-    FilledTonalButton(
-        onClick = onOpenCustomTheme,
-        shapes = ButtonDefaults.shapes(),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Icon(StackIcons.Palette, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-        Text("Customise theme")
+        ReaderPillButton(
+            text = "Customise theme",
+            onClick = onOpenCustomTheme,
+            style = ReaderPillStyle.Secondary,
+            icon = StackIcons.Palette,
+            height = ReaderControlHeight,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
+// endregion
+
+// region Font and size
+
+/**
+ * The reading fonts as one sideways row of chips, each named in its own face, ending in "Get
+ * fonts" (the font library) when [onGetFonts] is given. Runs edge to edge: [gutter] is the
+ * screen's side padding, so the row can scroll past it.
+ */
 @Composable
-internal fun ReaderLayoutControl(
+internal fun ReaderFontPicker(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    customFonts: List<CustomFontRef>,
+    onGetFonts: (() -> Unit)?,
+    gutter: Dp,
+    modifier: Modifier = Modifier,
 ) {
-    YomuConnectedChoiceGroup(
-        options = ReaderLayout.entries,
-        selected = settings.layout,
-        label = { it.name },
-        icon = { it.icon },
-        onSelect = { onUpdateSettings(settings.copy(layout = it)) },
-        modifier = Modifier.fillMaxWidth(),
+    val selectedIndex = if (settings.customFont == null) {
+        ReaderFont.entries.indexOf(settings.font)
+    } else {
+        ReaderFont.entries.size + customFonts.indexOfFirst { it.family == settings.customFont.family }.coerceAtLeast(0)
+    }
+    // Opens with the chosen font in view.
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selectedIndex - 1).coerceAtLeast(0))
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        LazyRow(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .horizontalEdgeFade(start = { listState.canScrollBackward }, end = { listState.canScrollForward })
+                .selectableGroup(),
+            contentPadding = PaddingValues(start = gutter, end = if (onGetFonts != null) YomuTheme.space.xs else gutter),
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            fontChips(settings, onUpdateSettings, customFonts)
+        }
+        // Pinned at the row's end so it is always in reach, however many fonts are installed.
+        if (onGetFonts != null) {
+            Box(Modifier.padding(end = gutter)) { GetFontsChip(onClick = onGetFonts) }
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.fontChips(
+    settings: ReaderSettings,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+    customFonts: List<CustomFontRef>,
+) {
+    items(ReaderFont.entries.size) { index ->
+        val font = ReaderFont.entries[index]
+        FontChip(
+            font = font,
+            selected = settings.customFont == null && settings.font == font,
+            onClick = { onUpdateSettings(settings.copy(font = font, customFont = null)) },
+        )
+    }
+    items(customFonts.size) { index ->
+        val custom = customFonts[index]
+        CustomFontChip(
+            font = custom,
+            selected = settings.customFont?.family == custom.family,
+            onClick = { onUpdateSettings(settings.copy(customFont = custom)) },
+        )
+    }
+}
+
+/** Fades content out toward a side that has more to scroll; read while drawing. */
+private fun Modifier.horizontalEdgeFade(start: () -> Boolean, end: () -> Boolean, width: Dp = 20.dp): Modifier = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+    drawContent()
+    val w = width.toPx()
+    if (start()) {
+        drawRect(
+            brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = 0f, endX = w),
+            size = Size(w, size.height),
+            blendMode = BlendMode.DstOut,
+        )
+    }
+    if (end()) {
+        drawRect(
+            brush = Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = size.width - w, endX = size.width),
+            topLeft = Offset(size.width - w, 0f),
+            size = Size(w, size.height),
+            blendMode = BlendMode.DstOut,
+        )
+    }
+}
+
+/** Font picker chip whose label is rendered in that bundled font as a live preview. */
+@Composable
+internal fun FontChip(font: ReaderFont, selected: Boolean, onClick: () -> Unit) {
+    val assets = LocalContext.current.assets
+    val family = remember(font) {
+        ComposeFontFamily(Font(path = "fonts/${font.name}-Regular.ttf", assetManager = assets))
+    }
+    ReaderFontFilterChip(label = font.displayName, family = family, selected = selected, onClick = onClick)
+}
+
+/** Font picker chip for a user-installed custom font, previewed in that font (loaded from its file). */
+@Composable
+internal fun CustomFontChip(font: CustomFontRef, selected: Boolean, onClick: () -> Unit) {
+    val family = remember(font.regularPath) {
+        runCatching { ComposeFontFamily(Font(file = File(font.regularPath))) }.getOrNull()
+    }
+    ReaderFontFilterChip(label = font.family, family = family, selected = selected, onClick = onClick)
+}
+
+@Composable
+private fun ReaderFontFilterChip(
+    label: String,
+    family: ComposeFontFamily?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    ReaderChip(
+        label = label,
+        selected = selected,
+        onClick = onClick,
+        role = Role.RadioButton,
+        labelStyle = StackType.Body.copy(fontFamily = family ?: StackType.Body.fontFamily),
     )
 }
 
+/** "+ Get fonts": the font library, right at the end of the font row. */
 @Composable
-internal fun ReaderFontRow(
-    settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    customFonts: List<CustomFontRef> = emptyList(),
-    onManageFonts: (() -> Unit)? = null,
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-    ) {
-        ReaderFont.entries.forEach { font ->
-            FontChip(
-                font = font,
-                // A bundled font is selected only when no custom font is active.
-                selected = settings.customFont == null && settings.font == font,
-                onClick = { onUpdateSettings(settings.copy(font = font, customFont = null)) },
-            )
-        }
-        customFonts.forEach { custom ->
-            CustomFontChip(
-                font = custom,
-                selected = settings.customFont?.family == custom.family,
-                onClick = { onUpdateSettings(settings.copy(customFont = custom)) },
-            )
-        }
-        if (onManageFonts != null) AddFontChip(onClick = onManageFonts)
-    }
+private fun GetFontsChip(onClick: () -> Unit) {
+    ReaderChip(
+        label = "Get fonts",
+        selected = false,
+        onClick = onClick,
+        role = Role.Button,
+        leadingIcon = StackIcons.Add,
+        dashed = true,
+    )
 }
 
+/** Text size: − and + around the scale, in 5% steps; tapping the value returns it to 100%. */
 @Composable
-internal fun ReaderFontSizeControl(
-    settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    position: YomuSettingPosition = YomuSettingPosition.First,
-    compact: Boolean = false,
-) {
+internal fun ReaderFontSizeLine(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
     val min = ReaderSettings.MIN_FONT_SCALE
     val max = ReaderSettings.MAX_FONT_SCALE
     val step = ReaderSettings.FONT_SCALE_STEP
-    fun snap(value: Float): Float = (round(value / step) * step).coerceIn(min, max)
-    val atDefault = settings.fontScale == ReaderSettings.DEFAULT_FONT_SCALE
-    YomuSettingContainer(position = position, dense = compact) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Font size",
-                style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            YomuValueChip(
-                text = "${(settings.fontScale * 100).roundToInt()}%",
-                customized = !atDefault,
-                onReset = { onUpdateSettings(settings.copy(fontScale = ReaderSettings.DEFAULT_FONT_SCALE)) },
-                resetLabel = "Reset font size",
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-        ) {
-            RoundIcon(StackIcons.TextDecrease, "Decrease font size", compact = compact) {
-                onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale - step)))
-            }
-            ReaderSlider(
-                fraction = (settings.fontScale - min) / (max - min),
-                onSeek = { onUpdateSettings(settings.copy(fontScale = snap(min + it * (max - min)))) },
-                modifier = Modifier.weight(1f),
-                contentDescription = "Font size",
-            )
-            RoundIcon(StackIcons.TextIncrease, "Increase font size", compact = compact) {
-                onUpdateSettings(settings.copy(fontScale = snap(settings.fontScale + step)))
-            }
-        }
+    fun snapScale(value: Float): Float = (round(value / step) * step).coerceIn(min, max)
+    val scale = settings.fontScale
+    ReaderSettingLine("Text size") {
+        ReaderStepper(
+            value = "${(scale * 100).roundToInt()}%",
+            customised = scale != ReaderSettings.DEFAULT_FONT_SCALE,
+            description = "Text size",
+            onDecrease = { onUpdateSettings(settings.copy(fontScale = snapScale(scale - step))) }.takeIf { scale > min + 0.001f },
+            onIncrease = { onUpdateSettings(settings.copy(fontScale = snapScale(scale + step))) }.takeIf { scale < max - 0.001f },
+            onReset = { onUpdateSettings(settings.copy(fontScale = ReaderSettings.DEFAULT_FONT_SCALE)) },
+            decreaseIcon = StackIcons.TextDecrease,
+            increaseIcon = StackIcons.TextIncrease,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+// endregion
+
+// region Page
+
+@Composable
+internal fun ReaderLayoutLine(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
+    ReaderSettingLine("Layout") {
+        YomuConnectedChoiceGroup(
+            options = ReaderLayout.entries,
+            selected = settings.layout,
+            label = { it.name },
+            icon = { it.icon },
+            onSelect = { onUpdateSettings(settings.copy(layout = it)) },
+            height = ReaderControlHeight,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
 @Composable
-internal fun ReaderTextAlignControl(
-    settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-) {
-    YomuConnectedChoiceGroup(
-        options = ReaderTextAlign.entries,
-        selected = settings.textAlign,
-        label = { it.label },
-        icon = { it.icon },
-        onSelect = { onUpdateSettings(settings.copy(textAlign = it)) },
-        modifier = Modifier.fillMaxWidth(),
+internal fun ReaderAlignmentLine(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
+    ReaderSettingLine("Alignment") {
+        YomuConnectedChoiceGroup(
+            options = ReaderTextAlign.entries,
+            selected = settings.textAlign,
+            label = { it.label },
+            onSelect = { onUpdateSettings(settings.copy(textAlign = it)) },
+            height = ReaderControlHeight,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * Line spacing, margins and paragraph spacing as steppers. Each shows a small drawing of what it
+ * changes (lines drawn at the chosen spacing, a page at the chosen margins, paragraphs at the
+ * chosen gap) next to the value; "Auto" leaves it to the book, and tapping a set value returns it
+ * to Auto.
+ */
+@Composable
+internal fun ReaderSpacingLines(settings: ReaderSettings, onUpdateSettings: (ReaderSettings) -> Unit) {
+    SpacingLine(
+        label = "Line spacing",
+        kind = SpacingGlyph.Lines,
+        value = settings.lineHeight,
+        min = ReaderSettings.MIN_LINE_HEIGHT,
+        max = ReaderSettings.MAX_LINE_HEIGHT,
+        default = ReaderSettings.DEFAULT_LINE_HEIGHT,
+        step = 0.1f,
+        format = { formatSpacing(it) },
+        onChange = { onUpdateSettings(settings.copy(lineHeight = it)) },
     )
+    SpacingLine(
+        label = "Margins",
+        kind = SpacingGlyph.Margins,
+        value = settings.pageMargins,
+        min = ReaderSettings.MIN_PAGE_MARGINS,
+        max = ReaderSettings.MAX_PAGE_MARGINS,
+        default = ReaderSettings.DEFAULT_PAGE_MARGINS,
+        step = 0.25f,
+        format = { "${formatSpacing(it)}×" },
+        onChange = { onUpdateSettings(settings.copy(pageMargins = it)) },
+    )
+    SpacingLine(
+        label = "Paragraphs",
+        kind = SpacingGlyph.Paragraphs,
+        value = settings.paragraphSpacing,
+        min = ReaderSettings.MIN_PARAGRAPH_SPACING,
+        max = ReaderSettings.MAX_PARAGRAPH_SPACING,
+        default = ReaderSettings.DEFAULT_PARAGRAPH_SPACING,
+        step = 0.25f,
+        format = { "${formatSpacing(it)} em" },
+        onChange = { onUpdateSettings(settings.copy(paragraphSpacing = it)) },
+    )
+}
+
+/** "1.5", "1.25", "0" — at most two decimals, no trailing zeros. */
+internal fun formatSpacing(value: Float): String = String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+
+@Composable
+private fun SpacingLine(
+    label: String,
+    kind: SpacingGlyph,
+    value: Float?,
+    min: Float,
+    max: Float,
+    default: Float,
+    step: Float,
+    format: (Float) -> String,
+    onChange: (Float?) -> Unit,
+) {
+    val current = value ?: default
+    fun stepTo(next: Float) = onChange((round(next / step) * step).coerceIn(min, max))
+    ReaderSettingLine(label) {
+        ReaderStepper(
+            value = if (value == null) "Auto" else format(value),
+            customised = value != null,
+            description = label,
+            onDecrease = { stepTo(current - step) }.takeIf { current > min + 0.001f },
+            onIncrease = { stepTo(current + step) }.takeIf { current < max - 0.001f },
+            onReset = { onChange(null) },
+            glyph = { SpacingDrawing(kind, ((current - min) / (max - min)).coerceIn(0f, 1f)) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+internal enum class SpacingGlyph { Lines, Margins, Paragraphs }
+
+/** A 24dp drawing of a spacing setting at [amount] (0 = its minimum, 1 = its maximum). */
+@Composable
+private fun SpacingDrawing(kind: SpacingGlyph, amount: Float) {
+    val color = YomuTheme.stack.muted
+    Box(
+        Modifier
+            .size(24.dp)
+            .drawBehind {
+                val bar = 2.dp.toPx()
+                val r = CornerRadius(bar / 2)
+                fun line(x: Float, y: Float, w: Float) = drawRoundRect(color, Offset(x, y - bar / 2), Size(w, bar), r)
+                when (kind) {
+                    SpacingGlyph.Lines -> {
+                        val gap = (3f + 5f * amount).dp.toPx()
+                        val mid = size.height / 2
+                        for (i in -1..1) line(2.dp.toPx(), mid + i * gap, size.width - 4.dp.toPx())
+                    }
+
+                    SpacingGlyph.Margins -> {
+                        val stroke = 1.5.dp.toPx()
+                        val page = Size(size.width - 6.dp.toPx(), size.height - 2.dp.toPx())
+                        val origin = Offset(3.dp.toPx(), 1.dp.toPx())
+                        drawRoundRect(color, origin, page, CornerRadius(3.dp.toPx()), style = Stroke(stroke))
+                        val inset = (2.5f + 4f * amount).dp.toPx()
+                        val width = page.width - inset * 2
+                        for (i in 0..3) line(origin.x + inset, origin.y + 6.dp.toPx() + i * 4.dp.toPx(), width)
+                    }
+
+                    SpacingGlyph.Paragraphs -> {
+                        val gap = (2f + 6f * amount).dp.toPx()
+                        val block = 3.5.dp.toPx()
+                        val top = (size.height - (block * 2 + gap) * 1f - block) / 2
+                        val w = size.width - 4.dp.toPx()
+                        line(2.dp.toPx(), top, w)
+                        line(2.dp.toPx(), top + block, w * 0.6f)
+                        line(2.dp.toPx(), top + block + gap + block, w)
+                        line(2.dp.toPx(), top + block + gap + block * 2, w * 0.6f)
+                    }
+                }
+            },
+    )
+}
+
+/**
+ * Stack's stepper: a raised pill as tall as the segmented choices, − and + at its ends and the value
+ * (with an optional [glyph]) between. When [customised], tapping the value calls [onReset]. A null
+ * step callback disables that end.
+ */
+@Composable
+internal fun ReaderStepper(
+    value: String,
+    customised: Boolean,
+    description: String,
+    onDecrease: (() -> Unit)?,
+    onIncrease: (() -> Unit)?,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier,
+    decreaseIcon: ImageVector = StackIcons.Remove,
+    increaseIcon: ImageVector = StackIcons.Add,
+    glyph: (@Composable () -> Unit)? = null,
+) {
+    val stack = YomuTheme.stack
+    Row(
+        modifier = modifier
+            .height(ReaderControlHeight)
+            .clip(CircleShape)
+            .background(stack.raised),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StepperEnd(decreaseIcon, "Decrease ${description.lowercase()}", onDecrease)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(ReaderControlHeight)
+                .clip(RoundedCornerShape(12.dp))
+                .then(if (customised) Modifier.yomuPressable(onClick = onReset, shape = RoundedCornerShape(12.dp)) else Modifier)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = description
+                    stateDescription = if (customised) "$value. Tap to reset" else value
+                },
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            glyph?.invoke()
+            Text(
+                text = value,
+                color = if (customised) stack.ink else stack.muted,
+                style = StackType.Label.copy(fontSize = 14.sp, fontFeatureSettings = "tnum"),
+                maxLines = 1,
+            )
+        }
+        StepperEnd(increaseIcon, "Increase ${description.lowercase()}", onIncrease)
+    }
+}
+
+@Composable
+private fun StepperEnd(icon: ImageVector, description: String, onClick: (() -> Unit)?) {
+    val stack = YomuTheme.stack
+    Box(
+        modifier = Modifier
+            .size(ReaderControlHeight)
+            .graphicsLayer { alpha = if (onClick != null) 1f else 0.38f }
+            .clip(CircleShape)
+            .yomuPressable(onClick = { onClick?.invoke() }, enabled = onClick != null, shape = CircleShape)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = stack.ink, modifier = Modifier.size(20.dp))
+    }
 }
 
 private val ReaderLayout.icon: ImageVector
@@ -332,13 +652,9 @@ private val ReaderLayout.icon: ImageVector
         ReaderLayout.Paged -> StackIcons.AutoStories
     }
 
-private val ReaderTextAlign.icon: ImageVector
-    get() = when (this) {
-        // Auto keeps the book's own alignment, so it shows ragged publisher text.
-        ReaderTextAlign.Default -> StackIcons.Notes
-        ReaderTextAlign.Left -> StackIcons.FormatAlignLeft
-        ReaderTextAlign.Justify -> StackIcons.FormatAlignJustify
-    }
+// endregion
+
+// region On the page
 
 /** Icons shared by the list and chip forms of [ReaderChromeToggles]. */
 private object ChromeIcons {
@@ -357,51 +673,11 @@ private fun ChromeRowIcon(icon: ImageVector) {
     Icon(icon, contentDescription = null)
 }
 
-/** Line height, page margins and paragraph spacing — each with an "Auto" default. */
-@Composable
-internal fun ReaderTypographySliders(
-    settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    compact: Boolean = false,
-) {
-    AutoSlider(
-        label = "Line height",
-        value = settings.lineHeight,
-        min = ReaderSettings.MIN_LINE_HEIGHT,
-        max = ReaderSettings.MAX_LINE_HEIGHT,
-        default = ReaderSettings.DEFAULT_LINE_HEIGHT,
-        step = ReaderSettings.LINE_HEIGHT_STEP,
-        valueText = { String.format(Locale.US, "%.2f", it) },
-        onChange = { onUpdateSettings(settings.copy(lineHeight = it)) },
-        position = YomuSettingPosition.Middle,
-        compact = compact,
-    )
-    AutoSlider(
-        label = "Page margins",
-        value = settings.pageMargins,
-        min = ReaderSettings.MIN_PAGE_MARGINS,
-        max = ReaderSettings.MAX_PAGE_MARGINS,
-        default = ReaderSettings.DEFAULT_PAGE_MARGINS,
-        step = ReaderSettings.PAGE_MARGINS_STEP,
-        valueText = { String.format(Locale.US, "%.1f", it) },
-        onChange = { onUpdateSettings(settings.copy(pageMargins = it)) },
-        position = YomuSettingPosition.Middle,
-        compact = compact,
-    )
-    AutoSlider(
-        label = "Paragraph spacing",
-        value = settings.paragraphSpacing,
-        min = ReaderSettings.MIN_PARAGRAPH_SPACING,
-        max = ReaderSettings.MAX_PARAGRAPH_SPACING,
-        default = ReaderSettings.DEFAULT_PARAGRAPH_SPACING,
-        step = ReaderSettings.PARAGRAPH_SPACING_STEP,
-        valueText = { String.format(Locale.US, "%.1f", it) },
-        onChange = { onUpdateSettings(settings.copy(paragraphSpacing = it)) },
-        position = YomuSettingPosition.Last,
-        compact = compact,
-    )
-}
-
+/**
+ * What shows on the page while reading: the footer and its items, and the screen behaviours. The
+ * list form is Reading defaults' "While reading"; [compact] is the sheet's chip form. One renderer
+ * for both so no option is missed in either place.
+ */
 @Composable
 internal fun ReaderChromeToggles(
     settings: ReaderSettings,
@@ -523,23 +799,21 @@ internal fun ReaderChromeToggles(
 }
 
 /**
- * The same options as [ReaderChromeToggles], as chips: the footer switch with its contents beneath,
- * then the screen behaviours. Keeps the in-reader sheet short without dropping any option.
+ * The same options as [ReaderChromeToggles] on the sheet's grid: the footer switch with its items
+ * as chips under it, then the screen behaviours as chips.
  */
 @Composable
 private fun CompactChromeToggles(
     settings: ReaderSettings,
     onUpdateSettings: (ReaderSettings) -> Unit,
 ) {
-    val stack = YomuTheme.stack
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            ReaderSectionLabel("Footer", Modifier.weight(1f))
+        ReaderSettingLine("Footer") {
             Text(
-                text = "Show",
-                color = stack.body,
-                style = StackType.Label.copy(fontWeight = FontWeight.Normal),
-                modifier = Modifier.padding(end = 10.dp),
+                text = if (settings.showFooter) "Shown" else "Hidden",
+                color = YomuTheme.stack.muted,
+                style = StackType.BodySmall,
+                modifier = Modifier.weight(1f),
             )
             YomuTogglePill(
                 checked = settings.showFooter,
@@ -565,9 +839,14 @@ private fun CompactChromeToggles(
                 onUpdateSettings(settings.copy(footerShowPagesLeft = it))
             }
         }
-        ReaderSectionLabel("Screen", Modifier.padding(top = YomuTheme.space.sm, bottom = 2.dp))
+        Text(
+            text = "Screen",
+            color = YomuTheme.stack.body,
+            style = StackType.BodySmall,
+            modifier = Modifier.padding(top = YomuTheme.space.md, bottom = YomuTheme.space.xxs),
+        )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
-            ToggleChip("Keep on", settings.keepScreenOn) {
+            ToggleChip("Keep screen on", settings.keepScreenOn) {
                 onUpdateSettings(settings.copy(keepScreenOn = it))
             }
             // The scrollbar only exists in scroll mode (a native WebView scroll).
@@ -597,61 +876,4 @@ private fun ToggleChip(
     )
 }
 
-/**
- * The full set of reader preferences (theme, typography, chrome) used by the app Settings screen.
- * Brightness/extra-dim are intentionally excluded — they're contextual, edited in-reader.
- */
-@Composable
-internal fun ReaderPreferenceControls(
-    settings: ReaderSettings,
-    customThemes: List<CustomReaderTheme>,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    onOpenCustomTheme: () -> Unit,
-    onApplyCustomTheme: (CustomReaderTheme) -> Unit,
-    modifier: Modifier = Modifier,
-    customFonts: List<CustomFontRef> = emptyList(),
-    onManageFonts: (() -> Unit)? = null,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md)) {
-        YomuSettingGroup(
-            title = "Theme",
-            subtitle = "Choose the page mood that welcomes you into every book.",
-        ) {
-            ReaderThemeRow(settings, onUpdateSettings)
-            if (settings.theme == ReaderThemeMode.Custom) {
-                ReaderCustomThemeRow(settings, customThemes, onOpenCustomTheme, onApplyCustomTheme)
-            }
-        }
-
-        YomuSettingGroup(
-            title = "Layout",
-            subtitle = "Decide how chapters move under your hand.",
-        ) {
-            ReaderLayoutControl(settings, onUpdateSettings)
-        }
-
-        YomuSettingGroup(
-            title = "Typography",
-            subtitle = "Tune the voice, scale, and breathing room of the page.",
-        ) {
-            ReaderFontRow(
-                settings,
-                onUpdateSettings,
-                customFonts = customFonts,
-                onManageFonts = onManageFonts,
-            )
-            ReaderTextAlignControl(settings, onUpdateSettings)
-            YomuSettingList {
-                ReaderFontSizeControl(settings, onUpdateSettings)
-                ReaderTypographySliders(settings, onUpdateSettings)
-            }
-        }
-
-        YomuSettingGroup(
-            title = "Reader chrome",
-            subtitle = "Keep the controls and context you want close at hand.",
-        ) {
-            ReaderChromeToggles(settings, onUpdateSettings)
-        }
-    }
-}
+// endregion

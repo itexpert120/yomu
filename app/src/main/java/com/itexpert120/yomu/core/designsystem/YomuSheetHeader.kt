@@ -122,7 +122,7 @@ fun YomuSheetTabsHeader(
     val at: () -> Float = position ?: { glide.value }
     val line = stack.ink
     val ink = stack.ink
-    val muted = stack.muted
+    val faint = stack.faint
     val rule = stack.rule
     Row(
         modifier = modifier
@@ -167,7 +167,7 @@ fun YomuSheetTabsHeader(
                     BasicText(
                         text = label,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium),
-                        color = { lerp(muted, ink, (1f - abs(at() - index)).coerceIn(0f, 1f)) },
+                        color = { lerp(faint, ink, (1f - abs(at() - index)).coerceIn(0f, 1f)) },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

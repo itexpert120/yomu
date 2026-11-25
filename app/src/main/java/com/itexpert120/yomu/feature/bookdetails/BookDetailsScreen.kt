@@ -103,6 +103,7 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.data.collections.Organize
@@ -180,6 +181,9 @@ fun BookDetailsScreen(
     onSetStatus: (ManualStatus?) -> Unit = {},
     onSetCollection: (id: String, member: Boolean) -> Unit = { _, _ -> },
     onCreateCollection: (String) -> Unit = {},
+    onToggleVolume: (Int) -> Unit = {},
+    onCollapseAllVolumes: () -> Unit = {},
+    onExpandAllVolumes: () -> Unit = {},
 ) {
     var showCover by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
@@ -209,13 +213,16 @@ fun BookDetailsScreen(
         onSelectAll = onSelectAllChapters,
         onDeselectAll = onDeselectAllChapters,
     )
-    val contents = ContentsActions(
+    val contents = TocActions(
         onTocSortChange = onTocSortChange,
         onOpenChapter = onOpenChapter,
         onSetChapterRead = onSetChapterRead,
         onEnterSelection = onEnterChapterSelection,
         onToggleSelection = onToggleChapterSelection,
         onToggleBookmark = onToggleChapterBookmark,
+        onToggleVolume = onToggleVolume,
+        onCollapseAllVolumes = onCollapseAllVolumes,
+        onExpandAllVolumes = onExpandAllVolumes,
     )
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -352,14 +359,32 @@ private class SheetActions(
     val onDeselectAll: () -> Unit,
 )
 
-private class ContentsActions(
-    val onTocSortChange: (TocSortMode) -> Unit,
-    val onOpenChapter: (String) -> Unit,
-    val onSetChapterRead: (Int, Boolean) -> Unit,
-    val onEnterSelection: (Int) -> Unit,
-    val onToggleSelection: (Int) -> Unit,
-    val onToggleBookmark: (Int) -> Unit,
-)
+/**
+ * [actions] for a list whose contents header is item [headerIndex]: collapsing or expanding every
+ * volume while the header is pinned brings the header back to the top of the list first, so the
+ * reader lands at the start of the reshaped contents rather than somewhere inside them.
+ */
+@Composable
+private fun rememberListTocActions(actions: TocActions, listState: LazyListState, headerIndex: Int): TocActions {
+    val scope = rememberCoroutineScope()
+    return remember(actions, listState, headerIndex) {
+        fun atHeader(change: () -> Unit) = {
+            change()
+            if (listState.firstVisibleItemIndex > headerIndex) scope.launch { listState.scrollToItem(headerIndex) }
+        }
+        TocActions(
+            onTocSortChange = actions.onTocSortChange,
+            onOpenChapter = actions.onOpenChapter,
+            onSetChapterRead = actions.onSetChapterRead,
+            onEnterSelection = actions.onEnterSelection,
+            onToggleSelection = actions.onToggleSelection,
+            onToggleBookmark = actions.onToggleBookmark,
+            onToggleVolume = actions.onToggleVolume,
+            onCollapseAllVolumes = atHeader(actions.onCollapseAllVolumes),
+            onExpandAllVolumes = atHeader(actions.onExpandAllVolumes),
+        )
+    }
+}
 
 /**
  * The phone sheet: starts [top] down, follows a drag down (from its bar, or from the top of its
@@ -537,11 +562,16 @@ private fun SingleColumnBody(
     toc: TocUiState,
     hasTimeline: Boolean,
     actions: SheetActions,
-    contents: ContentsActions,
+    contents: TocActions,
     gutter: Dp,
     closeIcon: ImageVector,
 ) {
     val listState = rememberLazyListState()
+    // Item 0 is the book's header; the contents header follows it.
+    val tocActions = rememberListTocActions(contents, listState, headerIndex = 1)
+    val volumeMotion = rememberTocVolumeMotion(toc, listState)
+    val edge = remember(listState) { ContentsEdge(listState, headerIndex = 1) }
+    val sheet = MaterialTheme.colorScheme.surface
     val density = LocalDensity.current
     val revealPx = with(density) { 180.dp.toPx() }
     val titleVisible by remember(listState) {
@@ -567,7 +597,9 @@ private fun SingleColumnBody(
                         val stacked = headerStacked(maxWidth - gutter * 2 - 152.dp)
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .contentsTopFade(edge, sheet),
                             contentPadding = PaddingValues(top = 8.dp, bottom = navBottom + 24.dp),
                         ) {
                             item {
@@ -583,16 +615,7 @@ private fun SingleColumnBody(
                                     modifier = Modifier.padding(bottom = 18.dp),
                                 )
                             }
-                            tocSection(
-                                toc = toc,
-                                gutter = gutter,
-                                onTocSortChange = contents.onTocSortChange,
-                                onOpenChapter = contents.onOpenChapter,
-                                onSetChapterRead = contents.onSetChapterRead,
-                                onEnterSelection = contents.onEnterSelection,
-                                onToggleSelection = contents.onToggleSelection,
-                                onToggleBookmark = contents.onToggleBookmark,
-                            )
+                            tocSection(toc = toc, gutter = gutter, actions = tocActions, motion = volumeMotion, edge = edge)
                             // Room for the selection toolbar without shifting rows when selection toggles.
                             item { Spacer(Modifier.height(FloatingActionClearance)) }
                         }
@@ -611,11 +634,15 @@ private fun WideBody(
     toc: TocUiState,
     hasTimeline: Boolean,
     actions: SheetActions,
-    contents: ContentsActions,
+    contents: TocActions,
     leadingWidth: Dp,
 ) {
     val gutter = 32.dp
     val listState: LazyListState = rememberLazyListState()
+    // The contents header is the list's first item.
+    val tocActions = rememberListTocActions(contents, listState, headerIndex = 0)
+    val volumeMotion = rememberTocVolumeMotion(toc, listState)
+    val edge = remember(listState) { ContentsEdge(listState, headerIndex = 0) }
     val detailsScroll: ScrollState = rememberScrollState()
     val revealPx = with(LocalDensity.current) { 180.dp.toPx() }
     val titleVisible by remember(detailsScroll) { derivedStateOf { detailsScroll.value > revealPx } }
@@ -649,6 +676,8 @@ private fun WideBody(
                             modifier = Modifier
                                 .width(leadingWidth)
                                 .fillMaxHeight()
+                                // The details slide under the sheet's bar: fade them at that edge.
+                                .yomuScrollEdgeShadow(top = detailsScroll.canScrollBackward)
                                 .verticalScroll(detailsScroll)
                                 .padding(top = 8.dp, bottom = navBottom + 24.dp),
                         )
@@ -657,16 +686,7 @@ private fun WideBody(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentPadding = PaddingValues(bottom = navBottom + if (toc.selectionMode) FloatingActionClearance else 24.dp),
                         ) {
-                            tocSection(
-                                toc = toc,
-                                gutter = gutter - 8.dp,
-                                onTocSortChange = contents.onTocSortChange,
-                                onOpenChapter = contents.onOpenChapter,
-                                onSetChapterRead = contents.onSetChapterRead,
-                                onEnterSelection = contents.onEnterSelection,
-                                onToggleSelection = contents.onToggleSelection,
-                                onToggleBookmark = contents.onToggleBookmark,
-                            )
+                            tocSection(toc = toc, gutter = gutter - 8.dp, actions = tocActions, motion = volumeMotion, edge = edge)
                         }
                     }
                 }
@@ -944,6 +964,41 @@ private fun previewToc(selection: Boolean = false) = TocUiState(
     flat = true,
 )
 
+/** A serial in volumes: front matter, an open volume holding the reading position, closed ones. */
+private fun previewVolumesToc(): TocUiState {
+    fun entry(uid: Int, title: String, depth: Int = 0, read: Boolean = false) = TocEntryUi(
+        uid = uid,
+        chapterId = "c$uid",
+        title = title,
+        locatorJson = "{}",
+        depth = depth,
+        read = read,
+        selected = false,
+        bookmarked = false,
+        percent = null,
+    )
+    return TocUiState(
+        loading = false,
+        items = listOf(
+            entry(0, "Foreword", read = true),
+            entry(1, "Credits", read = true),
+            entry(2, "Volume 1: Clown").copy(children = 4, chapterCount = 4, chapterReadCount = 2),
+            entry(3, "Chapter 1: Crimson", depth = 1, read = true),
+            entry(4, "Chapter 2: Situation", depth = 1, read = true),
+            entry(5, "Chapter 3: Melissa", depth = 1).copy(current = true, percent = 0.4f),
+            entry(6, "Chapter 4: Divination", depth = 1),
+            entry(7, "Volume 2: Faceless").copy(children = 213, chapterCount = 213, expanded = false),
+            entry(221, "Volume 3: Traveler").copy(children = 249, chapterCount = 249, expanded = false),
+            entry(471, "Volume 4: Undying").copy(children = 250, chapterCount = 250, chapterReadCount = 250, expanded = false, read = true),
+        ),
+        selectableCount = 720,
+        readCount = 256,
+        unreadCount = 464,
+        collapsibleCount = 4,
+        collapsedCount = 3,
+    )
+}
+
 /** Stands in for the dimmed library the navigation frame draws behind the sheet. */
 @Composable
 private fun PreviewBackdrop(content: @Composable () -> Unit) {
@@ -1013,6 +1068,18 @@ private fun BookDetailsNewPreview() {
             toc = TocUiState(loading = false),
         )
     }
+}
+
+@Preview(name = "Details volumes", widthDp = 390, heightDp = 1400)
+@Composable
+private fun BookDetailsVolumesPreview() {
+    YomuDesignTheme(darkTheme = false) { PreviewDetails(toc = previewVolumesToc()) }
+}
+
+@Preview(name = "Details volumes dark", widthDp = 390, heightDp = 1400)
+@Composable
+private fun BookDetailsVolumesDarkPreview() {
+    YomuDesignTheme(darkTheme = true) { PreviewDetails(toc = previewVolumesToc()) }
 }
 
 @Preview(name = "Details building contents", widthDp = 390, heightDp = 844)

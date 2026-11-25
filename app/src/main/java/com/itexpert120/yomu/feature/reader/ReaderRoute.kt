@@ -11,7 +11,7 @@ import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.ReaderThemeMode
 
 @Composable
-fun ReaderRoute(onBack: () -> Unit) {
+fun ReaderRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit = {}) {
     val viewModel: ReaderViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -22,9 +22,14 @@ fun ReaderRoute(onBack: () -> Unit) {
         onPauseOrDispose { viewModel.onReadingPaused() }
     }
 
-    val onAction = remember(viewModel, onBack) {
+    val onAction = remember(viewModel, onBack, onOpenFontLibrary) {
         { action: ReaderAction ->
-            if (action == ReaderAction.Back) onBack() else viewModel.onAction(action)
+            when (action) {
+                ReaderAction.Back -> onBack()
+                // The Reading settings sheet stays open underneath, to pick the new font on return.
+                ReaderAction.OpenFontLibrary -> onOpenFontLibrary()
+                else -> viewModel.onAction(action)
+            }
         }
     }
     // The reader's sheets, dialogs and notices follow the page, not the app: a Night page gets dark

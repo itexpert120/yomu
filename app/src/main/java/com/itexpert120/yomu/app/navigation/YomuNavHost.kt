@@ -240,7 +240,10 @@ fun YomuNavHost(
             }
             BackPreviewFrame(backMotion) {
                 ReaderEntranceFrame(entrance = entrance, pageReady = pageReady) {
-                    ReaderRoute(onBack = { popWhenSettled(entry) })
+                    ReaderRoute(
+                        onBack = { popWhenSettled(entry) },
+                        onOpenFontLibrary = { navController.navigate(FontLibrary) },
+                    )
                 }
             }
         }
