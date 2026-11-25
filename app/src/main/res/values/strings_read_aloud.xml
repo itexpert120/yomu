@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Notification channel for the read-aloud media controls (system notification settings). -->
+    <string name="read_aloud_notification_channel">Read aloud</string>
+    <string name="read_aloud_install_voice">Get voice data</string>
+    <string name="read_aloud_error_engine_unavailable">No text-to-speech engine is available. Install one to have books read aloud.</string>
+    <string name="read_aloud_error_missing_voice">The voice for this language isn’t downloaded yet.</string>
+    <string name="read_aloud_error_language_not_supported">Your text-to-speech engine can’t read this language.</string>
+    <string name="read_aloud_error_nothing_to_read">There’s no text to read from here.</string>
+    <string name="read_aloud_error_source_failed">Reading aloud stopped because the page’s text couldn’t be read.</string>
+    <string name="read_aloud_error_speech_failed">Text-to-speech stopped working.</string>
+</resources>

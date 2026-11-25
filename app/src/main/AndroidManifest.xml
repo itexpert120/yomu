@@ -9,6 +9,17 @@
     <!-- Only for scanning a sync QR code; asked for when the scanner opens. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <!-- Read aloud keeps speaking outside the app as a media-playback foreground service. Its
+         media-session notification is exempt from POST_NOTIFICATIONS, so that isn't asked for. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- Lets TextToSpeech find and bind the installed speech engines (package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:name=".YomuApplication"
@@ -79,6 +90,18 @@
                 <data android:mimeType="application/epub+zip" />
             </intent-filter>
         </activity>
+
+        <!-- Read aloud's media session: notification, lock-screen and headset controls. Exported
+             so system UI, Bluetooth and car controllers can connect, as media3 requires. -->
+        <service
+            android:name=".data.readaloud.ReadAloudService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <!-- Shares the local diagnostics log (Settings → About → Diagnostics). -->
         <provider
