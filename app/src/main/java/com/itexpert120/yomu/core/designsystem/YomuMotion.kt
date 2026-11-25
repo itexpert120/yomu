@@ -50,24 +50,20 @@ object YomuMotion {
     const val ScreenTransitionFadeOutMillis = 105
     const val ScreenTransitionFadeInMillis =
         ScreenTransitionDurationMillis - ScreenTransitionFadeOutMillis
-    val ScreenTransitionDistance = 30.dp
+
+    // Top-level switch: content slides 24dp and fades through (Stack motion spec).
+    val ScreenTransitionDistance = 24.dp
 
     // Opening a child screen (yomuScreenPushEnter): the new page is opaque this fast.
     const val ScreenPushFadeInMillis = 150
 
     const val PopupScaleFrom = 0.90f
 
-    // Predictive back on dialog-like surfaces (sheets, dialogs, cover viewer): how far they shrink.
-    const val BackPreviewScale = 0.90f
-
-    // Back out of a child screen is Material's predictive back, as in Google's apps, for gestures
-    // and back taps alike: the top page shrinks toward 90%, rounds its corners and drifts toward
-    // the far side by width/20 minus this margin, over the page underneath, which waits shrunk,
-    // offset and darkened, then glides in as the top page fades away (see YomuNavHost).
-    const val PredictiveBackMillis = 450
-    val PredictiveBackCorner = 32.dp
-    val PredictiveBackEdgeMargin = 8.dp
-    const val PredictiveBackScrim = 0.4f
+    // Stack's one back motion: the leaving page slides sideways off its edge over the page
+    // underneath (sheets toward their own edge) — following the finger, then completing on the
+    // spatial spring or retracing. Never a scale, corner rounding or darkening. A back runs as a
+    // seekable transition this long (see app/navigation/BackSlide).
+    const val BackSlideMillis = 450
 }
 
 /** Honors the system's reduced-motion setting without calling the API 26 method on older devices. */
