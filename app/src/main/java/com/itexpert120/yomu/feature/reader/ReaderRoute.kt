@@ -9,6 +9,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.model.ReaderThemeMode
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferHost
+import com.itexpert120.yomu.feature.annotations.rememberAnnotationImportPicker
 
 @Composable
 fun ReaderRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit = {}) {
@@ -22,12 +25,14 @@ fun ReaderRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit = {}) {
         onPauseOrDispose { viewModel.onReadingPaused() }
     }
 
-    val onAction = remember(viewModel, onBack, onOpenFontLibrary) {
+    val pickAnnotationFile = rememberAnnotationImportPicker { viewModel.onAction(ReaderAction.Annotations(it)) }
+    val onAction = remember(viewModel, onBack, onOpenFontLibrary, pickAnnotationFile) {
         { action: ReaderAction ->
-            when (action) {
-                ReaderAction.Back -> onBack()
+            when {
+                action == ReaderAction.Back -> onBack()
                 // The Reading settings sheet stays open underneath, to pick the new font on return.
-                ReaderAction.OpenFontLibrary -> onOpenFontLibrary()
+                action == ReaderAction.OpenFontLibrary -> onOpenFontLibrary()
+                action is ReaderAction.Annotations && action.action == AnnotationTransferAction.PickFile -> pickAnnotationFile()
                 else -> viewModel.onAction(action)
             }
         }
@@ -42,5 +47,10 @@ fun ReaderRoute(onBack: () -> Unit, onOpenFontLibrary: () -> Unit = {}) {
     }
     YomuDesignTheme(themeMode = pageMode) {
         ReaderScreen(state = state, onAction = onAction)
+        AnnotationTransferHost(
+            state = state.annotationTransfer,
+            onAction = { onAction(ReaderAction.Annotations(it)) },
+            shares = viewModel.annotations.shares,
+        )
     }
 }

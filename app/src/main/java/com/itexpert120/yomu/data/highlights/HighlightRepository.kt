@@ -17,4 +17,7 @@ interface HighlightRepository {
     suspend fun setStyle(id: String, style: HighlightStyle): Unit = throw UnsupportedOperationException("setStyle")
 
     suspend fun delete(id: String)
+
+    /** Puts a deleted [highlight] back as it was (same id), e.g. for Undo. */
+    suspend fun restore(bookId: BookId, highlight: ReaderHighlight): Unit = throw UnsupportedOperationException("restore")
 }

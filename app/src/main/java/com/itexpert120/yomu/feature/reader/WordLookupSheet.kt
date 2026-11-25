@@ -15,13 +15,19 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -36,10 +42,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +70,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
@@ -66,6 +80,8 @@ import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.web.openWebSearchSheet
 import com.itexpert120.yomu.data.dictionary.DictionaryResult
 import com.itexpert120.yomu.data.dictionary.DictionarySense
+import com.itexpert120.yomu.data.encyclopedia.WikipediaResult
+import java.util.Locale
 
 /** One rendered block in the definitions list. */
 private sealed interface LookupBlock {
@@ -88,37 +104,52 @@ private data class PronunciationLabel(val ipa: String, val accent: String?)
 /** Space the lookup sheet needs around its definitions: drag handle, header, bottom inset. */
 private val LookupSheetReservedHeight = 220.dp
 
-/** Bottom sheet showing a word's dictionary definition (or loading / not-found / error states). */
+/** What the look-up sheet can ask for besides closing. */
+internal class WordLookupActions(
+    val onPronounce: (String) -> Unit = {},
+    val onLookUpWord: (String) -> Unit = {},
+    val onBack: () -> Unit = {},
+    val onRetry: () -> Unit = {},
+    val onSelectTab: (LookupTab) -> Unit = {},
+    val onLookUpInEnglish: () -> Unit = {},
+    val onRetryWikipedia: () -> Unit = {},
+    val onTranslate: (String) -> Unit = {},
+    val onSearchInBook: (String) -> Unit = {},
+)
+
+/**
+ * The look-up sheet: a word's dictionary definition (or loading / not-found / error states) and,
+ * on its own tab, the Wikipedia summary for the selection; a short phrase shows Wikipedia only.
+ */
 @Composable
 internal fun WordLookupSheet(
     state: WordLookupUiState?,
     onDismiss: () -> Unit,
-    onPronounce: (String) -> Unit,
-    onLookUpWord: (String) -> Unit,
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
+    actions: WordLookupActions,
 ) {
     YomuBottomSheet(visible = state != null, onDismiss = onDismiss, scrollable = false) { dismiss ->
         if (state == null) return@YomuBottomSheet
-        WordLookupSheetContent(state, dismiss, onPronounce, onLookUpWord, onBack, onRetry)
+        WordLookupSheetContent(state, dismiss, actions)
     }
 }
 
 /** The word lookup sheet's body, separate from its sheet so it can be previewed. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun WordLookupSheetContent(
     state: WordLookupUiState,
     dismiss: () -> Unit,
-    onPronounce: (String) -> Unit,
-    onLookUpWord: (String) -> Unit,
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
+    actions: WordLookupActions,
 ) {
     run {
         val found = state.result as? DictionaryResult.Found
         val pronunciations = remember(found) { found?.pronunciationLabels().orEmpty() }
         // An inflection ("muttered") resolves to its base word ("mutter"), which is what's shown.
-        val headword = found?.inflectionOf?.let { found.response.word.ifBlank { null } } ?: state.word
+        val headword = when {
+            state.phrase -> state.query
+            else -> found?.inflectionOf?.let { found.response.word.ifBlank { null } } ?: state.word
+        }
+        val language = remember(state.language) { lookupLanguageName(state.language) }
 
         val lookupMotion = MaterialTheme.motionScheme
         val bottomInset = LocalYomuSheetBottomInset.current
@@ -138,7 +169,7 @@ internal fun WordLookupSheetContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (state.canGoBack) {
-                    LookupIconButton(StackIcons.ArrowBack, "Back", onClick = onBack)
+                    LookupIconButton(StackIcons.ArrowBack, "Back", onClick = actions.onBack)
                 }
                 Text(
                     text = headword,
@@ -153,7 +184,7 @@ internal fun WordLookupSheetContent(
                         StackIcons.TravelExplore,
                         "Search the web for $headword",
                         tint = stack.muted,
-                        onClick = { activity.openWebSearchSheet("define $headword") },
+                        onClick = { activity.openWebSearchSheet(if (state.phrase) headword else "define $headword") },
                     )
                 }
                 LookupIconButton(
@@ -163,9 +194,13 @@ internal fun WordLookupSheetContent(
                     onClick = dismiss,
                 )
             }
-            // The inflection note and IPA under the word; pronounce beside them.
+            // The language (when it isn't English), the inflection note and IPA under the word;
+            // pronounce beside them.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (language != null) {
+                        Text(text = language, color = stack.muted, style = StackType.Label)
+                    }
                     found?.inflectionOf?.let { note ->
                         Text(
                             text = "${note.word} · ${note.description}",
@@ -174,30 +209,64 @@ internal fun WordLookupSheetContent(
                         )
                     }
                     if (pronunciations.isNotEmpty()) {
-                        PronunciationLine(pronunciations, onClick = { onPronounce(headword) })
+                        PronunciationLine(pronunciations, onClick = { actions.onPronounce(headword) })
                     }
                 }
                 // No audio clips in this API — speak the word with the device voice instead.
                 ReaderPillButton(
                     text = "Pronounce",
-                    onClick = { onPronounce(headword) },
+                    onClick = { actions.onPronounce(headword) },
                     style = ReaderPillStyle.Secondary,
                     icon = StackIcons.VolumeUp,
                     height = 44.dp,
                 )
+            }
+            // Where else the selection can go: the device's translator, and the rest of this book.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+            ) {
+                if (state.canTranslate) {
+                    ReaderChip(
+                        label = "Translate",
+                        selected = false,
+                        role = Role.Button,
+                        onClick = { actions.onTranslate(state.query) },
+                    )
+                }
+                ReaderChip(
+                    label = "Search in book",
+                    selected = false,
+                    role = Role.Button,
+                    leadingIcon = StackIcons.Search,
+                    onClick = { actions.onSearchInBook(state.query) },
+                )
+            }
+            if (!state.phrase) {
+                LookupTabs(selected = state.tab, onSelect = actions.onSelectTab)
             }
 
             // Cross-fade loading → result (or error) while the column's height springs to fit, so
             // the sheet grows smoothly instead of jumping when the definition arrives.
             AnimatedContent(
                 targetState = state,
-                contentKey = { Triple(it.word, it.loading, it.result?.let { r -> r::class }) },
+                contentKey = {
+                    if (it.tab == LookupTab.Wikipedia) {
+                        listOf(it.tab, it.query, it.wikipedia?.loading, it.wikipedia?.result?.let { r -> r::class })
+                    } else {
+                        listOf(it.tab, it.word, it.language, it.loading, it.result?.let { r -> r::class })
+                    }
+                },
                 transitionSpec = {
                     (fadeIn(lookupMotion.defaultEffectsSpec()) togetherWith fadeOut(lookupMotion.fastEffectsSpec()))
                         .using(SizeTransform(clip = false) { _, _ -> lookupMotion.defaultSpatialSpec() })
                 },
                 label = "wordLookupBody",
             ) { target ->
+                if (target.tab == LookupTab.Wikipedia) {
+                    WikipediaBody(target, actions.onRetryWikipedia)
+                    return@AnimatedContent
+                }
                 val targetBlocks = remember(target.result) {
                     (target.result as? DictionaryResult.Found)?.toBlocks().orEmpty()
                 }
@@ -214,7 +283,7 @@ internal fun WordLookupSheetContent(
                     ) {
                         items(targetBlocks) { block ->
                             when (block) {
-                                is LookupBlock.PartOfSpeech -> PartOfSpeechSection(block.group, onLookUpWord)
+                                is LookupBlock.PartOfSpeech -> PartOfSpeechSection(block.group, actions.onLookUpWord)
                                 is LookupBlock.Footer -> LookupFooter(block.sourceUrl, block.license)
                             }
                         }
@@ -224,18 +293,149 @@ internal fun WordLookupSheetContent(
                         icon = StackIcons.CloudOff,
                         title = "Couldn't reach the dictionary",
                         text = "You seem to be offline. Definitions need a connection.",
-                        word = target.word,
-                        onRetry = onRetry,
+                        webQuery = "define ${target.word}",
+                        primaryLabel = "Try again",
+                        onPrimary = actions.onRetry,
+                    )
+
+                    // Nothing in the book's language: offer the English dictionary, then the web.
+                    target.language != "en" -> LookupMessage(
+                        icon = null,
+                        title = null,
+                        text = "No ${lookupLanguageName(target.language) ?: "entry"} entry for “${target.word}”.",
+                        webQuery = "${target.word} meaning",
+                        primaryLabel = "Look up in English",
+                        onPrimary = actions.onLookUpInEnglish,
                     )
 
                     else -> LookupMessage(
                         icon = null,
                         title = null,
                         text = "No definition found. It may be a name or a rare spelling.",
-                        word = target.word,
-                        onRetry = null,
+                        webQuery = "define ${target.word}",
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Dictionary · Wikipedia, as Stack's word tabs: the selected one in ink 600 over a 2dp ink line. */
+@Composable
+private fun LookupTabs(selected: LookupTab, onSelect: (LookupTab) -> Unit) {
+    val stack = YomuTheme.stack
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val rule = 1.dp.toPx()
+                drawRect(stack.rule, topLeft = Offset(0f, size.height - rule), size = Size(size.width, rule))
+            }
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        LookupTab.entries.forEach { tab ->
+            val active = tab == selected
+            Box(
+                modifier = Modifier
+                    .height(48.dp)
+                    .selectable(selected = active, role = Role.Tab, onClick = { onSelect(tab) })
+                    .drawBehind {
+                        if (active) {
+                            val line = 2.dp.toPx()
+                            drawRoundRect(
+                                color = stack.ink,
+                                topLeft = Offset(0f, size.height - line),
+                                size = Size(size.width, line),
+                                cornerRadius = CornerRadius(line / 2),
+                            )
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = tab.label,
+                    color = if (active) stack.ink else stack.faint,
+                    style = StackType.Body.copy(fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The Wikipedia tab: the article's title, description and summary (thumbnail beside it when it
+ * has one), "Read on Wikipedia", and the CC BY-SA attribution the text requires.
+ */
+@Composable
+private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
+    val wiki = state.wikipedia
+    val stack = YomuTheme.stack
+    when (val result = wiki?.result) {
+        null -> ReaderLoadingBlock("Looking up on Wikipedia…", horizontalPadding = 0.dp, modifier = Modifier.padding(bottom = LocalYomuSheetBottomInset.current))
+
+        WikipediaResult.Error -> LookupMessage(
+            icon = StackIcons.CloudOff,
+            title = "Couldn't reach Wikipedia",
+            text = "You seem to be offline. Wikipedia needs a connection.",
+            webQuery = state.query,
+            primaryLabel = "Try again",
+            onPrimary = onRetry,
+        )
+
+        WikipediaResult.NotFound -> LookupMessage(
+            icon = null,
+            title = null,
+            text = "No Wikipedia article for “${state.query}”.",
+            webQuery = state.query,
+        )
+
+        is WikipediaResult.Found -> {
+            val summary = result.summary
+            val uriHandler = LocalUriHandler.current
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight) + LocalYomuSheetBottomInset.current)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(text = summary.title, color = stack.ink, style = StackType.Heading)
+                        summary.description?.let { Text(text = it, color = stack.muted, style = StackType.BodySmall) }
+                    }
+                    summary.thumbnail?.let { thumbnail ->
+                        AsyncImage(
+                            model = thumbnail.bytes,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(stack.raised),
+                        )
+                    }
+                }
+                Text(text = summary.extract, color = stack.body, style = StackType.Body)
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .yomuPressable(onClick = { runCatching { uriHandler.openUri(summary.pageUrl) } }, pressedScale = 1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(StackIcons.TravelExplore, contentDescription = null, tint = stack.ink, modifier = Modifier.size(20.dp))
+                    Text(text = "Read on Wikipedia", color = stack.ink, style = StackType.Label.copy(fontSize = 14.sp))
+                }
+                Text(
+                    text = "From Wikipedia, the free encyclopedia · Text under CC BY-SA 4.0",
+                    color = stack.faint,
+                    style = StackType.Caption,
+                    modifier = Modifier.padding(bottom = YomuTheme.space.xs + LocalYomuSheetBottomInset.current),
+                )
             }
         }
     }
@@ -258,14 +458,15 @@ private fun LookupIconButton(
     }
 }
 
-/** Offline or nothing found: what happened, then Try again (when it can help) and the web. */
+/** Offline or nothing found: what happened, then the one action that can help, and the web. */
 @Composable
 private fun LookupMessage(
     icon: ImageVector?,
     title: String?,
     text: String,
-    word: String,
-    onRetry: (() -> Unit)?,
+    webQuery: String,
+    primaryLabel: String? = null,
+    onPrimary: (() -> Unit)? = null,
 ) {
     val stack = YomuTheme.stack
     val activity = LocalActivity.current
@@ -284,20 +485,30 @@ private fun LookupMessage(
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
-            if (onRetry != null) {
-                ReaderPillButton(text = "Try again", onClick = onRetry)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+        ) {
+            if (primaryLabel != null && onPrimary != null) {
+                ReaderPillButton(text = primaryLabel, onClick = onPrimary)
             }
             if (activity != null) {
                 ReaderPillButton(
                     text = "Search the web",
-                    onClick = { activity.openWebSearchSheet("define $word") },
+                    onClick = { activity.openWebSearchSheet(webQuery) },
                     style = ReaderPillStyle.Secondary,
-                    icon = if (onRetry == null) StackIcons.TravelExplore else null,
+                    icon = if (onPrimary == null) StackIcons.TravelExplore else null,
                 )
             }
         }
     }
+}
+
+/** "French" for "fr", in English like the rest of the app; null for English or an unknown code. */
+internal fun lookupLanguageName(code: String): String? {
+    if (code.equals("en", ignoreCase = true)) return null
+    val name = Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH)
+    return name.takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
 }
 
 /** IPA in Cardo: device monospace/UI fonts (e.g. Xiaomi's) often lack IPA glyphs and render tofu. */

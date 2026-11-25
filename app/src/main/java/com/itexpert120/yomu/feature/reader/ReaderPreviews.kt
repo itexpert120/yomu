@@ -226,7 +226,14 @@ private fun BrowseSample(tab: BrowseTab, volumes: Boolean = true) = PreviewSheet
         onJumpToBookmark = {},
         onDeleteBookmark = {},
         highlights = listOf(
-            ReaderHighlight("1", """{"href":"ch0.xhtml","locations":{"progression":0.2}}""", "the sullen heats of the torrid afternoon broke up and rolled away", 0xFFF6E27A.toInt(), 0L),
+            ReaderHighlight(
+                "1",
+                """{"href":"ch0.xhtml","locations":{"progression":0.2}}""",
+                "the sullen heats of the torrid afternoon broke up and rolled away",
+                0xFFF6E27A.toInt(),
+                0L,
+                note = "The heat breaking like a storm: Grahame's summer always turns at night.",
+            ),
             ReaderHighlight("2", """{"href":"ch6.xhtml","locations":{"progression":0.5}}""", "Then the faces began.", 0xFFB4D4F5.toInt(), 0L),
             ReaderHighlight("4", """{"href":"ch0.xhtml","locations":{"progression":0.6}}""", "Believe me, my young friend, there is nothing—absolutely nothing—half so much worth doing as simply messing about in boats.", 0xFFB8E3A8.toInt(), 0L),
         ),
@@ -255,6 +262,10 @@ private fun BrowseContentsDarkPreview() = YomuDesignTheme(themeMode = YomuThemeM
 @Preview(widthDp = 390, heightDp = 640)
 @Composable
 private fun BrowseBookmarksPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { BrowseSample(BrowseTab.Bookmarks, volumes = false) }
+
+@Preview(widthDp = 390, heightDp = 640)
+@Composable
+private fun BrowseHighlightsPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { BrowseSample(BrowseTab.Highlights, volumes = false) }
 
 @Preview(widthDp = 390, heightDp = 640)
 @Composable
@@ -358,7 +369,7 @@ private val SampleLookup = DictionaryResult.Found(
 @Composable
 private fun WordLookupPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) {
     PreviewSheet {
-        WordLookupSheetContent(WordLookupUiState("selvedge", loading = false, result = SampleLookup), {}, {}, {}, {}, {})
+        WordLookupSheetContent(WordLookupUiState("selvedge", loading = false, result = SampleLookup), {}, WordLookupActions())
     }
 }
 
@@ -366,7 +377,7 @@ private fun WordLookupPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Ligh
 @Composable
 private fun WordLookupOfflineDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) {
     PreviewSheet {
-        WordLookupSheetContent(WordLookupUiState("selvedge", loading = false, result = DictionaryResult.Error), {}, {}, {}, {}, {})
+        WordLookupSheetContent(WordLookupUiState("selvedge", loading = false, result = DictionaryResult.Error), {}, WordLookupActions())
     }
 }
 
@@ -376,18 +387,22 @@ private fun HighlightEditPreview() = YomuDesignTheme(themeMode = YomuThemeMode.L
     PreviewSheet {
         HighlightEditSheetContent(
             ReaderHighlight("1", "{}", "the sullen heats of the torrid afternoon broke up and rolled away", 0xFFF6E27A.toInt(), 0L),
-            {},
-            {},
-            {},
+            onSelectColor = {},
+            onSelectStyle = {},
+            onNoteChange = { _, _ -> },
+            onCopy = {},
+            onShare = {},
+            onDelete = {},
+            dismiss = {},
         )
     }
 }
 
-@Preview(widthDp = 390, heightDp = 300)
+@Preview(widthDp = 390, heightDp = 380)
 @Composable
 private fun ReaderNoticesPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { NoticesSample() }
 
-@Preview(widthDp = 390, heightDp = 300)
+@Preview(widthDp = 390, heightDp = 380)
 @Composable
 private fun ReaderNoticesDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) { NoticesSample() }
 
@@ -403,6 +418,9 @@ private fun NoticesSample() {
         ReaderNoticeCard(text = "Continue from Pixel Tablet at 63%?", icon = StackIcons.Devices) {
             ReaderNoticeAction("Stay here", onClick = {}, secondary = true)
             ReaderNoticeAction("Jump", onClick = {})
+        }
+        ReaderNoticeCard(text = "Highlight deleted") {
+            ReaderNoticeAction("Undo", onClick = {})
         }
     }
 }

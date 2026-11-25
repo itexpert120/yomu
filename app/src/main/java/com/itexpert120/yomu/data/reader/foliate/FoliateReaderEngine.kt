@@ -756,6 +756,8 @@ private class FoliateReaderSession(
             SelectionAction.SearchWeb -> ReaderSelection.Action.SearchWeb
             SelectionAction.ReadAloud -> ReaderSelection.Action.ReadAloud
             SelectionAction.Share -> ReaderSelection.Action.Share
+            SelectionAction.SearchInBook -> ReaderSelection.Action.SearchInBook
+            SelectionAction.CopyWithCitation -> ReaderSelection.Action.CopyWithCitation
         }
         _selections.tryEmit(ReaderSelection(readerAction, text, locator.toString()))
     }

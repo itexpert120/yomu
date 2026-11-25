@@ -2,6 +2,8 @@ package com.itexpert120.yomu.feature.reader
 
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
+import com.itexpert120.yomu.core.reader.HighlightStyle
+import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
 
 /** Everything the person can do in the reader, raised by the reader screen through one `onAction`. */
 sealed interface ReaderAction {
@@ -54,11 +56,28 @@ sealed interface ReaderAction {
     data object LookupBack : ReaderAction
     data class Pronounce(val word: String) : ReaderAction
     data object CloseLookup : ReaderAction
+    data class SelectLookupTab(val tab: LookupTab) : ReaderAction
+
+    /** The book's language has no entry for the word: look it up in the English dictionary. */
+    data object LookUpInEnglish : ReaderAction
+    data object RetryWikipedia : ReaderAction
+
+    /** Hands [text] to the device's translation app. */
+    data class Translate(val text: String) : ReaderAction
+
+    /** Opens in-book search for [text] (from the look-up sheet or the selection menu). */
+    data class SearchInBook(val text: String) : ReaderAction
     data object CloseFootnote : ReaderAction
 
     // Annotations on the current page.
     data object ToggleBookmark : ReaderAction
     data class SetHighlightColor(val colorArgb: Int) : ReaderAction
+    data class SetHighlightStyle(val style: HighlightStyle) : ReaderAction
+
+    /** The note on highlight [id]; blank clears it. Carries the id so a save that lands after the sheet closed still finds it. */
+    data class SetHighlightNote(val id: String, val note: String) : ReaderAction
+    data object CopyEditingHighlight : ReaderAction
+    data object ShareEditingHighlight : ReaderAction
     data object DeleteEditingHighlight : ReaderAction
     data object CloseHighlightEditor : ReaderAction
 
@@ -67,6 +86,13 @@ sealed interface ReaderAction {
     data object RetryAnnotations : ReaderAction
     data object AcceptSyncOffer : ReaderAction
     data object DismissSyncOffer : ReaderAction
+
+    /** Puts back the highlight or bookmark the undo notice [key] is about. */
+    data class UndoDelete(val key: Long) : ReaderAction
+    data class DismissUndo(val key: Long) : ReaderAction
+
+    /** Export / import of the book's highlights and notes (Browse → Highlights). */
+    data class Annotations(val action: AnnotationTransferAction) : ReaderAction
 }
 
 /** Which reader surfaces are up: the menu (top bar, toolbar, system bars) and at most one sheet. */
@@ -110,6 +136,12 @@ internal fun reduceChrome(state: ReaderChromeState, action: ReaderAction): Reade
         displaySheetVisible = false,
         controlsVisible = false,
     )
+    is ReaderAction.SearchInBook -> state.copy(
+        searchSheetVisible = true,
+        browseTab = null,
+        displaySheetVisible = false,
+        controlsVisible = false,
+    )
     ReaderAction.CloseSearch, is ReaderAction.JumpToSearchResult -> state.copy(searchSheetVisible = false)
 
     else -> state
@@ -138,15 +170,26 @@ internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when 
     ReaderAction.LookupBack -> ReadingExperienceAction.LookupBack
     is ReaderAction.Pronounce -> ReadingExperienceAction.Pronounce(word)
     ReaderAction.CloseLookup -> ReadingExperienceAction.CloseLookup
+    is ReaderAction.SelectLookupTab -> ReadingExperienceAction.SelectLookupTab(tab)
+    ReaderAction.LookUpInEnglish -> ReadingExperienceAction.LookUpInEnglish
+    ReaderAction.RetryWikipedia -> ReadingExperienceAction.RetryWikipedia
+    is ReaderAction.Translate -> ReadingExperienceAction.Translate(text)
+    is ReaderAction.SearchInBook -> ReadingExperienceAction.SearchFor(text)
     ReaderAction.CloseFootnote -> ReadingExperienceAction.CloseFootnote
     ReaderAction.ToggleBookmark -> ReadingExperienceAction.ToggleBookmark
     is ReaderAction.SetHighlightColor -> ReadingExperienceAction.SetEditingHighlightColor(colorArgb)
+    is ReaderAction.SetHighlightStyle -> ReadingExperienceAction.SetEditingHighlightStyle(style)
+    is ReaderAction.SetHighlightNote -> ReadingExperienceAction.SetHighlightNote(id, note)
+    ReaderAction.CopyEditingHighlight -> ReadingExperienceAction.CopyEditingHighlight
+    ReaderAction.ShareEditingHighlight -> ReadingExperienceAction.ShareEditingHighlight
     ReaderAction.DeleteEditingHighlight -> ReadingExperienceAction.DeleteEditingHighlight
     ReaderAction.CloseHighlightEditor -> ReadingExperienceAction.CloseEditingHighlight
     ReaderAction.RetrySettings -> ReadingExperienceAction.RetrySettings
     ReaderAction.RetryAnnotations -> ReadingExperienceAction.RetryAnnotations
     ReaderAction.AcceptSyncOffer -> ReadingExperienceAction.AcceptSyncOffer
     ReaderAction.DismissSyncOffer -> ReadingExperienceAction.DismissSyncOffer
+    is ReaderAction.UndoDelete -> ReadingExperienceAction.UndoDelete(key)
+    is ReaderAction.DismissUndo -> ReadingExperienceAction.DismissUndo(key)
 
     // Chrome-only, navigation-only, or handled by the view model itself.
     ReaderAction.Back,
@@ -163,6 +206,7 @@ internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when 
     is ReaderAction.SelectBrowseTab,
     ReaderAction.CloseBrowse,
     ReaderAction.OpenSearch,
+    is ReaderAction.Annotations,
     -> null
 }
 
