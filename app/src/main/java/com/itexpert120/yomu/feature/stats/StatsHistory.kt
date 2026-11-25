@@ -24,8 +24,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
-import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
@@ -57,33 +55,24 @@ internal fun HistorySection(
             Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
         }
     }
-    val totalSessions = consolidated.sumOf { it.sessionCount }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
     ) {
-        SectionHeading(
-            text = "Recent history",
-            trailing = if (consolidated.isEmpty()) {
-                null
-            } else {
-                "${plural(totalSessions, "session")} · ${formatReadingTime(consolidated.sumOf { it.seconds })}"
-            },
-        )
+        SectionHeading(text = "Recent history", trailing = null)
         if (consolidated.isEmpty()) {
             SectionEmpty("Each time you read, the session shows up here, newest first.")
         }
         val today = LocalDate.now()
         byDay.forEach { (day, sessions) ->
-            HistoryDayHeader(day, today, sessions)
+            HistoryDayHeader(day, today)
             sessions.forEach { session -> HistoryRow(session, thumbWidth) }
         }
         if (consolidated.size > visibleCount) {
-            YomuButton(
+            SectionTextAction(
                 text = "Show more",
                 onClick = { visibleCount += HistoryPage },
-                emphasis = YomuButtonEmphasis.Ghost,
                 modifier = Modifier.padding(top = YomuTheme.space.xxs),
             )
         }
@@ -102,31 +91,16 @@ internal fun HistorySection(
 }
 
 @Composable
-private fun HistoryDayHeader(day: LocalDate, today: LocalDate, sessions: List<ReadingSessionItem>) {
-    val stack = YomuTheme.stack
-    val count = sessions.sumOf { it.sessionCount }
-    Row(
+private fun HistoryDayHeader(day: LocalDate, today: LocalDate) {
+    Text(
+        text = formatDayHeader(day, today),
+        style = StackType.Label,
+        color = YomuTheme.stack.muted,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp, bottom = YomuTheme.space.xxs),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Text(
-            text = formatDayHeader(day, today),
-            style = StackType.Label,
-            color = stack.muted,
-            modifier = Modifier
-                .weight(1f)
-                .semantics { heading() },
-        )
-        Text(
-            text = "${plural(count, "session")} · ${formatReadingTime(sessions.sumOf { it.seconds })}",
-            style = MaterialTheme.typography.bodySmall,
-            color = stack.faint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+            .padding(top = 20.dp, bottom = YomuTheme.space.xxs)
+            .semantics { heading() },
+    )
 }
 
 @Composable
@@ -146,10 +120,15 @@ private fun HistoryRow(session: ReadingSessionItem, thumbWidth: Dp) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        CoverThumb(path = session.coverImagePath, title = session.bookTitle, width = thumbWidth)
+        val removed = session.bookId == null
+        if (removed) {
+            RemovedBooksThumb(width = thumbWidth)
+        } else {
+            CoverThumb(path = session.coverImagePath, title = session.bookTitle, width = thumbWidth)
+        }
         Column(Modifier.weight(1f)) {
             Text(
-                text = session.bookTitle,
+                text = if (removed) "Removed book" else session.bookTitle,
                 style = StackType.Body,
                 color = stack.ink,
                 maxLines = 1,
@@ -185,7 +164,11 @@ internal fun consolidateSessions(history: List<ReadingSessionItem>): List<Readin
     for (next in history.drop(1)) {
         val gapSeconds = current.startedAt / 1000 - (next.startedAt / 1000 + next.seconds)
         val bothShort = current.seconds <= ShortSessionSeconds && next.seconds <= ShortSessionSeconds
+        // A removed book has no title or cover left to tell its sessions apart: a day's run of
+        // them reads as one row.
+        val bothRemoved = current.bookId == null && next.bookId == null && sameDay(current.startedAt, next.startedAt)
         current = if (
+            bothRemoved ||
             current.bookId != null &&
             current.bookId == next.bookId &&
             bothShort &&
@@ -202,4 +185,9 @@ internal fun consolidateSessions(history: List<ReadingSessionItem>): List<Readin
     }
     merged += current
     return merged
+}
+
+private fun sameDay(a: Long, b: Long): Boolean {
+    val zone = ZoneId.systemDefault()
+    return Instant.ofEpochMilli(a).atZone(zone).toLocalDate() == Instant.ofEpochMilli(b).atZone(zone).toLocalDate()
 }

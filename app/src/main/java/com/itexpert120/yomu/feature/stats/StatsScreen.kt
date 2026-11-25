@@ -670,6 +670,7 @@ private fun previewState(): StatsUiState {
             booksInLibrary = 24,
             booksStarted = 9,
             booksFinished = 2,
+            booksFinishedThisYear = 2,
             chaptersRead = 63,
             estimatedWordsRead = 412_000,
             sessionCount = 104,

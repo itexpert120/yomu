@@ -176,6 +176,13 @@ class StatsRepository internal constructor(
             booksFinished = books.count {
                 ShelfStatus.of(it.progress, ManualStatus.fromStoredName(it.manualStatus)) == ShelfStatus.Finished
             },
+            booksFinishedThisYear = LocalDate.now().year.let { year ->
+                books.count {
+                    it.finishedAt > 0L &&
+                        Instant.ofEpochMilli(it.finishedAt).atZone(ZoneId.systemDefault()).year == year &&
+                        ShelfStatus.of(it.progress, ManualStatus.fromStoredName(it.manualStatus)) == ShelfStatus.Finished
+                }
+            },
             chaptersRead = chaptersRead,
             estimatedWordsRead = (day.totalSeconds / 60.0 * WORDS_PER_MINUTE).toLong(),
             estimatedReadingSpeedWpm = if (day.totalSeconds > 0L) WORDS_PER_MINUTE else 0,

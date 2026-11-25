@@ -403,7 +403,7 @@ internal data class StatsMetric(val value: String, val label: String)
 /** The three headline facts that sit under the figure. */
 internal fun ReadingStats.headlineFacts(): List<StatsMetric> = listOf(
     StatsMetric(formatDays(currentStreakDays), "streak · best $longestStreakDays"),
-    StatsMetric(booksFinished.toString(), if (booksFinished == 1) "book finished" else "books finished"),
+    StatsMetric(booksFinishedThisYear.toString(), "finished this year"),
     StatsMetric(daysRead.toString(), if (daysRead == 1) "day with reading" else "days with reading"),
 )
 
