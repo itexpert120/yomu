@@ -103,7 +103,7 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.data.collections.Organize
@@ -677,7 +677,7 @@ private fun WideBody(
                                 .width(leadingWidth)
                                 .fillMaxHeight()
                                 // The details slide under the sheet's bar: fade them at that edge.
-                                .yomuScrollEdgeShadow(top = detailsScroll.canScrollBackward)
+                                .yomuScrollEdgeRule(top = detailsScroll.canScrollBackward)
                                 .verticalScroll(detailsScroll)
                                 .padding(top = 8.dp, bottom = navBottom + 24.dp),
                         )

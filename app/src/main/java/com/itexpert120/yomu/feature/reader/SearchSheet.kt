@@ -51,7 +51,7 @@ import com.itexpert120.yomu.core.designsystem.YomuNotice
 import com.itexpert120.yomu.core.designsystem.YomuNoticeTone
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.web.openWebSearchSheet
 
@@ -204,7 +204,7 @@ internal fun ReaderSearchSheetContent(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
+                            .yomuScrollEdgeRule(top = listState.canScrollBackward),
                     ) {
                         itemsIndexed(searchResults) { index, result ->
                             SearchResultRow(

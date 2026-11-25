@@ -133,6 +133,8 @@ internal fun PeriodPicker(
     selected: StatsPeriod,
     onSelect: (StatsPeriod) -> Unit,
     modifier: Modifier = Modifier,
+    // The compact header is 52dp tall; the full-size picker would nearly touch its edges.
+    compact: Boolean = false,
 ) {
     val stack = YomuTheme.stack
     val options = StatsPeriod.entries
@@ -152,7 +154,7 @@ internal fun PeriodPicker(
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(stack.track.copy(alpha = if (stack.isDark) 0.7f else 0.6f))
-            .padding(3.dp)
+            .padding(if (compact) 2.dp else 3.dp)
             .drawBehind {
                 val from = position.toInt().coerceIn(0, options.lastIndex)
                 val to = (from + 1).coerceAtMost(options.lastIndex)
@@ -174,7 +176,7 @@ internal fun PeriodPicker(
                         starts[index] = it.positionInParent().x
                         widths[index] = it.size.width.toFloat()
                     }
-                    .heightIn(min = 42.dp)
+                    .heightIn(min = if (compact) 32.dp else 42.dp)
                     .clip(RoundedCornerShape(50))
                     .selectable(
                         selected = isSelected,
@@ -186,12 +188,12 @@ internal fun PeriodPicker(
                             }
                         },
                     )
-                    .padding(horizontal = 14.dp),
+                    .padding(horizontal = if (compact) 12.dp else 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = option.label,
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp),
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = if (compact) 13.sp else 14.sp),
                     color = if (isSelected) stack.ink else stack.muted,
                     maxLines = 1,
                 )

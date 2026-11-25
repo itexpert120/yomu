@@ -61,7 +61,7 @@ import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
 import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.designsystem.yomuPressable
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderTocItem
@@ -262,7 +262,7 @@ private fun ContentsPage(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
+                        .yomuScrollEdgeRule(top = listState.canScrollBackward),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
                 ) {
                     contentsItems(
@@ -580,7 +580,7 @@ private fun <T> GroupedList(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .yomuScrollEdgeShadow(top = listState.canScrollBackward, bottom = listState.canScrollForward),
+            .yomuScrollEdgeRule(top = listState.canScrollBackward),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = YomuTheme.space.lg),
     ) {
         groups.forEachIndexed { groupIndex, group ->

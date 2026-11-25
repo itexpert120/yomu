@@ -75,7 +75,7 @@ import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.BookReadingTime
 import com.itexpert120.yomu.core.model.DailyReading
 import com.itexpert120.yomu.core.model.ReadingSessionItem
@@ -305,7 +305,7 @@ private fun PhoneStats(
                 gutter = gutter,
                 endPadding = 16.dp,
                 actions = if (onBack == null) {
-                    { PeriodPicker(selected = period, onSelect = onPeriodChange) }
+                    { PeriodPicker(selected = period, onSelect = onPeriodChange, compact = true) }
                 } else {
                     null
                 },
@@ -397,7 +397,7 @@ private fun WideStats(
                 gutter = YomuTheme.space.xl,
                 endPadding = YomuTheme.space.xl,
                 actions = if (onBack == null) {
-                    { PeriodPicker(selected = period, onSelect = onPeriodChange) }
+                    { PeriodPicker(selected = period, onSelect = onPeriodChange, compact = true) }
                 } else {
                     null
                 },
@@ -472,7 +472,7 @@ private fun WidePanes(
                     .clip(SideSheetShape)
                     .background(YomuTheme.stack.sheet)
                     // Rows dissolve at the sheet's top edge once they scroll under it.
-                    .yomuScrollEdgeShadow(top = sideScroll.canScrollBackward)
+                    .yomuScrollEdgeRule(top = sideScroll.canScrollBackward)
                     .verticalScroll(sideScroll)
                     .padding(horizontal = 28.dp)
                     .padding(top = YomuTheme.space.lg),

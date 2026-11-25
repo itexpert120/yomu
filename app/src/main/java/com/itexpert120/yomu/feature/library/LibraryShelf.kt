@@ -23,7 +23,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
-import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeShadow
+import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import kotlinx.coroutines.flow.drop
@@ -115,7 +115,7 @@ internal fun LibraryGrid(
         // Covers dissolve under the pinned tab row rather than cut off at its rule.
         modifier = Modifier
             .fillMaxSize()
-            .yomuScrollEdgeShadow(top = state.canScrollBackward),
+            .yomuScrollEdgeRule(top = state.canScrollBackward),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(spec.rowGap),
         horizontalArrangement = Arrangement.spacedBy(spec.columnGap),
@@ -176,7 +176,7 @@ internal fun LibraryList(
         state = state,
         modifier = Modifier
             .fillMaxSize()
-            .yomuScrollEdgeShadow(top = state.canScrollBackward),
+            .yomuScrollEdgeRule(top = state.canScrollBackward),
         contentPadding = contentPadding,
     ) {
         lazyListItems(books, key = { it.id }, contentType = { LibraryBookContentType }) { book ->
