@@ -128,6 +128,18 @@ ICONS = [
     ("ViewList", "view_list", OUTLINED, True),
     ("VolumeUp", "volume_up", OUTLINED, True),
     ("Wallpaper", "wallpaper", OUTLINED, False),
+    ("Bookmarks", "bookmarks", OUTLINED, False),
+    ("BugReport", "bug_report", OUTLINED, False),
+    ("ChatBubble", "chat_bubble", OUTLINED, False),
+    ("ContentCopy", "content_copy", OUTLINED, False),
+    ("Contrast", "contrast", OUTLINED, False),
+    ("Description", "description", OUTLINED, False),
+    ("Dns", "dns", OUTLINED, False),
+    ("Favorite", "favorite", OUTLINED, False),
+    ("Gavel", "gavel", OUTLINED, False),
+    ("Lock", "lock", OUTLINED, False),
+    ("MatchCase", "match_case", OUTLINED, False),
+    ("QrCodeScanner", "qr_code_scanner", OUTLINED, False),
 ]
 
 VIEWBOX = "0 -960 960 960"
