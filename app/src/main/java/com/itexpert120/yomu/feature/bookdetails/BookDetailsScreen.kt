@@ -709,7 +709,7 @@ private fun BookOptions(hasTimeline: Boolean, canSelect: Boolean, actions: Sheet
     val stack = YomuTheme.stack
     Box {
         SheetIconButton(
-            icon = StackIcons.MoreVert,
+            icon = StackIcons.MoreHoriz,
             contentDescription = "Book options",
             onClick = { expanded = true },
             background = if (expanded) stack.raised else Color.Transparent,
@@ -794,7 +794,7 @@ private fun ReadingTimeline(book: BookDetailsUi, onClose: () -> Unit) {
         Triple(StackIcons.Add, "Added", book.addedDate),
         Triple(StackIcons.AutoStories, "Started", book.startedDate),
         Triple(StackIcons.Schedule, "Last read", book.lastReadDate),
-        Triple(StackIcons.CheckCircle, "Finished", book.finishedDate),
+        Triple(StackIcons.DoneAll, "Finished", book.finishedDate),
     ).filter { (_, label, value) -> value != null || label != "Added" }
     Column {
         YomuSheetHeader(title = "Reading timeline", onClose = onClose)

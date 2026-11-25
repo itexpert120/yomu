@@ -250,7 +250,7 @@ private fun ControlsTab(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
         ) {
-            SheetIconButton(StackIcons.KeyboardArrowLeft, "Previous chapter", onClick = onPreviousChapter)
+            SheetIconButton(StackIcons.SkipPrevious, "Previous chapter", onClick = onPreviousChapter)
             ReaderSlider(
                 fraction = chapterFraction,
                 onSeek = { fraction ->
@@ -264,7 +264,7 @@ private fun ControlsTab(
                 snapPoints = chapters.size,
                 contentDescription = "Chapter selector",
             )
-            SheetIconButton(StackIcons.KeyboardArrowRight, "Next chapter", onClick = onNextChapter)
+            SheetIconButton(StackIcons.SkipNext, "Next chapter", onClick = onNextChapter)
         }
 
         // Brightness + extra dim are contextual to the current reading session, so they stay here.
@@ -418,7 +418,7 @@ private fun DisplayTab(
                 .padding(top = 6.dp)
                 .heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(22.dp))
-                .yomuPressable(onClick = onResetSettings),
+                .yomuPressable(onClick = onResetSettings, shape = RoundedCornerShape(22.dp)),
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
@@ -454,7 +454,7 @@ private fun SheetFontSizeRow(s: ReaderSettings, onUpdateSettings: (ReaderSetting
                     } else {
                         Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .yomuPressable(onClick = { onUpdateSettings(s.copy(fontScale = ReaderSettings.DEFAULT_FONT_SCALE)) })
+                            .yomuPressable(onClick = { onUpdateSettings(s.copy(fontScale = ReaderSettings.DEFAULT_FONT_SCALE)) }, shape = RoundedCornerShape(12.dp))
                     },
                 )
                 .semantics {
@@ -571,7 +571,7 @@ private fun SavedThemeChip(
             .clip(CircleShape)
             .background(stack.raised)
             .then(if (selected) Modifier.border(2.dp, stack.ink, CircleShape) else Modifier)
-            .yomuPressable(onClick = onApply, role = Role.RadioButton)
+            .yomuPressable(onClick = onApply, role = Role.RadioButton, shape = CircleShape)
             .semantics { this.selected = selected }
             .padding(start = 6.dp, end = if (onDelete != null) 0.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically,

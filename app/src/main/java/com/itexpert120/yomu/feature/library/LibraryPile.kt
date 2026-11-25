@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
+import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.stackCoverShadow
@@ -260,7 +261,7 @@ private fun PileCover(book: LibraryBook, depth: Int, metrics: PileMetrics, onCli
                 transformOrigin = TransformOrigin(0f, 1f)
             }
             .stackCoverShadow()
-            .then(if (depth == 0) Modifier.yomuPressable(onClick = onClick) else Modifier),
+            .then(if (depth == 0) Modifier.yomuPressable(onClick = onClick, shape = YomuShapeTokens.cover) else Modifier),
     ) {
         BookCoverImage(book = book, modifier = Modifier.fillMaxSize())
         // Covers further back sit a little darker (brightness .95, .9).
@@ -278,7 +279,7 @@ private fun ResumeButton(title: String, size: Dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(size)
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, shape = CircleShape)
             .clip(CircleShape)
             .background(stack.ink)
             .semantics { contentDescription = "Resume $title" },

@@ -201,7 +201,7 @@ private fun BookmarksBody(
 ) {
     if (bookmarks.isEmpty()) {
         YomuEmptyState(
-            icon = StackIcons.Bookmark,
+            icon = StackIcons.Bookmarks,
             title = "No bookmarks yet",
             body = "Tap the bookmark at the top of a page to keep your place.",
             compact = true,

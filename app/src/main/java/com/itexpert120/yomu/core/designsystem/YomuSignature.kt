@@ -275,7 +275,7 @@ fun YomuCard(
         Column(
             modifier = modifier
                 .clip(shape)
-                .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick) else Modifier)
+                .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick, shape = shape) else Modifier)
                 .background(container)
                 .padding(contentPadding),
             content = content,
@@ -458,15 +458,18 @@ fun YomuDialogCard(
     }
 }
 
-/** How the enclosing [YomuBottomSheet] is presented; lets shared headers adapt. */
-enum class YomuSheetPresentation { Sheet, Dialog }
+/**
+ * How the enclosing [YomuBottomSheet] is presented; lets shared headers adapt. [Side] is the side
+ * sheet it becomes from medium widths; [Dialog] is kept for centred dialog-like surfaces.
+ */
+enum class YomuSheetPresentation { Sheet, Dialog, Side }
 
 val LocalYomuSheetPresentation = staticCompositionLocalOf { YomuSheetPresentation.Sheet }
 
 /**
  * The title row for every [YomuBottomSheet]: close on the left (a chevron down on a phone sheet, a
- * close × when the sheet is a tablet dialog), the title (17/600) with an optional muted line under
- * it, and [trailing] actions on the right. The icon buttons bleed 12dp into the sheet's gutter so
+ * close × in a dialog), the title (17/600) with an optional muted line under it, and [trailing]
+ * actions on the right. In a side sheet the close × moves to the end, after [trailing]. The icon buttons bleed 12dp into the sheet's gutter so
  * their glyphs line up with the content edge.
  */
 @Composable
@@ -478,7 +481,8 @@ fun YomuSheetHeader(
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val stack = YomuTheme.stack
-    val dialog = LocalYomuSheetPresentation.current == YomuSheetPresentation.Dialog
+    val presentation = LocalYomuSheetPresentation.current
+    val closeAtEnd = presentation == YomuSheetPresentation.Side
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -488,17 +492,19 @@ fun YomuSheetHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CompositionLocalProvider(LocalContentColor provides stack.ink) {
-            if (onClose != null) {
+            if (onClose != null && !closeAtEnd) {
                 YomuIconButton(
-                    icon = if (dialog) StackIcons.Close else StackIcons.KeyboardArrowDown,
+                    icon = if (presentation == YomuSheetPresentation.Sheet) StackIcons.KeyboardArrowDown else StackIcons.Close,
                     contentDescription = "Close",
                     onClick = onClose,
                 )
             }
+            val closeLeads = onClose != null && !closeAtEnd
+            val endsBare = trailing == null && (onClose == null || !closeAtEnd)
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = if (onClose != null) 4.dp else 12.dp, end = if (trailing == null) 12.dp else 4.dp),
+                    .padding(start = if (closeLeads) 4.dp else 12.dp, end = if (endsBare) 12.dp else 4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
@@ -514,6 +520,9 @@ fun YomuSheetHeader(
                 }
             }
             trailing?.invoke(this)
+            if (onClose != null && closeAtEnd) {
+                YomuIconButton(icon = StackIcons.Close, contentDescription = "Close", onClick = onClose)
+            }
         }
     }
 }

@@ -228,7 +228,7 @@ internal fun SyncStatusCard(state: SyncUiState, onClick: () -> Unit, modifier: M
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
             .background(stack.sheet)
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, shape = RoundedCornerShape(24.dp))
             .semantics(mergeDescendants = true) {}
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,

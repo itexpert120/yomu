@@ -111,7 +111,7 @@ internal fun ReaderNoticeAction(label: String, onClick: () -> Unit, secondary: B
         modifier = Modifier
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(24.dp))
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, shape = RoundedCornerShape(24.dp))
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

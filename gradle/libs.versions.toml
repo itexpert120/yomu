@@ -32,6 +32,7 @@ ktlint = "1.5.0"
 benchmark = "1.5.0"
 profileinstaller = "1.4.1"
 webkit = "1.18.0"
+window = "1.5.0"
 uiautomator = "2.4.1"
 testRunner = "1.7.0"
 
@@ -47,6 +48,7 @@ androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomato
 androidx-benchmark-macro = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+androidx-window = { group = "androidx.window", name = "window", version.ref = "window" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }

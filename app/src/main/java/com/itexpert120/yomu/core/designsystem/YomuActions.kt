@@ -56,13 +56,14 @@ fun YomuLabeledIconAction(
     contentColor: Color = YomuTheme.stack.ink,
     containerColor: Color? = null,
 ) {
+    val shape = if (containerColor != null) RoundedCornerShape(16.dp) else CircleShape
     Column(
         modifier = modifier
             .widthIn(min = 64.dp)
             .heightIn(min = 48.dp)
             .alpha(if (enabled) 1f else 0.4f)
-            .clip(if (containerColor != null) RoundedCornerShape(16.dp) else CircleShape)
-            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button)
+            .clip(shape)
+            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button, shape = shape)
             .semantics(mergeDescendants = true) {
                 this.contentDescription = label
                 this.selected = selected
@@ -227,7 +228,7 @@ fun YomuFloatingToolbar(
                     .heightIn(min = 48.dp)
                     .alpha(if (action.enabled) 1f else 0.4f)
                     .clip(CircleShape)
-                    .yomuPressable(onClick = action.onClick, enabled = action.enabled, role = Role.Button)
+                    .yomuPressable(onClick = action.onClick, enabled = action.enabled, role = Role.Button, shape = CircleShape)
                     .semantics { this.selected = action.selected }
                     .then(if (action.selected) Modifier.background(content.copy(alpha = 0.14f)) else Modifier)
                     .padding(horizontal = 14.dp),

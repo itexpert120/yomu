@@ -136,7 +136,7 @@ private fun ContentsHeader(
         if (ready) {
             val next = if (toc.sort == TocSortMode.Ascending) TocSortMode.Descending else TocSortMode.Ascending
             SheetIconButton(
-                icon = if (toc.sort == TocSortMode.Ascending) StackIcons.KeyboardArrowDown else StackIcons.KeyboardArrowUp,
+                icon = StackIcons.SwapVert,
                 contentDescription = "Sort ${next.label.lowercase()}",
                 onClick = { onTocSortChange(next) },
                 iconSize = 20.dp,
@@ -198,7 +198,7 @@ private fun TocRow(
         SwipeableActionsBox(
             modifier = Modifier.clipToBounds(),
             startActions = listOf(
-                tocSwipeAction(if (entry.read) StackIcons.RemoveDone else StackIcons.CheckCircle, stack.raised, stack.ink, entry.read, onToggleRead),
+                tocSwipeAction(if (entry.read) StackIcons.RemoveDone else StackIcons.DoneAll, stack.raised, stack.ink, entry.read, onToggleRead),
             ),
             endActions = listOf(
                 tocSwipeAction(if (entry.bookmarked) StackIcons.BookmarkFilled else StackIcons.Bookmark, stack.raised, stack.ink, entry.bookmarked, onToggleBookmark),
@@ -396,9 +396,9 @@ internal fun ChapterSelectionToolbar(
     YomuFloatingToolbar(
         vibrant = true,
         actions = listOf(
-            YomuToolbarAction(StackIcons.CheckCircle, "Mark read", onMarkRead, enabled = hasSelection),
+            YomuToolbarAction(StackIcons.DoneAll, "Mark read", onMarkRead, enabled = hasSelection),
             YomuToolbarAction(StackIcons.RemoveDone, "Unread", onMarkUnread, enabled = hasSelection),
-            YomuToolbarAction(StackIcons.PlaylistAddCheck, "Read to here", onMarkPrevious, enabled = hasSelection),
+            YomuToolbarAction(StackIcons.VerticalAlignBottom, "Read to here", onMarkPrevious, enabled = hasSelection),
         ),
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
@@ -421,7 +421,7 @@ internal fun SheetIconButton(
     Box(
         modifier = modifier
             .size(48.dp)
-            .yomuPressable(onClick = onClick, enabled = enabled)
+            .yomuPressable(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(background)
             .semantics { this.contentDescription = contentDescription },

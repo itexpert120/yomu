@@ -206,7 +206,7 @@ internal fun CoverViewerDialog(
                             .align(Alignment.TopStart)
                             .padding(top = statusTop + space.xs, start = space.xs)
                             .size(48.dp)
-                            .yomuPressable(onClick = close)
+                            .yomuPressable(onClick = close, shape = CircleShape)
                             .clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.08f))
                             .semantics { contentDescription = "Close cover" },
@@ -219,7 +219,7 @@ internal fun CoverViewerDialog(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = navBottom + 32.dp)
                             .height(52.dp)
-                            .yomuPressable(onClick = onSave)
+                            .yomuPressable(onClick = onSave, shape = CircleShape)
                             .clip(CircleShape)
                             .background(room.ink)
                             .padding(horizontal = 22.dp),

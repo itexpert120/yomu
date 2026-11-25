@@ -163,7 +163,7 @@ internal fun ReaderValuePill(
             .background(stack.raised)
             .then(
                 if (onReset != null) {
-                    Modifier.yomuPressable(onClick = onReset).semantics { resetLabel?.let { contentDescription = "$text. $it" } }
+                    Modifier.yomuPressable(onClick = onReset, shape = RoundedCornerShape(14.dp)).semantics { resetLabel?.let { contentDescription = "$text. $it" } }
                 } else {
                     Modifier
                 },
@@ -390,7 +390,7 @@ internal fun ReaderPillButton(
             .heightIn(min = height)
             .graphicsLayer { alpha = if (enabled) 1f else 0.38f }
             .clip(CircleShape)
-            .yomuPressable(onClick = onClick, enabled = enabled)
+            .yomuPressable(onClick = onClick, enabled = enabled, shape = CircleShape)
             .background(container)
             .then(if (primary) Modifier else Modifier.border(BorderStroke(1.5.dp, border), CircleShape))
             .padding(horizontal = 20.dp),

@@ -107,7 +107,7 @@ fun YomuSettingRow(
             .clip(shape)
             .then(if (position != null) Modifier.background(stack.sheet) else Modifier)
             .then(
-                if (onClick != null) Modifier.yomuPressable(onClick = onClick, enabled = enabled, role = role, pressedScale = 1f) else Modifier,
+                if (onClick != null) Modifier.yomuPressable(onClick = onClick, enabled = enabled, role = role, pressedScale = 1f, shape = shape) else Modifier,
             )
             .then(
                 if (divider) {
@@ -235,7 +235,7 @@ fun YomuValueChip(
             .then(
                 if (customized) {
                     Modifier
-                        .yomuPressable(onClick = onReset)
+                        .yomuPressable(onClick = onReset, shape = CircleShape)
                         .semantics { onClickLabel(resetLabel, action = null) }
                         .background(stack.raised)
                 } else {

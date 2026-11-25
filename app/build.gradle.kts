@@ -104,6 +104,7 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     // WebView async start-up (reader warm-up); also what Readium uses.
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.window)
     baselineProfile(project(":benchmark"))
     implementation(libs.androidx.browser)
     implementation(libs.androidx.compose.material3)

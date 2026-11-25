@@ -148,7 +148,7 @@ fun StatsScreen(
 
                 StatsPhase.Empty -> StatsStatePane(onBack, gutter) {
                     YomuEmptyState(
-                        icon = StackIcons.HourglassBottom,
+                        icon = StackIcons.HourglassEmpty,
                         title = "No reading time yet",
                         body = "Minutes, streaks and how long each book takes will show up here once you start reading.",
                         actions = onOpenLibrary?.let { open -> { YomuButton(text = "Open your library", onClick = open) } },

@@ -140,6 +140,17 @@ ICONS = [
     ("Lock", "lock", OUTLINED, False),
     ("MatchCase", "match_case", OUTLINED, False),
     ("QrCodeScanner", "qr_code_scanner", OUTLINED, False),
+    ("Devices", "devices", OUTLINED, False),
+    ("DoneAll", "done_all", OUTLINED, False),
+    ("EditOff", "edit_off", OUTLINED, False),
+    ("HourglassEmpty", "hourglass_empty", OUTLINED, False),
+    ("Image", "image", OUTLINED, False),
+    ("MoreHoriz", "more_horiz", OUTLINED, False),
+    ("SkipNext", "skip_next", OUTLINED, True),
+    ("SkipPrevious", "skip_previous", OUTLINED, True),
+    ("SwapVert", "swap_vert", OUTLINED, False),
+    ("TravelExplore", "travel_explore", OUTLINED, False),
+    ("VerticalAlignBottom", "vertical_align_bottom", OUTLINED, False),
 ]
 
 VIEWBOX = "0 -960 960 960"
