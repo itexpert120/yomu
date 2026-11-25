@@ -179,6 +179,10 @@ internal fun WordLookupSheetContent(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
+                if (!state.phrase) {
+                    // No audio clips in this API — the device voice speaks the word.
+                    LookupIconButton(StackIcons.VolumeUp, "Pronounce $headword", onClick = { actions.onPronounce(headword) })
+                }
                 if (activity != null) {
                     LookupIconButton(
                         StackIcons.TravelExplore,
@@ -212,35 +216,6 @@ internal fun WordLookupSheetContent(
                         PronunciationLine(pronunciations, onClick = { actions.onPronounce(headword) })
                     }
                 }
-                // No audio clips in this API — speak the word with the device voice instead.
-                ReaderPillButton(
-                    text = "Pronounce",
-                    onClick = { actions.onPronounce(headword) },
-                    style = ReaderPillStyle.Secondary,
-                    icon = StackIcons.VolumeUp,
-                    height = 44.dp,
-                )
-            }
-            // Where else the selection can go: the device's translator, and the rest of this book.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-                verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-            ) {
-                if (state.canTranslate) {
-                    ReaderChip(
-                        label = "Translate",
-                        selected = false,
-                        role = Role.Button,
-                        onClick = { actions.onTranslate(state.query) },
-                    )
-                }
-                ReaderChip(
-                    label = "Search in book",
-                    selected = false,
-                    role = Role.Button,
-                    leadingIcon = StackIcons.Search,
-                    onClick = { actions.onSearchInBook(state.query) },
-                )
             }
             if (!state.phrase) {
                 LookupTabs(selected = state.tab, onSelect = actions.onSelectTab)
@@ -271,15 +246,13 @@ internal fun WordLookupSheetContent(
                     (target.result as? DictionaryResult.Found)?.toBlocks().orEmpty()
                 }
                 when {
-                    target.loading -> ReaderLoadingBlock("Looking up…", horizontalPadding = 0.dp, modifier = Modifier.padding(bottom = bottomInset))
+                    target.loading -> ReaderLoadingBlock("Looking up…", horizontalPadding = 0.dp)
 
                     targetBlocks.isNotEmpty() -> LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight) + bottomInset),
+                            .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight)),
                         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.lg),
-                        // Definitions scroll on down behind the gesture bar.
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = bottomInset),
                     ) {
                         items(targetBlocks) { block ->
                             when (block) {
@@ -313,6 +286,28 @@ internal fun WordLookupSheetContent(
                         title = null,
                         text = "No definition found. It may be a name or a rare spelling.",
                         webQuery = "define ${target.word}",
+                    )
+                }
+            }
+            // Where else the selection can go, after what it means: the device's translator and the
+            // rest of this book. The sheet's bottom inset sits under this row.
+            Row(
+                modifier = Modifier.padding(top = YomuTheme.space.xxs, bottom = bottomInset),
+                horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+            ) {
+                ReaderChip(
+                    label = "Search in book",
+                    selected = false,
+                    role = Role.Button,
+                    leadingIcon = StackIcons.Search,
+                    onClick = { actions.onSearchInBook(state.query) },
+                )
+                if (state.canTranslate) {
+                    ReaderChip(
+                        label = "Translate",
+                        selected = false,
+                        role = Role.Button,
+                        onClick = { actions.onTranslate(state.query) },
                     )
                 }
             }
@@ -373,7 +368,7 @@ private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
     val wiki = state.wikipedia
     val stack = YomuTheme.stack
     when (val result = wiki?.result) {
-        null -> ReaderLoadingBlock("Looking up on Wikipedia…", horizontalPadding = 0.dp, modifier = Modifier.padding(bottom = LocalYomuSheetBottomInset.current))
+        null -> ReaderLoadingBlock("Looking up on Wikipedia…", horizontalPadding = 0.dp)
 
         WikipediaResult.Error -> LookupMessage(
             icon = StackIcons.CloudOff,
@@ -397,7 +392,7 @@ private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight) + LocalYomuSheetBottomInset.current)
+                    .heightIn(max = readerSheetListMaxHeight(LookupSheetReservedHeight))
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
             ) {
@@ -434,7 +429,7 @@ private fun WikipediaBody(state: WordLookupUiState, onRetry: () -> Unit) {
                     text = "From Wikipedia, the free encyclopedia · Text under CC BY-SA 4.0",
                     color = stack.faint,
                     style = StackType.Caption,
-                    modifier = Modifier.padding(bottom = YomuTheme.space.xs + LocalYomuSheetBottomInset.current),
+                    modifier = Modifier.padding(bottom = YomuTheme.space.xs),
                 )
             }
         }
@@ -471,7 +466,7 @@ private fun LookupMessage(
     val stack = YomuTheme.stack
     val activity = LocalActivity.current
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = YomuTheme.space.xxs, bottom = YomuTheme.space.xs + LocalYomuSheetBottomInset.current),
+        modifier = Modifier.fillMaxWidth().padding(top = YomuTheme.space.xxs, bottom = YomuTheme.space.xs),
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.md),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm)) {
