@@ -4,6 +4,7 @@ package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
@@ -44,7 +45,7 @@ fun Modifier.yomuPressable(
     onClick: () -> Unit,
     enabled: Boolean = true,
     onLongClick: (() -> Unit)? = null,
-    pressedScale: Float = 0.97f,
+    pressedScale: Float = 0.98f,
     role: Role? = Role.Button,
 ): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
@@ -53,7 +54,8 @@ fun Modifier.yomuPressable(
     val motionEnabled = yomuAnimationsEnabled()
     val scale = animateFloatAsState(
         targetValue = if (motionEnabled && pressed && enabled) pressedScale else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        // Stack: subtle and critically damped — the press never bounces.
+        animationSpec = PressSpring,
         label = "yomuPressScale",
     )
     val haptics = LocalHapticFeedback.current
@@ -93,6 +95,8 @@ fun Modifier.yomuPressable(
             onClick = onClick,
         )
 }
+
+private val PressSpring = spring<Float>(dampingRatio = 1f, stiffness = 1400f)
 
 /**
  * A soft scroll-edge fade: content dissolves toward the top and/or bottom edge instead of

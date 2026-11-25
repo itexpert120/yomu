@@ -21,14 +21,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailDefaults
 import androidx.compose.material3.WideNavigationRailItem
+import androidx.compose.material3.WideNavigationRailItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -100,10 +105,14 @@ fun YomuNavigationBar(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val stackRule = YomuTheme.stack.rule
+    // Stack bar A: a white sheet with a top rule; no tonal container.
     ShortNavigationBar(
         windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
-        modifier = modifier,
-        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier.drawBehind {
+            drawLine(stackRule, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
         content = content,
     )
 }
@@ -117,21 +126,28 @@ fun YomuNavigationBarItem(
     modifier: Modifier = Modifier,
     selectedIcon: ImageVector = icon,
 ) {
+    val stack = YomuTheme.stack
     ShortNavigationBarItem(
         selected = selected,
         onClick = onClick,
         modifier = modifier,
         icon = { Icon(if (selected) selectedIcon else icon, contentDescription = null) },
-        label = { YomuNavigationLabel(label, selected) },
+        label = { YomuNavigationLabel(label) },
+        // Active is ink with the filled icon; there is no indicator.
+        colors = ShortNavigationBarItemDefaults.colors(
+            selectedIconColor = stack.ink,
+            selectedTextColorTopIconPosition = stack.ink,
+            selectedTextColorStartIconPosition = stack.ink,
+            selectedIndicatorColor = Color.Transparent,
+            unselectedIconColor = stack.muted,
+            unselectedTextColor = stack.muted,
+        ),
     )
 }
 
 @Composable
-private fun YomuNavigationLabel(label: String, selected: Boolean) {
-    Text(
-        text = label,
-        style = if (selected) MaterialTheme.typography.labelMediumEmphasized else MaterialTheme.typography.labelMedium,
-    )
+private fun YomuNavigationLabel(label: String) {
+    Text(text = label, style = MaterialTheme.typography.labelMedium)
 }
 
 /** Material rail container with the same role mapping as the compact navigation bar. */
@@ -144,7 +160,7 @@ fun YomuNavigationRail(
         windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Vertical + WindowInsetsSides.Start),
         modifier = modifier,
         arrangement = Arrangement.Center,
-        colors = WideNavigationRailDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = WideNavigationRailDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
         content = content,
     )
 }
@@ -158,13 +174,22 @@ fun YomuNavigationRailItem(
     modifier: Modifier = Modifier,
     selectedIcon: ImageVector = icon,
 ) {
+    val stack = YomuTheme.stack
     WideNavigationRailItem(
         railExpanded = false,
         selected = selected,
         onClick = onClick,
         modifier = modifier,
         icon = { Icon(if (selected) selectedIcon else icon, contentDescription = null) },
-        label = { YomuNavigationLabel(label, selected) },
+        label = { YomuNavigationLabel(label) },
+        colors = WideNavigationRailItemDefaults.colors(
+            selectedIconColor = stack.ink,
+            selectedTextColorTopIconPosition = stack.ink,
+            selectedTextColorStartIconPosition = stack.ink,
+            selectedIndicatorColor = Color.Transparent,
+            unselectedIconColor = stack.muted,
+            unselectedTextColor = stack.muted,
+        ),
     )
 }
 

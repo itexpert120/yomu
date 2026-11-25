@@ -4,12 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
@@ -45,6 +40,7 @@ fun YomuTogglePill(
     enabled: Boolean = true,
 ) {
     val haptics = LocalHapticFeedback.current
+    val stack = YomuTheme.stack
     Switch(
         checked = checked,
         onCheckedChange = {
@@ -53,13 +49,15 @@ fun YomuTogglePill(
         },
         modifier = modifier,
         enabled = enabled,
-        thumbContent = {
-            Icon(
-                imageVector = if (checked) Icons.Rounded.Check else Icons.Rounded.Close,
-                contentDescription = null,
-                modifier = Modifier.size(SwitchDefaults.IconSize),
-            )
-        },
+        // Stack: on is an ink track with a white thumb, off the grey track; no thumb icons.
+        colors = SwitchDefaults.colors(
+            checkedTrackColor = stack.ink,
+            checkedThumbColor = stack.onInk,
+            checkedBorderColor = Color.Transparent,
+            uncheckedTrackColor = stack.track,
+            uncheckedThumbColor = Color.White,
+            uncheckedBorderColor = Color.Transparent,
+        ),
     )
 }
 
