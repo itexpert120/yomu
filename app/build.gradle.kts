@@ -27,6 +27,21 @@ android {
         }
     }
 
+    // Release signing comes from Gradle properties kept outside the repo (e.g. ~/.gradle/gradle.properties):
+    // OPEN_READER_RELEASE_STORE_FILE, _STORE_PASSWORD, _KEY_ALIAS, _KEY_PASSWORD. Without them the
+    // release build stays unsigned (Android Studio's "Generate Signed Bundle" still works).
+    val releaseStoreFile = providers.gradleProperty("OPEN_READER_RELEASE_STORE_FILE").orNull
+    if (releaseStoreFile != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = providers.gradleProperty("OPEN_READER_RELEASE_STORE_PASSWORD").orNull
+                keyAlias = providers.gradleProperty("OPEN_READER_RELEASE_KEY_ALIAS").orNull
+                keyPassword = providers.gradleProperty("OPEN_READER_RELEASE_KEY_PASSWORD").orNull
+            }
+        }
+    }
+
     buildTypes {
         // Sync backend (backend/convex). Debug builds use the Convex dev deployment, release (and
         // benchmark, which inherits it) the production one. URLs aren't secrets: access is gated by
@@ -37,6 +52,7 @@ android {
         }
         release {
             buildConfigField("String", "SYNC_CONVEX_URL", "\"https://colorful-kudu-684.convex.cloud\"")
+            if (releaseStoreFile != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
