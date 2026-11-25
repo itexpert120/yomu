@@ -239,23 +239,15 @@ fun BookDetailsScreen(
             }
 
             libraryBeside -> {
-                // The library beside the pane: a tap there closes the book, as on the tablet boards.
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClickLabel = "Close book",
-                            onClick = onBack,
-                        ),
-                )
+                // List-detail: the library beside the pane is live (navigation narrows it); this
+                // page draws only the pane, so touches outside it reach the library.
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .width(bookPaneWidth(windowWidth))
                         .fillMaxHeight()
                         .padding(top = statusTop)
+                        .bookPaneEdge()
                         .clip(RoundedCornerShape(topStart = SheetCorner))
                         .background(MaterialTheme.colorScheme.surface)
                         // The pane swallows taps so they never reach the close area beneath it.
