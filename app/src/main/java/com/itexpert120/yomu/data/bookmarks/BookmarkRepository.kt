@@ -21,4 +21,7 @@ interface BookmarkRepository {
     )
 
     suspend fun delete(id: String)
+
+    /** Puts a deleted [bookmark] back as it was (same id), e.g. for Undo. */
+    suspend fun restore(bookId: BookId, bookmark: ReaderBookmark): Unit = throw UnsupportedOperationException("restore")
 }

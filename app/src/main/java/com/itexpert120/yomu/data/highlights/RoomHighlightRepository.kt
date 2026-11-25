@@ -43,6 +43,20 @@ class RoomHighlightRepository @Inject constructor(
     override suspend fun setStyle(id: String, style: HighlightStyle) = dao.updateStyle(id, style.key, System.currentTimeMillis())
 
     override suspend fun delete(id: String) = dao.deleteById(id)
+
+    override suspend fun restore(bookId: BookId, highlight: ReaderHighlight) = dao.upsert(
+        HighlightEntity(
+            id = highlight.id,
+            bookId = bookId.value,
+            locatorJson = highlight.locatorJson,
+            text = highlight.text,
+            colorArgb = highlight.colorArgb,
+            createdAt = highlight.createdAt,
+            note = highlight.note,
+            style = highlight.style.key,
+            modifiedAt = highlight.modifiedAt,
+        ),
+    )
 }
 
 /** A note as stored: surrounding blank lines trimmed, and an empty note is no note. */
