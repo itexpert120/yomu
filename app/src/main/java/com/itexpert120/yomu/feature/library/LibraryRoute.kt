@@ -24,8 +24,9 @@ fun LibraryRoute(
     val viewModel: LibraryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Selection swaps the navigation bar for a floating toolbar; M3 never shows both at once.
-    LaunchedEffect(state.selectionMode) { onSelectionModeChange(state.selectionMode) }
+    // Selection swaps the navigation bar for its toolbar, and search takes the whole screen.
+    val barHidden = state.selectionMode || state.searchActive
+    LaunchedEffect(barHidden) { onSelectionModeChange(barHidden) }
     LaunchedEffect(state.isLoading, state.continueReading?.id) {
         if (!state.isLoading) viewModel.onLibraryShown(state.continueReading?.id)
     }
@@ -75,6 +76,8 @@ fun LibraryRoute(
         onSetTabHidden = viewModel::onSetTabHidden,
         onSetSelectedInCollection = viewModel::onSetSelectedInCollection,
         onSetSelectedStatus = viewModel::onSetSelectedStatus,
+        onRememberSearch = viewModel::onRememberSearch,
+        onForgetSearch = viewModel::onForgetSearch,
         onImport = {
             safLauncher.launch(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).apply {

@@ -3,9 +3,12 @@ package com.itexpert120.yomu.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -13,13 +16,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itexpert120.yomu.app.navigation.LocalYomuBottomChromeInset
+import com.itexpert120.yomu.app.navigation.YomuBottomChromeInset
 import com.itexpert120.yomu.app.navigation.YomuNavHost
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
 import com.itexpert120.yomu.core.designsystem.YomuNotice
@@ -48,6 +57,7 @@ fun YomuApp(
     val externalError by externalOpenViewModel.error.collectAsStateWithLifecycle()
     val readingWriteError by appViewModel.readingWriteError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val bottomChrome = remember { YomuBottomChromeInset() }
 
     val resolved = appearance.resolveThemeMode(systemDark)
     val dark = resolved != YomuThemeMode.Light
@@ -68,14 +78,20 @@ fun YomuApp(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         ) {
-            YomuNavHost(
-                appViewModel = appViewModel,
-                externalOpenViewModel = externalOpenViewModel,
-            )
+            // The top-level navigation bar reports how much of the bottom it covers, so app-wide
+            // notices float just above it (and drop to the gesture area while it's away).
+            CompositionLocalProvider(LocalYomuBottomChromeInset provides bottomChrome) {
+                YomuNavHost(
+                    appViewModel = appViewModel,
+                    externalOpenViewModel = externalOpenViewModel,
+                )
+            }
+            val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val noticeModifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .imePadding()
+                .padding(bottom = (bottomChrome.height - navBottom).coerceAtLeast(0.dp))
                 .widthIn(max = 568.dp)
                 .fillMaxWidth()
                 .padding(YomuTheme.space.md)
@@ -84,12 +100,15 @@ fun YomuApp(
                     text = data.visuals.message,
                     icon = StackIcons.Error,
                     tone = YomuNoticeTone.Floating,
+                    actionLabel = "Dismiss",
+                    onAction = data::dismiss,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
             readingWriteError?.let { message ->
                 YomuNotice(
                     text = message,
-                    modifier = noticeModifier,
+                    modifier = noticeModifier.semantics { liveRegion = LiveRegionMode.Polite },
                     icon = StackIcons.Error,
                     tone = YomuNoticeTone.Floating,
                     actionLabel = "Retry",

@@ -4,7 +4,9 @@ import androidx.compose.ui.graphics.Color
 import com.itexpert120.yomu.core.model.Book
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
+import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.data.collections.CatalogEntry
 import com.itexpert120.yomu.data.collections.LibraryTab
 import com.itexpert120.yomu.data.collections.LibraryTabKeys
@@ -27,6 +29,8 @@ data class LibraryBook(
     val coverColors: List<Color>,
     val lastOpenedAt: Long,
     val series: String?,
+    // The one shelf the book sits on (manual On hold / Dropped win over progress).
+    val shelf: ShelfStatus = ShelfStatus.of(progress, null),
 )
 
 fun Book.toLibraryBook(): LibraryBook = LibraryBook(
@@ -40,6 +44,7 @@ fun Book.toLibraryBook(): LibraryBook = LibraryBook(
     coverColors = coverPalette.map { Color(it) },
     lastOpenedAt = lastOpenedAt,
     series = series,
+    shelf = shelfStatus,
 )
 
 private fun String.lastNameKey(): String = trim().substringAfterLast(' ').uppercase()
@@ -65,7 +70,11 @@ data class LibraryUiState(
     val landscapeGridColumns: Int = LibraryPreferences.AUTO_COLUMNS,
     val searchActive: Boolean = false,
     val searchQuery: String = "",
+    // Newest first; shown while the search field is empty.
+    val recentSearches: List<String> = emptyList(),
     val isImporting: Boolean = false,
+    // Files in the running import (0 when unknown).
+    val importingCount: Int = 0,
     val importNotice: String? = null,
     val canRetryImport: Boolean = false,
     val selectionMode: Boolean = false,

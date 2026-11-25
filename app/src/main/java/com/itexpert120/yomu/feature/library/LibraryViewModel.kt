@@ -39,6 +39,8 @@ private data class SearchState(val active: Boolean = false, val query: String = 
 /** Transient import progress/result, surfaced as an inline notice. */
 private data class ImportState(
     val isImporting: Boolean = false,
+    // How many files the running import was given, for its progress notice.
+    val count: Int = 0,
     val notice: String? = null,
     val retryUris: List<Uri> = emptyList(),
 )
@@ -61,6 +63,7 @@ class LibraryViewModel @Inject constructor(
     private val libraryPrefs: LibraryPrefsRepository,
     private val importBooks: ImportBooksUseCase,
     private val readerPreloader: ReaderPreloader,
+    private val recentSearches: RecentLibrarySearches,
 ) : ViewModel() {
 
     private val search = MutableStateFlow(SearchState())
@@ -81,8 +84,8 @@ class LibraryViewModel @Inject constructor(
     private var projections = IdentityHashMap<Book, LibraryBook>()
 
     val state: StateFlow<LibraryUiState> =
-        combine(catalog.observe(), libraryPrefs.preferences, inputs) { d, prefs, i ->
-            buildState(d, prefs, i)
+        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches) { d, prefs, i, recent ->
+            buildState(d, prefs, i, recent)
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
@@ -239,7 +242,7 @@ class LibraryViewModel @Inject constructor(
     private fun performImport(uris: List<Uri>) {
         viewModelScope.launch {
             importNoticeDismissJob?.cancel()
-            importState.value = ImportState(isImporting = true)
+            importState.value = ImportState(isImporting = true, count = uris.size)
             try {
                 val summary = importBooks.import(uris)
                 showImportNotice(
@@ -274,6 +277,15 @@ class LibraryViewModel @Inject constructor(
 
     fun onSearchQueryChange(query: String) = search.update { it.copy(query = query) }
 
+    /** The query was submitted or led to a book: keep it among the recent searches. */
+    fun onRememberSearch(query: String) {
+        viewModelScope.launch { recentSearches.remember(query) }
+    }
+
+    fun onForgetSearch(query: String) {
+        viewModelScope.launch { recentSearches.forget(query) }
+    }
+
     fun onSortModeChange(mode: SortMode) = persist { libraryPrefs.setSortMode(mode) }
     fun onViewModeChange(mode: LibraryViewMode) = persist { libraryPrefs.setViewMode(mode) }
     fun onPortraitGridColumnsChange(columns: Int) = persist { libraryPrefs.setPortraitGridColumns(columns) }
@@ -292,7 +304,12 @@ class LibraryViewModel @Inject constructor(
         return next
     }
 
-    private fun buildState(catalog: Catalog, prefs: LibraryPreferences, inputs: LibraryInputs): LibraryUiState {
+    private fun buildState(
+        catalog: Catalog,
+        prefs: LibraryPreferences,
+        inputs: LibraryInputs,
+        recent: List<String>,
+    ): LibraryUiState {
         val entries = catalog.entries
         val projected = project(entries.map { it.book })
         val search = inputs.search
@@ -334,6 +351,8 @@ class LibraryViewModel @Inject constructor(
             searchActive = search.active,
             searchQuery = search.query,
             isImporting = inputs.import.isImporting,
+            importingCount = inputs.import.count,
+            recentSearches = recent,
             importNotice = inputs.import.notice,
             canRetryImport = inputs.import.retryUris.isNotEmpty(),
             selectionMode = selection.active,
@@ -349,10 +368,12 @@ class LibraryViewModel @Inject constructor(
 }
 
 private fun ImportSummary.toNotice(): String = buildList {
-    if (imported > 0) add("Imported $imported")
-    if (duplicates > 0) add("$duplicates duplicate${if (duplicates == 1) "" else "s"}")
-    if (failed > 0) add("$failed failed")
+    if (imported > 0) add("${books(imported)} added")
+    if (duplicates > 0) add("$duplicates already in your library")
+    if (failed > 0) add("$failed couldn't be opened")
 }.joinToString(" · ").ifEmpty { "Nothing imported" }
+
+private fun books(count: Int) = if (count == 1) "1 book" else "$count books"
 
 private const val IMPORT_NOTICE_DURATION_MS = 3_500L
 

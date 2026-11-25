@@ -15,7 +15,7 @@
 
     <style name="Theme.Yomu.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_open_reader_mark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_wordmark</item>
         <item name="yomuSplashMarkColor">@color/yomu_splash_mark</item>
         <item name="postSplashScreenTheme">@style/Theme.Yomu</item>
         <item name="android:windowLightStatusBar">@bool/yomu_splash_light_system_bars</item>
@@ -29,6 +29,7 @@
 
     <style name="Theme.Yomu.Starting.Light" parent="Theme.Yomu.Starting">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background_light</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_wordmark_light</item>
         <item name="yomuSplashMarkColor">@color/yomu_splash_mark_light</item>
         <item name="android:windowLightStatusBar">@bool/yomu_splash_force_light_system_bars</item>
         <item name="android:windowLightNavigationBar">@bool/yomu_splash_force_light_system_bars</item>
@@ -38,6 +39,7 @@
 
     <style name="Theme.Yomu.Starting.Dark" parent="Theme.Yomu.Starting">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background_dark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_wordmark_dark</item>
         <item name="yomuSplashMarkColor">@color/yomu_splash_mark_dark</item>
         <item name="android:windowLightStatusBar">@bool/yomu_splash_force_dark_system_bars</item>
         <item name="android:windowLightNavigationBar">@bool/yomu_splash_force_dark_system_bars</item>
@@ -47,6 +49,7 @@
 
     <style name="Theme.Yomu.Starting.Oled" parent="Theme.Yomu.Starting">
         <item name="windowSplashScreenBackground">@color/yomu_splash_background_oled</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_wordmark_dark</item>
         <item name="yomuSplashMarkColor">@color/yomu_splash_mark_oled</item>
         <item name="android:windowLightStatusBar">@bool/yomu_splash_force_dark_system_bars</item>
         <item name="android:windowLightNavigationBar">@bool/yomu_splash_force_dark_system_bars</item>
