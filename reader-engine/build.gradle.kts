@@ -3,8 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Open Reader's own EPUB engine: parsing, native text layout and the page view. No WebView and no
-// Readium; the app talks to it through a small Kotlin API.
+// Open Reader's own EPUB engine (v2 experiments): a native text-layout prototype and a foliate-js
+// WebView host. No Readium; the app talks to it through a small Kotlin API.
 android {
     namespace = "com.itexpert120.yomu.reader"
     compileSdk = 37
@@ -31,5 +31,6 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.webkit)
     testImplementation(libs.junit)
 }
