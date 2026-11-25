@@ -27,7 +27,6 @@ hiltNavigationCompose = "1.4.0"
 room = "2.8.5"
 coil = "3.6.3"
 swipe = "1.3.0"
-materialKolor = "5.0.1"
 spotless = "8.12.0"
 ktlint = "1.5.0"
 benchmark = "1.5.0"
@@ -87,7 +86,6 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 swipe = { module = "me.saket.swipe:swipe", version.ref = "swipe" }
-material-kolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
