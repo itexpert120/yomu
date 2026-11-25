@@ -3,6 +3,7 @@
 import './view.js'
 import { EPUB } from './epub.js'
 import { installPageTurns } from './yomu-turns.js'
+import { installStandIn } from './yomu-standin.js'
 
 const host = globalThis.YomuHost
 const t0 = performance.now()
@@ -86,7 +87,7 @@ const readerCSS = ({ lineHeight, justify, hyphenate }) => `
 
 const view = document.createElement('foliate-view')
 document.body.append(view)
-installPageTurns(view, report)
+const turns = installPageTurns(view, report)
 
 let firstPage = true
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -127,13 +128,25 @@ const open = async () => {
     report('script')
     const book = await new EPUB(await makeLoader()).init()
     report('book', { sections: book.sections.length })
+    if (params.has('trace')) for (const [i, sec] of book.sections.entries()) {
+        const load = sec.load
+        sec.load = async () => {
+            const t = performance.now()
+            const src = await load()
+            report('section-src', { index: i, took: Math.round(performance.now() - t) })
+            return src
+        }
+    }
     await view.open(book)
-    const renderer = view.renderer
-    renderer.setAttribute('flow', 'paginated')
-    // No 'animated': foliate jumps between pages and the app draws the turn.
-    renderer.setAttribute('gap', '6%')
-    renderer.setStyles(readerCSS({ lineHeight: 1.5, justify: true, hyphenate: true }))
+    const configure = renderer => {
+        renderer.setAttribute('flow', 'paginated')
+        // No 'animated': foliate jumps between pages and the app draws the turn.
+        renderer.setAttribute('gap', '6%')
+        renderer.setStyles(readerCSS({ lineHeight: 1.5, justify: true, hyphenate: true }))
+    }
+    configure(view.renderer)
     await view.goTo(section)
+    if (!params.has('nostandin')) turns.setStandIn(installStandIn(view, book, configure))
 }
 
 open().catch(e => report('error', { message: String(e?.stack ?? e) }))

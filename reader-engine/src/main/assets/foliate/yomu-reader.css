@@ -11,8 +11,12 @@ html, body {
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
 }
-foliate-view {
+foliate-view, .yomu-stand-in {
     display: block;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    inset: 0;
+}
+/* Behind the real view; seen only while a turn enters the chapter it holds. */
+.yomu-stand-in {
+    pointer-events: none;
 }
