@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
@@ -305,6 +306,7 @@ fun ReaderScreen(
     val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val fastEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val openingRise by rememberUpdatedState(LocalReaderOpeningRise.current)
     LaunchedEffect(reading.renderState) {
         when (val render = reading.renderState) {
             is ReaderRenderState.Transitioning -> {
@@ -314,7 +316,8 @@ fun ReaderScreen(
 
             !is ReaderRenderState.Ready -> {
                 reveal.snapTo(0f)
-                revealShift.snapTo(0f)
+                // The first page rises into place only when opened from a rising book sheet.
+                revealShift.snapTo(if (render is ReaderRenderState.Opening) openingRise / ChapterRevealTravel else 0f)
             }
 
             else -> if (!yomuAnimationsEnabled()) {
@@ -723,6 +726,12 @@ private val ReaderFailureMaxWidth = 420.dp
 
 /** How far a newly revealed chapter travels into place. */
 private val ChapterRevealTravel = 40.dp
+
+/**
+ * How far the book's first page rises into place as the reader opens: set by navigation while
+ * the book sheet turns into the reader (Stack's Resume motion); 0 elsewhere, where it fades in.
+ */
+val LocalReaderOpeningRise = compositionLocalOf { 0.dp }
 
 private fun applyReaderCutoutMode(window: android.view.Window) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
