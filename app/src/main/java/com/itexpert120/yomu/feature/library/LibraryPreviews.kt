@@ -92,7 +92,7 @@ private fun previewState(
         totalCount = if (empty) 0 else PreviewBooks.size,
         selectableCount = current.bookCount,
         pile = if (searchQuery == null && !empty) PreviewBooks.filter { it.progress in 0.01f..0.99f }.take(3) else emptyList(),
-        pileChapters = mapOf("0" to "Chapter VII", "1" to "Chapter 17"),
+        chapters = mapOf("0" to "Chapter VII", "1" to "Chapter 17", "2" to "Chapter 3: It Is a Truth"),
         books = current.books,
         viewMode = viewMode,
         searchActive = searchQuery != null,

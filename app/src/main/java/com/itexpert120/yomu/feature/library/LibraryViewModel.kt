@@ -118,10 +118,15 @@ class LibraryViewModel @Inject constructor(
     // Only touched from the serial state pipeline below.
     private var projections = IdentityHashMap<Book, LibraryBook>()
 
-    // The chapter each pile book is in, from its already-indexed contents (never parses an EPUB).
+    // The chapter each book in progress is in (the pile's "Chapter 7", a list row's "Ch. 7"), from
+    // its already-indexed contents (never parses an EPUB).
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val pileChapters = catalog.observe()
-        .map { catalog -> catalog.entries.map { it.book }.pileBooks().map { PilePosition(it.id, it.currentChapterId, it.currentHref) } }
+    private val chapters = catalog.observe()
+        .map { catalog ->
+            catalog.entries.map { it.book }
+                .filter { it.shelfStatus == ShelfStatus.Reading && (it.currentChapterId != null || it.currentHref != null) }
+                .map { PilePosition(it.id, it.currentChapterId, it.currentHref) }
+        }
         .distinctUntilChanged()
         .mapLatest { positions ->
             positions.mapNotNull { position ->
@@ -132,8 +137,8 @@ class LibraryViewModel @Inject constructor(
         .onStart { emit(emptyMap()) }
 
     val state: StateFlow<LibraryUiState> =
-        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches, pileChapters) { d, prefs, i, recent, chapters ->
-            buildState(d, prefs, i, recent).copy(pileChapters = chapters)
+        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches, chapters) { d, prefs, i, recent, chapters ->
+            buildState(d, prefs, i, recent).copy(chapters = chapters)
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())

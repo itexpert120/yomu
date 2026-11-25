@@ -234,8 +234,19 @@ fun LibraryScreen(
             content == ShelfContent.Shelf &&
             state.pile.isNotEmpty()
         // Beside the pile on a landscape phone the shelf is phone-sized, so it keeps phone density.
+        // Beside the pile a landscape phone has room for one row of covers: the Comfortable view
+        // shows them bare there (the board's landscape shelf), five across.
+        val shelfViewMode = if (sideBySide && state.viewMode == LibraryViewMode.ComfortableGrid) {
+            LibraryViewMode.CoverOnlyGrid
+        } else {
+            state.viewMode
+        }
         val grid = if (sideBySide) {
-            gridSpec(state.viewMode, PileLayout.Phone, 24.dp)
+            if (shelfViewMode == LibraryViewMode.CoverOnlyGrid) {
+                GridSpec(inset = 24.dp, top = 16.dp, rowGap = 14.dp, columnGap = 14.dp, autoMinSize = 88.dp)
+            } else {
+                gridSpec(shelfViewMode, PileLayout.Phone, 24.dp)
+            }
         } else {
             gridSpec(state.viewMode, pileLayout, gridInset)
         }
@@ -245,7 +256,7 @@ fun LibraryScreen(
             if (state.viewMode != LibraryViewMode.List) {
                 LibraryGrid(
                     state = gridStates.getOrPut(page.key) { LazyGridState() },
-                    viewMode = state.viewMode,
+                    viewMode = shelfViewMode,
                     columns = activeColumns,
                     spec = grid,
                     contentPadding = PaddingValues(
@@ -263,6 +274,7 @@ fun LibraryScreen(
             } else {
                 LibraryList(
                     state = listStates.getOrPut(page.key) { LazyListState() },
+                    chapters = state.chapters,
                     contentPadding = PaddingValues(start = listInset, end = listInset, top = 4.dp, bottom = contentBottom),
                     books = page.books,
                     selectedIds = state.selectedIds,
@@ -567,7 +579,7 @@ private fun StackedLibrary(
                 content == ShelfContent.Loading -> LibraryPileSkeleton(Modifier.padding(top = pileLayout.topGap), gutter = gutter)
                 showPile -> LibraryPile(
                     books = state.pile,
-                    chapters = state.pileChapters,
+                    chapters = state.chapters,
                     onOpenDetails = onOpenDetails,
                     onResume = onOpenReader,
                     layout = pileLayout,
@@ -665,7 +677,7 @@ private fun SideBySideLibrary(
         Box(Modifier.fillMaxHeight()) {
             LibraryPile(
                 books = state.pile,
-                chapters = state.pileChapters,
+                chapters = state.chapters,
                 onOpenDetails = onOpenDetails,
                 onResume = onOpenReader,
                 layout = PileLayout.Column,
