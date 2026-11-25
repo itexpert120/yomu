@@ -561,13 +561,27 @@ private class FoliateReaderSession(
         val cfi = locations?.optString("cfi")?.takeIf { it.isNotEmpty() }
         val fragment = locations?.optJSONArray("fragments")?.optString(0)?.takeIf { it.isNotEmpty() }
         val progression = locations?.optDouble("progression")?.takeUnless { it.isNaN() }
+        val text = quotedText(locator)
         return JSONObject().put("index", index).apply {
             when {
                 cfi != null -> put("cfi", cfi)
+                // A position the Readium engine wrote (bookmark, highlight, synced position) is
+                // found by its text, as Readium would.
+                text != null -> put("text", text).put("fraction", progression ?: 0.0)
                 fragment != null -> put("href", "${book.paths[index]}#$fragment")
                 else -> put("fraction", progression ?: 0.0)
             }
         }
+    }
+
+    /** A locator's `text` (before / highlight / after) when it quotes some, else null. */
+    private fun quotedText(locator: JSONObject): JSONObject? {
+        val text = locator.optJSONObject("text") ?: return null
+        val highlight = text.optString("highlight").takeIf { it.isNotBlank() } ?: return null
+        return JSONObject()
+            .put("before", text.optString("before"))
+            .put("highlight", highlight)
+            .put("after", text.optString("after"))
     }
 
     // endregion
@@ -749,15 +763,21 @@ private class FoliateReaderSession(
         if (_renderState.value is ReaderRenderState.Ready) drawHighlights()
     }
 
-    // Only highlights made in this engine carry a CFI to draw; Readium's are positioned by its
-    // own text search and aren't drawn here.
+    // Highlights made in this engine carry a CFI; the Readium engine's carry their text, which the
+    // page finds when their chapter loads.
     private fun drawHighlights() {
         val reader = reader ?: return
         val list = JSONArray()
         for (highlight in highlights) {
-            val cfi = runCatching { JSONObject(highlight.locatorJson).optJSONObject("locations")?.optString("cfi") }
-                .getOrNull()?.takeIf { it.isNotEmpty() } ?: continue
-            list.put(JSONObject().put("id", highlight.id).put("cfi", cfi).put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF)))
+            val locator = runCatching { JSONObject(highlight.locatorJson) }.getOrNull() ?: continue
+            val entry = JSONObject().put("id", highlight.id).put("color", "#%06X".format(highlight.colorArgb and 0xFFFFFF))
+            val cfi = locator.optJSONObject("locations")?.optString("cfi")?.takeIf { it.isNotEmpty() }
+            val text = quotedText(locator)
+            val index = book.indexOfHref(locator.optString("href"))
+            when {
+                cfi != null -> list.put(entry.put("cfi", cfi))
+                text != null && index >= 0 -> list.put(entry.put("index", index).put("text", text))
+            }
         }
         reader.setHighlights(list.toString())
     }

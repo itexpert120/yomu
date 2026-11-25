@@ -246,9 +246,29 @@ view.addEventListener('create-overlay', ({ detail: { index } }) => {
     }
 })
 
-/** Replaces the drawn highlights with [list]: [{ id, cfi, color }]. */
+// Highlights made under the Readium engine carry their text instead of a CFI. Each is found by its
+// text when its chapter loads, then drawn (and tapped) like any other, under the CFI found.
+let textHighlights = [] // [{ id, index, text: { before, highlight, after }, color }]
+const anchorTextHighlights = (index, doc) => textHighlights.flatMap(h => {
+    if (h.index !== index) return []
+    const range = findText(doc, h.text)
+    return range ? [{ id: h.id, cfi: view.getCFI(index, range), color: h.color, index }] : []
+})
+// 'load' comes before the chapter's overlay is made (create-overlay), which then draws these.
+view.addEventListener('load', ({ detail: { doc, index } }) => {
+    for (const h of anchorTextHighlights(index, doc)) highlights.set(h.cfi, h)
+})
+
+/**
+ * Replaces the drawn highlights with [list]: [{ id, cfi, color }], or [{ id, index, text, color }]
+ * for one positioned by its text.
+ */
 globalThis.yomuSetHighlights = list => {
-    const next = new Map(list.map(h => [h.cfi, h]))
+    textHighlights = list.filter(h => !h.cfi && h.text?.highlight)
+    const next = new Map(list.filter(h => h.cfi).map(h => [h.cfi, h]))
+    for (const { index, doc } of view.renderer?.getContents() ?? []) {
+        for (const h of anchorTextHighlights(index, doc)) next.set(h.cfi, h)
+    }
     for (const cfi of highlights.keys()) {
         if (!next.has(cfi)) view.deleteAnnotation({ value: cfi }).catch(() => {})
     }
@@ -717,9 +737,72 @@ globalThis.yomuApplySettings = next => {
     if (view.renderer) configure(view.renderer)
 }
 
+const commonPrefix = (a, b) => {
+    let n = 0
+    while (n < a.length && n < b.length && a[n] === b[n]) n++
+    return n
+}
+const commonSuffix = (a, b) => {
+    let n = 0
+    while (n < a.length && n < b.length && a[a.length - 1 - n] === b[b.length - 1 - n]) n++
+    return n
+}
+
+/**
+ * The range of [highlight] in [doc]'s text (as it stands, whitespace untouched, the way the Readium
+ * engine quotes it); where it occurs more than once, the one whose surroundings best match
+ * [before]/[after]. Null when it isn't there.
+ */
+const findText = (doc, { before = '', highlight, after = '' } = {}) => {
+    const body = doc?.body
+    if (!body || !highlight) return null
+    const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+    const nodes = []
+    const starts = []
+    const parts = []
+    let length = 0
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        nodes.push(node)
+        starts.push(length)
+        parts.push(node.nodeValue)
+        length += node.nodeValue.length
+    }
+    const text = parts.join('')
+    let best = -1
+    let bestScore = -1
+    for (let at = text.indexOf(highlight); at > -1; at = text.indexOf(highlight, at + 1)) {
+        const end = at + highlight.length
+        const score = commonSuffix(text.slice(Math.max(0, at - before.length), at), before)
+            + commonPrefix(text.slice(end, end + after.length), after)
+        if (score > bestScore) {
+            best = at
+            bestScore = score
+        }
+    }
+    if (best < 0) return null
+    // The text node holding offset [at]; [end] takes the node a range ending there ends in.
+    const locate = (at, end) => {
+        let i = nodes.length - 1
+        while (i > 0 && (end ? starts[i] >= at : starts[i] > at)) i--
+        return [nodes[i], at - starts[i]]
+    }
+    const range = doc.createRange()
+    range.setStart(...locate(best, false))
+    range.setEnd(...locate(best + highlight.length, true))
+    return range
+}
+
 const goTo = target => {
     if (target?.cfi) return view.goTo(target.cfi)
     if (target?.href) return view.goTo(target.href)
+    // A position quoted by its text (from the Readium engine): found once the chapter loads, else
+    // its progression.
+    if (target?.text?.highlight) {
+        return view.renderer.goTo({
+            index: target.index ?? 0,
+            anchor: doc => findText(doc, target.text) ?? target.fraction ?? 0,
+        })
+    }
     return view.renderer.goTo({ index: target?.index ?? 0, anchor: target?.fraction ?? 0 })
 }
 
