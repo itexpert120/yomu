@@ -52,5 +52,8 @@ export const installStandIn = (view, book, configure) => {
         return target != null && shown?.index === target && shown.anchor === (dir > 0 ? 0 : 1)
     }
 
-    return { follow, ready }
+    /** Settings changed: restyle the stand-in too; it keeps its place in its chapter. */
+    const refresh = () => configure(standIn)
+
+    return { follow, ready, refresh }
 }

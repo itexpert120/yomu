@@ -304,6 +304,16 @@ class ReadiumReaderEngine @Inject constructor(
         }
     }
 
+    /**
+     * The TOC and resource weights this parser derives for [filePath], for an engine that only
+     * renders (foliate) and must key chapters exactly as this one does.
+     */
+    suspend fun publicationCache(filePath: String): ReaderPublicationCache? {
+        val book = load(filePath, null) ?: return null
+        runCatching { book.publication.close() }
+        return book.cache
+    }
+
     private suspend fun openPublication(filePath: String): Publication? {
         val asset = assetRetriever.retrieve(File(filePath).toUrl(isDirectory = false))
             .getOrElse { return null }

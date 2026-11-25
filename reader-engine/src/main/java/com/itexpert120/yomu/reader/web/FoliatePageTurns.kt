@@ -58,6 +58,9 @@ internal class FoliatePageTurns(
     private val jumpWaiters = HashMap<Int, (Boolean) -> Unit>()
     private var nextJumpId = 1
 
+    /** Off in scrolled layout: no drags are taken and taps turn nothing. */
+    var enabled = true
+
     private val touchSlop = ViewConfiguration.get(container.context).scaledTouchSlop
     private val minFling = ViewConfiguration.get(container.context).scaledMinimumFlingVelocity
 
@@ -79,6 +82,7 @@ internal class FoliatePageTurns(
 
     /** A tap in the page's outer thirds, or a programmatic turn. */
     fun tap(dir: Int) {
+        if (!enabled) return
         if (turn != null) {
             queuedTap = dir
             return
@@ -223,6 +227,7 @@ internal class FoliatePageTurns(
     private var velocity: VelocityTracker? = null
 
     private fun onTouch(event: MotionEvent): Boolean {
+        if (!enabled && !dragging) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.x

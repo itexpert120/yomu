@@ -6,8 +6,10 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -18,25 +20,38 @@ import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileInputStream
 import java.util.zip.ZipFile
 
 /**
  * Hosts foliate-js in a WebView. Everything is served from one local origin: the engine's scripts
- * and the app's fonts from assets, and the book's files straight out of the EPUB, one at a time.
- * Nothing else loads — any other request gets an empty 404 — and the page's CSP lets only our own
- * scripts run, so scripts inside books never do.
+ * and the app's fonts from assets, user-installed fonts from [userFonts], and the book's files
+ * straight out of the EPUB, one at a time. Nothing else loads — any other request gets an empty
+ * 404 — and the page's CSP lets only our own scripts run, so scripts inside books never do.
+ *
+ * Page turns are drawn natively over the WebView (see [FoliatePageTurns]). [onEvent] gets the
+ * page's events (`relocate`, `first-page`, `center-tap`, …) on the main thread. [context] must be
+ * an Activity: turns snapshot its window.
  */
 class FoliateReader(
     context: Context,
     epub: File,
     private val onEvent: (name: String, json: String) -> Unit,
+    private val onRendererGone: () -> Unit = {},
 ) : AutoCloseable {
     private val zip = ZipFile(epub)
+
+    /** Font files outside the app's assets (user-installed fonts), served at `/userfonts/<name>`. */
+    @Volatile
+    var userFonts: Map<String, File> = emptyMap()
 
     private val assetLoader = WebViewAssetLoader.Builder()
         .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
         .addPathHandler("/book/", BookPathHandler(zip))
+        .addPathHandler("/userfonts/", UserFontPathHandler())
         .build()
+
+    private val main = Handler(Looper.getMainLooper())
 
     @SuppressLint("SetJavaScriptEnabled")
     val webView: WebView = WebView(context).apply {
@@ -55,6 +70,14 @@ class FoliateReader(
             // Links inside books never navigate the page away. Chapter frames (blob: documents this
             // page creates) must still load: this is called for frames too.
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = request.isForMainFrame || request.url.scheme != "blob"
+
+            // The system kills renderers freely in the background; unhandled, that takes the app
+            // down with it. The owner rebuilds the reader instead.
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                Log.w(TAG, "WebView renderer gone (crashed=${detail.didCrash()})")
+                main.post(onRendererGone)
+                return true
+            }
         }
         webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(message: ConsoleMessage): Boolean {
@@ -68,8 +91,6 @@ class FoliateReader(
     /** The reader's view: the WebView with the native page-turn layer over it. */
     val view: FrameLayout = FrameLayout(context).apply { addView(webView) }
 
-    private val main = Handler(Looper.getMainLooper())
-
     private val turns = FoliatePageTurns(
         container = view,
         webView = webView,
@@ -77,14 +98,33 @@ class FoliateReader(
         log = { Log.i(TAG, it) },
     )
 
-    /** Opens the book at spine [section]; [extra] goes to the page as query parameters. */
-    fun open(section: Int, extra: Map<String, String> = emptyMap()) {
+    /** Native page turns (paged layout). Off in scrolled layout, where the page scrolls itself. */
+    var pageTurns: Boolean
+        get() = turns.enabled
+        set(value) {
+            turns.enabled = value
+        }
+
+    /**
+     * Opens the book. [configJson] is `{ start, settings }` as described in yomu-reader.js; [extra]
+     * goes to the page as query parameters (debug switches).
+     */
+    fun open(configJson: String, extra: Map<String, String> = emptyMap()) {
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
-            .appendQueryParameter("section", section.toString())
+            .appendQueryParameter("config", configJson)
             .apply { extra.forEach { (key, value) -> appendQueryParameter(key, value) } }
             .build()
         webView.loadUrl(url.toString())
     }
+
+    /** Opens the book at the start of spine item [section], with the page's default settings. */
+    fun open(section: Int, extra: Map<String, String> = emptyMap()) = open("{\"start\":{\"index\":$section,\"fraction\":0}}", extra)
+
+    /** Restyles the page; [settingsJson] as `settings` in [open]. */
+    fun applySettings(settingsJson: String) = webView.evaluateJavascript("globalThis.yomuApplySettings?.($settingsJson)", null)
+
+    /** Jumps to [targetJson]: `{ cfi }`, `{ href }` or `{ index, fraction }`. */
+    fun goTo(targetJson: String) = webView.evaluateJavascript("globalThis.yomuGoTo?.($targetJson)", null)
 
     fun next() = turns.tap(1)
 
@@ -92,25 +132,32 @@ class FoliateReader(
 
     override fun close() {
         turns.release()
+        (view.parent as? ViewGroup)?.removeView(view)
         webView.destroy()
         zip.close()
     }
 
-    private fun onPageEvent(name: String, json: JSONObject) {
+    private fun onPageEvent(name: String, json: String) {
         when (name) {
-            "tap" -> turns.tap(json.getInt("dir"))
-            "jumped" -> turns.onJumped(json.getInt("id"), json.getBoolean("moved"))
-            "settled" -> turns.onSettled(json.getInt("seq"))
+            "tap" -> turns.tap(JSONObject(json).getInt("dir"))
+            "jumped" -> JSONObject(json).let { turns.onJumped(it.getInt("id"), it.getBoolean("moved")) }
+            "settled" -> turns.onSettled(JSONObject(json).getInt("seq"))
         }
+        onEvent(name, json)
     }
 
     private inner class Bridge {
         @JavascriptInterface
         fun event(name: String, json: String) {
-            when (name) {
-                "tap", "jumped", "settled" -> main.post { onPageEvent(name, JSONObject(json)) }
-            }
-            onEvent(name, json)
+            main.post { onPageEvent(name, json) }
+        }
+    }
+
+    /** Serves `/userfonts/<name>` from [userFonts]. */
+    private inner class UserFontPathHandler : WebViewAssetLoader.PathHandler {
+        override fun handle(path: String): WebResourceResponse {
+            val file = userFonts[path]?.takeIf { it.isFile } ?: return notFound()
+            return WebResourceResponse(mimeType(file.name), null, FileInputStream(file))
         }
     }
 

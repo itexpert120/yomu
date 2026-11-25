@@ -38,10 +38,14 @@ class FoliatePrototypeActivity : ComponentActivity() {
         // The reading page's colour, so the bars sit on the page.
         val page = if (night) Color.rgb(0x1A, 0x1E, 0x22) else Color.WHITE
         val root = FrameLayout(this).apply { setBackgroundColor(page) }
-        val reader = FoliateReader(this, File(path)) { name, json ->
-            Log.i(TAG, "$name +${SystemClock.elapsedRealtime() - started} ms $json")
-            if (name == "first-page") runOnUiThread { reportFullyDrawn() }
-        }.also { reader = it }
+        val reader = FoliateReader(
+            context = this,
+            epub = File(path),
+            onEvent = { name, json ->
+                Log.i(TAG, "$name +${SystemClock.elapsedRealtime() - started} ms $json")
+                if (name == "first-page") reportFullyDrawn()
+            },
+        ).also { reader = it }
         Log.i(TAG, "webview created +${SystemClock.elapsedRealtime() - started} ms")
         root.addView(reader.view)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
