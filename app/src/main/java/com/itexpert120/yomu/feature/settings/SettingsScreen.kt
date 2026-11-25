@@ -18,20 +18,29 @@ import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -102,101 +111,131 @@ private val VersionText = "Open Reader ${BuildConfig.VERSION_NAME} · build ${Bu
 @Composable
 internal fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
     val stack = YomuTheme.stack
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(stack.sheet)
-            .verticalScroll(rememberScrollState()),
-    ) {
+    val scroll = rememberScrollState()
+    var deskHeight by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier
-                .fillMaxWidth()
-                .background(stack.desk)
-                .statusBarsPadding(),
-        ) {
-            Text(
-                text = "Settings",
-                style = StackType.Display,
-                color = stack.ink,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
-            )
-            SyncStatusCard(
-                state = state.sync,
-                onClick = { actions.onOpenPane(SettingsPane.Sync) },
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
-            )
-        }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(stack.desk)
-                .background(stack.sheet, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
-            contentAlignment = Alignment.TopCenter,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(stack.sheet)
+                .verticalScroll(scroll),
         ) {
             Column(
                 Modifier
-                    .widthIn(max = YomuReadableMaxWidth)
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 4.dp, bottom = 24.dp),
+                    .onSizeChanged { deskHeight = it.height }
+                    .background(stack.desk)
+                    .statusBarsPadding(),
             ) {
-                SettingsSectionLabel("Appearance")
-                SettingsRow(
-                    title = "Theme",
-                    icon = StackIcons.Contrast,
-                    value = state.selectedTheme.stackLabel,
-                    chevron = true,
-                    onClick = actions.onOpenTheme,
-                )
-                PureBlackRow(state, actions, divider = false)
-
-                SettingsSectionLabel("Reading")
-                SettingsRow(
-                    title = "Reading defaults",
-                    subtitle = state.readerSettings.defaultsSummary(),
-                    icon = StackIcons.AutoStories,
-                    chevron = true,
-                    onClick = { actions.onOpenPane(SettingsPane.ReadingDefaults) },
-                )
-                SettingsRow(
-                    title = "Fonts",
-                    icon = StackIcons.MatchCase,
-                    value = fontsSummary(state.installedFontCount),
-                    chevron = true,
-                    divider = false,
-                    onClick = { actions.onOpenPane(SettingsPane.Fonts) },
-                )
-
-                SettingsSectionLabel("While reading")
-                Spacer(Modifier.height(8.dp))
-                ReaderChromeToggles(state.readerSettings, actions.onUpdateReaderSettings)
-
-                SettingsSectionLabel("Help")
-                SettingsRow(
-                    title = "Send feedback",
-                    icon = StackIcons.ChatBubble,
-                    chevron = true,
-                    onClick = actions.onSendFeedback,
-                )
-                SettingsRow(
-                    title = "About Open Reader",
-                    icon = StackIcons.Info,
-                    value = BuildConfig.VERSION_NAME,
-                    chevron = true,
-                    divider = false,
-                    onClick = { actions.onOpenPane(SettingsPane.About) },
-                )
                 Text(
-                    text = VersionText,
-                    style = StackType.Caption,
-                    color = stack.faint,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 14.dp),
+                    text = "Settings",
+                    style = StackType.Display,
+                    color = stack.ink,
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
+                )
+                SyncStatusCard(
+                    state = state.sync,
+                    onClick = { actions.onOpenPane(SettingsPane.Sync) },
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
                 )
             }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(stack.desk)
+                    .background(stack.sheet, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                Column(
+                    Modifier
+                        .widthIn(max = YomuReadableMaxWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 4.dp, bottom = 24.dp),
+                ) {
+                    SettingsSectionLabel("Appearance")
+                    SettingsRow(
+                        title = "Theme",
+                        icon = StackIcons.Contrast,
+                        value = state.selectedTheme.stackLabel,
+                        chevron = true,
+                        onClick = actions.onOpenTheme,
+                    )
+                    PureBlackRow(state, actions, divider = false)
+
+                    SettingsSectionLabel("Reading")
+                    SettingsRow(
+                        title = "Reading defaults",
+                        subtitle = state.readerSettings.defaultsSummary(),
+                        icon = StackIcons.AutoStories,
+                        chevron = true,
+                        onClick = { actions.onOpenPane(SettingsPane.ReadingDefaults) },
+                    )
+                    SettingsRow(
+                        title = "Fonts",
+                        icon = StackIcons.MatchCase,
+                        value = fontsSummary(state.installedFontCount),
+                        chevron = true,
+                        divider = false,
+                        onClick = { actions.onOpenPane(SettingsPane.Fonts) },
+                    )
+
+                    SettingsSectionLabel("While reading")
+                    Spacer(Modifier.height(8.dp))
+                    // The shared toggles draw as a grouped card with its own 16dp inset; on this sheet the
+                    // card is invisible, so widen it by that inset to line its rows up with the others.
+                    Box(
+                        Modifier.layout { measurable, constraints ->
+                            val inset = 16.dp.roundToPx()
+                            val wide = constraints.copy(
+                                minWidth = constraints.minWidth + inset * 2,
+                                maxWidth = constraints.maxWidth + inset * 2,
+                            )
+                            val placeable = measurable.measure(wide)
+                            layout(constraints.maxWidth, placeable.height) { placeable.place(-inset, 0) }
+                        },
+                    ) {
+                        ReaderChromeToggles(state.readerSettings, actions.onUpdateReaderSettings)
+                    }
+
+                    SettingsSectionLabel("Help")
+                    SettingsRow(
+                        title = "Send feedback",
+                        icon = StackIcons.ChatBubble,
+                        chevron = true,
+                        onClick = actions.onSendFeedback,
+                    )
+                    SettingsRow(
+                        title = "About Open Reader",
+                        icon = StackIcons.Info,
+                        value = BuildConfig.VERSION_NAME,
+                        chevron = true,
+                        divider = false,
+                        onClick = { actions.onOpenPane(SettingsPane.About) },
+                    )
+                    Text(
+                        text = VersionText,
+                        style = StackType.Caption,
+                        color = stack.faint,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp),
+                    )
+                }
+            }
         }
+        // Behind the status bar: the desk at rest, the sheet once the list has scrolled up under it.
+        // Read while drawing, so scrolling never recomposes the screen.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .windowInsetsTopHeight(WindowInsets.statusBars)
+                .drawBehind {
+                    val sheetUnder = scroll.value >= deskHeight - size.height
+                    drawRect(if (sheetUnder) stack.sheet else stack.desk)
+                },
+        )
     }
 }
 
