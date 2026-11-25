@@ -248,7 +248,7 @@ class ReadingExperienceTest {
             engine = FakeReaderEngine(ReaderOpenResult(session, ReaderPublicationCache())),
             scope = this,
             readAloud = readAloud,
-            lookupWord = { word ->
+            lookupWord = { word, _ ->
                 lookedUp += word
                 DictionaryResult.NotFound
             },
@@ -289,7 +289,7 @@ class ReadingExperienceTest {
             engine = engine,
             scope = this,
             selectionOutlet = outlet,
-            lookupWord = { word ->
+            lookupWord = { word, _ ->
                 lookedUp += word
                 DictionaryResult.NotFound
             },
@@ -687,7 +687,7 @@ class ReadingExperienceTest {
         settings: Flow<ReaderSettings> = MutableStateFlow(ReaderSettings()),
         persistSettings: suspend (ReaderSettings) -> Unit = {},
         resetSettings: suspend () -> Unit = {},
-        lookupWord: suspend (String) -> DictionaryResult = { DictionaryResult.NotFound },
+        lookupWord: suspend (String, String?) -> DictionaryResult = { _, _ -> DictionaryResult.NotFound },
         selectionOutlet: SelectionOutlet = FakeSelectionOutlet(),
         readAloud: ReadAloud = FakeReadAloud(),
         nowMillis: () -> Long = { 0L },

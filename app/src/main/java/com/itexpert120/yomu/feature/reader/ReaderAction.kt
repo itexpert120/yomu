@@ -48,6 +48,17 @@ sealed interface ReaderAction {
     data object SubmitSearch : ReaderAction
     data class JumpToSearchResult(val locatorJson: String) : ReaderAction
 
+    /** Go to page: a page-list entry's position. */
+    data class GoToPage(val locatorJson: String) : ReaderAction
+
+    /** "Back to p. 112": returns to where the reader was before the last jump. */
+    data object JumpBack : ReaderAction
+
+    // The picture viewer (a picture opened from the page).
+    data object CloseImageViewer : ReaderAction
+    data object SaveImage : ReaderAction
+    data object ShareImage : ReaderAction
+
     // Word lookup and footnote popups.
     data class LookUpWord(val word: String) : ReaderAction
     data object RetryLookup : ReaderAction
@@ -102,6 +113,7 @@ internal fun reduceChrome(state: ReaderChromeState, action: ReaderAction): Reade
     is ReaderAction.JumpToTocEntry,
     is ReaderAction.JumpToBookmark,
     is ReaderAction.JumpToHighlight,
+    is ReaderAction.GoToPage,
     -> state.copy(browseTab = null)
 
     ReaderAction.OpenSearch -> state.copy(
@@ -133,6 +145,11 @@ internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when 
     is ReaderAction.ChangeSearchQuery -> ReadingExperienceAction.ChangeSearchQuery(query)
     ReaderAction.SubmitSearch -> ReadingExperienceAction.SubmitSearch
     is ReaderAction.JumpToSearchResult -> navigateTo(locatorJson)
+    is ReaderAction.GoToPage -> navigateTo(locatorJson)
+    ReaderAction.JumpBack -> ReadingExperienceAction.JumpBack
+    ReaderAction.CloseImageViewer -> ReadingExperienceAction.CloseImage
+    ReaderAction.SaveImage -> ReadingExperienceAction.SaveImage
+    ReaderAction.ShareImage -> ReadingExperienceAction.ShareImage
     is ReaderAction.LookUpWord -> ReadingExperienceAction.LookUpWord(word)
     ReaderAction.RetryLookup -> ReadingExperienceAction.RetryLookup
     ReaderAction.LookupBack -> ReadingExperienceAction.LookupBack

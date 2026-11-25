@@ -64,6 +64,7 @@ import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
+import com.itexpert120.yomu.core.reader.ReaderPageTarget
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.ChapterReadState
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -104,6 +105,9 @@ internal fun ReaderBrowseSheet(
     chapterReads: ChapterReadState = ChapterReadState.Empty,
     chapterProgress: Double? = null,
     currentPercent: Int? = null,
+    // The book's printed pages, for Go to page at the top of Contents (empty: none).
+    pages: List<ReaderPageTarget> = emptyList(),
+    onGoToPage: (String) -> Unit = {},
 ) {
     YomuBottomSheet(
         visible = tab != null,
@@ -129,6 +133,8 @@ internal fun ReaderBrowseSheet(
             chapterReads = chapterReads,
             chapterProgress = chapterProgress,
             currentPercent = currentPercent,
+            pages = pages,
+            onGoToPage = onGoToPage,
         )
     }
 }
@@ -152,6 +158,8 @@ internal fun ReaderBrowseSheetContent(
     chapterReads: ChapterReadState = ChapterReadState.Empty,
     chapterProgress: Double? = null,
     currentPercent: Int? = null,
+    pages: List<ReaderPageTarget> = emptyList(),
+    onGoToPage: (String) -> Unit = {},
 ) {
     val tabs = BrowseTab.entries
     val pager = rememberPagerState(initialPage = current.ordinal) { tabs.size }
@@ -189,6 +197,8 @@ internal fun ReaderBrowseSheetContent(
                     chapterProgress = chapterProgress,
                     currentPercent = currentPercent,
                     onJump = onJumpToLocator,
+                    pages = pages,
+                    onGoToPage = onGoToPage,
                 )
 
                 BrowseTab.Bookmarks -> BookmarksPage(bookmarks, toc, onJumpToBookmark, onDeleteBookmark)
@@ -210,6 +220,8 @@ private fun ContentsPage(
     chapterProgress: Double?,
     currentPercent: Int?,
     onJump: (String) -> Unit,
+    pages: List<ReaderPageTarget> = emptyList(),
+    onGoToPage: (String) -> Unit = {},
 ) {
     val outline = remember(toc, currentHref) { contentsOutline(toc, currentHref) }
     when {
@@ -245,6 +257,13 @@ private fun ContentsPage(
         revealCurrent = false
     }
     Column(Modifier.fillMaxSize()) {
+        if (pages.isNotEmpty()) {
+            ReaderGoToPageField(
+                pages = pages,
+                onGoToPage = onGoToPage,
+                modifier = Modifier.padding(start = YomuTheme.space.lg, end = YomuTheme.space.lg, top = YomuTheme.space.sm, bottom = YomuTheme.space.xxs),
+            )
+        }
         if (outline.chapterCount >= ContentsFilterThreshold) {
             ReaderFilterField(
                 query = query,
