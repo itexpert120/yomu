@@ -52,3 +52,14 @@ foliate-view, .yomu-stand-in {
 .yomu-stand-in {
     pointer-events: none;
 }
+/* A two-page spread's gutter rule (see yomu-reader.js). */
+#yomu-gutter {
+    display: none;
+    position: fixed;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    margin-left: -0.5px;
+    pointer-events: none;
+}

@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -84,8 +85,10 @@ import java.util.Locale
 import kotlin.math.ceil
 
 /**
- * Stack's reader top bar, in the page colour: back · book title over the chapter · bookmark, on a
- * hairline rule. Its full measured height (status area included) is reported for the page inset.
+ * Stack's reader top bar, in the sheet colour, on a hairline rule: back · titles · bookmark. On a
+ * phone the titles are the chapter's label over its name ("Chapter VII" / "The Piper at the Gates
+ * of Dawn"); on a wide window, where the bar spans a spread, the book over the whole chapter title.
+ * Its full measured height (status area included) is reported for the page inset.
  */
 @Composable
 internal fun ReaderTopBar(
@@ -98,13 +101,22 @@ internal fun ReaderTopBar(
     modifier: Modifier = Modifier,
     bookTitle: String? = null,
 ) {
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val wide = YomuWidthClass.fromWidth(windowWidth).isWide
+    val chapterTitle = chapter.ifBlank { "Reading" }
+    val book = bookTitle?.takeIf { it.isNotBlank() }
+    val (caption, title) = if (wide) {
+        (if (book != null) chapterTitle else null) to (book ?: chapterTitle)
+    } else {
+        chapterTitleParts(chapterTitle)?.let { (label, name) -> label to name } ?: (book to chapterTitle)
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .onSizeChanged { onContentHeight(it.height) }
-            .background(colors.page),
+            .background(colors.panel),
     ) {
-        // The navigator draws edge-to-edge: keep the cutout/status area solid page colour.
+        // The navigator draws edge-to-edge: keep the cutout/status area solid bar colour.
         Spacer(
             Modifier
                 .fillMaxWidth()
@@ -113,8 +125,12 @@ internal fun ReaderTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = ReaderTopBarHeight)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .height(if (wide) ReaderTopBarWideHeight else ReaderTopBarHeight)
+                .padding(
+                    start = if (wide) 16.dp else 6.dp,
+                    end = if (wide) 16.dp else 6.dp,
+                    top = if (wide) 0.dp else 14.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
@@ -131,22 +147,22 @@ internal fun ReaderTopBar(
                     .semantics(mergeDescendants = true) { heading() },
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                bookTitle?.takeIf { it.isNotBlank() }?.let { title ->
-                    Text(
-                        text = title,
-                        color = colors.muted,
-                        style = StackType.Caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                val captionText: @Composable () -> Unit = {
+                    caption?.let {
+                        Text(text = it, color = colors.muted, style = StackType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-                Text(
-                    text = chapter.ifBlank { "Reading" },
-                    color = colors.ink,
-                    style = StackType.Heading,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                val titleText: @Composable () -> Unit = {
+                    Text(text = title, color = colors.ink, style = StackType.Heading, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                // Phone: the label above the name. Wide: the book above the chapter.
+                if (wide) {
+                    titleText()
+                    captionText()
+                } else {
+                    captionText()
+                    titleText()
+                }
             }
             IconToggleButton(
                 checked = isBookmarked,
@@ -167,7 +183,19 @@ internal fun ReaderTopBar(
     }
 }
 
-private val ReaderTopBarHeight = 56.dp
+// Below the status area: 14 of air over a 62 row on a phone; a 64 row across a spread.
+private val ReaderTopBarHeight = 76.dp
+private val ReaderTopBarWideHeight = 64.dp
+
+private val ChapterLabel = Regex(
+    """^((?:chapter|part|book|volume|vol\.|section|act|episode)\s+[\p{L}\p{N}.]+)\s*[:.\-–—]\s*(.+)$""",
+    RegexOption.IGNORE_CASE,
+)
+
+/** "Chapter 3: Melissa" as ("Chapter 3", "Melissa"); null when the title has no such label. */
+internal fun chapterTitleParts(title: String): Pair<String, String>? = ChapterLabel.matchEntire(title.trim())?.let {
+    it.groupValues[1] to it.groupValues[2].trim()
+}?.takeIf { it.second.isNotEmpty() }
 
 /** "3 pages left in chapter" (paged) or "12% of chapter left" (scroll); null while unknown. */
 internal fun chapterRemainingLabel(layout: ReaderLayout, pagesLeft: Int?, chapterProgression: Double): String? = when (layout) {
@@ -214,6 +242,8 @@ internal fun ReaderFooter(
     deviceStatusActive: Boolean = true,
 ) {
     val colors = settings.chromeColors()
+    // A step quieter than the captions: the footer stays out of the reading.
+    val footerInk = lerp(colors.muted, colors.page, if (colors.isLight) 0.1f else 0.32f)
     val showBattery = settings.footerShowBattery && showDeviceStatus
     val showClock = settings.footerShowClock && showDeviceStatus
     Row(
@@ -222,19 +252,19 @@ internal fun ReaderFooter(
             .onSizeChanged { onContentHeight(it.height) }
             .background(colors.page)
             // Extra bottom padding keeps the row clear of the device's rounded corners.
-            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp),
+            .padding(start = 26.dp, end = 26.dp, top = 4.dp, bottom = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (showBattery) FooterBattery(color = colors.muted, background = colors.page, active = deviceStatusActive)
-        if (showClock) FooterClock(color = colors.muted, active = deviceStatusActive)
+        if (showBattery) FooterBattery(color = footerInk, background = colors.page, active = deviceStatusActive)
+        if (showClock) FooterClock(color = footerInk, active = deviceStatusActive)
         Spacer(Modifier.weight(1f))
         val remaining = footerRemainingLabel(settings.layout, chapterPagesLeft, chapterProgression)
         if (settings.footerShowPagesLeft && remaining != null) {
-            Text(text = remaining, color = colors.muted, style = ReaderFigures, maxLines = 1)
+            Text(text = remaining, color = footerInk, style = ReaderFigures, maxLines = 1)
         }
         if (settings.footerShowProgress) {
-            Text(text = progressPercent?.let { "$it%" } ?: "", color = colors.muted, style = ReaderFigures)
+            Text(text = progressPercent?.let { "$it%" } ?: "", color = footerInk, style = ReaderFigures)
         }
     }
 }
@@ -307,10 +337,10 @@ internal fun BoxScope.ReaderControlsPanel(
                     // Swallow taps so they never reach the page under the panel.
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(
-                        start = 24.dp,
-                        end = 24.dp,
+                        start = if (floating) 28.dp else 24.dp,
+                        end = if (floating) 28.dp else 24.dp,
                         top = if (floating) 18.dp else 20.dp,
-                        bottom = if (floating) 8.dp else navInset + 8.dp,
+                        bottom = if (floating) 8.dp else maxOf(navInset + 8.dp, 46.dp),
                     ),
             ) {
                 ReaderPositionControl(
@@ -320,7 +350,7 @@ internal fun BoxScope.ReaderControlsPanel(
                     chapterProgression = chapterProgression,
                     onSeekChapter = onSeekChapter,
                 )
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = if (floating) 6.dp else 10.dp)) {
                     ReaderPanelAction("Contents", onContents, colors.muted) {
                         Icon(StackIcons.Toc, contentDescription = null, tint = colors.muted)
                     }

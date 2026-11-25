@@ -183,13 +183,22 @@ const columns = () => {
     return r && !r.scrolled ? Math.max(1, r.heads?.length ?? 1) : 1
 }
 
+// The hairline down a spread's gutter, like a book's fold.
+const gutter = document.createElement('div')
+gutter.id = 'yomu-gutter'
+const showGutter = () => {
+    const ink = settings.colors?.ink ?? 'gray'
+    gutter.style.background = `color-mix(in srgb, ${ink} 10%, transparent)`
+    gutter.style.display = columns() === 2 ? 'block' : 'none'
+}
+
 const applyPageColor = () => {
     document.documentElement.style.background = settings.colors?.page ?? ''
 }
 applyPageColor()
 
 const view = document.createElement('foliate-view')
-document.body.append(view)
+document.body.append(view, gutter)
 
 let firstPage = true
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -265,6 +274,7 @@ const reportLocation = detail => {
     // Counted in pages, not screens: a spread shows two, and `page` is the last one in view, so
     // what's left is what's after this screen.
     const perScreen = columns()
+    showGutter()
     report('relocate', {
         index: detail.section?.current,
         fraction: Math.min(1, Math.max(0, fraction)),
