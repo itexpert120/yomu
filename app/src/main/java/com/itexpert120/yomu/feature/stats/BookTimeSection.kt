@@ -2,21 +2,13 @@ package com.itexpert120.yomu.feature.stats
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,71 +20,69 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
-import com.itexpert120.yomu.core.designsystem.YomuProgressBar
-import com.itexpert120.yomu.core.designsystem.YomuSettingContainer
-import com.itexpert120.yomu.core.designsystem.YomuSettingList
-import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
+import androidx.compose.ui.unit.sp
+import com.itexpert120.yomu.core.designsystem.StackType
+import com.itexpert120.yomu.core.designsystem.YomuButton
+import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
-import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
-import com.itexpert120.yomu.core.designsystem.yomuSettingPosition
 import com.itexpert120.yomu.core.model.BookReadingTime
-import java.io.File
 import kotlin.math.roundToInt
 
 private const val CollapsedBookCount = 5
 
 /**
- * Lifetime reading time for every book, longest first, each with its share of the collective
- * total. The list starts with the top few and expands in place.
+ * Lifetime reading time for every book, longest first: its cover, its share of all reading as a
+ * thin ink bar, and the time. The list starts with the top few and expands in place.
  */
 @Composable
 internal fun BookTimeSection(
     books: List<BookReadingTime>,
-    formatTime: (Long) -> String,
+    modifier: Modifier = Modifier,
+    thumbWidth: Dp = 44.dp,
 ) {
-    if (books.isEmpty()) return
-    val total = books.sumOf { it.seconds }.coerceAtLeast(1L)
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val visible = if (expanded) books else books.take(CollapsedBookCount)
-
-    Column(
-        modifier = Modifier.fillMaxWidth().animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-    ) {
-        YomuSettingList {
+    Column(modifier.fillMaxWidth()) {
+        val total = books.sumOf { it.seconds }
+        SectionHeading(
+            text = "Time by book",
+            trailing = if (books.isEmpty()) null else "${plural(books.size, "book")} · ${formatReadingTime(total)}",
+        )
+        if (books.isEmpty()) {
+            SectionEmpty("Time you spend in each book will add up here.")
+            return@Column
+        }
+        var expanded by rememberSaveable { mutableStateOf(false) }
+        val visible = if (expanded) books else books.take(CollapsedBookCount)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = YomuTheme.space.xxs)
+                .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
+        ) {
             visible.forEachIndexed { index, book ->
                 BookTimeRow(
                     book = book,
-                    share = book.seconds.toFloat() / total,
-                    time = formatTime(book.seconds),
-                    rank = index + 1,
-                    position = yomuSettingPosition(index, visible.size),
+                    share = book.seconds.toFloat() / total.coerceAtLeast(1L),
+                    thumbWidth = thumbWidth,
+                    last = index == visible.lastIndex,
                 )
             }
         }
         if (books.size > CollapsedBookCount) {
-            FilledTonalButton(
+            YomuButton(
+                text = if (expanded) "Show fewer" else "Show all ${books.size} books",
                 onClick = { expanded = !expanded },
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                Icon(
-                    imageVector = if (expanded) StackIcons.ExpandLess else StackIcons.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(if (expanded) "Show fewer" else "Show all ${books.size} books")
-            }
+                emphasis = YomuButtonEmphasis.Ghost,
+                modifier = Modifier.padding(top = YomuTheme.space.xxs),
+            )
         }
     }
 }
@@ -101,89 +91,72 @@ internal fun BookTimeSection(
 private fun BookTimeRow(
     book: BookReadingTime,
     share: Float,
-    time: String,
-    rank: Int,
-    position: com.itexpert120.yomu.core.designsystem.YomuSettingPosition,
+    thumbWidth: Dp,
+    last: Boolean,
 ) {
+    val stack = YomuTheme.stack
+    val time = formatReadingTime(book.seconds)
     val percent = (share * 100).roundToInt()
-    // Bars grow in from zero the first time the row appears — a small cue that these are shares.
+    // Bars grow in from zero the first time the row appears, a small cue that these are shares.
     val animatedShare = remember { Animatable(if (yomuAnimationsEnabled()) 0f else share) }
     val growSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
     LaunchedEffect(share) { animatedShare.animateTo(share, growSpec) }
 
-    YomuSettingContainer(
-        position = position,
-        modifier = Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "${book.title}, $time, $percent percent of your reading"
-        },
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .ruleBelow(show = !last)
+            .padding(vertical = 10.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${book.title}, ${speakReadingTime(book.seconds)}, $percent percent of your reading"
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
-        ) {
+        CoverThumb(path = book.coverImagePath, title = book.title, width = thumbWidth)
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = book.title,
+                style = StackType.Body,
+                color = stack.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = listOfNotNull(book.author, plural(book.sessionCount, "session")).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = stack.muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp),
+            )
+            // Track and fill drawn in one pass; the animated share is read only while drawing.
             Box(
-                modifier = Modifier
-                    .width(40.dp)
-                    .aspectRatio(YomuBookCoverAspectRatio)
-                    .clip(YomuShapeTokens.cover)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (book.coverImagePath != null) {
-                    AsyncImage(
-                        model = File(book.coverImagePath),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Text(
-                        text = "$rank",
-                        style = MaterialTheme.typography.titleMediumEmphasized,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.bodyLargeEmphasized,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = listOfNotNull(
-                        book.author,
-                        "${book.sessionCount} ${if (book.sessionCount == 1) "session" else "sessions"}",
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = time,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "$percent%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .drawBehind {
+                        val radius = CornerRadius(size.height / 2f)
+                        drawRoundRect(stack.rule, cornerRadius = radius)
+                        val fill = size.width * animatedShare.value.coerceIn(0f, 1f)
+                        if (fill > 0f) drawRoundRect(stack.ink, size = Size(fill.coerceAtLeast(size.height), size.height), cornerRadius = radius)
+                    },
+            )
         }
-        ShareBar(animatedShare)
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = time,
+                style = StackType.BodySmall.copy(fontSize = 14.sp, fontFeatureSettings = "tnum"),
+                color = stack.muted,
+                maxLines = 1,
+            )
+            Text(
+                text = "$percent%",
+                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                color = stack.faint,
+                maxLines = 1,
+            )
+        }
     }
-}
-
-/** Kept separate so the grow-in animation only recomposes the bar, not the whole row. */
-@Composable
-private fun ShareBar(share: Animatable<Float, AnimationVector1D>) {
-    YomuProgressBar(progress = share.value)
 }

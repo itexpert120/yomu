@@ -9,6 +9,7 @@ import com.itexpert120.yomu.core.database.ReadingWriteReceipt
 import com.itexpert120.yomu.core.database.YomuDatabase
 import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.BookReadingTime
+import com.itexpert120.yomu.core.model.DailyReading
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.ReadingSessionItem
 import com.itexpert120.yomu.core.model.ReadingStats
@@ -189,6 +190,19 @@ class StatsRepository internal constructor(
             secondsLast30Days = day.secondsLast30Days,
         )
     }
+
+    /**
+     * Seconds read on each day from the first of the month eleven months back up to today, oldest
+     * first and zero-filled, for the dashboard's week / month / twelve-month charts.
+     */
+    val dailyReading: Flow<List<DailyReading>> = combine(dao.observeReadingDays(), dates) { days, today ->
+        val byDate = days.associate { it.date to it.seconds }
+        val start = today.withDayOfMonth(1).minusMonths(11)
+        generateSequence(start) { it.plusDays(1) }
+            .takeWhile { !it.isAfter(today) }
+            .map { date -> date.toString().let { DailyReading(it, byDate[it] ?: 0L) } }
+            .toList()
+    }.distinctUntilChanged()
 
     /** Lifetime reading time per book, longest first, joined to current library metadata. */
     val bookReadingTimes: Flow<List<BookReadingTime>> = combine(
