@@ -24,8 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -223,7 +222,7 @@ private fun PhoneStats(
     val stack = YomuTheme.stack
     val density = LocalDensity.current
     var deskHeight by remember { mutableIntStateOf(0) }
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val navBottom = if (LocalYomuNavigationBarShown.current) {
         0.dp
     } else {
@@ -267,7 +266,7 @@ private fun PhoneStats(
                 Modifier
                     .fillMaxWidth()
                     .onSizeChanged { deskHeight = it.height }
-                    .statusBarsPadding(),
+                    .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
             ) {
                 StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = gutter, collapse = headerProgress)
                 PeriodOverview(pager, wide = false, gutter = gutter)
@@ -455,7 +454,7 @@ private fun WidePanes(
                     Modifier
                         .fillMaxSize()
                         .then(if (dashboardScroll != null) Modifier.verticalScroll(dashboardScroll) else Modifier)
-                        .statusBarsPadding()
+                        .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
                         .padding(horizontal = YomuTheme.space.xl),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -468,7 +467,7 @@ private fun WidePanes(
                 Modifier
                     .width(sideWidth)
                     .fillMaxHeight()
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
                     .clip(SideSheetShape)
                     .background(YomuTheme.stack.sheet)
                     // Rows dissolve at the sheet's top edge once they scroll under it.
@@ -488,7 +487,7 @@ private fun StatsStatePane(onBack: (() -> Unit)?, gutter: Dp, content: @Composab
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .statusBarsPadding(),
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
     ) {
         StatsTitle(onBack = onBack, period = null, onPeriodChange = {}, gutter = gutter)
         Box(
@@ -583,7 +582,7 @@ private fun PhoneSkeleton(
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .clearAndSetSemantics { },
     ) {
         StatsTitle(onBack = onBack, period = period, onPeriodChange = onPeriodChange, gutter = gutter)
