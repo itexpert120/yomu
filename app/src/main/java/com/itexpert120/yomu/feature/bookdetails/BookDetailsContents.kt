@@ -29,11 +29,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +71,7 @@ import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
+import kotlinx.coroutines.delay
 import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
 
@@ -76,6 +80,9 @@ private val TocNumberWidth = 34.dp
 
 /** Deeper TOC levels share the last indent so long hierarchies keep a readable line length. */
 private const val TocMaxIndentLevels = 4
+
+// How long a contents load may take before its "Building contents…" note shows.
+private const val TocBuildingGraceMillis = 400L
 
 private const val TocRowContentType = "tocRow"
 
@@ -525,11 +532,26 @@ private fun tocSwipeAction(
     isUndo = isUndo,
 )
 
-/** First open of a long book: a thin line while the contents are built, and a word on why. */
+/**
+ * First open of a long book: a thin line while the contents are built, and a word on why. It keeps
+ * its space but stays blank for [TocBuildingGraceMillis], then fades in, so contents that arrive
+ * within a moment (most books, read from storage) never flash a loading state.
+ */
 @Composable
 private fun TocBuilding(gutter: Dp) {
     val stack = YomuTheme.stack
-    Column(Modifier.fillMaxWidth().padding(horizontal = gutter, vertical = 12.dp)) {
+    var waited by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(TocBuildingGraceMillis)
+        waited = true
+    }
+    val shown = animateFloatAsState(if (waited) 1f else 0f, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "tocBuilding")
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = shown.value }
+            .padding(horizontal = gutter, vertical = 12.dp),
+    ) {
         LinearProgressIndicator(
             modifier = Modifier.fillMaxWidth().height(2.dp),
             color = stack.ink,
