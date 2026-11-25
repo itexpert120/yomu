@@ -22,7 +22,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,14 +45,6 @@ internal val ThemePreference.stackLabel: String
 
 /** Light, Dark, Auto: the order the choices read in. */
 internal val ThemeOrder = listOf(ThemePreference.Light, ThemePreference.Dark, ThemePreference.System)
-
-/** The icon beside each theme choice in Settings' inline segmented control. */
-internal val ThemePreference.icon: ImageVector
-    get() = when (this) {
-        ThemePreference.Light -> StackIcons.LightMode
-        ThemePreference.Dark -> StackIcons.DarkMode
-        ThemePreference.System -> StackIcons.BrightnessAuto
-    }
 
 /** Pure black applies only once the app is dark, so it's offered with Dark and Auto. */
 internal fun ThemePreference.allowsPureBlack(): Boolean = this != ThemePreference.Light

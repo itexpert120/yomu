@@ -193,7 +193,8 @@ private fun StatsTitle(
     period: StatsPeriod?,
     onPeriodChange: (StatsPeriod) -> Unit,
     gutter: Dp,
-    endPadding: Dp = gutter,
+    // The board ends the period choice 16dp in on a phone.
+    endPadding: Dp = if (gutter > 0.dp) 16.dp else 0.dp,
     collapse: (() -> Float)? = null,
 ) {
     if (onBack != null) {
@@ -302,7 +303,7 @@ private fun PhoneStats(
                 title = "Statistics",
                 progress = headerProgress,
                 gutter = gutter,
-                endPadding = gutter,
+                endPadding = 16.dp,
                 actions = if (onBack == null) {
                     { PeriodPicker(selected = period, onSelect = onPeriodChange) }
                 } else {

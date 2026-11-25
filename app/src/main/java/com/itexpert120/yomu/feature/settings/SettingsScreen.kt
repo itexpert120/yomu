@@ -99,6 +99,12 @@ private val ReaderThemeMode.stackName: String
         ReaderThemeMode.Custom -> "Custom"
     }
 
+/** "Lora · Paper": the font and page theme every book starts with (the phone list's value). */
+internal fun ReaderSettings.defaultsShortSummary(): String = listOf(
+    customFont?.family ?: font.displayName,
+    theme.stackName,
+).joinToString(" · ")
+
 /** "Lora · 100% · Paper": the font, size and page theme every book starts with. */
 internal fun ReaderSettings.defaultsSummary(): String = listOf(
     customFont?.family ?: font.displayName,
@@ -159,7 +165,9 @@ internal fun SettingsScreen(
                 SyncStatusCard(
                     state = state.sync,
                     onClick = { actions.onOpenPane(SettingsPane.Sync) },
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
+                    // The board's card sits 18dp under the 38dp title (8 under the shared 48dp row) and
+                    // the sheet 4dp under the card.
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
                 )
             }
             Box(
@@ -189,7 +197,7 @@ internal fun SettingsScreen(
                     SettingsSectionLabel("Reading")
                     SettingsRow(
                         title = "Reading defaults",
-                        subtitle = state.readerSettings.defaultsSummary(),
+                        value = state.readerSettings.defaultsShortSummary(),
                         icon = StackIcons.AutoStories,
                         chevron = true,
                         onClick = { actions.onOpenPane(SettingsPane.ReadingDefaults) },
@@ -234,53 +242,31 @@ internal fun SettingsScreen(
     }
 }
 
-/** Theme as an inline choice: the row's name, then Light / Dark / Auto as one segmented control. */
+/** Theme as an inline choice on its row: Light / Dark / Auto as one compact segmented control. */
 @Composable
 private fun ThemeChoiceRow(selected: ThemePreference, onSelect: (ThemePreference) -> Unit) {
-    val stack = YomuTheme.stack
-    val ruleColor = stack.rule
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .drawBehind {
-                val y = size.height - 0.5.dp.toPx()
-                drawLine(ruleColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-            }
-            .padding(top = 8.dp, bottom = 14.dp),
-    ) {
-        Row(
-            Modifier.heightIn(min = 40.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(StackIcons.Contrast, contentDescription = null, tint = stack.muted, modifier = Modifier.size(24.dp))
-            Column {
-                Text(text = "Theme", style = StackType.Body, color = stack.ink)
-                Text(
-                    text = "Auto follows your phone’s dark theme",
-                    style = SettingsCaptionStyle,
-                    color = stack.muted,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
+    SettingsRow(title = "Theme", icon = StackIcons.Contrast) {
         YomuConnectedChoiceGroup(
             options = ThemeOrder,
             selected = selected,
             label = { it.stackLabel },
             onSelect = onSelect,
-            icon = { it.icon },
-            modifier = Modifier.padding(start = 38.dp, top = 10.dp),
+            height = 38.dp,
+            modifier = Modifier.width(ThemeChoiceWidth),
         )
     }
 }
+
+/** The board's segmented choice: three 13/600 words with 12dp sides in a 3dp track. */
+private val ThemeChoiceWidth = 192.dp
 
 @Composable
 private fun PureBlackRow(state: SettingsUiState, actions: SettingsActions, divider: Boolean) {
     val allowed = state.selectedTheme.allowsPureBlack()
     SettingsSwitchRow(
         title = "Pure black at night",
-        subtitle = if (allowed) "For OLED screens" else "Available with the Dark or Auto theme",
+        // Only said when it can't be switched on.
+        subtitle = if (allowed) null else "Available with the Dark or Auto theme",
         icon = StackIcons.DarkMode,
         checked = state.oledDark && allowed,
         enabled = allowed,

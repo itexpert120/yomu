@@ -77,14 +77,22 @@ fun StackTitleRow(
     modifier: Modifier = Modifier,
     gutter: Dp = 24.dp,
     collapse: (() -> Float)? = null,
-    // Icon-button actions carry their own 12dp inset, so the row ends 8dp in by default; a bare
-    // control (e.g. a segmented choice) asks for the full gutter.
+    // Icon-button actions carry their own 12dp inset, so the row ends 12dp (8dp beside a rail) in
+    // by default; a bare control (e.g. a segmented choice) asks for its own.
     endPadding: Dp? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val stack = YomuTheme.stack
-    val end = endPadding ?: if (actions != null) YomuTheme.space.xs else gutter
-    val top = if (LocalConfiguration.current.screenWidthDp >= 600) StackTitleRowTopWide else StackTitleRowTop
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    // The boards end an icon-button row 12dp in on a phone and 8dp in beside a rail.
+    val end = endPadding ?: if (actions == null) {
+        gutter
+    } else if (wide) {
+        YomuTheme.space.xs
+    } else {
+        12.dp
+    }
+    val top = if (wide) StackTitleRowTopWide else StackTitleRowTop
     FlowRow(
         modifier = modifier
             .fillMaxWidth()
