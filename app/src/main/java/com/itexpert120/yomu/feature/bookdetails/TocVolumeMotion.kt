@@ -176,6 +176,7 @@ internal fun rememberTocVolumeMotion(toc: TocUiState, listState: LazyListState):
 /** A volume's row: its height follows the motion, measured at full height and clipped. */
 internal fun Modifier.tocVolumeReveal(motion: TocVolumeMotion, uid: Int): Modifier = clipToBounds().layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
-    val height = (placeable.height * motion.heightFraction(uid)).roundToInt()
+    // The spatial spring overshoots past 0 and 1; a layout height must stay within the row.
+    val height = (placeable.height * motion.heightFraction(uid).coerceIn(0f, 1f)).roundToInt()
     layout(placeable.width, height) { placeable.place(0, 0) }
 }
