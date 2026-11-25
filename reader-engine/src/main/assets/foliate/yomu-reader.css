@@ -1,6 +1,9 @@
 html {
-    color-scheme: light;
-    background: #fff;
+    color-scheme: light dark;
+    background: #FFFFFF;
+}
+@media (prefers-color-scheme: dark) {
+    html { background: #1A1E22; }
 }
 html, body {
     margin: 0;

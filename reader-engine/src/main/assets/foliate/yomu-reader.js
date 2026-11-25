@@ -1,7 +1,8 @@
 // Open Reader's glue around foliate-js: the book is read file by file from the app (never as one
-// big blob), styled like the reader's settings, and every milestone is reported to Kotlin.
+// big blob), styled, and every milestone is reported to Kotlin, which also draws the page turns.
 import './view.js'
 import { EPUB } from './epub.js'
+import { installPageTurns } from './yomu-turns.js'
 
 const host = globalThis.YomuHost
 const t0 = performance.now()
@@ -31,35 +32,50 @@ const makeLoader = async () => {
     }
 }
 
-// foliate's own defaults (its demo reader): the book's fonts and layout, 1.4 line spacing, justified
-// and hyphenated, on the light page.
-const readerCSS = ({ spacing, justify, hyphenate }) => `
+// foliate's default rendering (the book's fonts and layout; justified, hyphenated) with the
+// Foliate app's spacing, on Open Reader's page colours. Light keeps the publisher's colours, as
+// foliate does; dark has to override them, or books that set dark text read dark on dark.
+const readerCSS = ({ lineHeight, justify, hyphenate }) => `
     @namespace epub "http://www.idpf.org/2007/ops";
-    /* foliate's demo also allows dark here; books that hard-code dark text then read dark on
-       dark, so the prototype stays on the light page until themes exist. */
     html {
-        color-scheme: light;
-    }
-    p, li, blockquote, dd {
-        line-height: ${spacing};
-        text-align: ${justify ? 'justify' : 'start'};
-        -webkit-hyphens: ${hyphenate ? 'auto' : 'manual'};
-        hyphens: ${hyphenate ? 'auto' : 'manual'};
-        -webkit-hyphenate-limit-before: 3;
-        -webkit-hyphenate-limit-after: 2;
-        -webkit-hyphenate-limit-lines: 2;
-        hanging-punctuation: allow-end last;
+        color-scheme: light dark;
+        --page: #FFFFFF;
+        --ink: #16191C;
+        --link: #2F5BB7;
+        line-height: ${lineHeight};
+        orphans: 2;
         widows: 2;
+        hanging-punctuation: allow-end last;
     }
-    /* prevent the above from overriding the align attribute */
+    @media (prefers-color-scheme: dark) {
+        html {
+            --page: #1A1E22;
+            --ink: #EEF1F3;
+            --link: #9DB8F0;
+            background: var(--page) !important;
+            color: var(--ink) !important;
+        }
+        body { background: none !important; color: inherit !important; }
+        body * {
+            color: inherit !important;
+            background-color: transparent !important;
+            border-color: currentColor !important;
+        }
+        a:any-link { color: var(--link) !important; }
+    }
+    html { background: var(--page); color: var(--ink); }
+    a:any-link { color: var(--link); }
+    p, li, blockquote, dd {
+        line-height: ${lineHeight};
+        text-align: ${justify ? 'justify' : 'start'};
+        hyphens: ${hyphenate ? 'auto' : 'manual'};
+    }
     [align="left"] { text-align: left; }
     [align="right"] { text-align: right; }
     [align="center"] { text-align: center; }
     [align="justify"] { text-align: justify; }
-
-    pre {
-        white-space: pre-wrap !important;
-    }
+    h1, h2, h3, h4, h5, h6, hgroup { text-wrap: balance; }
+    pre { white-space: pre-wrap !important; }
     aside[epub|type~="endnote"],
     aside[epub|type~="footnote"],
     aside[epub|type~="note"],
@@ -70,6 +86,7 @@ const readerCSS = ({ spacing, justify, hyphenate }) => `
 
 const view = document.createElement('foliate-view')
 document.body.append(view)
+installPageTurns(view, report)
 
 let firstPage = true
 view.addEventListener('load', ({ detail: { doc, index } }) => {
@@ -91,9 +108,10 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
         // The chapter frame is wider than the screen and scrolled from outside, so use screen x.
         const x = e.screenX
         const width = innerWidth
-        if (x < width / 3) view.prev()
-        else if (x > width * 2 / 3) view.next()
-        else host?.event('center-tap', '{}')
+        // The app draws the turn.
+        if (x < width / 3) report('tap', { dir: -1 })
+        else if (x > width * 2 / 3) report('tap', { dir: 1 })
+        else report('center-tap')
     })
 })
 view.addEventListener('relocate', ({ detail }) => {
@@ -112,8 +130,9 @@ const open = async () => {
     await view.open(book)
     const renderer = view.renderer
     renderer.setAttribute('flow', 'paginated')
-    renderer.setAttribute('animated', '')
-    renderer.setStyles(readerCSS({ spacing: 1.4, justify: true, hyphenate: true }))
+    // No 'animated': foliate jumps between pages and the app draws the turn.
+    renderer.setAttribute('gap', '6%')
+    renderer.setStyles(readerCSS({ lineHeight: 1.5, justify: true, hyphenate: true }))
     await view.goTo(section)
 }
 

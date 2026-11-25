@@ -3,6 +3,8 @@ package com.itexpert120.yomu.reader.web
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
@@ -11,7 +13,9 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.zip.ZipFile
@@ -61,6 +65,18 @@ class FoliateReader(
         addJavascriptInterface(Bridge(), "YomuHost")
     }
 
+    /** The reader's view: the WebView with the native page-turn layer over it. */
+    val view: FrameLayout = FrameLayout(context).apply { addView(webView) }
+
+    private val main = Handler(Looper.getMainLooper())
+
+    private val turns = FoliatePageTurns(
+        container = view,
+        webView = webView,
+        jump = { dir, id -> webView.evaluateJavascript("globalThis.yomuJump($dir, $id)", null) },
+        log = { Log.i(TAG, it) },
+    )
+
     /** Opens the book at spine [section]; [extra] goes to the page as query parameters. */
     fun open(section: Int, extra: Map<String, String> = emptyMap()) {
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
@@ -70,18 +86,32 @@ class FoliateReader(
         webView.loadUrl(url.toString())
     }
 
-    fun next() = webView.evaluateJavascript("document.querySelector('foliate-view').next()", null)
+    fun next() = turns.tap(1)
 
-    fun prev() = webView.evaluateJavascript("document.querySelector('foliate-view').prev()", null)
+    fun prev() = turns.tap(-1)
 
     override fun close() {
+        turns.release()
         webView.destroy()
         zip.close()
     }
 
+    private fun onPageEvent(name: String, json: JSONObject) {
+        when (name) {
+            "tap" -> turns.tap(json.getInt("dir"))
+            "jumped" -> turns.onJumped(json.getInt("id"), json.getBoolean("moved"))
+            "settled" -> turns.onSettled(json.getInt("seq"))
+        }
+    }
+
     private inner class Bridge {
         @JavascriptInterface
-        fun event(name: String, json: String) = onEvent(name, json)
+        fun event(name: String, json: String) {
+            when (name) {
+                "tap", "jumped", "settled" -> main.post { onPageEvent(name, JSONObject(json)) }
+            }
+            onEvent(name, json)
+        }
     }
 
     /** Serves `/book/<entry>` from the EPUB, and `/book/.sizes` as every entry's size. */

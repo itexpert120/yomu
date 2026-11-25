@@ -1,5 +1,7 @@
 package com.itexpert120.yomu.prototype
 
+import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
@@ -22,11 +24,7 @@ class FoliatePrototypeActivity : ComponentActivity() {
     private var reader: FoliateReader? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Light page: dark bar icons.
-        enableEdgeToEdge(
-            statusBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
-        )
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val chapter = intent.getIntExtra("chapter", 0)
         val path = intent.getStringExtra("path")
@@ -36,13 +34,16 @@ class FoliatePrototypeActivity : ComponentActivity() {
             finish()
             return
         }
-        val root = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.WHITE) }
+        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        // The reading page's colour, so the bars sit on the page.
+        val page = if (night) Color.rgb(0x1A, 0x1E, 0x22) else Color.WHITE
+        val root = FrameLayout(this).apply { setBackgroundColor(page) }
         val reader = FoliateReader(this, File(path)) { name, json ->
             Log.i(TAG, "$name +${SystemClock.elapsedRealtime() - started} ms $json")
             if (name == "first-page") runOnUiThread { reportFullyDrawn() }
         }.also { reader = it }
         Log.i(TAG, "webview created +${SystemClock.elapsedRealtime() - started} ms")
-        root.addView(reader.webView)
+        root.addView(reader.view)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
