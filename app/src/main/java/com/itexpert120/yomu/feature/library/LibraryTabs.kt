@@ -4,6 +4,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -73,6 +74,8 @@ internal fun LibraryTabRow(
     onEditTabs: () -> Unit,
     horizontalInset: Dp,
     modifier: Modifier = Modifier,
+    // Actions at the row's end, outside the scrolling strip (e.g. search once the shelf has pinned).
+    trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     if (tabs.isEmpty()) return
     val scroll = rememberScrollState()
@@ -101,70 +104,79 @@ internal fun LibraryTabRow(
             .drawBehind {
                 val rule = 1.dp.toPx()
                 drawRect(ruleColor, topLeft = Offset(0f, size.height - rule), size = Size(size.width, rule))
-            }
-            // Soft scroll edges: the strip fades out toward an edge only while there is more
-            // to scroll that way, ramping in over the first few dp of travel.
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                val fade = fadeWidth.toPx()
-                val start = (scroll.value / fade).coerceIn(0f, 1f)
-                val end = ((scroll.maxValue - scroll.value) / fade).coerceIn(0f, 1f)
-                if (start > 0f) {
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            0f to Color.Black.copy(alpha = start),
-                            1f to Color.Transparent,
-                            endX = fade,
-                        ),
-                        size = Size(fade, size.height),
-                        blendMode = BlendMode.DstOut,
-                    )
-                }
-                if (end > 0f) {
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            0f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = end),
-                            startX = size.width - fade,
-                            endX = size.width,
-                        ),
-                        topLeft = Offset(size.width - fade, 0f),
-                        size = Size(fade, size.height),
-                        blendMode = BlendMode.DstOut,
-                    )
-                }
-            }
-            .horizontalScroll(scroll)
-            .padding(horizontal = horizontalInset)
-            .drawBehind {
-                val span = spans.interpolate(position()) ?: return@drawBehind
-                val line = LineHeight.toPx()
-                drawRoundRect(
-                    color = lineColor,
-                    topLeft = Offset(span.left, size.height - line),
-                    size = Size(span.width, line),
-                    cornerRadius = CornerRadius(line / 2),
-                )
             },
-        horizontalArrangement = Arrangement.spacedBy(TabGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        tabs.forEachIndexed { index, tab ->
-            // 1 on the selected tab, falling to 0 a whole page away.
-            val closeness = { (1f - abs(position() - index)).coerceIn(0f, 1f) }
-            LibraryTabPill(
-                tab = tab,
-                selected = pagerState.currentPage == index,
-                labelColor = { lerp(unselectedColor, selectedColor, closeness()) },
-                onClick = { onSelect(index) },
-                modifier = Modifier.onPlaced { coordinates ->
-                    val span = TabSpan(coordinates.positionInParent().x, coordinates.size.width.toFloat())
-                    if (spans.getOrNull(index) != span && index < spans.size) spans[index] = span
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                // Soft scroll edges: the strip fades out toward an edge only while there is more
+                // to scroll that way, ramping in over the first few dp of travel.
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val fade = fadeWidth.toPx()
+                    val start = (scroll.value / fade).coerceIn(0f, 1f)
+                    val end = ((scroll.maxValue - scroll.value) / fade).coerceIn(0f, 1f)
+                    if (start > 0f) {
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                0f to Color.Black.copy(alpha = start),
+                                1f to Color.Transparent,
+                                endX = fade,
+                            ),
+                            size = Size(fade, size.height),
+                            blendMode = BlendMode.DstOut,
+                        )
+                    }
+                    if (end > 0f) {
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                0f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = end),
+                                startX = size.width - fade,
+                                endX = size.width,
+                            ),
+                            topLeft = Offset(size.width - fade, 0f),
+                            size = Size(fade, size.height),
+                            blendMode = BlendMode.DstOut,
+                        )
+                    }
+                }
+                .horizontalScroll(scroll)
+                .padding(start = horizontalInset, end = if (trailing != null) YomuTheme.space.xs else horizontalInset)
+                .drawBehind {
+                    val span = spans.interpolate(position()) ?: return@drawBehind
+                    val line = LineHeight.toPx()
+                    drawRoundRect(
+                        color = lineColor,
+                        topLeft = Offset(span.left, size.height - line),
+                        size = Size(span.width, line),
+                        cornerRadius = CornerRadius(line / 2),
+                    )
                 },
-            )
+            horizontalArrangement = Arrangement.spacedBy(TabGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                // 1 on the selected tab, falling to 0 a whole page away.
+                val closeness = { (1f - abs(position() - index)).coerceIn(0f, 1f) }
+                LibraryTabPill(
+                    tab = tab,
+                    selected = pagerState.currentPage == index,
+                    labelColor = { lerp(unselectedColor, selectedColor, closeness()) },
+                    onClick = { onSelect(index) },
+                    modifier = Modifier.onPlaced { coordinates ->
+                        val span = TabSpan(coordinates.positionInParent().x, coordinates.size.width.toFloat())
+                        if (spans.getOrNull(index) != span && index < spans.size) spans[index] = span
+                    },
+                )
+            }
+            AddTabButton(onClick = onEditTabs)
         }
-        AddTabButton(onClick = onEditTabs)
+        if (trailing != null) {
+            Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, content = trailing)
+        }
     }
 }
 
