@@ -114,7 +114,9 @@ internal fun ReaderTopBar(
         modifier = modifier
             .fillMaxWidth()
             .onSizeChanged { onContentHeight(it.height) }
-            .background(colors.panel),
+            // The page's own colour, with no line under it: the bar is part of the page, not a band
+            // over it.
+            .background(colors.page),
     ) {
         // The navigator draws edge-to-edge: keep the cutout/status area solid bar colour.
         Spacer(
@@ -179,7 +181,6 @@ internal fun ReaderTopBar(
                 )
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.rule))
     }
 }
 

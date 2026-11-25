@@ -54,8 +54,8 @@ data class StackColors(
     val danger: Color,
     val isDark: Boolean,
 ) {
-    /** Pure black: the sheet is the desk, so sheets, cards and dialogs need a hairline edge. */
-    val flat: Boolean get() = sheet == desk
+    /** Pure black: sheets sit barely above the black desk, so they get a hairline edge. */
+    val flat: Boolean get() = isDark && desk == Color(0xFF000000)
 
     companion object {
         val Light = StackColors(
@@ -88,16 +88,16 @@ data class StackColors(
         )
 
         /** Pure black: the desk goes black; sheets keep a faint step so they still read as sheets. */
-        // Pure black: every large surface (desk, sheets, cards, bars) is #000 so an OLED panel is
-        // off there; sheets and cards are set apart by the rule hairline, and only small raised
-        // controls (chips, fields, tracks) keep a near-black fill.
+        // Pure black: the desk (behind everything) is #000 so an OLED panel is off there; sheets and
+        // cards sit just above it, enough to read as surfaces, with a hairline at their edge, and
+        // raised controls (chips, fields, tracks) stand out clearly on both.
         val Black = Dark.copy(
             desk = Color(0xFF000000),
-            sheet = Color(0xFF000000),
-            raised = Color(0xFF141619),
+            sheet = Color(0xFF0C0D0F),
+            raised = Color(0xFF1C1F23),
             onInk = Color(0xFF000000),
-            rule = Color(0xFF22262A),
-            track = Color(0xFF33393E),
+            rule = Color(0xFF2A2E33),
+            track = Color(0xFF3A4046),
         )
 
         internal fun forMode(mode: YomuThemeMode): StackColors = when (mode) {
