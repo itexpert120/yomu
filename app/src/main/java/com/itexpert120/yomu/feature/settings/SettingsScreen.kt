@@ -366,7 +366,7 @@ private fun PaneItem(
             .heightIn(min = 64.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) stack.sheet else stack.desk)
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, shape = RoundedCornerShape(16.dp))
             .semantics { this.selected = selected }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

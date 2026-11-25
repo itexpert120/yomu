@@ -109,7 +109,7 @@ internal fun ReaderBrowseRow(
                     .heightIn(min = 52.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(stack.raised)
-                    .yomuPressable(onClick = onClick, pressedScale = 1f)
+                    .yomuPressable(onClick = onClick, pressedScale = 1f, shape = RoundedCornerShape(16.dp))
                     .padding(start = YomuTheme.space.sm, end = if (onTrailingClick != null) 0.dp else YomuTheme.space.sm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),

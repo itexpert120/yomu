@@ -125,7 +125,7 @@ fun EditBookScreen(
 
                 !state.available -> Box(Modifier.fillMaxSize().padding(bottom = 96.dp), contentAlignment = Alignment.Center) {
                     YomuEmptyState(
-                        icon = StackIcons.Error,
+                        icon = StackIcons.EditOff,
                         title = "Can't edit this book",
                         body = state.error ?: "It's still being added, or its file couldn't be read. Try again in a moment.",
                         actions = { YomuButton(text = "Go back", onClick = onBack) },
@@ -177,7 +177,7 @@ private fun EditBar(state: EditBookUiState, onBack: () -> Unit, onSave: () -> Un
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .yomuPressable(onClick = onBack, enabled = !state.busy)
+                .yomuPressable(onClick = onBack, enabled = !state.busy, shape = CircleShape)
                 .clip(CircleShape)
                 .semantics { contentDescription = if (state.available) "Discard and close" else "Close" },
             contentAlignment = Alignment.Center,
@@ -203,7 +203,7 @@ private fun SaveButton(busy: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .height(40.dp)
-            .yomuPressable(onClick = onClick, enabled = enabled)
+            .yomuPressable(onClick = onClick, enabled = enabled, shape = CircleShape)
             .clip(CircleShape)
             .background(if (active) stack.ink else stack.track),
         contentAlignment = Alignment.Center,
@@ -233,7 +233,7 @@ private fun CoverControls(editable: Boolean, onChangeCover: () -> Unit) {
     Row(
         modifier = Modifier
             .height(44.dp)
-            .yomuPressable(onClick = onChangeCover, enabled = editable)
+            .yomuPressable(onClick = onChangeCover, enabled = editable, shape = CircleShape)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.5.dp, stack.track, CircleShape)
@@ -241,7 +241,7 @@ private fun CoverControls(editable: Boolean, onChangeCover: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(StackIcons.Photo, contentDescription = null, tint = if (editable) stack.ink else stack.faint, modifier = Modifier.size(20.dp))
+        Icon(StackIcons.Image, contentDescription = null, tint = if (editable) stack.ink else stack.faint, modifier = Modifier.size(20.dp))
         Text("Change cover", style = StackType.Label.copy(fontSize = 14.sp), color = if (editable) stack.ink else stack.faint)
     }
     Text(

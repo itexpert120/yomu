@@ -222,7 +222,7 @@ internal fun InkPillButton(
     Row(
         modifier = modifier
             .height(height)
-            .yomuPressable(onClick = onClick, enabled = enabled)
+            .yomuPressable(onClick = onClick, enabled = enabled, shape = CircleShape)
             .clip(CircleShape)
             .background(if (enabled) stack.ink else stack.track)
             .padding(horizontal = 20.dp),
@@ -252,7 +252,7 @@ private fun RoundOutlinedButton(contentDescription: String, onClick: () -> Unit)
     Box(
         modifier = Modifier
             .size(PrimaryButtonHeight)
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, shape = CircleShape)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.5.dp, stack.track, CircleShape)

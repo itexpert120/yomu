@@ -82,7 +82,7 @@ private fun androidx.compose.foundation.layout.RowScope.ToolbarAction(icon: Imag
             .fillMaxHeight()
             .padding(vertical = 6.dp)
             .clip(RoundedCornerShape(24.dp))
-            .yomuPressable(onClick = onClick, role = Role.Button),
+            .yomuPressable(onClick = onClick, role = Role.Button, shape = RoundedCornerShape(24.dp)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {

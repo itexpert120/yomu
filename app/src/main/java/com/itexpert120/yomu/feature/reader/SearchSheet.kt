@@ -185,7 +185,7 @@ internal fun ReaderSearchSheetContent(
                                 text = "Search the web",
                                 onClick = { activity.openWebSearchSheet(searchQuery.trim()) },
                                 style = ReaderPillStyle.Secondary,
-                                icon = StackIcons.Search,
+                                icon = StackIcons.TravelExplore,
                                 modifier = Modifier.padding(top = 22.dp),
                             )
                         }

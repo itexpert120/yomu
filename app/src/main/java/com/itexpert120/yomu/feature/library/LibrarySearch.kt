@@ -185,7 +185,7 @@ private fun ShelfFilterChip(label: String, onRemove: () -> Unit) {
     Row(
         modifier = Modifier
             .heightIn(min = 32.dp)
-            .yomuPressable(onClick = onRemove, role = Role.Button)
+            .yomuPressable(onClick = onRemove, role = Role.Button, shape = RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .drawBehind { drawRect(stack.raised) }
             .semantics(mergeDescendants = true) { contentDescription = "Remove filter: $label" }

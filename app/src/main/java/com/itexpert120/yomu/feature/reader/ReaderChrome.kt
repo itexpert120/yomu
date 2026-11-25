@@ -331,7 +331,7 @@ internal fun BoxScope.ReaderControlsPanel(
                         Icon(StackIcons.Search, contentDescription = null, tint = colors.muted)
                     }
                     ReaderPanelAction("Marks", onMarks, colors.muted, description = "Bookmarks") {
-                        Icon(StackIcons.Bookmark, contentDescription = null, tint = colors.muted)
+                        Icon(StackIcons.Bookmarks, contentDescription = null, tint = colors.muted)
                     }
                     ReaderPanelAction("Display", onDisplay, colors.ink) {
                         Text(
@@ -420,7 +420,7 @@ private fun RowScope.ReaderPanelAction(
             .weight(1f)
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .yomuPressable(onClick = onClick)
+            .yomuPressable(onClick = onClick, shape = RoundedCornerShape(16.dp))
             .semantics(mergeDescendants = true) { contentDescription = description }
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

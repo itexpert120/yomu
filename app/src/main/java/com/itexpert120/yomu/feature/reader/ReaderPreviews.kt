@@ -331,7 +331,7 @@ private fun NoticesSample() {
         ReaderNoticeCard(text = "Couldn’t save your highlight", icon = StackIcons.Error, iconIsAlert = true) {
             ReaderNoticeAction("Retry", onClick = {})
         }
-        ReaderNoticeCard(text = "Continue from Pixel Tablet at 63%?", icon = StackIcons.Sync) {
+        ReaderNoticeCard(text = "Continue from Pixel Tablet at 63%?", icon = StackIcons.Devices) {
             ReaderNoticeAction("Stay here", onClick = {}, secondary = true)
             ReaderNoticeAction("Jump", onClick = {})
         }

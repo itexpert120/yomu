@@ -8,23 +8,30 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -40,6 +47,10 @@ import androidx.compose.ui.unit.dp
  *
  * Apply this EARLY in the modifier chain (before `clip`/`background`/`border`) so the whole surface —
  * fill, border, and content — scales together rather than just the inner content.
+ *
+ * Keyboard focus draws Stack's 2dp ink ring and a mouse/stylus hover an 8% ink tint, both in
+ * [shape] — pass the element's own shape (`CircleShape` for round buttons, a pill for pills and
+ * chips) so they follow its outline. The indication only answers presses; hover and focus are ours.
  */
 fun Modifier.yomuPressable(
     onClick: () -> Unit,
@@ -47,10 +58,17 @@ fun Modifier.yomuPressable(
     onLongClick: (() -> Unit)? = null,
     pressedScale: Float = 0.98f,
     role: Role? = Role.Button,
+    shape: Shape = YomuPressableDefaultShape,
 ): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
+    // The ripple sees presses only, so its rectangular hover/focus state layers don't stack on ours.
+    val presses = remember { MutableInteractionSource() }
+    LaunchedEffect(interaction) {
+        interaction.interactions.collect { if (it is PressInteraction) presses.emit(it) }
+    }
     val pressed by interaction.collectIsPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
+    val hovered by interaction.collectIsHoveredAsState()
     val motionEnabled = yomuAnimationsEnabled()
     val scale = animateFloatAsState(
         targetValue = if (motionEnabled && pressed && enabled) pressedScale else 1f,
@@ -74,21 +92,22 @@ fun Modifier.yomuPressable(
     }
         .drawWithContent {
             drawContent()
+            if (hovered && enabled) {
+                drawOutline(shape.createOutline(size, layoutDirection, this), color = focusColor.copy(alpha = HoverAlpha))
+            }
             if (focused) {
+                // Inset by half the stroke so the whole ring lands inside the element's bounds.
                 val stroke = 2.dp.toPx()
-                val radius = 12.dp.toPx()
-                drawRoundRect(
-                    color = focusColor,
-                    topLeft = Offset(stroke / 2f, stroke / 2f),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    cornerRadius = CornerRadius(radius, radius),
-                    style = Stroke(stroke),
-                )
+                val inner = Size(size.width - stroke, size.height - stroke)
+                translate(stroke / 2f, stroke / 2f) {
+                    drawOutline(shape.createOutline(inner, layoutDirection, this), color = focusColor, style = Stroke(stroke))
+                }
             }
         }
+        .indication(presses, LocalIndication.current)
         .combinedClickable(
             interactionSource = interaction,
-            indication = LocalIndication.current,
+            indication = null,
             enabled = enabled,
             role = role,
             onLongClick = longClick,
@@ -97,6 +116,12 @@ fun Modifier.yomuPressable(
 }
 
 private val PressSpring = spring<Float>(dampingRatio = 1f, stiffness = 1400f)
+
+/** Stack's hover state: an 8% ink tint. */
+private const val HoverAlpha = 0.08f
+
+/** The focus ring's shape when the caller names none: today's 12dp rounding. */
+val YomuPressableDefaultShape: Shape = RoundedCornerShape(12.dp)
 
 /**
  * A soft scroll-edge fade: content dissolves toward the top and/or bottom edge instead of

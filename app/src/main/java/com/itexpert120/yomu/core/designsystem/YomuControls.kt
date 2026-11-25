@@ -141,7 +141,7 @@ internal fun YomuPill(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.4f)
             .clip(CircleShape)
-            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button)
+            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button, shape = CircleShape)
             .background(container)
             .then(if (border != null) Modifier.border(1.5.dp, border, CircleShape) else Modifier)
             .defaultMinSize(minWidth = height, minHeight = height)
@@ -167,7 +167,7 @@ fun YomuIconButton(
             .size(48.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .clip(CircleShape)
-            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button)
+            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button, shape = CircleShape)
             .semantics { if (contentDescription != null) this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
@@ -198,7 +198,7 @@ fun YomuChip(
         Row(
             modifier = Modifier
                 .clip(StackChipShape)
-                .yomuPressable(onClick = onClick, role = Role.Button)
+                .yomuPressable(onClick = onClick, role = Role.Button, shape = StackChipShape)
                 .background(if (selected) stack.ink else stack.raised)
                 .height(28.dp)
                 .padding(start = if (selected || icon != null) 8.dp else 10.dp, end = 10.dp),
@@ -334,6 +334,7 @@ fun <T> YomuConnectedChoiceGroup(
                         },
                         enabled = enabled,
                         role = Role.RadioButton,
+                        shape = CircleShape,
                     )
                     .semantics { this.selected = checked }
                     .padding(horizontal = 6.dp),
@@ -443,6 +444,7 @@ fun YomuSelectableChip(
                     },
                     enabled = enabled,
                     role = Role.Checkbox,
+                    shape = StackChipShape,
                 )
                 .semantics { toggleableState = ToggleableState(selected) }
                 .drawBehind { drawRect(lerp(raised, ink, fill.value.coerceIn(0f, 1f))) }
@@ -541,7 +543,7 @@ fun YomuColorSwatch(
     Column(
         modifier = modifier
             .clip(shape)
-            .yomuPressable(onClick = onClick, role = Role.RadioButton)
+            .yomuPressable(onClick = onClick, role = Role.RadioButton, shape = shape)
             .semantics {
                 contentDescription = name
                 this.selected = selected

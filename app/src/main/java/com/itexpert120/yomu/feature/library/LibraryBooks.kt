@@ -180,7 +180,7 @@ fun BookListRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .yomuPressable(onClick = onClick, onLongClick = onLongPress)
+            .yomuPressable(onClick = onClick, onLongClick = onLongPress, shape = RoundedCornerShape(16.dp))
             .semantics { this.selected = selected }
             .clip(RoundedCornerShape(16.dp))
             .drawBehind {

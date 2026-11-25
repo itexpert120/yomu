@@ -275,7 +275,7 @@ fun YomuCard(
         Column(
             modifier = modifier
                 .clip(shape)
-                .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick) else Modifier)
+                .then(if (onClick != null) Modifier.yomuPressable(onClick = onClick, shape = shape) else Modifier)
                 .background(container)
                 .padding(contentPadding),
             content = content,

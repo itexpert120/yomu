@@ -53,7 +53,7 @@ fun YomuExtendedFloatingActionButton(
         modifier = modifier
             .dropShadow(CircleShape, FabShadow)
             .clip(CircleShape)
-            .yomuPressable(onClick = onClick, role = Role.Button)
+            .yomuPressable(onClick = onClick, role = Role.Button, shape = CircleShape)
             .semantics { this.contentDescription = contentDescription }
             .background(stack.ink)
             .defaultMinSize(minWidth = 56.dp, minHeight = 56.dp)

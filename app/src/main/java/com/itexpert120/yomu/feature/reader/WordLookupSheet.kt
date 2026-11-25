@@ -143,7 +143,7 @@ internal fun WordLookupSheetContent(
                 Spacer(Modifier.weight(1f))
                 if (activity != null) {
                     LookupIconButton(
-                        StackIcons.Search,
+                        StackIcons.TravelExplore,
                         "Search the web for $headword",
                         modifier = Modifier.offset(x = 24.dp),
                         onClick = { activity.openWebSearchSheet("define $headword") },
@@ -283,7 +283,7 @@ private fun LookupMessage(
                     text = "Search the web",
                     onClick = { activity.openWebSearchSheet("define $word") },
                     style = ReaderPillStyle.Secondary,
-                    icon = if (onRetry == null) StackIcons.Search else null,
+                    icon = if (onRetry == null) StackIcons.TravelExplore else null,
                 )
             }
         }
@@ -439,7 +439,7 @@ private fun WordChip(word: String, onLookUpWord: (String) -> Unit) {
             .heightIn(min = 36.dp)
             .clip(CircleShape)
             .background(stack.raised)
-            .yomuPressable(onClick = { onLookUpWord(word) })
+            .yomuPressable(onClick = { onLookUpWord(word) }, shape = CircleShape)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
