@@ -38,8 +38,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -58,8 +56,9 @@ internal fun yomuStableSystemBarInsets(): WindowInsets = WindowInsets.systemBars
 /**
  * Stack's screen title bar, on the desk. A top-level screen ([onBack] null) sets its title in
  * Display 32/38 at the 24dp gutter with its actions to the right; a child screen gets a 48dp back
- * button followed by the title (17/600). [subtitle] adds a muted line. With a [scrollBehavior] the
- * bar never collapses: it stays put and draws a rule under itself once content scrolls beneath it.
+ * button followed by the title (17/600). [subtitle] adds a muted line. The bar never collapses: it
+ * stays put and shows Stack's scroll-edge rule under itself while content is scrolled beneath it
+ * ([scrolledUnder], or a [scrollBehavior]'s content offset).
  */
 @Composable
 fun YomuScreenHeader(
@@ -70,6 +69,7 @@ fun YomuScreenHeader(
     scrollBehavior: TopAppBarScrollBehavior? = null,
     // Extra inset on each side so the title lines up with width-capped, centred content below.
     contentGutter: Dp = 0.dp,
+    scrolledUnder: (() -> Boolean)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     val stack = YomuTheme.stack
@@ -78,16 +78,18 @@ fun YomuScreenHeader(
         // consuming scroll while it still tracks how far content has moved under the bar.
         SideEffect { scrollBehavior.state.heightOffsetLimit = 0f }
     }
-    val rule = stack.rule
     Column(
         modifier = modifier
             .zIndex(1f)
             .fillMaxWidth()
             .background(stack.desk)
-            .drawBehind {
-                val scrolled = scrollBehavior != null && scrollBehavior.state.contentOffset < -1f
-                if (scrolled) drawLine(rule, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
-            }
+            .then(
+                when {
+                    scrolledUnder != null -> Modifier.yomuPinnedHeaderRule(scrolledUnder)
+                    scrollBehavior != null -> Modifier.yomuPinnedHeaderRule { scrollBehavior.state.contentOffset < -1f }
+                    else -> Modifier
+                },
+            )
             .windowInsetsPadding(yomuStableSystemBarInsets().only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
             .padding(horizontal = contentGutter),
     ) {
@@ -175,6 +177,7 @@ fun YomuScreenScaffold(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     trailing: @Composable RowScope.() -> Unit = {},
+    // Stack's scroll-edge rule under the header while content is scrolled beneath it.
     showScrollEdgeShadow: Boolean = true,
     // Reading-width by default so forms and prose keep a comfortable line length on tablets;
     // visual dashboards can pass YomuContentMaxWidth.
@@ -193,23 +196,15 @@ fun YomuScreenScaffold(
                 title = title,
                 onBack = onBack,
                 subtitle = subtitle,
-                scrollBehavior = scrollBehavior,
                 contentGutter = headerGutter,
+                // Stack's scroll-edge rule under the pinned header; the bottom edge is open.
+                scrolledUnder = if (showScrollEdgeShadow) ({ scrollState.canScrollBackward }) else ({ false }),
                 trailing = trailing,
             )
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .then(
-                        if (showScrollEdgeShadow) {
-                            Modifier.yomuScrollEdgeShadow(
-                                bottom = scrollState.canScrollForward,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    )
                     // Lift content above the keyboard; a focused field then scrolls itself into view.
                     .imePadding()
                     .verticalScroll(scrollState),
