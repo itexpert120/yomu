@@ -30,6 +30,10 @@ object FontLibrary
 @Serializable
 object About
 
+/** Sync, full-screen (no bottom bar), opened from Settings. */
+@Serializable
+object Sync
+
 /**
  * Opens the reader for [bookId]. [locator] optionally overrides the restored position with a
  * specific location (e.g. a table-of-contents jump); null resumes the last saved position.

@@ -53,6 +53,7 @@ import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
 import com.itexpert120.yomu.feature.reader.ReaderRoute
 import com.itexpert120.yomu.feature.settings.SettingsRoute
 import com.itexpert120.yomu.feature.stats.StatsRoute
+import com.itexpert120.yomu.feature.sync.SyncRoute
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -192,6 +193,8 @@ fun YomuNavHost(
                         },
                         onOpenFontLibrary = { navController.navigate(FontLibrary) },
                         onOpenAbout = { navController.navigate(About) },
+                        onOpenReaderDefaults = { navController.navigate(ReaderDefaults) },
+                        onOpenSync = { navController.navigate(Sync) },
                     )
                 }
             }
@@ -235,6 +238,11 @@ fun YomuNavHost(
                 AboutRoute(onBack = navController::popBackStackIfResumed)
             }
         }
+        composable<Sync> {
+            BackPreviewFrame(backMotion) {
+                SyncRoute(onBack = navController::popBackStackIfResumed)
+            }
+        }
         composable<Reader> {
             BackPreviewFrame(backMotion) {
                 ReaderRoute(onBack = navController::popBackStackIfResumed)
@@ -256,6 +264,8 @@ private fun TopLevelNavigationShell(
     onOpenDetails: (String) -> Unit,
     onOpenFontLibrary: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenReaderDefaults: () -> Unit,
+    onOpenSync: () -> Unit,
 ) {
     val navController = rememberNavController()
     val currentDestination = navController.currentBackStackEntryAsState().value?.destination
@@ -293,7 +303,10 @@ private fun TopLevelNavigationShell(
                 )
             }
             composable<Stats> {
-                StatsRoute(onBack = null)
+                StatsRoute(
+                    onBack = null,
+                    onOpenLibrary = { navController.navigateTopLevel(YomuTopLevelDestination.Library) },
+                )
             }
             composable<Settings> {
                 SettingsRoute(
@@ -301,6 +314,8 @@ private fun TopLevelNavigationShell(
                     onBack = null,
                     onOpenFontLibrary = onOpenFontLibrary,
                     onOpenAbout = onOpenAbout,
+                    onOpenReaderDefaults = onOpenReaderDefaults,
+                    onOpenSync = onOpenSync,
                 )
             }
         }
