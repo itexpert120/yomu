@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,7 +26,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -140,6 +141,14 @@ fun YomuBottomSheet(
 internal val LocalYomuSheetRule = staticCompositionLocalOf { true }
 
 /**
+ * The space a sheet keeps clear at its bottom (the gesture bar plus breathing room). A sheet that
+ * scrolls its own content (`scrollable = false`) runs that content down to its very edge, so its
+ * scroll container adds this as bottom content padding: rows scroll behind the gesture bar instead
+ * of stopping at a hard edge above it.
+ */
+val LocalYomuSheetBottomInset = compositionLocalOf { 0.dp }
+
+/**
  * The window a sheet lives in: a full-screen, edge-to-edge dialog window with no platform dim or
  * window animation of its own. The dim ([dim]: bottom sheets; a side sheet leaves the page
  * undimmed, as on Stack's tablet board) is drawn here, following the sheet
@@ -241,13 +250,26 @@ private fun BoxScope.BottomSheetPanel(
             )
             .padding(horizontal = gutter)
             .padding(top = YomuTheme.space.xs)
-            // Clear of the gesture bar (the IME padding above already covers it while typing).
-            .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
-            .padding(bottom = YomuTheme.space.md),
+            // Clear of the gesture bar (the IME padding above already covers it while typing). A sheet
+            // with its own scroll container gets this as LocalYomuSheetBottomInset instead.
+            .then(
+                if (scrollable) {
+                    Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+                        .padding(bottom = YomuTheme.space.md)
+                } else {
+                    Modifier
+                },
+            ),
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-        content = content,
-    )
+    ) {
+        val inset = if (scrollable) 0.dp else navigationBarBottom() + YomuTheme.space.md
+        CompositionLocalProvider(LocalYomuSheetBottomInset provides inset) { content() }
+    }
 }
+
+@Composable
+private fun navigationBarBottom(): Dp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
 /** From medium widths: a full-height panel at the end edge, sliding in from it. */
 @Composable
@@ -282,17 +304,30 @@ private fun BoxScope.SideSheetPanel(
                 onDragStopped = { velocity -> motion.release(velocity * towardEdge) },
             )
             .pointerInput(Unit) { detectTapGestures(onTap = {}) }
-            .windowInsetsPadding(
-                WindowInsets.systemBars
-                    .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
-                    .union(WindowInsets.ime.only(WindowInsetsSides.Bottom)),
-            )
+            // Top and end insets stay outside; the bottom one goes inside the scroll (or to the content
+            // as LocalYomuSheetBottomInset), so content scrolls down to the panel's edge, not to a cut.
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.End))
+            .windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
             .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
-            .padding(start = sideGutter, end = sideGutter, top = SideSheetTop, bottom = YomuTheme.space.lg),
+            .padding(start = sideGutter, end = sideGutter, top = SideSheetTop)
+            .then(
+                if (scrollable) {
+                    Modifier
+                        .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Bottom))
+                        .padding(bottom = YomuTheme.space.lg)
+                } else {
+                    Modifier
+                },
+            ),
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-        content = content,
-    )
+    ) {
+        val inset = if (scrollable) 0.dp else systemBarBottom() + YomuTheme.space.lg
+        CompositionLocalProvider(LocalYomuSheetBottomInset provides inset) { content() }
+    }
 }
+
+@Composable
+private fun systemBarBottom(): Dp = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
 /** How far below the status bar a sheet at its tallest still leaves the screen showing. */
 private val SheetTopClearance = 24.dp
