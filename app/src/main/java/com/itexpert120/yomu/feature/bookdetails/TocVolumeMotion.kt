@@ -43,8 +43,8 @@ internal class TocVolumeMotion(
     private val viewportHeight: () -> Int,
     private val rowHeight: Float,
 ) {
-    /** The volume (uid) that is opening or closing, or -1. */
-    var volume by mutableIntStateOf(-1)
+    /** The volume (uid) that is opening or closing, or [NoVolume]. */
+    var volume by mutableIntStateOf(NoVolume)
         private set
     private var span by mutableIntStateOf(0)
     private var opening by mutableStateOf(false)
@@ -61,7 +61,7 @@ internal class TocVolumeMotion(
         private set
 
     /** Whether [uid] is one of the moving volume's rows. */
-    fun moves(uid: Int): Boolean = volume >= 0 && uid > volume && uid <= volume + span
+    fun moves(uid: Int): Boolean = volume != NoVolume && uid > volume && uid <= volume + span
 
     /** Height fraction for [uid]'s row; read it while laying out. */
     fun heightFraction(uid: Int): Float = if (moves(uid)) reveal.value else 1f
@@ -129,7 +129,7 @@ internal class TocVolumeMotion(
     }
 
     private fun reset() {
-        volume = -1
+        volume = NoVolume
         span = 0
     }
 
@@ -147,7 +147,7 @@ internal class TocVolumeMotion(
      */
     fun rows(items: List<TocEntryUi>): List<TocEntryUi> {
         val moving = volume
-        if (moving < 0) return items
+        if (moving == NoVolume) return items
         val header = items.indexOfFirst { it.uid == moving }
         if (header < 0) return items
         var end = header + 1
@@ -159,6 +159,9 @@ internal class TocVolumeMotion(
 }
 
 private const val DataWaitMillis = 1_000L
+
+// No volume moving. Not -1: that is the folded read-chapters row's uid.
+private const val NoVolume = Int.MIN_VALUE
 
 @Composable
 internal fun rememberTocVolumeMotion(toc: TocUiState, listState: LazyListState): TocVolumeMotion {

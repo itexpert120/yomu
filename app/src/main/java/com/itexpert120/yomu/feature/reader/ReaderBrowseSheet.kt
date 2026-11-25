@@ -1,6 +1,5 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -43,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -62,8 +59,6 @@ import com.itexpert120.yomu.core.designsystem.YomuIconButton
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
-import com.itexpert120.yomu.core.designsystem.yomuPopupEnter
-import com.itexpert120.yomu.core.designsystem.yomuPopupExit
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.reader.ReaderBookmark
@@ -72,6 +67,9 @@ import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.ChapterReadState
 import com.itexpert120.yomu.feature.annotations.AnnotationTransferAction
 import com.itexpert120.yomu.feature.annotations.AnnotationTransferMenuItems
+import com.itexpert120.yomu.feature.contents.CurrentChapterPill
+import com.itexpert120.yomu.feature.contents.revealItem
+import com.itexpert120.yomu.feature.contents.showsItem
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlin.math.roundToInt
@@ -250,10 +248,11 @@ private fun ContentsPage(
     val lead = if (outline.grouped) 2 else 1
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (currentRow - lead).coerceAtLeast(0))
     var revealCurrent by remember { mutableStateOf(false) }
+    val revealSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     LaunchedEffect(revealCurrent, rows) {
         if (!revealCurrent) return@LaunchedEffect
         val index = rows.indexOfFirst { it is ContentsRow.Chapter && it.current }
-        if (index >= 0) listState.animateScrollToItem((index - lead).coerceAtLeast(0))
+        if (index >= 0) listState.revealItem(index, lead, revealSpec)
         revealCurrent = false
     }
     Column(Modifier.fillMaxSize()) {
@@ -292,7 +291,7 @@ private fun ContentsPage(
             }
             // Back to the chapter being read once it has scrolled away (or is folded or filtered out).
             val away by remember(rows, currentRow) {
-                derivedStateOf { outline.current >= 0 && !listState.shows(currentRow) }
+                derivedStateOf { outline.current >= 0 && !listState.showsItem(currentRow) }
             }
             // Where it is (or its folded volume), to point the pill's arrow.
             val target = if (currentRow >= 0) {
@@ -313,32 +312,6 @@ private fun ContentsPage(
             )
         }
     }
-}
-
-/** "Current chapter ↓": an ink pill that rises in while the chapter being read is out of view. */
-@Composable
-private fun CurrentChapterPill(visible: Boolean, below: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = yomuPopupEnter(TransformOrigin(0.5f, 1f)),
-        exit = yomuPopupExit(TransformOrigin(0.5f, 1f)),
-        modifier = modifier,
-    ) {
-        ReaderPillButton(
-            text = "Current chapter",
-            icon = if (below) StackIcons.KeyboardArrowDown else StackIcons.KeyboardArrowUp,
-            height = 44.dp,
-            onClick = onClick,
-        )
-    }
-}
-
-private fun LazyListState.shows(index: Int): Boolean {
-    if (index < 0) return false
-    val visible = layoutInfo.visibleItemsInfo
-    if (visible.isEmpty()) return true
-    val viewportEnd = layoutInfo.viewportEndOffset
-    return visible.any { it.index == index && it.offset + it.size / 2 in 0..viewportEnd }
 }
 
 private fun LazyListScope.contentsItems(

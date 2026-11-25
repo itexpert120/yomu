@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -38,14 +39,22 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -157,7 +166,12 @@ private fun ProgressFigure(book: BookDetailsUi, toc: TocUiState, centered: Boole
     val caption = when {
         book.progress >= 1f -> "Finished"
         book.progress <= 0f -> "Not started"
-        toc.currentNumber != null && toc.flat -> "Chapter ${toc.currentNumber} of ${toc.readCount + toc.unreadCount}"
+        // A flat contents: the chapter's place in it, matching the number column.
+        toc.flat && toc.currentNumber != null && toc.chapterTotal > 1 -> "Chapter ${toc.currentNumber} of ${toc.chapterTotal}"
+        // In volumes the book's own numbering ("Chapter 121: …") reads truer than a position that
+        // counts front matter.
+        toc.chapterTotal > 1 && toc.currentTitle?.let { ChapterNumberPrefix.find(it) } != null ->
+            "Chapter ${ChapterNumberPrefix.find(toc.currentTitle)!!.groupValues[1]} of ${toc.chapterTotal}"
         toc.currentTitle != null -> toc.currentTitle
         else -> "Read so far"
     }
@@ -177,6 +191,8 @@ private fun ProgressFigure(book: BookDetailsUi, toc: TocUiState, centered: Boole
         )
     }
 }
+
+private val ChapterNumberPrefix = Regex("""^\s*chapter\s+(\d+)\b""", RegexOption.IGNORE_CASE)
 
 /** Read / Resume as the ink pill, Organize as the round secondary button beside it. */
 @Composable
@@ -274,7 +290,6 @@ private fun BookTags(book: BookDetailsUi, modifier: Modifier = Modifier) {
     ) {
         StatusTag(book.shelfStatus)
         book.series?.let { DetailsTag(it) }
-        book.readingTime?.let { DetailsTag("$it read") }
         book.collectionNames.forEach { DetailsTag(it) }
     }
 }
@@ -316,39 +331,66 @@ private fun TagSurface(content: @Composable () -> Unit) {
     ) { content() }
 }
 
+/**
+ * The description, four lines at most with a bold "More" at the end of the last one (as on the
+ * board); "Less" ends the opened text. Where the text is cut is measured up front, so the first
+ * frame already ends in "More".
+ */
 @Composable
 private fun BookDescription(description: String, modifier: Modifier = Modifier) {
     val stack = YomuTheme.stack
     var expanded by remember(description) { mutableStateOf(false) }
-    var expandable by remember(description) { mutableStateOf(false) }
     val animate = yomuAnimationsEnabled()
     val spec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = description,
-            style = StackType.BodySmall,
-            color = stack.body,
-            maxLines = if (expanded) Int.MAX_VALUE else DescriptionLines,
-            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
-            onTextLayout = { if (!expanded) expandable = it.hasVisualOverflow },
-            modifier = Modifier.animateContentSize(if (animate) spec else snap(), alignment = Alignment.TopStart),
-        )
-        if (expandable || expanded) {
-            Box(
-                modifier = Modifier
-                    .heightIn(min = 40.dp)
-                    .yomuPressable(onClick = { expanded = !expanded }, role = Role.Button),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Text(
-                    text = if (expanded) "Less" else "More",
-                    style = StackType.Label.copy(fontSize = 14.5.sp),
-                    color = stack.ink,
-                )
+    val style = StackType.BodySmall
+    val linkStyle = TextLinkStyles(SpanStyle(color = stack.ink, fontWeight = FontWeight.SemiBold))
+    val toggle = LinkAnnotation.Clickable(tag = "more", styles = linkStyle) { expanded = !expanded }
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val measurer = rememberTextMeasurer()
+        val width = constraints.maxWidth
+        // The collapsed text, cut so "… More" still ends the last line; null when it all fits.
+        val collapsed = remember(description, width, style) {
+            collapsedDescription(description, style, width, measurer)
+        }
+        val text = buildAnnotatedString {
+            if (!expanded && collapsed != null) {
+                append(collapsed)
+                append("… ")
+                withLink(toggle) { append("More") }
+            } else {
+                append(description)
+                if (expanded && collapsed != null) {
+                    append(" ")
+                    withLink(toggle) { append("Less") }
+                }
             }
         }
+        Text(
+            text = text,
+            style = style,
+            color = stack.body,
+            modifier = Modifier.animateContentSize(if (animate) spec else snap(), alignment = Alignment.TopStart),
+        )
     }
 }
+
+private fun collapsedDescription(description: String, style: TextStyle, width: Int, measurer: TextMeasurer): String? {
+    val constraints = Constraints(maxWidth = width)
+    val full = measurer.measure(description, style, maxLines = DescriptionLines, constraints = constraints)
+    if (!full.hasVisualOverflow) return null
+    var end = full.getLineEnd(DescriptionLines - 1, visibleEnd = true)
+    // Give back characters until "… More" fits on the last line.
+    repeat(DescriptionFitAttempts) {
+        val candidate = description.substring(0, end.coerceAtLeast(0)).trimEnd().trimEnd(',', ';', ':', '.', '—', '-').trimEnd()
+        val probe = measurer.measure("$candidate… More", style, maxLines = DescriptionLines, constraints = constraints)
+        if (!probe.hasVisualOverflow) return candidate
+        end -= DescriptionFitStep
+    }
+    return description.substring(0, end.coerceAtLeast(0)).trimEnd()
+}
+
+private const val DescriptionFitAttempts = 8
+private const val DescriptionFitStep = 4
 
 /**
  * The cover at its own size with Stack's static shadow. A book without a cover image gets a
