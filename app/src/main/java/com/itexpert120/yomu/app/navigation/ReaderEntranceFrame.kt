@@ -78,6 +78,9 @@ internal suspend fun awaitFirstPage(pageReady: Flow<Boolean>, graceMillis: Long)
  */
 private const val OpeningGraceMillis = 650L
 
+/** How far the reader rises as it fades in, opened from the library's play button. */
+private val LibraryEntranceRise = 48.dp
+
 /**
  * The reader's side of Stack's Resume motion. The reader page arrives inside a sheet that rises
  * into it: from the book sheet ([ReaderEntrance.BookSheet]; [BookSheetFrame] moves that sheet up on
@@ -121,7 +124,7 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         if (!active) return@LaunchedEffect
         launch {
             awaitFirstPage(pageReady, OpeningGraceMillis)
-            pageIn.animateTo(1f, effects)
+            pageIn.animateTo(1f, if (fromLibrary) scheme.slowEffectsSpec() else effects)
         }
         // The chapter's rise belongs to this first open only, not to a later reopen of the page.
         pageReady.first { it }
@@ -133,6 +136,7 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         bookSheetTop(WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()).toPx()
     }
     val cornerPx = with(density) { BookSheetCorner.toPx() }
+    val libraryRisePx = with(density) { LibraryEntranceRise.toPx() }
     val sheetColor = MaterialTheme.colorScheme.surface
 
     // Navigation keeps the page underneath until this page's move has settled.
@@ -150,20 +154,31 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
                 val s = square.value.coerceIn(0f, 1f)
                 if (!active || (r >= 1f && s >= 1f)) {
                     clip = false
+                    translationY = 0f
+                    alpha = 1f
                     return@graphicsLayer
                 }
-                val startTop = if (fromLibrary) size.height else sheetTopPx
-                shape = RisingSheetShape(top = startTop * (1f - r), corner = cornerPx * (1f - s))
+                if (fromLibrary) {
+                    // From the library: no sheet travelling the whole screen up from the bottom; the
+                    // page itself rises a little as it fades in, once its first page is laid out.
+                    clip = false
+                    translationY = libraryRisePx * (1f - pageIn.value.coerceIn(0f, 1f))
+                    return@graphicsLayer
+                }
+                shape = RisingSheetShape(top = sheetTopPx * (1f - r), corner = cornerPx * (1f - s))
                 clip = true
             }
             .drawBehind {
                 // The sheet itself, under the page until the page has faded in. From the book it is
                 // drawn only once that sheet has gone (it is the same blank sheet by then), so the
                 // book info can be seen leaving (it has faded long before the sheet tops out).
-                if (active && pageIn.value < 1f && (fromLibrary || settled() || rise.value >= 0.999f)) drawRect(sheetColor)
+                if (active && !fromLibrary && pageIn.value < 1f && (settled() || rise.value >= 0.999f)) drawRect(sheetColor)
             },
     ) {
-        CompositionLocalProvider(LocalReaderOpeningRise provides if (active && rising) BookSheetResumeScroll else 0.dp) {
+        // The chapter's own first rise belongs to the book sheet's scroll; from the library the whole
+        // page makes the short rise.
+        val chapterRise = if (fromLibrary) 0.dp else BookSheetResumeScroll
+        CompositionLocalProvider(LocalReaderOpeningRise provides if (active && rising) chapterRise else 0.dp) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = pageIn.value }) { content() }
         }
     }
