@@ -599,7 +599,7 @@ private fun SingleColumnBody(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .contentsTopFade(edge, sheet),
+                                .contentsTopFade(edge, YomuTheme.stack.rule),
                             contentPadding = PaddingValues(top = 8.dp, bottom = navBottom + 24.dp),
                         ) {
                             item {
