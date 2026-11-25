@@ -9,6 +9,10 @@ object ReaderOpenTrace {
     private val nextCookie = AtomicInteger(1)
 
     fun mark(name: String) {
+        // v2 prototype measurement: timestamps for comparing against the native engine.
+        if (com.itexpert120.yomu.BuildConfig.DEBUG) {
+            android.util.Log.i("ReaderOpenTrace", "$name at ${android.os.SystemClock.elapsedRealtime()}")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val cookie = nextCookie.getAndIncrement()
             Trace.beginAsyncSection(name, cookie)

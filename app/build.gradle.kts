@@ -132,6 +132,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.compose)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
+    implementation(project(":reader-engine"))
     implementation(libs.readium.shared)
     implementation(libs.readium.streamer)
     implementation(libs.readium.navigator)

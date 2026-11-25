@@ -3,6 +3,7 @@ import com.diffplug.spotless.LineEnding
 
 plugins {
     alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.baselineprofile) apply false
     alias(libs.plugins.spotless)
@@ -14,7 +15,7 @@ spotless {
     kotlin {
         // Restrict traversal to source roots. Scanning `**` can race Android's asset compression
         // task over transient build directories when formatting and assemble run together in CI.
-        target("app/src/**/*.kt", "benchmark/src/**/*.kt")
+        target("app/src/**/*.kt", "benchmark/src/**/*.kt", "reader-engine/src/**/*.kt")
         ktlint(libs.versions.ktlint.get())
             .editorConfigOverride(
                 mapOf(
