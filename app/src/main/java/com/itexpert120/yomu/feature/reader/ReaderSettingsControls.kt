@@ -666,6 +666,7 @@ private object ChromeIcons {
     val KeepOn = StackIcons.Lightbulb
     val Scrollbar = StackIcons.Height
     val Immersive = StackIcons.Fullscreen
+    val TwoPages = StackIcons.MenuBook
 }
 
 @Composable
@@ -784,6 +785,19 @@ internal fun ReaderChromeToggles(
                 enabled = settings.layout == ReaderLayout.Scroll,
             )
         }
+        // Spreads only exist in paged mode, on a landscape window wide enough for two pages.
+        YomuSettingRow(
+            title = "Two pages in landscape",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.layout == ReaderLayout.Paged,
+            leadingContent = { ChromeRowIcon(ChromeIcons.TwoPages) },
+        ) {
+            YomuTogglePill(
+                checked = settings.twoPageSpread,
+                onCheckedChange = { onUpdateSettings(settings.copy(twoPageSpread = it)) },
+                enabled = settings.layout == ReaderLayout.Paged,
+            )
+        }
         YomuSettingRow(
             title = "Immersive",
             position = YomuSettingPosition.Last,
@@ -852,6 +866,9 @@ private fun CompactChromeToggles(
             // The scrollbar only exists in scroll mode (a native WebView scroll).
             ToggleChip("Scrollbar", settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
                 onUpdateSettings(settings.copy(showScrollbar = it))
+            }
+            ToggleChip("Two pages", settings.twoPageSpread, settings.layout == ReaderLayout.Paged) {
+                onUpdateSettings(settings.copy(twoPageSpread = it))
             }
             ToggleChip("Immersive", settings.immersiveChrome) {
                 onUpdateSettings(settings.copy(immersiveChrome = it))
