@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,13 +16,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -39,8 +36,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
 import com.itexpert120.yomu.core.designsystem.YomuSectionLabel
@@ -166,16 +170,17 @@ private fun ViewTiles(selected: LibraryViewMode, onSelect: (LibraryViewMode) -> 
                             onSelect(mode)
                         },
                     )
-                    .padding(vertical = YomuTheme.space.sm, horizontal = YomuTheme.space.xxs),
+                    .padding(vertical = YomuTheme.space.sm, horizontal = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
             ) {
                 Icon(mode.icon, contentDescription = null, tint = content)
                 Text(
                     text = mode.label,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = StackType.Caption.copy(fontWeight = FontWeight.SemiBold),
                     color = content,
                     maxLines = 1,
+                    softWrap = false,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -275,42 +280,42 @@ private fun ColumnsFootnote(
     onResetLandscape: () -> Unit,
 ) {
     val stack = YomuTheme.stack
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = YomuTheme.space.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = if (gridView) {
-                "Automatic fits columns to your screen and text size."
-            } else {
-                "Columns apply to the grid views."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = stack.muted,
-            modifier = Modifier.weight(1f),
-        )
-        if (gridView && (portraitCustom || landscapeCustom)) {
-            TextButton(
-                onClick = {
+    val resetLabel = when {
+        !gridView -> null
+        portraitCustom && landscapeCustom -> "Reset columns"
+        portraitCustom -> "Reset portrait"
+        landscapeCustom -> "Reset landscape"
+        else -> null
+    }
+    val text = buildAnnotatedString {
+        append(if (gridView) "Automatic fits columns to your screen and text size." else "Columns apply to the grid views.")
+        if (resetLabel != null) {
+            append(" ")
+            withLink(
+                LinkAnnotation.Clickable(
+                    tag = "reset",
+                    styles = TextLinkStyles(SpanStyle(color = stack.ink, fontWeight = FontWeight.SemiBold)),
+                ) {
                     if (portraitCustom) onResetPortrait()
                     if (landscapeCustom) onResetLandscape()
                 },
-                shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.textButtonColors(contentColor = stack.ink),
-                modifier = Modifier.height(40.dp),
-            ) {
-                Text("Reset", style = MaterialTheme.typography.labelLarge)
-            }
+            ) { append(resetLabel) }
         }
     }
+    Text(
+        text = text,
+        style = StackType.Caption,
+        color = stack.muted,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+    )
 }
 
 private val LibraryViewMode.icon: ImageVector
     get() = when (this) {
         LibraryViewMode.ComfortableGrid -> StackIcons.GridView
-        LibraryViewMode.CompactGrid -> StackIcons.ViewComfy
-        LibraryViewMode.CoverOnlyGrid -> StackIcons.Photo
+        LibraryViewMode.CompactGrid -> StackIcons.Apps
+        LibraryViewMode.CoverOnlyGrid -> StackIcons.PhotoLibrary
         LibraryViewMode.List -> StackIcons.ViewList
     }

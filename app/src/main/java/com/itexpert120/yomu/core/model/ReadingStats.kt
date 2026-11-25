@@ -58,6 +58,8 @@ data class ReadingStats(
     val booksInLibrary: Int = 0,
     val booksStarted: Int = 0,
     val booksFinished: Int = 0,
+    // Finished books whose finish falls in the current calendar year.
+    val booksFinishedThisYear: Int = 0,
     val chaptersRead: Int = 0,
     val estimatedWordsRead: Long = 0L,
     val estimatedReadingSpeedWpm: Int = 0,

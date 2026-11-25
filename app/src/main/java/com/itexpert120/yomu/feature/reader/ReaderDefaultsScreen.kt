@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -55,6 +56,7 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
+import com.itexpert120.yomu.core.designsystem.bleedHorizontally
 import com.itexpert120.yomu.core.model.CustomFontRef
 import com.itexpert120.yomu.core.model.CustomReaderTheme
 import com.itexpert120.yomu.core.model.ReaderSettings
@@ -248,7 +250,11 @@ private fun ColumnScope.ReaderDefaultsControls(
         ReaderAlignmentLine(settings, onUpdate)
         ReaderSpacingLines(settings, onUpdate)
     }
-    DefaultsSection("While reading") { ReaderChromeToggles(settings, onUpdate) }
+    DefaultsSection("While reading") {
+        // The rows' group card is the sheet's own colour here, so its 16dp inset would only push
+        // the rows off the gutter every other control sits on.
+        Box(Modifier.bleedHorizontally(16.dp)) { ReaderChromeToggles(settings, onUpdate) }
+    }
 }
 
 @Composable

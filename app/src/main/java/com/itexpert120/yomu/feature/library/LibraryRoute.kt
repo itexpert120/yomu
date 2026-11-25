@@ -79,7 +79,7 @@ fun LibraryRoute(
         onCreateCollection = viewModel::onCreateCollection,
         onRenameCollection = viewModel::onRenameCollection,
         onDeleteCollection = viewModel::onDeleteCollection,
-        onMoveTab = viewModel::onMoveTab,
+        onReorderTabs = viewModel::onReorderTabs,
         onSetTabHidden = viewModel::onSetTabHidden,
         onSetSelectedInCollection = viewModel::onSetSelectedInCollection,
         onSetSelectedStatus = viewModel::onSetSelectedStatus,

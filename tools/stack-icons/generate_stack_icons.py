@@ -23,6 +23,7 @@ OUT = os.path.join(
 OUTLINED = "wght300"  # FILL 0, weight 300, grade 0, optical size 24
 FILLED = "fill1"  # FILL 1, weight 400: the active nav item and the play/resume button
 FILLED_300 = "wght300fill1"  # FILL 1, weight 300: on-state of a toggle whose off-state is OUTLINED
+THIN = "wght200"  # FILL 0, weight 200: the large 48dp symbol of an empty state
 
 # (StackIcons property, Material Symbols name, variant, autoMirror)
 ICONS = [
@@ -151,6 +152,21 @@ ICONS = [
     ("SwapVert", "swap_vert", OUTLINED, False),
     ("TravelExplore", "travel_explore", OUTLINED, False),
     ("VerticalAlignBottom", "vertical_align_bottom", OUTLINED, False),
+    ("Apps", "apps", OUTLINED, False),
+    ("DragIndicator", "drag_indicator", OUTLINED, False),
+    ("PhotoLibrary", "photo_library", OUTLINED, False),
+    ("AutoStoriesThin", "auto_stories", THIN, False),
+    ("BookThin", "book", THIN, False),
+    ("BookmarksThin", "bookmarks", THIN, False),
+    ("BorderColorThin", "border_color", THIN, False),
+    ("CloudOffThin", "cloud_off", THIN, False),
+    ("CollectionsBookmarkThin", "collections_bookmark", THIN, False),
+    ("EditOffThin", "edit_off", THIN, False),
+    ("HourglassEmptyThin", "hourglass_empty", THIN, False),
+    ("MatchCaseThin", "match_case", THIN, False),
+    ("NoPhotographyThin", "no_photography", THIN, False),
+    ("SearchOffThin", "search_off", THIN, False),
+    ("TocThin", "toc", THIN, True),
 ]
 
 VIEWBOX = "0 -960 960 960"
@@ -214,6 +230,7 @@ import androidx.compose.ui.unit.dp
  * Stack's icons: Material Symbols Outlined at weight 300 (optical size 24, grade 0). `*Filled` are
  * FILL 1 at weight 400, used only for the active navigation item and the play/resume button, except
  * [BookmarkFilled], which is FILL 1 at weight 300 so it keeps [Bookmark]'s silhouette when toggled.
+ * `*Thin` are weight 200, for the large symbol of an empty state.
  */
 object StackIcons {
 """

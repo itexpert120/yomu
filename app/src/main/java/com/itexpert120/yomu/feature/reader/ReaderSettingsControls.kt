@@ -10,8 +10,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -35,14 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -198,20 +192,32 @@ private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (Reader
                     .weight(1f)
                     .heightIn(min = 72.dp)
                     .clip(tileShape)
-                    .background(background)
-                    .then(
-                        when {
-                            selected -> Modifier.border(2.dp, stack.ink, tileShape)
-                            custom -> Modifier.readerDashedBorder(stack.track, 14.dp)
-                            else -> Modifier.border(1.5.dp, stack.track, tileShape)
-                        },
-                    )
                     .selectable(
                         selected = selected,
                         role = Role.RadioButton,
                         onClick = { onUpdateSettings(palette) },
                     )
-                    .padding(vertical = YomuTheme.space.xs),
+                    .then(
+                        // The chosen tile: an ink ring with a sheet-coloured gap, so the choice
+                        // also shows on Night, Black and a dark Custom page.
+                        if (selected) {
+                            Modifier
+                                .border(2.dp, stack.ink, tileShape)
+                                .padding(3.dp)
+                                .clip(SelectedTileInnerShape)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .background(background)
+                    .then(
+                        when {
+                            selected -> Modifier
+                            custom -> Modifier.readerDashedBorder(stack.track, 14.dp)
+                            else -> Modifier.border(1.5.dp, stack.track, tileShape)
+                        },
+                    )
+                    .padding(vertical = if (selected) YomuTheme.space.xs - 3.dp else YomuTheme.space.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
             ) {
@@ -230,6 +236,8 @@ private fun ReaderThemeTiles(settings: ReaderSettings, onUpdateSettings: (Reader
         }
     }
 }
+
+private val SelectedTileInnerShape = RoundedCornerShape(11.dp)
 
 /** The Custom theme's saved palettes as chips, then the way into the theme editor. */
 @Composable
@@ -271,10 +279,11 @@ internal fun ReaderCustomThemes(
 // region Font and size
 
 /**
- * The reading fonts as one sideways row of chips, each named in its own face, ending in "Get
- * fonts" (the font library) when [onGetFonts] is given. Runs edge to edge: [gutter] is the
- * screen's side padding, so the row can scroll past it.
+ * The reading fonts as chips that wrap, each named in its own face, ending in "Get fonts" (the font
+ * library) when [onGetFonts] is given: every font in view, none clipped, as on the board. [gutter]
+ * is the screen's side padding.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ReaderFontPicker(
     settings: ReaderSettings,
@@ -284,74 +293,29 @@ internal fun ReaderFontPicker(
     gutter: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val selectedIndex = if (settings.customFont == null) {
-        ReaderFont.entries.indexOf(settings.font)
-    } else {
-        ReaderFont.entries.size + customFonts.indexOfFirst { it.family == settings.customFont.family }.coerceAtLeast(0)
-    }
-    // Opens with the chosen font in view.
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selectedIndex - 1).coerceAtLeast(0))
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        LazyRow(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .horizontalEdgeFade(start = { listState.canScrollBackward }, end = { listState.canScrollForward })
-                .selectableGroup(),
-            contentPadding = PaddingValues(start = gutter, end = if (onGetFonts != null) YomuTheme.space.xs else gutter),
-            horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            fontChips(settings, onUpdateSettings, customFonts)
+    FlowRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = gutter)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
+    ) {
+        ReaderFont.entries.forEach { font ->
+            FontChip(
+                font = font,
+                selected = settings.customFont == null && settings.font == font,
+                onClick = { onUpdateSettings(settings.copy(font = font, customFont = null)) },
+            )
         }
-        // Pinned at the row's end so it is always in reach, however many fonts are installed.
-        if (onGetFonts != null) {
-            Box(Modifier.padding(end = gutter)) { GetFontsChip(onClick = onGetFonts) }
+        customFonts.forEach { custom ->
+            CustomFontChip(
+                font = custom,
+                selected = settings.customFont?.family == custom.family,
+                onClick = { onUpdateSettings(settings.copy(customFont = custom)) },
+            )
         }
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.fontChips(
-    settings: ReaderSettings,
-    onUpdateSettings: (ReaderSettings) -> Unit,
-    customFonts: List<CustomFontRef>,
-) {
-    items(ReaderFont.entries.size) { index ->
-        val font = ReaderFont.entries[index]
-        FontChip(
-            font = font,
-            selected = settings.customFont == null && settings.font == font,
-            onClick = { onUpdateSettings(settings.copy(font = font, customFont = null)) },
-        )
-    }
-    items(customFonts.size) { index ->
-        val custom = customFonts[index]
-        CustomFontChip(
-            font = custom,
-            selected = settings.customFont?.family == custom.family,
-            onClick = { onUpdateSettings(settings.copy(customFont = custom)) },
-        )
-    }
-}
-
-/** Fades content out toward a side that has more to scroll; read while drawing. */
-private fun Modifier.horizontalEdgeFade(start: () -> Boolean, end: () -> Boolean, width: Dp = 20.dp): Modifier = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
-    drawContent()
-    val w = width.toPx()
-    if (start()) {
-        drawRect(
-            brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = 0f, endX = w),
-            size = Size(w, size.height),
-            blendMode = BlendMode.DstOut,
-        )
-    }
-    if (end()) {
-        drawRect(
-            brush = Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = size.width - w, endX = size.width),
-            topLeft = Offset(size.width - w, 0f),
-            size = Size(w, size.height),
-            blendMode = BlendMode.DstOut,
-        )
+        if (onGetFonts != null) GetFontsChip(onClick = onGetFonts)
     }
 }
 

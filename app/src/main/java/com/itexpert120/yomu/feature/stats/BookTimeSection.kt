@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,11 +38,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
-import com.itexpert120.yomu.core.designsystem.YomuButton
-import com.itexpert120.yomu.core.designsystem.YomuButtonEmphasis
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.BookReadingTime
 import kotlin.math.roundToInt
 
@@ -89,15 +91,12 @@ internal fun foldRemovedBooks(books: List<BookReadingTime>): List<BookTimeEntry>
 internal fun BookTimeSection(
     books: List<BookReadingTime>,
     modifier: Modifier = Modifier,
-    thumbWidth: Dp = 44.dp,
+    thumbWidth: Dp = 32.dp,
 ) {
     Column(modifier.fillMaxWidth()) {
         val rows = remember(books) { foldRemovedBooks(books) }
         val total = remember(books) { books.sumOf { it.seconds } }
-        SectionHeading(
-            text = "Time by book",
-            trailing = if (books.isEmpty()) null else "${plural(books.size, "book")} · ${formatReadingTime(total)}",
-        )
+        SectionHeading(text = "Time by book", trailing = null)
         if (books.isEmpty()) {
             SectionEmpty("Time you spend in each book will add up here.")
             return@Column
@@ -120,10 +119,9 @@ internal fun BookTimeSection(
             }
         }
         if (rows.size > CollapsedBookCount) {
-            YomuButton(
+            SectionTextAction(
                 text = if (expanded) "Show fewer" else "Show ${rows.size - CollapsedBookCount} more",
                 onClick = { expanded = !expanded },
-                emphasis = YomuButtonEmphasis.Ghost,
                 modifier = Modifier.padding(top = YomuTheme.space.xxs),
             )
         }
@@ -169,18 +167,10 @@ private fun BookTimeRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = listOfNotNull(book.author, plural(book.sessionCount, "session")).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = stack.muted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 1.dp),
-            )
             // Track and fill drawn in one pass; the animated share is read only while drawing.
             Box(
                 Modifier
-                    .padding(top = 8.dp)
+                    .padding(top = 6.dp)
                     .fillMaxWidth()
                     .height(3.dp)
                     .drawBehind {
@@ -191,26 +181,18 @@ private fun BookTimeRow(
                     },
             )
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = time,
-                style = StackType.BodySmall.copy(fontSize = 14.sp, fontFeatureSettings = "tnum"),
-                color = stack.muted,
-                maxLines = 1,
-            )
-            Text(
-                text = "$percent%",
-                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                color = stack.faint,
-                maxLines = 1,
-            )
-        }
+        Text(
+            text = time,
+            style = StackType.BodySmall.copy(fontSize = 14.sp, fontFeatureSettings = "tnum"),
+            color = stack.muted,
+            maxLines = 1,
+        )
     }
 }
 
 /** Removed books have no cover any more: an empty raised block with a quiet delete mark. */
 @Composable
-private fun RemovedBooksThumb(width: Dp) {
+internal fun RemovedBooksThumb(width: Dp) {
     val stack = YomuTheme.stack
     Box(
         modifier = Modifier
@@ -220,5 +202,18 @@ private fun RemovedBooksThumb(width: Dp) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(StackIcons.Delete, contentDescription = null, tint = stack.faint, modifier = Modifier.size(width * 0.45f))
+    }
+}
+
+/** A section's quiet text action ("Show more"), its label on the content's leading edge. */
+@Composable
+internal fun SectionTextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .yomuPressable(onClick = onClick, role = Role.Button, shape = RoundedCornerShape(16.dp)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(text = text, style = StackType.Heading, color = YomuTheme.stack.ink)
     }
 }

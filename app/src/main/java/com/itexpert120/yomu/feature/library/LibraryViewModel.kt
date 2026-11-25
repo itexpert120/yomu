@@ -8,7 +8,9 @@ import com.itexpert120.yomu.core.model.BookId
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
+import com.itexpert120.yomu.core.model.ShelfStatus
 import com.itexpert120.yomu.core.model.SortMode
+import com.itexpert120.yomu.core.model.shelfStatus
 import com.itexpert120.yomu.core.reader.ReaderTocItem
 import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.data.books.PublicationIndex
@@ -40,9 +42,16 @@ import kotlinx.coroutines.launch
 import java.util.IdentityHashMap
 import javax.inject.Inject
 
-/** The pile: opened, unfinished books, most recently opened first, at most three. */
+/**
+ * The pile: books in progress (started and not finished, or set to Reading by hand), most recently
+ * opened first, at most three. A book only opened at its first page isn't in progress yet; with none,
+ * the pile area collapses and the shelf sits under the title.
+ */
 internal fun List<Book>.pileBooks(): List<Book> = asSequence()
-    .filter { it.lastOpenedAt > 0L && it.progress < 0.995f }
+    .filter { book ->
+        book.shelfStatus == ShelfStatus.Reading &&
+            (book.manualStatus == ManualStatus.Reading || book.progress < 0.995f)
+    }
     .sortedByDescending { it.lastOpenedAt }
     .take(3)
     .toList()
@@ -109,10 +118,15 @@ class LibraryViewModel @Inject constructor(
     // Only touched from the serial state pipeline below.
     private var projections = IdentityHashMap<Book, LibraryBook>()
 
-    // The chapter each pile book is in, from its already-indexed contents (never parses an EPUB).
+    // The chapter each book in progress is in (the pile's "Chapter 7", a list row's "Ch. 7"), from
+    // its already-indexed contents (never parses an EPUB).
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val pileChapters = catalog.observe()
-        .map { catalog -> catalog.entries.map { it.book }.pileBooks().map { PilePosition(it.id, it.currentChapterId, it.currentHref) } }
+    private val chapters = catalog.observe()
+        .map { catalog ->
+            catalog.entries.map { it.book }
+                .filter { it.shelfStatus == ShelfStatus.Reading && (it.currentChapterId != null || it.currentHref != null) }
+                .map { PilePosition(it.id, it.currentChapterId, it.currentHref) }
+        }
         .distinctUntilChanged()
         .mapLatest { positions ->
             positions.mapNotNull { position ->
@@ -123,8 +137,8 @@ class LibraryViewModel @Inject constructor(
         .onStart { emit(emptyMap()) }
 
     val state: StateFlow<LibraryUiState> =
-        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches, pileChapters) { d, prefs, i, recent, chapters ->
-            buildState(d, prefs, i, recent).copy(pileChapters = chapters)
+        combine(catalog.observe(), libraryPrefs.preferences, inputs, recentSearches.searches, chapters) { d, prefs, i, recent, chapters ->
+            buildState(d, prefs, i, recent).copy(chapters = chapters)
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
@@ -172,13 +186,8 @@ class LibraryViewModel @Inject constructor(
         launchSafely { libraryPrefs.setTabHidden(key, hidden) }
     }
 
-    /** Moves any tab (status or collection) one place; the whole order is then remembered. */
-    fun onMoveTab(key: String, up: Boolean) {
-        val order = state.value.allTabs.map { it.key }.toMutableList()
-        val from = order.indexOf(key)
-        val to = if (up) from - 1 else from + 1
-        if (from < 0 || to !in order.indices) return
-        order.add(to, order.removeAt(from))
+    /** Remembers the tab order the Shelves sheet's drag settled on. */
+    fun onReorderTabs(order: List<String>) {
         launchSafely { libraryPrefs.setTabOrder(order) }
     }
 

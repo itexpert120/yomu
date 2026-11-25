@@ -111,6 +111,8 @@ class RoomBookRepository @Inject constructor(
         val now = System.currentTimeMillis()
         val canonical = if (snapshot.completed) 1.0 else snapshot.bookProgress.coerceIn(0.0, 0.999)
         database.withTransaction {
+            // Before the update: it compares against the progress stored so far.
+            dao.clearUnpinnedStatusOnProgress(id.value, canonical.toFloat(), now)
             dao.updateProgress(
                 id = id.value,
                 progress = canonical.toFloat(),

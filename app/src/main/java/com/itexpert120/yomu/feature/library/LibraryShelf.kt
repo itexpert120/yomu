@@ -169,6 +169,7 @@ internal fun LibraryList(
     selecting: Boolean,
     onBookClick: (LibraryBook) -> Unit,
     onBookLongPress: (LibraryBook) -> Unit,
+    chapters: Map<String, String> = emptyMap(),
 ) {
     // A full-bleed list of rows reads awkwardly on a wide tablet; the horizontal content padding
     // keeps it to a single centred, readable column. Phones are unaffected (screen < max width).
@@ -182,6 +183,7 @@ internal fun LibraryList(
         lazyListItems(books, key = { it.id }, contentType = { LibraryBookContentType }) { book ->
             BookListRow(
                 book = book,
+                caption = listCaption(book, chapters[book.id]),
                 onClick = { onBookClick(book) },
                 onLongPress = { onBookLongPress(book) },
                 selected = book.id in selectedIds,
@@ -198,3 +200,16 @@ internal fun LibraryList(
 }
 
 private const val LibraryBookContentType = "book"
+
+/**
+ * A list row's caption as on the board: the author, then "Ch. 7" while the book is in progress and
+ * its chapter is numbered (an unnumbered chapter title would crowd the author out).
+ */
+internal fun listCaption(book: LibraryBook, chapter: String?): String {
+    val short = chapter?.let(::pileChapterLabel)?.let { label ->
+        ChapterWord.find(label)?.let { "Ch. " + it.groupValues[1] }
+    }
+    return listOfNotNull(book.author.takeIf { it.isNotBlank() }, short).joinToString(" · ")
+}
+
+private val ChapterWord = Regex("""^(?:chapter|ch\.?)\s+([\p{L}\p{N}]+)$""", RegexOption.IGNORE_CASE)

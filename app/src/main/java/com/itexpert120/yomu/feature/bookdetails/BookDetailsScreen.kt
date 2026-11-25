@@ -612,13 +612,21 @@ private fun SingleColumnBody(
                                     onCoverClick = actions.onCover,
                                     onRead = actions.onRead,
                                     onOrganize = actions.onOrganize,
-                                    modifier = Modifier.padding(bottom = 18.dp),
+                                    modifier = Modifier.padding(bottom = 6.dp),
                                 )
                             }
                             tocSection(toc = toc, gutter = gutter, actions = tocActions, motion = volumeMotion, edge = edge)
                             // Room for the selection toolbar without shifting rows when selection toggles.
                             item { Spacer(Modifier.height(FloatingActionClearance)) }
                         }
+                        ContentsCurrentChapterPill(
+                            listState = listState,
+                            toc = toc,
+                            motion = volumeMotion,
+                            onToggleVolume = contents.onToggleVolume,
+                            firstRowIndex = 2,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBottom + YomuTheme.space.md),
+                        )
                     }
                 }
             }
@@ -681,12 +689,22 @@ private fun WideBody(
                                 .verticalScroll(detailsScroll)
                                 .padding(top = 8.dp, bottom = navBottom + 24.dp),
                         )
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            contentPadding = PaddingValues(bottom = navBottom + if (toc.selectionMode) FloatingActionClearance else 24.dp),
-                        ) {
-                            tocSection(toc = toc, gutter = gutter - 8.dp, actions = tocActions, motion = volumeMotion, edge = edge)
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = navBottom + if (toc.selectionMode) FloatingActionClearance else 24.dp),
+                            ) {
+                                tocSection(toc = toc, gutter = gutter - 8.dp, actions = tocActions, motion = volumeMotion, edge = edge)
+                            }
+                            ContentsCurrentChapterPill(
+                                listState = listState,
+                                toc = toc,
+                                motion = volumeMotion,
+                                onToggleVolume = contents.onToggleVolume,
+                                firstRowIndex = 1,
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBottom + YomuTheme.space.md),
+                            )
                         }
                     }
                 }
@@ -948,7 +966,20 @@ private val PreviewChapters = listOf(
 private fun previewToc(selection: Boolean = false) = TocUiState(
     loading = false,
     selectionMode = selection,
-    items = PreviewChapters.mapIndexed { index, title ->
+    // Out of selection the six read chapters before the current one fold into "1–6 Read".
+    items = (
+        if (selection) {
+            emptyList()
+        } else {
+            listOf(
+                TocEntryUi(
+                    uid = READ_RUN_UID, chapterId = "", title = "Read", locatorJson = null, depth = 0, read = true,
+                    selected = false, bookmarked = false, percent = null, children = 6, expanded = false,
+                    chapterCount = 6, chapterReadCount = 6, readRun = true, numberLabel = "1–6",
+                ),
+            )
+        }
+        ) + PreviewChapters.mapIndexed { index, title ->
         TocEntryUi(
             uid = index,
             chapterId = "c$index",
@@ -962,13 +993,14 @@ private fun previewToc(selection: Boolean = false) = TocUiState(
             number = index + 1,
             current = index == 6,
         )
-    },
+    }.filter { selection || it.uid >= 6 },
     selectedCount = if (selection) 3 else 0,
     selectableCount = PreviewChapters.size,
     readCount = 6,
     unreadCount = 6,
     currentNumber = 7,
     currentTitle = PreviewChapters[6],
+    chapterTotal = PreviewChapters.size,
     flat = true,
 )
 
@@ -1002,6 +1034,9 @@ private fun previewVolumesToc(): TocUiState {
         selectableCount = 720,
         readCount = 256,
         unreadCount = 464,
+        currentNumber = 5,
+        currentTitle = "Chapter 3: Melissa",
+        chapterTotal = 718,
         collapsibleCount = 4,
         collapsedCount = 3,
     )

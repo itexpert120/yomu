@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -32,12 +33,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,12 +76,18 @@ import com.itexpert120.yomu.core.designsystem.YomuToolbarAction
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
+import com.itexpert120.yomu.feature.contents.CurrentChapterPill
+import com.itexpert120.yomu.feature.contents.revealItem
+import com.itexpert120.yomu.feature.contents.showsItem
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.saket.swipe.SwipeAction
 import me.saket.swipe.SwipeableActionsBox
 
 internal val TocRowMinHeight = 52.dp
-private val TocNumberWidth = 34.dp
+private val TocNumberWidth = 30.dp
 
 /** Deeper TOC levels share the last indent so long hierarchies keep a readable line length. */
 private const val TocMaxIndentLevels = 4
@@ -223,21 +234,11 @@ private fun ContentsHeader(
                 if (strength > 0f) drawEdgeFade(rule, top = size.height, height = fade, strength = strength)
             }
             .background(sheet)
-            .padding(start = gutter, end = gutter - 6.dp, top = 12.dp, bottom = 2.dp)
+            .padding(start = gutter, end = gutter - 6.dp, top = 4.dp, bottom = 2.dp)
             .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(text = "Contents", style = StackType.Heading, color = stack.ink)
-            if (ready) {
-                val total = toc.readCount + toc.unreadCount
-                Text(
-                    text = "$total ${if (total == 1) "chapter" else "chapters"} · ${toc.readCount} read",
-                    style = StackType.Caption,
-                    color = stack.muted,
-                )
-            }
-        }
+        Text(text = "Contents", style = StackType.Heading, color = stack.ink, modifier = Modifier.weight(1f))
         if (ready && toc.collapsibleCount > 0) {
             // Anything collapsed → open everything; nothing collapsed → close every volume.
             val anyCollapsed = toc.collapsedCount > 0
@@ -301,6 +302,7 @@ private fun TocRow(
     val titleColor by animateColorAsState(
         targetValue = when {
             entry.selected || entry.current -> stack.ink
+            entry.readRun -> stack.muted
             // A volume's title heads its chapters, so it stays ink unless it is a read chapter itself.
             entry.children > 0 && !entry.jumpable -> stack.ink
             // Read chapters recede (like visited links) so unread ones stand out at a glance.
@@ -366,14 +368,16 @@ private fun TocListItem(
 ) {
     val stack = YomuTheme.stack
     val progress = entry.percent?.coerceIn(0f, 1f) ?: 0f
-    val insetPx = 10.dp
     val volume = entry.children > 0
+    // The board's "you are here" card: a raised inset on the gutter with its content 14dp inside.
+    val card = entry.current && !selectionMode
+    val highlightInset = if (card) 0.dp else 10.dp
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .drawBehind {
                 drawRect(background)
-                val inset = (gutter - insetPx).toPx()
+                val inset = (gutter - highlightInset).toPx()
                 val tint = highlight.value
                 if (tint.alpha > 0f) {
                     drawRoundRect(
@@ -400,32 +404,43 @@ private fun TocListItem(
                 },
             )
             .heightIn(min = TocRowMinHeight)
-            .padding(start = gutter + 4.dp, end = if (volume) gutter - 12.dp else gutter),
+            .padding(
+                start = if (card) gutter + 14.dp else gutter,
+                end = if (volume) {
+                    gutter - 12.dp
+                } else if (card) {
+                    gutter + 14.dp
+                } else {
+                    gutter
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val indent = 16.dp * entry.depth.coerceIn(0, TocMaxIndentLevels)
-        if (entry.number != null) {
+        val number = entry.numberLabel ?: entry.number?.toString()
+        if (number != null) {
             Text(
-                text = entry.number.toString(),
+                text = number,
                 style = NumberStyle,
                 color = if (entry.current || entry.selected) stack.ink else stack.faint,
                 maxLines = 1,
-                modifier = Modifier.width(TocNumberWidth),
+                softWrap = false,
+                modifier = Modifier.widthIn(min = TocNumberWidth),
             )
         }
         Column(
             Modifier
                 .weight(1f)
-                .padding(start = indent, top = 8.dp, bottom = 8.dp, end = 8.dp),
+                .padding(start = indent + if (number != null) 14.dp else 0.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
         ) {
             Text(
                 text = entry.title,
                 color = titleColor,
-                style = if ((entry.current && !selectionMode) || volume) StackType.Body.copy(fontWeight = FontWeight.SemiBold) else StackType.Body,
+                style = if (card || (volume && !entry.readRun)) StackType.Body.copy(fontWeight = FontWeight.SemiBold) else StackType.Body,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (volume && entry.chapterCount > 0) {
+            if (volume && !entry.readRun && entry.chapterCount > 0) {
                 Text(
                     text = volumeTally(entry, expanded),
                     style = StackType.Caption,
@@ -615,6 +630,53 @@ internal fun ChapterSelectionToolbar(
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(bottom = 16.dp),
+    )
+}
+
+/**
+ * The reader's "Current chapter" pill on Book Details' contents: it shows while the chapter being
+ * read is off screen or inside a folded volume, and a tap opens what hides it and glides it into
+ * view with a row of context above (the contents header is pinned over the row before that).
+ * [firstRowIndex] is the list index of the first contents row.
+ */
+@Composable
+internal fun ContentsCurrentChapterPill(
+    listState: LazyListState,
+    toc: TocUiState,
+    motion: TocVolumeMotion,
+    onToggleVolume: (Int) -> Unit,
+    firstRowIndex: Int,
+    modifier: Modifier = Modifier,
+) {
+    val latest = rememberUpdatedState(toc)
+    val rows = motion.rows(toc.items)
+    val currentRow = rows.indexOfFirst { it.current }
+    val target = if (currentRow >= 0) currentRow else rows.indexOfFirst { it.holdsCurrent && !motion.showsExpanded(it) }
+    val targetIndex = if (target >= 0) firstRowIndex + target else -1
+    val away by remember(listState, targetIndex) {
+        derivedStateOf { targetIndex >= 0 && !listState.showsItem(targetIndex) }
+    }
+    val below by remember(listState, targetIndex) { derivedStateOf { targetIndex > listState.firstVisibleItemIndex } }
+    val scope = rememberCoroutineScope()
+    val spec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    CurrentChapterPill(
+        visible = away && !toc.selectionMode && !toc.loading,
+        below = below,
+        onClick = {
+            scope.launch {
+                // Open every folded volume around the chapter (outermost first), then glide to it.
+                repeat(TocMaxIndentLevels + 1) {
+                    val folded = latest.value.items.firstOrNull { it.holdsCurrent && !it.expanded } ?: return@repeat
+                    onToggleVolume(folded.uid)
+                    withTimeoutOrNull(1_000L) {
+                        snapshotFlow { latest.value.items.firstOrNull { it.uid == folded.uid }?.expanded }.first { it == true }
+                    }
+                }
+                val row = latest.value.items.indexOfFirst { it.current }
+                if (row >= 0) listState.revealItem(firstRowIndex + row, lead = 2, spec = spec)
+            }
+        },
+        modifier = modifier,
     )
 }
 
