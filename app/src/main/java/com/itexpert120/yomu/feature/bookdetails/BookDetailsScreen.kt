@@ -405,6 +405,7 @@ private fun PhoneSheet(
     val density = LocalDensity.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val hold = LocalBookSheetHold.current
     val drag = remember(scope) {
         SheetDrag(
             scope = scope,
@@ -416,6 +417,7 @@ private fun PhoneSheet(
     }
     drag.spec = settleSpec
     drag.onDismiss = onDismiss
+    drag.hold = hold
     val surface = MaterialTheme.colorScheme.surface
     val topPx = with(density) { top.toPx() }
     val cornerPx = with(density) { SheetCorner.toPx() }
@@ -477,6 +479,9 @@ private class SheetDrag(
     var offset by mutableFloatStateOf(0f)
     var height = 0f
     var spec: CoreAnimationSpec<Float>? = null
+
+    // Navigation's close motion, which a dismissal hands the sheet to (null in previews).
+    var hold: BookSheetHold? = null
     private var dismissing = false
     private var settle: Job? = null
 
@@ -490,6 +495,16 @@ private class SheetDrag(
         if (dismissing || offset <= 0f) return
         val close = offset > dismissPx || velocity > flingPx
         settle?.cancel()
+        val handOver = hold
+        if (close && handOver != null) {
+            // Navigation carries the sheet on from exactly here (and pops once the page has
+            // settled, if it is still opening), so it never animates away twice or comes back.
+            dismissing = true
+            handOver.offsetPx = offset
+            offset = 0f
+            onDismiss()
+            return
+        }
         settle = scope.launch {
             if (close) {
                 dismissing = true

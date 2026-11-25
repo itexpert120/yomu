@@ -129,7 +129,11 @@ private fun YomuNavigationLabel(label: String) {
     Text(text = label, style = MaterialTheme.typography.labelMedium)
 }
 
-/** Material rail container with the same role mapping as the compact navigation bar. */
+/**
+ * Stack's rail (medium widths and up): no surface of its own — it stands straight on the desk, so
+ * the desk shows through in every theme; muted items, the active one in ink with its filled icon.
+ * (The phone bar, by contrast, is a sheet-coloured strip with a top rule, on the library's sheet.)
+ */
 @Composable
 fun YomuNavigationRail(
     modifier: Modifier = Modifier,
@@ -138,8 +142,9 @@ fun YomuNavigationRail(
     WideNavigationRail(
         windowInsets = yomuStableSystemBarInsets().only(WindowInsetsSides.Vertical + WindowInsetsSides.Start),
         modifier = modifier,
-        arrangement = Arrangement.Center,
-        colors = WideNavigationRailDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        // Items from the top, as on the tablet board.
+        arrangement = Arrangement.Top,
+        colors = WideNavigationRailDefaults.colors(containerColor = Color.Transparent),
         content = content,
     )
 }

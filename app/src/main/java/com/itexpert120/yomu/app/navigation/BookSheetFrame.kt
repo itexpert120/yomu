@@ -4,16 +4,15 @@ import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -31,11 +30,15 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.LayoutDirection
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.rememberSettlingSpatialSpring
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
+import com.itexpert120.yomu.feature.bookdetails.BookSheetHold
 import com.itexpert120.yomu.feature.bookdetails.BookSheetResume
+import com.itexpert120.yomu.feature.bookdetails.LocalBookSheetHold
 import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
 import com.itexpert120.yomu.feature.bookdetails.bookPaneWidth
 import kotlinx.coroutines.CoroutineScope
@@ -44,9 +47,6 @@ import kotlinx.coroutines.launch
 
 /** Behind an open book the library dims to 80% (spec: black at 20%, never blur). */
 internal const val SheetDim = 0.2f
-
-/** How much of its travel the sheet follows a back gesture before the back commits. */
-private const val SheetDragShare = 0.35f
 
 /**
  * The library as it looked when a book opened over it. Navigation removes the library page once
@@ -100,11 +100,16 @@ internal fun AnimatedContentScope.LibraryPageRecorder(
  * Stack's open-book motion around the book details page. Opening, the book sheet rises from the
  * bottom (phones) or slides in from the end edge (a pane beside the library, medium and up) on
  * the spatial default spring, while the library behind dims to 80% on the effects spring and
- * never moves or scales. Closing reverses it: a back tap plays it from rest; a back gesture pulls
- * the sheet along with the finger, then commits from wherever it was (or retraces on cancel).
+ * never moves or scales. Closing is Stack's one back motion ([BackSlide]): the sheet slides back
+ * down (the pane back to its edge) and the dim lifts with it — following the finger during a back
+ * gesture, from rest on a back tap, a tap on the library beside a pane or the close button, and
+ * from wherever a drag let go of the phone sheet ([BookSheetHold], handed over by the sheet).
  *
- * The library page underneath is live during these moves; at rest, once navigation has removed
- * it, the frame draws [LibraryUnderlay]'s picture of it (or the plain desk when there is none).
+ * Under the sheet the frame draws [LibraryUnderlay]'s picture of the library, at rest and while the
+ * sheet moves, over the live library page underneath; while closing, the picture fades out as the
+ * sheet leaves, uncovering the live library. So the library on screen never swaps for a frame
+ * (the live page's first frame after being recreated is often not settled yet). With no picture
+ * (after a configuration change) it stands on the live library, or on the plain desk at rest.
  * Moving on to the editor, or coming back from it or from the reader, leaves the sheet where it is.
  *
  * Resume ([resuming]: the page is leaving for the reader, as a phone sheet) keeps the sheet moving
@@ -121,19 +126,22 @@ internal fun AnimatedContentScope.BookSheetFrame(
 ) {
     val motionEnabled = yomuAnimationsEnabled()
     val scheme = MaterialTheme.motionScheme
-    val enterSpring = rememberSheetSpring()
+    val sheetSpring = rememberSheetSpring()
+    // A pane beside the library slides in on the slow spatial spring (Stack: panes), a sheet on the default one.
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val slowSpring = remember(scheme) { scheme.slowSpatialSpec<Float>() }
+    val enterSpring = if (bookPaneBesideLibrary(windowWidth) && underlay.image != null) slowSpring else sheetSpring
     val dimSpring = remember(scheme) { scheme.defaultEffectsSpec<Float>() }
-    // 1 = off screen / not dimmed, 0 = at rest. Entering springs; leaving runs linearly so a back
-    // gesture can scrub it (the pose below eases it).
+    // 1 = off screen, 0 = at rest. Opening springs; any other move is the linear back clock.
     val hidden = transition.animateFloat(
         transitionSpec = {
-            if (initialState == EnterExitState.PreEnter) enterSpring else tween(YomuMotion.PredictiveBackMillis, easing = LinearEasing)
+            if (initialState == EnterExitState.PreEnter) enterSpring else tween(YomuMotion.BackSlideMillis, easing = LinearEasing)
         },
         label = "bookSheet",
     ) { state -> if (motionEnabled && state != EnterExitState.Visible) 1f else 0f }
     val undimmed = transition.animateFloat(
         transitionSpec = {
-            if (initialState == EnterExitState.PreEnter) dimSpring else tween(YomuMotion.PredictiveBackMillis, easing = LinearEasing)
+            if (initialState == EnterExitState.PreEnter) dimSpring else tween(YomuMotion.BackSlideMillis, easing = LinearEasing)
         },
         label = "bookSheetDim",
     ) { state -> if (motionEnabled && state != EnterExitState.Visible) 1f else 0f }
@@ -143,7 +151,7 @@ internal fun AnimatedContentScope.BookSheetFrame(
     val resumingNow = leaving && motionEnabled && resuming()
     val fadeSpring = remember(scheme) { scheme.fastEffectsSpec<Float>() }
     val rise = transition.animateFloat(
-        transitionSpec = { if (resumingNow) enterSpring else snap() },
+        transitionSpec = { if (resumingNow) sheetSpring else snap() },
         label = "bookSheetResume",
     ) { state -> if (resumingNow && state == EnterExitState.PostExit) 1f else 0f }
     val square = transition.animateFloat(
@@ -155,7 +163,8 @@ internal fun AnimatedContentScope.BookSheetFrame(
         label = "bookSheetResumeInfo",
     ) { state -> if (resumingNow && state == EnterExitState.PostExit) 1f else 0f }
     val resume = remember(rise, square, away) { BookSheetResume(rise, square, away) }
-    val releaseAt = remember { floatArrayOf(0f) }
+    val slide = remember { BackSlide() }
+    val hold = remember { BookSheetHold() }
     val desk = YomuTheme.stack.desk
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val density = LocalDensity.current
@@ -166,61 +175,55 @@ internal fun AnimatedContentScope.BookSheetFrame(
         val paneWidthPx = with(density) { bookPaneWidth(maxWidth).toPx() }
 
         // Which move is running is decided by navigation in the same pass, so it is read while
-        // drawing. [BackMotion.sheet]: closing onto the library (also while a cancelled back
-        // gesture retraces); [BackMotion.sheetEnter]: opening over it.
-        fun closing(): Boolean = motion.sheet
-        fun opening(): Boolean = !motion.sheet && motion.sheetEnter && !leaving
+        // drawing: closing onto the library (also while a cancelled back gesture retraces), or
+        // opening over it.
+        fun closing(): Boolean = leaving && motion.popping
+        fun opening(): Boolean = !leaving && motion.sheetEnter
 
-        // 0..1 of the sheet's travel away from rest for this frame.
-        fun travel(): Float {
-            val t = hidden.value
-            return when {
-                closing() -> {
-                    if (!motion.released) releaseAt[0] = t
-                    val pose = PredictivePose.of(t, release = if (motion.tapPop) 0f else releaseAt[0])
-                    val dragged = SheetDragShare * pose.drag
-                    dragged + (1f - dragged) * pose.commit
-                }
-                opening() -> t
+        // 0..1 of the sheet's travel away from rest for this frame, over [extent] px; a drag's
+        // hand-off starts it [hold] px down.
+        fun travel(extent: Float): Float {
+            val held = hold.offsetPx.coerceIn(0f, extent)
+            val moved = when {
+                closing() -> slide.position(hidden.value, dragging = !motion.released, tap = motion.tapPop)
+                opening() -> hidden.value
                 else -> 0f
             }
+            return if (extent <= 0f) moved else (held + (extent - held) * moved) / extent
         }
 
         Box(
             Modifier
                 .fillMaxSize()
                 .drawBehind {
+                    val gone = travel(if (besideLibrary) paneWidthPx else size.height).coerceIn(0f, 1f)
                     val picture = image?.takeIf { it.width == size.width.toInt() && it.height == size.height.toInt() }
                     when {
-                        // Closing onto the library: it is live underneath, so only the dim is drawn.
-                        closing() && leaving -> Unit
-                        picture != null -> drawImage(picture)
-                        // Opening without a picture yet: the live library still shows through.
-                        opening() -> Unit
+                        picture != null -> drawImage(picture, alpha = if (closing()) 1f - gone else 1f)
+                        // Moving over the live library without a picture: it shows through.
+                        closing() || opening() -> Unit
                         else -> drawRect(desk)
                     }
+                    // A pane beside the library leaves it undimmed (Stack's tablet board).
                     if (!besideLibrary) {
-                        val away = when {
-                            closing() -> travel()
-                            opening() -> undimmed.value
-                            else -> 0f
-                        }.coerceIn(0f, 1f)
-                        drawRect(Color.Black, alpha = SheetDim * (1f - away))
+                        val dimLifted = if (opening()) undimmed.value else gone
+                        drawRect(Color.Black, alpha = SheetDim * (1f - dimLifted).coerceIn(0f, 1f))
                     }
                 },
         )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    val away = travel()
-                    if (besideLibrary) {
-                        translationX = paneWidthPx * away * if (rtl) -1f else 1f
-                    } else {
-                        translationY = size.height * away
-                    }
-                },
-        ) { content(besideLibrary, resume.takeUnless { besideLibrary }) }
+        CompositionLocalProvider(LocalBookSheetHold provides hold) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (besideLibrary) {
+                            translationX = paneWidthPx * travel(paneWidthPx) * if (rtl) -1f else 1f
+                        } else {
+                            translationY = size.height * travel(size.height)
+                        }
+                    },
+            ) { content(besideLibrary, resume.takeUnless { besideLibrary }) }
+        }
     }
 }
 
@@ -229,10 +232,4 @@ internal fun AnimatedContentScope.BookSheetFrame(
  * travel so it settles smoothly. The reader's page arriving in a rising sheet uses the same one.
  */
 @Composable
-internal fun rememberSheetSpring(): FiniteAnimationSpec<Float> {
-    val scheme = MaterialTheme.motionScheme
-    return remember(scheme) {
-        (scheme.defaultSpatialSpec<Float>() as? SpringSpec<Float>)?.let { spring(it.dampingRatio, it.stiffness, visibilityThreshold = 0.0005f) }
-            ?: scheme.defaultSpatialSpec()
-    }
-}
+internal fun rememberSheetSpring(): FiniteAnimationSpec<Float> = rememberSettlingSpatialSpring()

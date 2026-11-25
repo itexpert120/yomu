@@ -1,21 +1,16 @@
 package com.itexpert120.yomu.core.designsystem
 
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,11 +20,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
@@ -40,23 +34,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Surface
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -64,15 +55,16 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /** Material 3 drag handle compatibility wrapper for [YomuBottomSheet]s. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,13 +76,26 @@ fun YomuSheetDragHandle() {
 }
 
 /**
- * Stack's modal sheet: sheet-coloured, top radius 32, no drag handle (the [YomuSheetHeader] title
- * row carries the close chevron); it rises on the sheet spring and the screen behind dims to 80%
- * (black at 20%, no blur). Dismiss by the chevron, back, or a drag down; programmatic dismissals
- * animate the slide-down before tearing it out of composition. From medium widths it is a side
- * sheet instead (see [YomuSideSheet]); confirmations stay centred as a [YomuDialog].
+ * The scroll state of the [YomuBottomSheet] around this content, while the sheet scrolls its
+ * content itself; the sheet's [YomuSheetHeader] uses it to stay pinned at the sheet's top.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+internal val LocalYomuSheetScroll = staticCompositionLocalOf<ScrollState?> { null }
+
+/**
+ * Stack's modal sheet. On phones it runs the full width of the window, flush to its bottom edge
+ * and drawn behind the gesture bar (its content is padded clear of it): sheet-coloured, top radius
+ * 32, no drag handle (the [YomuSheetHeader] title row carries the close ×). It rises on the default
+ * spatial spring while the screen behind dims to 80% (black at 20%, no blur). From medium widths it
+ * is a side sheet at the end edge instead (≤[wideMaxWidth], leading corners 32).
+ *
+ * Every way out — the ×, back, a tap on the dim, a drag toward its edge (from the title row, or a
+ * pull past the top of its content), the `dismiss` its content is handed — slides it off its edge
+ * on the same spring before [onDismiss] runs. The system back gesture moves it with the finger
+ * toward its edge, then completes or springs back ([YomuSheetMotion]). Turning [visible] off
+ * removes it at once (its content may already be gone). Content taller than 60% of the window
+ * scrolls ([scrollable]; pass false when the content has its own scroll container), under a
+ * pinned header with Stack's scroll-edge rule. Previews draw it in place.
+ */
 @Composable
 fun YomuBottomSheet(
     visible: Boolean,
@@ -101,263 +106,207 @@ fun YomuBottomSheet(
     minHeight: Dp = 0.dp,
     // The side sheet's width from medium widths; Stack caps it at 420.
     wideMaxWidth: Dp = SideSheetMaxWidth,
-    // Override the standard 20–24 dp horizontal gutter for full-width list surfaces.
+    // Override the standard 24 dp horizontal gutter for full-width list surfaces.
     horizontalContentPadding: Dp? = null,
-    // Some controls contain their own visual hierarchy and do not need a fading scroll edge.
+    // Whether the pinned header shows Stack's scroll-edge rule while content is scrolled under it.
     showScrollEdgeShadow: Boolean = true,
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
 ) {
     if (!visible) return
     val windowSize = LocalWindowInfo.current.containerSize
     val density = LocalDensity.current
-    val windowWidth = with(density) { windowSize.width.toDp() }
-    if (YomuWidthClass.fromWidth(windowWidth).isWide) {
-        YomuSideSheet(
-            onDismiss = onDismiss,
-            scrollable = scrollable,
-            maxWidth = wideMaxWidth,
-            horizontalContentPadding = horizontalContentPadding,
-            showScrollEdgeShadow = showScrollEdgeShadow,
-            content = content,
-        )
-        return
-    }
-    // Open at the height the content needs rather than a half-expanded stop; tall content is then
-    // capped to a reasonable height and scrolls internally instead of filling the whole screen.
-    val sheetState = rememberBottomSheetState(
-        initialValue = SheetValue.Hidden,
-        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-    )
-    val scope = rememberCoroutineScope()
-    fun animatedDismiss() {
-        scope.launch { sheetState.hide() }.invokeOnCompletion {
-            if (!sheetState.isVisible) onDismiss()
-        }
-    }
-    // Cap tall sheets at 60% of the actual window height (containerSize, not Configuration).
-    val maxHeight = with(LocalDensity.current) {
-        (LocalWindowInfo.current.containerSize.height * 0.60f).toDp()
-    }
+    val side = YomuWidthClass.fromWidth(with(density) { windowSize.width.toDp() }).isWide
+    val motion = rememberYomuSheetMotion(onGone = onDismiss)
+    val dismiss: () -> Unit = remember(motion) { { motion.dismiss() } }
     val scrollState = rememberScrollState()
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = SheetShape,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        scrimColor = YomuScrim,
-        dragHandle = null,
-        // Draw the panel edge-to-edge under the (transparent) gesture nav bar instead of reserving it
-        // as bottom inset — otherwise the panel stops above the bar, leaving a coloured band. The nav
-        // clearance is moved onto the content below so text/controls still sit above the bar.
-        contentWindowInsets = { WindowInsets(0) },
-    ) {
-        // The sheet's dialog window is edge-to-edge, so the keyboard arrives as IME insets rather than
-        // a window resize. Resize mode guarantees those insets are dispatched (pan mode left the
-        // sheet sitting under the keyboard); the content then pads itself above the IME, lifting
-        // the whole sheet with its fields still visible.
-        val dialogView = LocalView.current
-        SideEffect {
-            (dialogView.parent as? DialogWindowProvider)?.window
-                ?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                // Outermost, so the height cap below applies to the space left above the keyboard.
-                .imePadding()
-                .then(
-                    if (scrollable) {
-                        Modifier
-                            .heightIn(
-                                min = minHeight.coerceAtMost(maxHeight),
-                                max = maxHeight,
-                            )
-                            .then(
-                                if (showScrollEdgeShadow) {
-                                    // Fade content into the panel at whichever edge has more to scroll, so a
-                                    // tall sheet doesn't hard-cut under the drag handle or at its bottom.
-                                    Modifier.yomuScrollEdgeShadow(
-                                        top = scrollState.canScrollBackward,
-                                        bottom = scrollState.canScrollForward,
-                                    )
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .verticalScroll(scrollState)
-                    } else {
-                        Modifier.heightIn(min = minHeight.coerceAtMost(maxHeight))
-                    },
-                )
-                .padding(horizontal = horizontalContentPadding ?: YomuTheme.space.lg)
-                .padding(top = YomuTheme.space.xs)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = YomuTheme.space.lg),
-            verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+    val gutter = horizontalContentPadding ?: YomuTheme.space.lg
+    val sideGutter = horizontalContentPadding ?: SideSheetGutter
+    SheetWindow(motion, dim = !side) {
+        CompositionLocalProvider(
+            LocalYomuSheetScroll provides scrollState.takeIf { scrollable },
+            LocalYomuSheetRule provides showScrollEdgeShadow,
+            LocalYomuSheetPresentation provides if (side) YomuSheetPresentation.Side else YomuSheetPresentation.Sheet,
         ) {
-            content(::animatedDismiss)
-        }
-    }
-}
-
-private val SheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-
-/**
- * [YomuBottomSheet] from medium widths: a full-height sheet-coloured panel at the end edge, at most
- * 420dp wide, rounded 32 on its leading edge, sliding in on the default spatial spring over the
- * 80% dim. Dismiss by back (the panel follows the predictive swipe), the close ×, a tap on the dim,
- * or a drag toward the edge; every dismissal plays the slide out before the window goes.
- */
-@Composable
-private fun YomuSideSheet(
-    onDismiss: () -> Unit,
-    scrollable: Boolean,
-    maxWidth: Dp,
-    horizontalContentPadding: Dp?,
-    showScrollEdgeShadow: Boolean,
-    content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
-) {
-    val scrollState = rememberScrollState()
-    // A preview has no frames to run the slide in, so it starts at rest.
-    val inspection = LocalInspectionMode.current
-    val panelState = remember { MutableTransitionState(inspection).apply { targetState = true } }
-    val dismissPanel: () -> Unit = { panelState.targetState = false }
-    if (panelState.isIdle && !panelState.currentState && !panelState.targetState) {
-        LaunchedEffect(Unit) { onDismiss() }
-    }
-    // Pure black: a hairline separates the panel from the dimmed page.
-    val oled = YomuTheme.stack.desk == Color.Black
-    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    // +1 when "toward the end edge" is +x.
-    val towardEdge = if (rtl) -1f else 1f
-    val animate = yomuAnimationsEnabled()
-    val slideSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
-    val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
-    val backPreview = rememberYomuBackPreviewState()
-    val panel: @Composable () -> Unit = {
-        val scope = rememberCoroutineScope()
-        // How far the panel has been dragged toward its edge, in px (never past its resting place).
-        val drag = remember { Animatable(0f) }
-        val flingVelocity = with(LocalDensity.current) { SideSheetFlingVelocity.toPx() }
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
-            // The panel fills the Dialog window, so platform outside-click handling never sees a
-            // click as being outside. Make the visible dim dismiss explicitly instead.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { dismissPanel() })
-                    },
-            )
-            AnimatedVisibility(
-                visibleState = panelState,
-                enter = if (animate) slideInHorizontally(slideSpec) { (it * towardEdge).toInt() } else EnterTransition.None,
-                exit = if (animate) slideOutHorizontally(slideSpec) { (it * towardEdge).toInt() } else ExitTransition.None,
-            ) {
-                var panelWidth by remember { mutableIntStateOf(0) }
-                Surface(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .widthIn(max = maxWidth.coerceAtMost(SideSheetMaxWidth))
-                        .fillMaxWidth()
-                        .onSizeChanged { panelWidth = it.width }
-                        .offset { IntOffset((drag.value * towardEdge).roundToInt(), 0) }
-                        .yomuBackPreview(backPreview, origin = TransformOrigin(if (rtl) 0f else 1f, 0.5f))
-                        .draggable(
-                            state = rememberDraggableState { delta ->
-                                scope.launch { drag.snapTo((drag.value + delta * towardEdge).coerceAtLeast(0f)) }
-                            },
-                            orientation = Orientation.Horizontal,
-                            onDragStopped = { velocity ->
-                                if (drag.value > panelWidth * SideSheetDismissFraction || velocity * towardEdge > flingVelocity) {
-                                    dismissPanel()
-                                } else {
-                                    drag.animateTo(0f, settleSpec)
-                                }
-                            },
-                        )
-                        // Keep taps on empty panel space from reaching the dismiss dim behind it.
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = {})
-                        },
-                    shape = SideSheetShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    border = if (oled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .windowInsetsPadding(
-                                WindowInsets.systemBars
-                                    .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
-                                    .union(WindowInsets.ime.only(WindowInsetsSides.Bottom)),
-                            )
-                            .then(
-                                if (scrollable) {
-                                    Modifier
-                                        .then(
-                                            if (showScrollEdgeShadow) {
-                                                Modifier.yomuScrollEdgeShadow(
-                                                    top = scrollState.canScrollBackward,
-                                                    bottom = scrollState.canScrollForward,
-                                                )
-                                            } else {
-                                                Modifier
-                                            },
-                                        )
-                                        .verticalScroll(scrollState)
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .padding(
-                                start = horizontalContentPadding ?: YomuTheme.space.lg,
-                                end = horizontalContentPadding ?: YomuTheme.space.lg,
-                                top = YomuTheme.space.sm,
-                                bottom = YomuTheme.space.lg,
-                            ),
-                        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
-                    ) {
-                        CompositionLocalProvider(LocalYomuSheetPresentation provides YomuSheetPresentation.Side) {
-                            content(dismissPanel)
-                        }
-                    }
-                }
+            if (side) {
+                SideSheetPanel(motion, scrollable, scrollState, wideMaxWidth, sideGutter) { content(dismiss) }
+            } else {
+                BottomSheetPanel(motion, scrollable, scrollState, minHeight, gutter) { content(dismiss) }
             }
         }
     }
+}
+
+/** Whether a sheet's pinned header draws the scroll-edge rule. */
+internal val LocalYomuSheetRule = staticCompositionLocalOf { true }
+
+/**
+ * The window a sheet lives in: a full-screen, edge-to-edge dialog window with no platform dim or
+ * window animation of its own. The dim ([dim]: bottom sheets; a side sheet leaves the page
+ * undimmed, as on Stack's tablet board) is drawn here, following the sheet
+ * ([YomuSheetMotion.travel]); a tap outside the sheet dismisses it. Back (button or gesture) goes
+ * to the sheet.
+ */
+@Composable
+private fun SheetWindow(
+    motion: YomuSheetMotion,
+    dim: Boolean,
+    panel: @Composable BoxScope.() -> Unit,
+) {
+    val frame: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawBehind { if (dim) drawRect(Color.Black.copy(alpha = YomuScrim.alpha * (1f - motion.travel).coerceIn(0f, 1f))) }
+                    .pointerInput(motion) { detectTapGestures(onTap = { motion.dismiss() }) }
+                    .semantics {
+                        contentDescription = "Close sheet"
+                        onClick {
+                            motion.dismiss()
+                            true
+                        }
+                    },
+            )
+            panel()
+        }
+    }
     if (LocalInspectionMode.current) {
-        // Previews can't show a Dialog window: draw the dim and the panel in place.
-        Box(Modifier.fillMaxSize().background(YomuScrim)) { panel() }
+        // Previews can't show a Dialog window: draw the dim and the sheet in place.
+        frame()
         return
     }
     Dialog(
-        onDismissRequest = dismissPanel,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+        onDismissRequest = { motion.dismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        YomuDialogWindowDim()
-        val dialogView = LocalView.current
+        val view = LocalView.current
         SideEffect {
-            (dialogView.parent as? DialogWindowProvider)?.window
-                ?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            (view.parent as? DialogWindowProvider)?.window?.apply {
+                // The sheet draws its own dim and moves itself; the window only hosts it.
+                clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                setDimAmount(0f)
+                setWindowAnimations(0)
+                // The window is edge-to-edge, so the keyboard arrives as IME insets (resize mode makes
+                // sure they are dispatched); the sheet pads itself above it.
+                setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            }
         }
-        YomuBackPreviewHandler(backPreview, onBack = dismissPanel)
-        panel()
+        YomuSheetBackHandler(motion)
+        frame()
     }
 }
+
+/** The phone sheet: full width, flush to the bottom edge, rising from below. */
+@Composable
+private fun BoxScope.BottomSheetPanel(
+    motion: YomuSheetMotion,
+    scrollable: Boolean,
+    scrollState: ScrollState,
+    minHeight: Dp,
+    gutter: Dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    // Tall content is capped at 60% of the window and scrolls inside the sheet.
+    val maxHeight = windowHeight * 0.6f
+    Column(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            // Never under the status bar or a cutout, even while the reader hides the bars.
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility.only(WindowInsetsSides.Top))
+            .padding(top = SheetTopClearance)
+            .onSizeChanged { motion.extentPx = it.height.toFloat() }
+            .graphicsLayer { translationY = size.height * motion.travel }
+            .clip(SheetShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .nestedScroll(motion.connection)
+            .draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState { motion.dragBy(it) },
+                onDragStopped = { velocity -> motion.release(velocity) },
+            )
+            // Keep taps on empty sheet space from reaching the dim behind it.
+            .pointerInput(Unit) { detectTapGestures(onTap = {}) }
+            // Above the keyboard; the sheet's surface still runs down behind it.
+            .windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
+            .then(
+                if (scrollable) {
+                    Modifier
+                        .heightIn(min = minHeight.coerceAtMost(maxHeight), max = maxHeight)
+                        .verticalScroll(scrollState)
+                } else {
+                    Modifier.heightIn(min = minHeight.coerceAtMost(maxHeight))
+                },
+            )
+            .padding(horizontal = gutter)
+            .padding(top = YomuTheme.space.xs)
+            // Clear of the gesture bar (the IME padding above already covers it while typing).
+            .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+            .padding(bottom = YomuTheme.space.md),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+        content = content,
+    )
+}
+
+/** From medium widths: a full-height panel at the end edge, sliding in from it. */
+@Composable
+private fun BoxScope.SideSheetPanel(
+    motion: YomuSheetMotion,
+    scrollable: Boolean,
+    scrollState: ScrollState,
+    maxWidth: Dp,
+    sideGutter: Dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    // Pure black: a hairline separates the panel from the dimmed page.
+    val rule = YomuTheme.stack.rule
+    // +1 when "toward the end edge" is +x.
+    val towardEdge = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
+    Column(
+        modifier = Modifier
+            .align(Alignment.CenterEnd)
+            .fillMaxHeight()
+            .widthIn(max = maxWidth.coerceAtMost(SideSheetMaxWidth))
+            .fillMaxWidth()
+            .onSizeChanged { motion.extentPx = it.width.toFloat() }
+            .graphicsLayer { translationX = size.width * motion.travel * towardEdge }
+            // No dim behind a side sheet: a soft shadow and a hairline set it off the page.
+            .dropShadow(SideSheetShape, SideSheetShadow)
+            .clip(SideSheetShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, rule, SideSheetShape)
+            .draggable(
+                orientation = Orientation.Horizontal,
+                state = rememberDraggableState { delta -> motion.dragBy(delta * towardEdge) },
+                onDragStopped = { velocity -> motion.release(velocity * towardEdge) },
+            )
+            .pointerInput(Unit) { detectTapGestures(onTap = {}) }
+            .windowInsetsPadding(
+                WindowInsets.systemBars
+                    .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
+                    .union(WindowInsets.ime.only(WindowInsetsSides.Bottom)),
+            )
+            .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
+            .padding(start = sideGutter, end = sideGutter, top = SideSheetTop, bottom = YomuTheme.space.lg),
+        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
+        content = content,
+    )
+}
+
+/** How far below the status bar a sheet at its tallest still leaves the screen showing. */
+private val SheetTopClearance = 24.dp
+
+private val SheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
 
 /** Stack's side sheet: at most 420 wide, rounded 32 on its leading edge only. */
 private val SideSheetMaxWidth = 420.dp
 private val SideSheetShape = RoundedCornerShape(topStart = 32.dp, bottomStart = 32.dp)
+private val SideSheetGutter = 28.dp
 
-/** A drag past this share of the panel's width, or a fling toward the edge, dismisses it. */
-private const val SideSheetDismissFraction = 0.3f
-private val SideSheetFlingVelocity = 800.dp
+// The board's 44dp from the window's top edge: the status bar's 24 plus this.
+private val SideSheetTop = 20.dp
+private val SideSheetShadow = Shadow(radius = 32.dp, spread = (-24).dp, offset = DpOffset((-16).dp, 0.dp), color = Color(0xFF16191C).copy(alpha = 0.25f))
 
 /** Stack's one softening: behind a sheet or dialog the screen dims to 80% (black at 20%). */
 val YomuScrim: Color = Color.Black.copy(alpha = 0.2f)

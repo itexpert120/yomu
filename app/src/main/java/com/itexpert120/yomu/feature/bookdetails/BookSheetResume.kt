@@ -2,6 +2,10 @@ package com.itexpert120.yomu.feature.bookdetails
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -38,3 +42,16 @@ class BookSheetResume(
     val square: Float get() = squareState.value
     val away: Float get() = awayState.value
 }
+
+/**
+ * Where a drag let go of the phone book sheet when it closed it: navigation's close motion
+ * continues from [offsetPx] (px below rest) instead of the sheet animating away on its own, so a
+ * drag-dismissal is one continuous move and the sheet never comes back. Navigation provides it
+ * through [LocalBookSheetHold]; the sheet writes it once, as it hands itself over.
+ */
+@Stable
+class BookSheetHold {
+    var offsetPx by mutableFloatStateOf(0f)
+}
+
+val LocalBookSheetHold = staticCompositionLocalOf<BookSheetHold?> { null }

@@ -24,9 +24,10 @@ class YomuBackPreviewState internal constructor() {
 fun rememberYomuBackPreviewState(): YomuBackPreviewState = remember { YomuBackPreviewState() }
 
 /**
- * Makes a surface follow the system back gesture: [state] tracks the swipe, [onBack] runs when the
- * gesture commits, and a cancelled swipe settles back to rest. Call it inside the window that owns
- * the surface (a Dialog has its own back dispatcher), and pair it with [yomuBackPreview].
+ * Makes a dialog-like surface follow the system back gesture: [state] tracks the swipe, [onBack]
+ * runs when the gesture commits, and a cancelled swipe springs back to rest on the default spatial
+ * spring. Call it inside the window that owns the surface (a Dialog has its own back dispatcher),
+ * and pair it with [yomuBackPreview]. (Sheets use [YomuSheetBackHandler] on their own motion.)
  */
 @Composable
 fun YomuBackPreviewHandler(state: YomuBackPreviewState, enabled: Boolean = true, onBack: () -> Unit) {
@@ -39,20 +40,25 @@ fun YomuBackPreviewHandler(state: YomuBackPreviewState, enabled: Boolean = true,
             latestOnBack()
         } catch (e: CancellationException) {
             // This coroutine is already cancelled, so the settle runs on the composition's scope.
-            scope.launch { state.progress.animateTo(0f, YomuMotion.scheme.defaultEffectsSpec()) }
+            scope.launch { state.progress.animateTo(0f, YomuMotion.scheme.defaultSpatialSpec()) }
             throw e
         }
     }
 }
 
-/** Shrinks a surface toward [origin] as the back gesture in [state] progresses. */
+/**
+ * Stack's one back motion on a dialog-like surface: it slides with the finger, never scaling.
+ * [origin] names the edge it leaves by: an end-anchored surface (pivot x 1, or 0 under RTL) slides
+ * toward that edge by its width; anything else slides down by half its height.
+ */
 fun Modifier.yomuBackPreview(
     state: YomuBackPreviewState,
     origin: TransformOrigin = TransformOrigin.Center,
 ): Modifier = graphicsLayer {
-    val eased = YomuMotion.EmphasizedDecel.transform(state.progress.value.coerceIn(0f, 1f))
-    val scale = 1f - (1f - YomuMotion.BackPreviewScale) * eased
-    scaleX = scale
-    scaleY = scale
-    transformOrigin = origin
+    val p = state.progress.value.coerceIn(0f, 1f)
+    when (origin.pivotFractionX) {
+        1f -> translationX = size.width * p
+        0f -> translationX = -size.width * p
+        else -> translationY = size.height * 0.5f * p
+    }
 }

@@ -1,8 +1,10 @@
 package com.itexpert120.yomu.core.designsystem
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +24,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -30,8 +31,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -61,7 +70,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Stack's buttons. [YomuButtonEmphasis.Primary] is the ink pill; [YomuButtonEmphasis.Secondary] the
@@ -96,6 +111,7 @@ fun YomuButton(
         modifier = modifier,
         enabled = enabled,
         container = container,
+        pressColor = content,
         border = if (emphasis == YomuButtonEmphasis.Secondary) stack.track else null,
         height = height,
         horizontalPadding = if (isText) 12.dp else size.padding,
@@ -132,6 +148,7 @@ internal fun YomuPill(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     container: Color,
+    pressColor: Color = Color.Unspecified,
     border: Color? = null,
     height: Dp = 56.dp,
     horizontalPadding: Dp = 24.dp,
@@ -141,7 +158,7 @@ internal fun YomuPill(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.4f)
             .clip(CircleShape)
-            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button, shape = CircleShape)
+            .yomuPressable(onClick = onClick, enabled = enabled, role = Role.Button, shape = CircleShape, pressColor = pressColor)
             .background(container)
             .then(if (border != null) Modifier.border(1.5.dp, border, CircleShape) else Modifier)
             .defaultMinSize(minWidth = height, minHeight = height)
@@ -246,10 +263,14 @@ fun YomuSingleChoiceSegmentedControl(
 
 /**
  * Stack's segmented choice: a pill track in the raised colour with one sheet-coloured chip (a tiny
- * static shadow under it) marking the selected option. The chip glides between options on the
- * default spatial spring; colours cross-fade on the effects spring — all read while drawing, so a
- * selection change never recomposes per frame. Icons, when given, sit beside the label (or above
- * it with [iconOnTop], for groups with too many options to fit both inline).
+ * static shadow under it) marking the selected option. A tap moves the chip at once: it glides on
+ * the default spatial spring, critically damped (no overshoot against the track's ends), and the
+ * labels' ink follows its position — all read while drawing, so the glide never recomposes. The
+ * choice reaches [onSelect] once the chip has nearly arrived (at most [SegmentCommitMillis] after
+ * the tap), so the owner's work lands after the glide rather than in its first frames; quick taps
+ * coalesce, and the chip never jumps back to a choice already left ([SegmentSelection]). Icons,
+ * when given, sit beside the label (or above it with [iconOnTop], for groups with too many options
+ * to fit both inline).
  */
 @Composable
 fun <T> YomuConnectedChoiceGroup(
@@ -260,7 +281,8 @@ fun <T> YomuConnectedChoiceGroup(
     modifier: Modifier = Modifier,
     icon: ((T) -> ImageVector)? = null,
     enabled: Boolean = true,
-    height: Dp = ButtonDefaults.MinHeight,
+    // The track's height: 44 as in Stack's sheets (38dp options); 38 gives the compact 32dp one.
+    height: Dp = SegmentDefaultHeight,
     iconOnTop: Boolean = false,
 ) {
     if (options.isEmpty()) return
@@ -268,11 +290,50 @@ fun <T> YomuConnectedChoiceGroup(
     val haptics = LocalHapticFeedback.current
     val motion = yomuAnimationsEnabled()
     val selectedIndex = options.indexOf(selected).coerceAtLeast(0)
+    val selection = remember { SegmentSelection(selectedIndex) }
+    var shown by remember { mutableIntStateOf(selectedIndex) }
+    val latestOptions by rememberUpdatedState(options)
+    val latestOnSelect by rememberUpdatedState(onSelect)
+    val scope = rememberCoroutineScope()
+    fun deliver() {
+        val choice = selection.takePending() ?: return
+        latestOptions.getOrNull(choice)?.let(latestOnSelect)
+    }
+    LaunchedEffect(selectedIndex) {
+        selection.external(selectedIndex)
+        shown = selection.shown
+    }
+    // A choice still on its way out is delivered even if the control leaves (a sheet closing).
+    DisposableEffect(Unit) { onDispose { deliver() } }
+    val glide = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val spec = remember(glide) { (glide as? SpringSpec<Float>)?.let { spring(dampingRatio = 1f, stiffness = it.stiffness, visibilityThreshold = 0.001f) } ?: glide }
     val position = animateFloatAsState(
-        targetValue = selectedIndex.toFloat(),
-        animationSpec = if (motion) MaterialTheme.motionScheme.defaultSpatialSpec() else snap(),
+        targetValue = shown.toFloat(),
+        animationSpec = if (motion) spec else snap(),
         label = "segmentPosition",
     )
+    var commit by remember { mutableStateOf<Job?>(null) }
+    fun choose(index: Int) {
+        if (!selection.tap(index)) return
+        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        shown = index
+        commit?.cancel()
+        commit = scope.launch {
+            if (motion) {
+                withTimeoutOrNull(SegmentCommitMillis) {
+                    snapshotFlow { kotlin.math.abs(position.value - index) < SegmentArrived }.first { it }
+                }
+            }
+            deliver()
+            // The owner normally reports the choice back within a frame or two; if it never does
+            // (it refused the choice), show what it says instead.
+            delay(SegmentConfirmMillis)
+            if (selection.isAwaiting) {
+                selection.giveUp()
+                shown = selection.shown
+            }
+        }
+    }
     val chip = stack.sheet
     val shadow = Color.Black.copy(alpha = if (stack.isDark) 0.16f else 0.08f)
     val count = options.size
@@ -295,7 +356,7 @@ fun <T> YomuConnectedChoiceGroup(
             .selectableGroup(),
     ) {
         options.forEachIndexed { index, option ->
-            val checked = index == selectedIndex
+            val checked = index == shown
             val ink = stack.ink
             val muted = stack.muted
             // 1 when this option is under the chip, falling off as the chip glides away.
@@ -316,7 +377,11 @@ fun <T> YomuConnectedChoiceGroup(
             val text: @Composable () -> Unit = {
                 BasicText(
                     text = label(option),
-                    style = (if (iconOnTop) MaterialTheme.typography.labelMedium else StackType.Label).copy(textAlign = TextAlign.Center),
+                    style = when {
+                        iconOnTop -> MaterialTheme.typography.labelMedium
+                        height >= SegmentDefaultHeight -> StackType.Label.copy(fontSize = 14.sp)
+                        else -> StackType.Label
+                    }.copy(textAlign = TextAlign.Center),
                     color = color,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -328,10 +393,7 @@ fun <T> YomuConnectedChoiceGroup(
                     .heightIn(min = (height - SegmentTrackPadding * 2).coerceAtLeast(32.dp))
                     .clip(CircleShape)
                     .yomuPressable(
-                        onClick = {
-                            if (!checked) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            onSelect(option)
-                        },
+                        onClick = { choose(index) },
                         enabled = enabled,
                         role = Role.RadioButton,
                         shape = CircleShape,
@@ -361,6 +423,16 @@ fun <T> YomuConnectedChoiceGroup(
 }
 
 private val SegmentTrackPadding = 3.dp
+private val SegmentDefaultHeight = 44.dp
+
+/** The longest a tapped choice waits for the chip before reaching the owner. */
+internal const val SegmentCommitMillis = 160L
+
+/** How close (in options) the chip must be to count as arrived. */
+private const val SegmentArrived = 0.15f
+
+/** How long a delivered choice waits for the owner to report it back. */
+private const val SegmentConfirmMillis = 1000L
 
 /**
  * A springy "pop" when [selected] turns on: the element shrinks, tilts, and springs back on the

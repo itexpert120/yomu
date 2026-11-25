@@ -47,13 +47,11 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.graphics.shapes.RoundedPolygon
-import com.itexpert120.yomu.core.designsystem.icons.StackIcons
 
 /*
  * The shared Stack vocabulary every screen is built from:
@@ -465,67 +463,6 @@ fun YomuDialogCard(
 enum class YomuSheetPresentation { Sheet, Dialog, Side }
 
 val LocalYomuSheetPresentation = staticCompositionLocalOf { YomuSheetPresentation.Sheet }
-
-/**
- * The title row for every [YomuBottomSheet]: close on the left (a chevron down on a phone sheet, a
- * close × in a dialog), the title (17/600) with an optional muted line under it, and [trailing]
- * actions on the right. In a side sheet the close × moves to the end, after [trailing]. The icon buttons bleed 12dp into the sheet's gutter so
- * their glyphs line up with the content edge.
- */
-@Composable
-fun YomuSheetHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-    onClose: (() -> Unit)? = null,
-    trailing: (@Composable RowScope.() -> Unit)? = null,
-) {
-    val stack = YomuTheme.stack
-    val presentation = LocalYomuSheetPresentation.current
-    val closeAtEnd = presentation == YomuSheetPresentation.Side
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .bleedHorizontally(12.dp)
-            .heightIn(min = 52.dp)
-            .padding(bottom = YomuTheme.space.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CompositionLocalProvider(LocalContentColor provides stack.ink) {
-            if (onClose != null && !closeAtEnd) {
-                YomuIconButton(
-                    icon = if (presentation == YomuSheetPresentation.Sheet) StackIcons.KeyboardArrowDown else StackIcons.Close,
-                    contentDescription = "Close",
-                    onClick = onClose,
-                )
-            }
-            val closeLeads = onClose != null && !closeAtEnd
-            val endsBare = trailing == null && (onClose == null || !closeAtEnd)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = if (closeLeads) 4.dp else 12.dp, end = if (endsBare) 12.dp else 4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = title,
-                    modifier = Modifier.semantics { heading() },
-                    style = StackType.SheetTitle,
-                    color = stack.ink,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (subtitle != null) {
-                    Text(text = subtitle, style = StackType.Value, color = stack.muted)
-                }
-            }
-            trailing?.invoke(this)
-            if (onClose != null && closeAtEnd) {
-                YomuIconButton(icon = StackIcons.Close, contentDescription = "Close", onClick = onClose)
-            }
-        }
-    }
-}
 
 /** Lets a row reach [amount] past its parent's padding on both sides (for edge-aligned icon buttons). */
 internal fun Modifier.bleedHorizontally(amount: Dp): Modifier = layout { measurable, constraints ->

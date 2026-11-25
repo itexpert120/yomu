@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -138,6 +139,8 @@ fun YomuDesignTheme(
             LocalYomuSpacing provides YomuSpacing(),
             LocalYomuRadius provides YomuRadius(),
             LocalStackColors provides stack,
+            // Stack's soft, rounded press highlight for every plain `clickable` (no ripple).
+            LocalIndication provides YomuPressIndication(),
             content = content,
         )
     }

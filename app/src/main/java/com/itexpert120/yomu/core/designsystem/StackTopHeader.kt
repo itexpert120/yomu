@@ -23,14 +23,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -201,34 +199,27 @@ fun stackHeaderProgress(position: Float, pinnedAt: Float, fadeDistance: Float): 
 }
 
 /**
- * The scroll-edge fade for a scroll container whose content passes under a pinned header that
- * sits *inside* the container's bounds (a single scrolling column under an overlaid header):
- * content dissolves over [height] just below [edge] (px from the container's top) instead of
- * hard-cutting there. Same mask and curve as `yomuScrollEdgeShadow`, offset to the header's edge;
- * [strength] (0–1) ramps it in as content actually arrives under the header. Apply it outside
- * (before) the `verticalScroll`.
+ * Stack's scroll-edge rule for a scroll container whose content passes under a pinned header that
+ * sits *inside* the container's bounds (a single scrolling column under an overlaid header): the
+ * 1dp `rule` hairline at [edge] (px from the container's top, the header's bottom edge), at
+ * [strength] (0–1) as content actually arrives under the header — the same one rule as
+ * `yomuPinnedHeaderRule` (see YomuScrollEdge.kt). [height] is kept for source compatibility.
+ * Everything is read while drawing.
  */
 fun Modifier.stackPinnedEdgeFade(
     edge: () -> Float,
     strength: () -> Float,
-    height: Dp = 28.dp,
-): Modifier = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
+    @Suppress("UNUSED_PARAMETER") height: Dp = 28.dp,
+): Modifier = composed {
+    val color = YomuTheme.stack.rule
+    drawWithContent {
         drawContent()
         val s = strength().coerceIn(0f, 1f)
-        val h = height.toPx()
-        if (s <= 0f || h <= 0f) return@drawWithContent
-        val top = edge()
-        val stops = Array(7) { i ->
-            val t = i / 6f
-            val inward = 1f - t
-            val erase = inward * inward * (3f - 2f * inward)
-            t to Color.Black.copy(alpha = erase * s)
-        }
+        if (s <= 0f) return@drawWithContent
         drawRect(
-            brush = Brush.verticalGradient(*stops, startY = top, endY = top + h),
-            topLeft = Offset(0f, top),
-            size = Size(size.width, h),
-            blendMode = BlendMode.DstOut,
+            color = color.copy(alpha = color.alpha * s),
+            topLeft = Offset(0f, edge()),
+            size = Size(size.width, YomuScrollRuleWidth.toPx()),
         )
     }
+}
