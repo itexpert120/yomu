@@ -95,8 +95,12 @@ com.itexpert120.yomu
 │   ├── diagnostics/             # CrashLog: local, user-shared diagnostics log (uncaught Java crashes,
 │   │                            #   ApplicationExitInfo native crashes/ANRs/LMK kills, breadcrumbs);
 │   │                            #   shared from About → Diagnostics via FileProvider — no analytics SDK
-│   └── dictionary/              # DictionaryRepository (Free Dictionary API — the only network call;
-│                                #   inflections like "muttered" resolve to their base word)
+│   ├── dictionary/              # DictionaryRepository (Free Dictionary API — the only network call;
+│   │                            #   inflections like "muttered" resolve to their base word)
+│   └── readaloud/               # whole-book read-aloud (core, UI not wired yet): ReadAloudPlayer (TextToSpeech
+│                                #   sentence queue across chapters, word ranges, sleep timer, audio focus) fed
+│                                #   by core/reader ReadAloudSource; ReadAloudService = media3 MediaSessionService
+│                                #   (notification / lock screen / headset); settings in ReadAloudSettingsRepository
 ├── domain/imports/              # ImportBooksUseCase (SAF + external-open import pipeline; seeds
 │                                #   PublicationIndex with the TOC read at extraction)
 └── feature/                     # library, bookdetails, bookedit, reader, settings, stats, sync, about,
