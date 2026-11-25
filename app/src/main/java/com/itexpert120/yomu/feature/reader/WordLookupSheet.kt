@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -131,34 +129,41 @@ internal fun WordLookupSheetContent(
                 .semantics { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(YomuTheme.space.sm),
         ) {
-            // Close (and Back through earlier look-ups) on the left; the web on the right.
+            // The one-line header: Back through earlier look-ups, the looked-up word as the title,
+            // the web and the close × at the end.
             Row(
-                modifier = Modifier.fillMaxWidth().offset(x = (-12).dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LookupIconButton(StackIcons.KeyboardArrowDown, "Close", onClick = dismiss)
                 if (state.canGoBack) {
                     LookupIconButton(StackIcons.ArrowBack, "Back", onClick = onBack)
                 }
-                Spacer(Modifier.weight(1f))
+                Text(
+                    text = headword,
+                    color = stack.ink,
+                    style = StackType.Title.copy(fontSize = 30.sp, lineHeight = 34.sp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
                 if (activity != null) {
                     LookupIconButton(
                         StackIcons.TravelExplore,
                         "Search the web for $headword",
-                        modifier = Modifier.offset(x = 24.dp),
+                        tint = stack.muted,
                         onClick = { activity.openWebSearchSheet("define $headword") },
                     )
                 }
+                LookupIconButton(
+                    StackIcons.Close,
+                    "Close",
+                    tint = stack.muted,
+                    onClick = dismiss,
+                )
             }
-            // The looked-up word is the sheet's title; the inflection note and IPA sit under it.
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
+            // The inflection note and IPA under the word; pronounce beside them.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = headword,
-                        color = stack.ink,
-                        style = StackType.Title.copy(fontSize = 30.sp, lineHeight = 34.sp),
-                        modifier = Modifier.semantics { heading() },
-                    )
                     found?.inflectionOf?.let { note ->
                         Text(
                             text = "${note.word} · ${note.description}",
@@ -237,11 +242,12 @@ private fun LookupIconButton(
     icon: ImageVector,
     description: String,
     modifier: Modifier = Modifier,
+    tint: Color = YomuTheme.stack.ink,
     onClick: () -> Unit,
 ) {
     IconButton(
         onClick = onClick,
-        colors = IconButtonDefaults.iconButtonColors(contentColor = YomuTheme.stack.ink),
+        colors = IconButtonDefaults.iconButtonColors(contentColor = tint),
         modifier = modifier.size(48.dp),
     ) {
         Icon(icon, contentDescription = description)

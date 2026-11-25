@@ -34,6 +34,7 @@ import com.itexpert120.yomu.core.reader.ReaderBookmark
 import com.itexpert120.yomu.core.reader.ReaderHighlight
 import com.itexpert120.yomu.core.reader.ReaderSearchResult
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.data.books.ChapterReadState
 import com.itexpert120.yomu.data.dictionary.DictionaryEntry
 import com.itexpert120.yomu.data.dictionary.DictionaryLicense
 import com.itexpert120.yomu.data.dictionary.DictionaryPronunciation
@@ -183,31 +184,65 @@ private fun PreviewSheet(gutter: Boolean = true, content: @Composable ColumnScop
     }
 }
 
+private val SampleChapterNames = listOf(
+    "Crimson", "Situation", "Melissa", "Divination", "The Beyonder Path", "Charm", "The Fool",
+    "Tarot Club", "Night Watch", "Old Neil", "Mysticism", "Spirit Vision",
+)
+
+// A web-novel shaped book: three volumes of a dozen chapters, reading in the second.
+private val SampleVolumes: List<ReaderTocItem> = listOf("Clown", "Faceless", "Traveler").flatMapIndexed { v, name ->
+    listOf(ReaderTocItem(id = "v$v.xhtml", title = "Volume ${v + 1}: $name", locatorJson = "{}", depth = 0)) +
+        (1..12).map { c ->
+            val n = v * 12 + c
+            ReaderTocItem(id = "c$n.xhtml", title = "Chapter $n: ${SampleChapterNames[n % SampleChapterNames.size]}", locatorJson = "{}", depth = 1)
+        }
+}
+
+private val SampleReads = ChapterReadState.from(
+    readRows = (1..12).map { "c$it.xhtml" } + (13..16).map { "c$it.xhtml" },
+    progressRows = mapOf("c17.xhtml" to 0.34f, "c19.xhtml" to 0.6f),
+)
+
 @Composable
-private fun BrowseSample(tab: BrowseTab) = PreviewSheet(gutter = false) {
+private fun BrowseSample(tab: BrowseTab, volumes: Boolean = true) = PreviewSheet(gutter = false) {
     ReaderBrowseSheetContent(
         current = tab,
-        toc = SampleToc,
+        toc = if (volumes) SampleVolumes else SampleToc,
         tocLoading = false,
-        currentHref = "ch6.xhtml",
+        currentHref = if (volumes) "c17.xhtml" else "ch6.xhtml",
         onJumpToLocator = {},
         bookmarks = listOf(
             ReaderBookmark("1", "{}", "ch6.xhtml", "The Piper at the Gates of Dawn", 0.42, System.currentTimeMillis()),
+            ReaderBookmark(
+                "3",
+                """{"href":"ch6.xhtml","text":{"highlight":"Then suddenly the Mole felt a great Awe fall upon him"}}""",
+                "ch6.xhtml",
+                "The Piper at the Gates of Dawn",
+                0.44,
+                System.currentTimeMillis() - 86_400_000L,
+            ),
             ReaderBookmark("2", "{}", "ch4.xhtml", "Dulce Domum", 0.31, System.currentTimeMillis() - 3 * 86_400_000L),
         ),
         onJumpToBookmark = {},
         onDeleteBookmark = {},
         highlights = listOf(
-            ReaderHighlight("1", "{}", "the sullen heats of the torrid afternoon broke up and rolled away", 0xFFF6E27A.toInt(), 0L),
-            ReaderHighlight("2", "{}", "Then the faces began.", 0xFFB4D4F5.toInt(), 0L),
+            ReaderHighlight("1", """{"href":"ch0.xhtml","locations":{"progression":0.2}}""", "the sullen heats of the torrid afternoon broke up and rolled away", 0xFFF6E27A.toInt(), 0L),
+            ReaderHighlight("2", """{"href":"ch6.xhtml","locations":{"progression":0.5}}""", "Then the faces began.", 0xFFB4D4F5.toInt(), 0L),
+            ReaderHighlight("4", """{"href":"ch0.xhtml","locations":{"progression":0.6}}""", "Believe me, my young friend, there is nothing—absolutely nothing—half so much worth doing as simply messing about in boats.", 0xFFB8E3A8.toInt(), 0L),
         ),
         onJumpToHighlight = {},
         onDeleteHighlight = {},
         onSelectTab = {},
         dismiss = {},
+        chapterReads = if (volumes) SampleReads else ChapterReadState.Empty,
+        chapterProgress = 0.34,
         currentPercent = 42,
     )
 }
+
+@Preview(widthDp = 390, heightDp = 844)
+@Composable
+private fun BrowseFlatContentsPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { BrowseSample(BrowseTab.Contents, volumes = false) }
 
 @Preview(widthDp = 390, heightDp = 844)
 @Composable
@@ -219,11 +254,11 @@ private fun BrowseContentsDarkPreview() = YomuDesignTheme(themeMode = YomuThemeM
 
 @Preview(widthDp = 390, heightDp = 640)
 @Composable
-private fun BrowseBookmarksPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { BrowseSample(BrowseTab.Bookmarks) }
+private fun BrowseBookmarksPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { BrowseSample(BrowseTab.Bookmarks, volumes = false) }
 
 @Preview(widthDp = 390, heightDp = 640)
 @Composable
-private fun BrowseHighlightsDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) { BrowseSample(BrowseTab.Highlights) }
+private fun BrowseHighlightsDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) { BrowseSample(BrowseTab.Highlights, volumes = false) }
 
 @Composable
 private fun SearchSample(results: Boolean) = PreviewSheet(gutter = false) {
@@ -257,26 +292,25 @@ private fun SearchResultsPreview() = YomuDesignTheme(themeMode = YomuThemeMode.L
 private fun SearchNoResultsDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) { SearchSample(results = false) }
 
 @Composable
-private fun ReadingSettingsSample(tab: SheetTab, theme: ReaderThemeMode = ReaderThemeMode.Light) = PreviewSheet(gutter = false) {
+private fun ReadingSettingsSample(
+    theme: ReaderThemeMode = ReaderThemeMode.Light,
+    settings: ReaderSettings = SampleSettings.copy(theme = theme, useSystemBrightness = false, brightness = 0.6f, dimLevel = 0.2f, lineHeight = 1.7f),
+) = PreviewSheet(gutter = false) {
     ReaderControlsSheetContent(
         state = ReaderUiState(
             experience = ReadingExperienceState(
                 title = "The Wind in the Willows",
                 tableOfContents = SampleToc,
                 currentHref = "ch6.xhtml",
-                settings = SampleSettings.copy(theme = theme, useSystemBrightness = false, brightness = 0.6f, dimLevel = 0.2f),
+                settings = settings,
             ),
         ),
-        tab = tab,
-        onSelectTab = {},
         dismiss = {},
-        onSelectChapter = {},
-        onNextChapter = {},
-        onPreviousChapter = {},
         onUpdateSettings = {},
         onResetSettings = {},
         onOpenCustomTheme = {},
         onApplyCustomTheme = {},
+        onOpenFontLibrary = {},
         onPreviewBrightness = {},
         onCommitBrightness = {},
         onPreviewDim = {},
@@ -284,18 +318,22 @@ private fun ReadingSettingsSample(tab: SheetTab, theme: ReaderThemeMode = Reader
     )
 }
 
-@Preview(widthDp = 390, heightDp = 760)
+// As it opens on a phone (capped, scrolling under its title).
+@Preview(widthDp = 390, heightDp = 844)
 @Composable
-private fun ReadingSettingsControlsPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { ReadingSettingsSample(SheetTab.Controls) }
+private fun ReadingSettingsPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { ReadingSettingsSample() }
 
-@Preview(widthDp = 390, heightDp = 900)
+// The whole sheet at once, to check every row.
+@Preview(widthDp = 390, heightDp = 1800)
 @Composable
-private fun ReadingSettingsDisplayPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) { ReadingSettingsSample(SheetTab.Display) }
+private fun ReadingSettingsFullPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) {
+    ReadingSettingsSample(settings = SampleSettings.copy(useSystemBrightness = true, theme = ReaderThemeMode.Custom))
+}
 
-@Preview(widthDp = 390, heightDp = 900)
+@Preview(widthDp = 390, heightDp = 1800)
 @Composable
-private fun ReadingSettingsDisplayDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) {
-    ReadingSettingsSample(SheetTab.Display, ReaderThemeMode.Dark)
+private fun ReadingSettingsFullDarkPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Dark) {
+    ReadingSettingsSample(ReaderThemeMode.Dark)
 }
 
 private val SampleLookup = DictionaryResult.Found(
@@ -375,7 +413,7 @@ private fun NoticesSample() {
 @Composable
 private fun DisplaySideSheetPreview() = YomuDesignTheme(themeMode = YomuThemeMode.Light) {
     Box(Modifier.fillMaxSize().background(YomuTheme.stack.desk)) {
-        YomuBottomSheet(visible = true, onDismiss = {}, showScrollEdgeShadow = false, horizontalContentPadding = 0.dp) { dismiss ->
+        YomuBottomSheet(visible = true, onDismiss = {}, scrollable = false, showScrollEdgeShadow = false, horizontalContentPadding = 0.dp) { dismiss ->
             ReaderControlsSheetContent(
                 state = ReaderUiState(
                     experience = ReadingExperienceState(
@@ -385,16 +423,12 @@ private fun DisplaySideSheetPreview() = YomuDesignTheme(themeMode = YomuThemeMod
                         settings = SampleSettings.copy(useSystemBrightness = false, brightness = 0.6f, dimLevel = 0.2f),
                     ),
                 ),
-                tab = SheetTab.Display,
-                onSelectTab = {},
                 dismiss = dismiss,
-                onSelectChapter = {},
-                onNextChapter = {},
-                onPreviousChapter = {},
                 onUpdateSettings = {},
                 onResetSettings = {},
                 onOpenCustomTheme = {},
                 onApplyCustomTheme = {},
+                onOpenFontLibrary = {},
                 onPreviewBrightness = {},
                 onCommitBrightness = {},
                 onPreviewDim = {},
@@ -411,9 +445,10 @@ private fun BrowseSideSheetPreview() = YomuDesignTheme(themeMode = YomuThemeMode
         YomuBottomSheet(visible = true, onDismiss = {}, scrollable = false, horizontalContentPadding = 0.dp) { dismiss ->
             ReaderBrowseSheetContent(
                 current = BrowseTab.Contents,
-                toc = SampleToc,
+                toc = SampleVolumes,
                 tocLoading = false,
-                currentHref = "ch6.xhtml",
+                currentHref = "c17.xhtml",
+                chapterReads = SampleReads,
                 onJumpToLocator = {},
                 bookmarks = emptyList(),
                 onJumpToBookmark = {},

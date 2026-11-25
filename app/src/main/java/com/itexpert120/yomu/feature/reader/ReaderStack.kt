@@ -1,7 +1,5 @@
 package com.itexpert120.yomu.feature.reader
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.snap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,7 +8,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -18,21 +15,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -51,12 +43,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -68,18 +56,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
-import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuPressable
 import com.itexpert120.yomu.core.model.ReaderSettings
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -145,123 +128,6 @@ internal fun ReaderSectionLabel(text: String, modifier: Modifier = Modifier) {
 @Composable
 internal fun ReaderRule(modifier: Modifier = Modifier, color: Color = YomuTheme.stack.rule) {
     Box(modifier.fillMaxWidth().height(1.dp).background(color))
-}
-
-/** Stack's value tag: 28 tall, raised fill, 12.5/600. Tapping it resets when [onReset] is given. */
-@Composable
-internal fun ReaderValuePill(
-    text: String,
-    modifier: Modifier = Modifier,
-    onReset: (() -> Unit)? = null,
-    resetLabel: String? = null,
-) {
-    val stack = YomuTheme.stack
-    Box(
-        modifier = modifier
-            .heightIn(min = 28.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(stack.raised)
-            .then(
-                if (onReset != null) {
-                    Modifier.yomuPressable(onClick = onReset, shape = RoundedCornerShape(14.dp)).semantics { resetLabel?.let { contentDescription = "$text. $it" } }
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = text, color = stack.body, style = StackType.Label.copy(fontSize = 12.5.sp), maxLines = 1)
-    }
-}
-
-/**
- * Stack's in-sheet tabs: words, the active one in ink 600 with a single 2dp ink line that glides
- * between them on the default spatial spring (read while drawing). Sits on a full-bleed rule.
- */
-@Composable
-internal fun <T> ReaderSheetTabs(
-    tabs: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-    modifier: Modifier = Modifier,
-    horizontalInset: Dp = YomuTheme.space.lg,
-) {
-    val stack = YomuTheme.stack
-    val haptics = LocalHapticFeedback.current
-    val spans = remember(tabs.size) { mutableStateListOf<Pair<Float, Float>?>().apply { repeat(tabs.size) { add(null) } } }
-    val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
-    val left = remember { Animatable(0f) }
-    val width = remember { Animatable(0f) }
-    var placed by remember { mutableStateOf(false) }
-    val spec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.defaultSpatialSpec<Float>() else snap()
-    val target = spans.getOrNull(selectedIndex)
-    LaunchedEffect(target) {
-        val span = target ?: return@LaunchedEffect
-        if (!placed) {
-            left.snapTo(span.first)
-            width.snapTo(span.second)
-            placed = true
-        } else {
-            coroutineScope {
-                launch { left.animateTo(span.first, spec) }
-                launch { width.animateTo(span.second, spec) }
-            }
-        }
-    }
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .drawBehind {
-                val rule = 1.dp.toPx()
-                drawRect(stack.rule, topLeft = Offset(0f, size.height - rule), size = Size(size.width, rule))
-            }
-            .padding(horizontal = horizontalInset)
-            .drawBehind {
-                if (!placed) return@drawBehind
-                val line = 2.dp.toPx()
-                drawRoundRect(
-                    color = stack.ink,
-                    topLeft = Offset(left.value, size.height - line),
-                    size = Size(width.value, line),
-                    cornerRadius = CornerRadius(line / 2),
-                )
-            }
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(22.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        tabs.forEachIndexed { index, tab ->
-            val isSelected = index == selectedIndex
-            Box(
-                modifier = Modifier
-                    .height(48.dp)
-                    .onPlaced { coordinates ->
-                        val span = coordinates.positionInParent().x to coordinates.size.width.toFloat()
-                        if (spans.getOrNull(index) != span && index < spans.size) spans[index] = span
-                    }
-                    .selectable(
-                        selected = isSelected,
-                        role = Role.Tab,
-                        indication = null,
-                        interactionSource = null,
-                        onClick = {
-                            if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            onSelect(tab)
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = label(tab),
-                    color = if (isSelected) stack.ink else stack.faint,
-                    style = StackType.Body.copy(fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium),
-                    maxLines = 1,
-                )
-            }
-        }
-    }
 }
 
 /**
@@ -461,30 +327,6 @@ internal fun ReaderChip(
     ) {
         if (icon != null) Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(18.dp))
         Text(text = label, color = content, style = labelStyle, maxLines = 1)
-    }
-}
-
-/** A row of [content] laid out like Stack's settings rows inside a sheet: label left, control right. */
-@Composable
-internal fun ReaderSheetRow(
-    label: String,
-    modifier: Modifier = Modifier,
-    labelWidth: Dp = 110.dp,
-    content: @Composable RowScope.() -> Unit,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth().heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = label,
-            color = YomuTheme.stack.body,
-            style = StackType.BodySmall.copy(fontSize = 14.sp),
-            modifier = Modifier.width(labelWidth),
-            maxLines = 1,
-        )
-        content()
     }
 }
 

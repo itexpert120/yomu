@@ -544,8 +544,9 @@ fun ReaderScreen(
 
                     ReaderBrowseSheet(
                         tab = state.chrome.browseTab,
-                        bookTitle = reading.title,
                         currentPercent = reading.progressPercent,
+                        chapterProgress = reading.chapterProgression,
+                        chapterReads = state.chapterReads,
                         toc = reading.tableOfContents,
                         tocLoading = reading.tocLoading,
                         currentHref = reading.currentHref,
@@ -631,9 +632,7 @@ private fun ReaderControlsSheetWithDimPreview(
         visible = visible,
         state = sheetState,
         onDismiss = { onAction(ReaderAction.CloseDisplay) },
-        onSelectChapter = { onAction(ReaderAction.SelectChapter(it)) },
-        onNextChapter = { onAction(ReaderAction.NextChapter) },
-        onPreviousChapter = { onAction(ReaderAction.PreviousChapter) },
+        onOpenFontLibrary = { onAction(ReaderAction.OpenFontLibrary) },
         onUpdateSettings = { onAction(ReaderAction.UpdateSettings(it)) },
         onResetSettings = { onAction(ReaderAction.ResetSettings) },
         onOpenCustomTheme = { onAction(ReaderAction.OpenCustomTheme) },

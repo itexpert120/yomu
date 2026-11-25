@@ -28,6 +28,9 @@ sealed interface ReaderAction {
     data class SaveCustomTheme(val name: String) : ReaderAction
     data class DeleteCustomTheme(val id: String) : ReaderAction
 
+    /** "Get fonts" in the font row: the font library, over the reader (handled by the route). */
+    data object OpenFontLibrary : ReaderAction
+
     // Browse sheet (Contents / Bookmarks / Highlights).
     data object OpenBrowse : ReaderAction
     data class SelectBrowseTab(val tab: BrowseTab) : ReaderAction
@@ -147,6 +150,7 @@ internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when 
 
     // Chrome-only, navigation-only, or handled by the view model itself.
     ReaderAction.Back,
+    ReaderAction.OpenFontLibrary,
     ReaderAction.ToggleChrome,
     ReaderAction.OpenDisplay,
     ReaderAction.CloseDisplay,
