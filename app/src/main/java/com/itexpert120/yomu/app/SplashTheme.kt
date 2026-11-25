@@ -2,6 +2,17 @@ package com.itexpert120.yomu.app
 
 import android.content.Context
 import androidx.annotation.StyleRes
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import com.itexpert120.yomu.R
 import com.itexpert120.yomu.core.model.ThemePreference
 
@@ -39,5 +50,28 @@ internal class SplashThemeStore(context: Context) {
     private companion object {
         const val PreferencesName = "yomu_startup"
         const val KeyTheme = "splash_theme"
+    }
+}
+
+/** The splash as the platform draws it: the desk colour with the wordmark in ink, light | dark | black. */
+@Preview(name = "Splash", widthDp = 900, heightDp = 600)
+@Composable
+private fun SplashPreview() {
+    Row {
+        listOf(
+            0xFFE9EDF0 to R.drawable.ic_splash_wordmark_light,
+            0xFF0F1215 to R.drawable.ic_splash_wordmark_dark,
+            0xFF000000 to R.drawable.ic_splash_wordmark_dark,
+        ).forEach { (desk, wordmark) ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(Color(desk)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(painter = painterResource(wordmark), contentDescription = null)
+            }
+        }
     }
 }

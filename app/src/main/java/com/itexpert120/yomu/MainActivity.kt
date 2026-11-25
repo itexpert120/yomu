@@ -62,9 +62,9 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * Keeps the platform splash visible until the first Compose frame is ready, then lets the
-     * library take over through a short, reduced-motion-aware fade. The icon gets a small emphasis
-     * scale so the brand does not appear to blink out between the starting window and the app bar.
+     * Keeps the platform splash (the desk with the wordmark) visible until the first Compose frame is
+     * ready, then lets the library take over through a short, reduced-motion-aware fade; nothing
+     * scales.
      */
     private fun animateSplashExit(provider: SplashScreenViewProvider) {
         if (!yomuAnimationsEnabled()) {
@@ -74,12 +74,6 @@ class MainActivity : FragmentActivity() {
 
         val splashView = provider.view
         val exitInterpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
-        provider.iconView.animate()
-            .scaleX(1.08f)
-            .scaleY(1.08f)
-            .setDuration(SPLASH_EXIT_DURATION_MS)
-            .setInterpolator(exitInterpolator)
-            .start()
         splashView.animate()
             .alpha(0f)
             .setDuration(SPLASH_EXIT_DURATION_MS)
