@@ -287,6 +287,60 @@ globalThis.yomuClearSelection = () => {
     for (const { doc } of view.renderer?.getContents() ?? []) doc.getSelection()?.removeAllRanges()
 }
 
+// --- Footnotes ---
+// A tapped note reference shows the note (reported as `footnote` { html }) instead of jumping to
+// it. Detection follows foliate's footnotes.js: marked up as a note reference, or a superscript
+// link that isn't a back-link. When the note can't be extracted, the link is followed as usual.
+
+const OPS = 'http://www.idpf.org/2007/ops'
+const epubTypes = el => new Set(el?.getAttributeNS?.(OPS, 'type')?.split(/\s+/))
+const roles = el => new Set(el?.getAttribute?.('role')?.split(/\s+/))
+const isSuper = el => {
+    if (!el?.matches) return false
+    if (el.matches('sup')) return true
+    const align = el.ownerDocument.defaultView?.getComputedStyle(el).verticalAlign ?? ''
+    return align === 'super' || align === 'top' || align === 'text-top' || /^\d/.test(align)
+}
+const isNoteReference = a => {
+    const types = epubTypes(a)
+    const r = roles(a)
+    if (['noteref', 'biblioref', 'glossref'].some(t => types.has(t))) return true
+    if (['doc-noteref', 'doc-biblioref', 'doc-glossref'].some(t => r.has(t))) return true
+    if (types.has('backlink') || r.has('doc-backlink')) return false
+    return isSuper(a) || (a.children.length === 1 && isSuper(a.children[0])) || isSuper(a.parentElement)
+}
+const isBacklink = a => epubTypes(a).has('backlink') || roles(a).has('doc-backlink')
+const INLINE = 'a, span, sup, sub, em, strong, i, b, small, big'
+// Longer than this, the "note" is more likely a chapter than a footnote.
+const MAX_NOTE_LENGTH = 4000
+
+/** The HTML of the note [href] points at, or null. */
+const noteContent = async href => {
+    const book = await loadBook()
+    const target = book.resolveHref(href)
+    if (!target || target.index < 0 || !book.sections[target.index]?.createDocument) return null
+    const doc = await book.sections[target.index].createDocument()
+    let el = target.anchor(doc)
+    if (el?.nodeType !== Node.ELEMENT_NODE) return null
+    // The id is often on an inline label inside the note: take the block around it.
+    while (el.matches(INLINE) && el.parentElement && el.parentElement !== doc.body) el = el.parentElement
+    if (el === doc.body || el === doc.documentElement) return null
+    const note = el.cloneNode(true)
+    for (const link of note.querySelectorAll('a[href]')) if (isBacklink(link)) link.remove()
+    const text = note.textContent.trim()
+    if (!text || text.length > MAX_NOTE_LENGTH) return null
+    return note.matches('li, aside, dd') ? note.innerHTML.trim() : note.outerHTML
+}
+
+view.addEventListener('link', e => {
+    const { a, href } = e.detail
+    if (!href?.includes('#') || !isNoteReference(a)) return
+    e.preventDefault()
+    noteContent(href)
+        .then(html => html ? report('footnote', { html }) : view.goTo(href))
+        .catch(() => view.goTo(href))
+})
+
 // --- In-book search ---
 // foliate's own search opens every chapter with a locale-aware segmenter and is far too slow for a
 // long book. The app scans the chapter files first (SearchText.kt) and passes only the chapters that

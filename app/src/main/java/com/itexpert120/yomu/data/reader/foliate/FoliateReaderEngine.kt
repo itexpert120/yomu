@@ -76,7 +76,7 @@ import kotlin.math.ceil
  * from Readium's parser (import-time cache, or [ReadiumReaderEngine.publicationCache] on a miss), so
  * chapter read marks stay keyed the same.
  *
- * Not yet ported (no-ops for now): footnote popups and the scroll-mode chapter rubberband.
+ * Not yet ported (no-ops for now): the scroll-mode chapter rubberband.
  */
 @Singleton
 class FoliateReaderEngine @Inject constructor(
@@ -334,8 +334,8 @@ private class FoliateReaderSession(
     private val _highlightTaps = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val highlightTaps: SharedFlow<String> = _highlightTaps.asSharedFlow()
 
-    // Not ported yet: never emits.
-    override val footnotes: SharedFlow<String> = MutableSharedFlow<String>().asSharedFlow()
+    private val _footnotes = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val footnotes: SharedFlow<String> = _footnotes.asSharedFlow()
 
     // The latest highlight set, drawn once the page shows (and again on a rebuilt page).
     private var highlights: List<ReaderHighlight> = emptyList()
@@ -461,6 +461,7 @@ private class FoliateReaderSession(
             "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
+            "footnote" -> JSONObject(json).optString("html").takeIf { it.isNotBlank() }?.let(_footnotes::tryEmit)
             "search-hits", "search-done" -> onSearchEvent(name, JSONObject(json))
             "script", "book", "view-open", "section-loaded" -> ReaderOpenTrace.mark("reader.foliate-$name")
             "error" -> Log.w(TAG, "page: $json")
