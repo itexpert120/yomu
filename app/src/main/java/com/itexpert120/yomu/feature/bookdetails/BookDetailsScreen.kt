@@ -10,6 +10,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -123,7 +124,7 @@ private enum class BookDetailsContentState { Loading, Missing, Ready }
 /** Wide windows without the library beside the book: the sheet starts just under the status bar. */
 private val WideSheetTopGap = 24.dp
 
-/** Width from which the book is a pane beside the library (spec: medium and up). */
+/** Width from which the book is a pane beside the library (spec: medium and up, landscape). */
 private val PaneMinWindowWidth = 600.dp
 
 /** Expanded and up: the book pane is 400 wide (spec), half the window on medium. */
@@ -143,8 +144,12 @@ fun bookPaneWidth(windowWidth: Dp): Dp = when {
     else -> windowWidth / 2
 }
 
-/** Whether a window this wide shows the book as a pane beside the library. */
-fun bookPaneBesideLibrary(windowWidth: Dp): Boolean = windowWidth >= PaneMinWindowWidth
+/**
+ * Whether a window this size shows the book as a pane beside the library: medium width and up, in
+ * landscape only. A portrait tablet (or an unfolded, near-square foldable) is too narrow for both a
+ * useful library and a pane, so it gets the book sheet over the library, as a phone does.
+ */
+fun bookPaneBesideLibrary(windowWidth: Dp, windowHeight: Dp): Boolean = windowWidth >= PaneMinWindowWidth && windowWidth > windowHeight
 
 /**
  * Book details as Stack's book sheet. On a phone the sheet stands over the dimmed library (drawn
@@ -234,7 +239,7 @@ fun BookDetailsScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val statusTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
         val windowWidth = maxWidth
-        val wide = bookPaneBesideLibrary(windowWidth)
+        val wide = bookPaneBesideLibrary(windowWidth, maxHeight)
         when {
             !wide -> PhoneSheet(
                 top = bookSheetTop(statusTop),
@@ -823,9 +828,11 @@ private fun BookOptions(hasTimeline: Boolean, canSelect: Boolean, actions: Sheet
             onDismissRequest = { expanded = false },
             offset = DpOffset(0.dp, 4.dp),
             shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = stack.menu,
             tonalElevation = 0.dp,
             shadowElevation = 8.dp,
+            // In the dark a shadow doesn't show: a hairline marks the menu's edge.
+            border = if (stack.isDark) BorderStroke(1.dp, stack.rule) else null,
             modifier = Modifier.width(264.dp),
         ) {
             OptionItem(StackIcons.LibraryAdd, "Organize") {

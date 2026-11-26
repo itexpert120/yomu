@@ -2,6 +2,7 @@ package com.itexpert120.yomu.feature.reader
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -675,9 +676,10 @@ private fun HighlightsActionsRow(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
                 shape = RoundedCornerShape(16.dp),
-                containerColor = stack.sheet,
+                containerColor = stack.menu,
                 tonalElevation = 0.dp,
                 shadowElevation = 8.dp,
+                border = if (stack.isDark) BorderStroke(1.dp, stack.rule) else null,
                 modifier = Modifier.width(264.dp),
             ) {
                 AnnotationTransferMenuItems(

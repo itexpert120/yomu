@@ -407,18 +407,20 @@ fun YomuDialog(
         YomuDialogWindowDim()
         // Registered from inside the dialog so it uses the dialog window's back dispatcher.
         YomuBackPreviewHandler(backPreview, onBack = onDismiss)
-        YomuDialogCard(
-            modifier = modifier.padding(horizontal = YomuTheme.space.lg).yomuBackPreview(backPreview),
-            title = title,
-            text = text,
-            confirmLabel = confirmLabel,
-            onConfirm = onConfirm,
-            onDismiss = onDismiss,
-            dismissLabel = dismissLabel,
-            destructive = destructive,
-            confirmEnabled = confirmEnabled,
-            content = content,
-        )
+        YomuFloatingSurface {
+            YomuDialogCard(
+                modifier = modifier.padding(horizontal = YomuTheme.space.lg).yomuBackPreview(backPreview),
+                title = title,
+                text = text,
+                confirmLabel = confirmLabel,
+                onConfirm = onConfirm,
+                onDismiss = onDismiss,
+                dismissLabel = dismissLabel,
+                destructive = destructive,
+                confirmEnabled = confirmEnabled,
+                content = content,
+            )
+        }
     }
 }
 

@@ -204,11 +204,11 @@ const PAGED_MARGIN = '16px'
 const SCROLLED_MARGIN = '48px'
 
 // Two pages side by side (a spread, like an open book) when paged on a landscape page wide enough for
-// two comfortable columns: at least 840 px and 56em of the reading size (two ~25em columns with
-// their margins and gutter). Portrait, and phones held upright, read one page. `settings.spread`
-// false turns it off.
+// two readable columns: at least 840 px and 44em of the reading size (two ~20em columns with their
+// margins and gutter — 56em turned a tablet's spread off from about 140% type). Portrait, and phones
+// held upright, read one page. `settings.spread` false turns it off.
 const SPREAD_MIN_WIDTH = 840
-const SPREAD_MIN_EMS = 56
+const SPREAD_MIN_EMS = 44
 // A spread's gutter and outer margins are wider than a single page's side margins.
 const SPREAD_GAP_FACTOR = 1.8
 const spreads = () => settings.flow !== 'scrolled' && settings.spread !== false
@@ -227,11 +227,21 @@ const maxInlineSize = () => {
     return `${Math.max(MIN_COLUMN_PX, Math.round(BASE_COLUMN_PX * Math.pow(m, -0.75)))}px`
 }
 // Set before foliate lays out: from a resize listener, which runs ahead of its resize observer.
+// `max-inline-size` goes last: it is the one attribute that re-lays out the page (`gap` and
+// `max-column-count` only set a variable), so it must see the new column count — set first, a spread
+// turned on by a setting (no resize to lay it out again) stayed a single column.
 const configureColumns = renderer => {
     const spread = spreads()
     renderer.setAttribute('gap', gapFor(spread))
-    renderer.setAttribute('max-inline-size', maxInlineSize())
     renderer.setAttribute('max-column-count', spread ? '2' : '1')
+    renderer.setAttribute('max-inline-size', spreadInlineSize(spread))
+}
+// foliate shows as many columns as fit the text box at this width (capped by the count), so in a
+// spread a column may be at most half the page: narrow margins (a wider column) otherwise left room
+// for only one.
+const spreadInlineSize = spread => {
+    const size = maxInlineSize()
+    return spread ? `${Math.min(parseFloat(size), Math.floor(innerWidth / 2))}px` : size
 }
 addEventListener('resize', () => {
     if (view.renderer) configureColumns(view.renderer)

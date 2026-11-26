@@ -554,8 +554,10 @@ private fun StackedLibrary(
         object : NestedScrollConnection {
             override suspend fun onPreFling(available: Velocity): Velocity {
                 val lift = sheetLift.floatValue
-                // Pinned and flung up, or resting with the pile shown and flung down: the grid's.
-                if (lift <= -travel && available.y <= 0f) return Velocity.Zero
+                // Pinned (either way — flung down, the grid scrolls back to its top first and only
+                // then, in onPostScroll/onPostFling, carries the sheet down), or resting with the
+                // pile shown and flung down: the grid's.
+                if (lift <= -travel) return Velocity.Zero
                 if (lift >= 0f && available.y >= 0f) return Velocity.Zero
                 val left = settleLift(available.y)
                 return Velocity(0f, available.y - left)

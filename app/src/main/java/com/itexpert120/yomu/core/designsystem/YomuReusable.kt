@@ -124,15 +124,18 @@ fun YomuBottomSheet(
     val gutter = horizontalContentPadding ?: YomuTheme.space.lg
     val sideGutter = horizontalContentPadding ?: SideSheetGutter
     SheetWindow(motion, dim = !side) {
-        CompositionLocalProvider(
-            LocalYomuSheetScroll provides scrollState.takeIf { scrollable },
-            LocalYomuSheetRule provides showScrollEdgeShadow,
-            LocalYomuSheetPresentation provides if (side) YomuSheetPresentation.Side else YomuSheetPresentation.Sheet,
-        ) {
-            if (side) {
-                SideSheetPanel(motion, scrollable, scrollState, wideMaxWidth, sideGutter) { content(dismiss) }
-            } else {
-                BottomSheetPanel(motion, scrollable, scrollState, minHeight, gutter) { content(dismiss) }
+        // In the dark the sheet is a step lighter than the screen's sheets (StackColors.elevated).
+        YomuFloatingSurface {
+            CompositionLocalProvider(
+                LocalYomuSheetScroll provides scrollState.takeIf { scrollable },
+                LocalYomuSheetRule provides showScrollEdgeShadow,
+                LocalYomuSheetPresentation provides if (side) YomuSheetPresentation.Side else YomuSheetPresentation.Sheet,
+            ) {
+                if (side) {
+                    SideSheetPanel(motion, scrollable, scrollState, wideMaxWidth, sideGutter) { content(dismiss) }
+                } else {
+                    BottomSheetPanel(motion, scrollable, scrollState, minHeight, gutter) { content(dismiss) }
+                }
             }
         }
     }

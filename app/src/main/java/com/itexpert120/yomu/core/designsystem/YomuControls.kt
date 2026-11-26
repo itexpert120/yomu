@@ -334,7 +334,8 @@ fun <T> YomuConnectedChoiceGroup(
             }
         }
     }
-    val chip = stack.sheet
+    // Lifted above the raised track in every theme (a sheet-coloured chip sank below it in the dark).
+    val chip = stack.lifted
     val shadow = Color.Black.copy(alpha = if (stack.isDark) 0.16f else 0.08f)
     val count = options.size
     Row(

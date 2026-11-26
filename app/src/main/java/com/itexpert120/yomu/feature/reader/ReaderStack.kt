@@ -94,7 +94,7 @@ internal fun ReaderSettings.chromeColors(): ReaderChromeColors {
         page = page,
         // Dark pages (Night, Black) need clear steps: the panel visibly above the page, and the
         // rule and slider track readable on it — a near-black panel and track vanished on Black.
-        panel = if (light) page else lerp(page, ink, 0.09f),
+        panel = if (light) page else lerp(page, ink, 0.12f),
         ink = ink,
         muted = Color(colorPalette.secondaryTextArgb),
         rule = if (light) Color(colorPalette.borderArgb) else lerp(page, ink, 0.18f),

@@ -179,8 +179,8 @@ fun YomuNavHost(
     // Resume: opening the reader from a book's phone sheet, or from the library pile, plays Stack's
     // Resume motion (the sheet rises into the page: BookSheetFrame + ReaderEntranceFrame) instead
     // of the push. A book shown as a pane beside the library keeps the push.
-    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
-    val bookIsPhoneSheet = !bookPaneBesideLibrary(windowWidth)
+    val windowSize = LocalWindowInfo.current.containerSize
+    val bookIsPhoneSheet = with(LocalDensity.current) { !bookPaneBesideLibrary(windowSize.width.toDp(), windowSize.height.toDp()) }
     fun readerEntrance(from: NavDestination?, to: NavDestination): ReaderEntrance? = readerEntrance(
         toReader = to.hasRoute<Reader>(),
         fromLibrary = from?.hasRoute<Home>() == true,

@@ -165,6 +165,9 @@ internal fun ReaderTopBar(
 // One 56dp row below the status area, on phones and across a spread alike.
 private val ReaderTopBarHeight = 56.dp
 
+/** Space above the controls panel inside its animated bounds, for the shadow it casts upward. */
+private val PanelShadowRoom = 32.dp
+
 /** "3 pages left in chapter" (paged) or "12% of chapter left" (scroll); null while unknown. */
 internal fun chapterRemainingLabel(layout: ReaderLayout, pagesLeft: Int?, chapterProgression: Double): String? = when (layout) {
     ReaderLayout.Paged -> pagesLeft?.let {
@@ -288,7 +291,10 @@ internal fun BoxScope.ReaderControlsPanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = if (floating) navInset + 28.dp else 0.dp),
+                // The fade draws this content into a layer the size of its bounds, so the room for
+                // the shadow (it reaches ~26dp above the phone panel) must lie inside them, or the
+                // shadow is cut off while the panel moves and only appears once it is still.
+                .padding(top = PanelShadowRoom, bottom = if (floating) navInset + 28.dp else 0.dp),
             contentAlignment = Alignment.BottomCenter,
         ) {
             Column(
@@ -314,7 +320,8 @@ internal fun BoxScope.ReaderControlsPanel(
                     .background(colors.panel)
                     .then(
                         if (floating) {
-                            Modifier
+                            // A dark page shows no shadow: a hairline marks the card's edge.
+                            if (colors.isLight) Modifier else Modifier.border(1.dp, colors.rule, shape)
                         } else {
                             Modifier.drawBehind { drawRect(colors.rule, size = Size(size.width, 1.dp.toPx())) }
                         },

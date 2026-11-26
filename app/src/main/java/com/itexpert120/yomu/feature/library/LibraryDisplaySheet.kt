@@ -146,7 +146,7 @@ private fun ViewTiles(selected: LibraryViewMode, onSelect: (LibraryViewMode) -> 
             val stack = YomuTheme.stack
             val animate = yomuAnimationsEnabled()
             val container by animateColorAsState(
-                targetValue = if (checked) stack.sheet else stack.raised,
+                targetValue = if (checked) stack.lifted else stack.raised,
                 animationSpec = if (animate) MaterialTheme.motionScheme.fastEffectsSpec() else snap(),
                 label = "viewTile",
             )

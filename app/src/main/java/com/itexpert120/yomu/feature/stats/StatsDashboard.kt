@@ -147,13 +147,13 @@ internal fun PeriodPicker(
     // Each option is as wide as its word; the chip interpolates between their measured bounds.
     val starts = remember { FloatArray(options.size) }
     val widths = remember { FloatArray(options.size) }
-    // On the dark desk a sheet-coloured chip would sink below the track, so it lifts to raised.
-    val chip = if (stack.isDark) stack.raised else stack.sheet
+    // Above the track in every theme (a sheet-coloured chip would sink below it in the dark).
+    val chip = stack.lifted
     val shadow = Color.Black.copy(alpha = if (stack.isDark) 0.24f else 0.08f)
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(stack.track.copy(alpha = if (stack.isDark) 0.7f else 0.6f))
+            .background(if (stack.isDark) stack.raised else stack.track.copy(alpha = 0.6f))
             .padding(if (compact) 2.dp else 3.dp)
             .drawBehind {
                 val from = position.toInt().coerceIn(0, options.lastIndex)

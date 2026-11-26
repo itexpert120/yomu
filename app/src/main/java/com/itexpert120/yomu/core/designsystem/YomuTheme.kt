@@ -4,6 +4,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -111,6 +112,31 @@ object YomuTheme {
     /** Stack's colours by their own names (desk, sheet, raised, ink, muted, …). */
     val stack: StackColors
         @Composable get() = LocalStackColors.current
+}
+
+/**
+ * Runs [content] as the inside of a floating surface (a sheet or dialog over a dim): Stack's and
+ * Material's `sheet`/`surface` become [StackColors.elevated], so everything that paints "the sheet"
+ * (pinned headers, rows, menus) matches the surface it sits on. A no-op on light themes.
+ */
+@Composable
+fun YomuFloatingSurface(content: @Composable () -> Unit) {
+    val stack = YomuTheme.stack
+    val floating = stack.floating()
+    if (floating === stack) {
+        content()
+        return
+    }
+    // Material's theme provides its ripple; keep Stack's press highlight.
+    val indication = LocalIndication.current
+    MaterialExpressiveTheme(
+        colorScheme = remember(floating) { floating.toColorScheme() },
+        motionScheme = MaterialTheme.motionScheme,
+        shapes = MaterialTheme.shapes,
+        typography = MaterialTheme.typography,
+    ) {
+        CompositionLocalProvider(LocalStackColors provides floating, LocalIndication provides indication, content = content)
+    }
 }
 
 /**

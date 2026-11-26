@@ -149,8 +149,8 @@ internal fun AnimatedContentScope.BookSheetFrame(
     val motionEnabled = yomuAnimationsEnabled()
     val scheme = MaterialTheme.motionScheme
     val sheetSpring = rememberSheetSpring()
-    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
-    val paneMode = bookPaneBesideLibrary(windowWidth)
+    val windowSize = LocalWindowInfo.current.containerSize
+    val paneMode = with(LocalDensity.current) { bookPaneBesideLibrary(windowSize.width.toDp(), windowSize.height.toDp()) }
     val slowSpring = remember(scheme) { scheme.slowSpatialSpec<Float>() }
     val enterSpring = if (paneMode) slowSpring else sheetSpring
     val dimSpring = remember(scheme) { scheme.defaultEffectsSpec<Float>() }
@@ -227,7 +227,7 @@ internal fun AnimatedContentScope.BookSheetFrame(
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val besideLibrary = paneMode && bookPaneBesideLibrary(maxWidth)
+        val besideLibrary = paneMode && bookPaneBesideLibrary(maxWidth, maxHeight)
         val paneWidthPx = with(LocalDensity.current) { bookPaneWidth(maxWidth).toPx() }
         if (!besideLibrary) {
             Box(

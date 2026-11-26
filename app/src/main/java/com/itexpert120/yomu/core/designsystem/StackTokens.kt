@@ -53,9 +53,27 @@ data class StackColors(
     val track: Color,
     val danger: Color,
     val isDark: Boolean,
+    /**
+     * Surfaces that float over the page under a dim: bottom/side sheets, dialogs. Light leaves it
+     * the sheet (shadows and the dim do the work); in the dark, where shadows don't show, it is a
+     * step above the sheet, as a higher surface is lighter. Inside one, [floating] maps it to `sheet`.
+     */
+    val elevated: Color,
+    /**
+     * What sits on a raised track: a segmented control's sliding chip, a chosen tile. Above
+     * [raised] in every theme (white on light; a step lighter in the dark, never a sheet-coloured
+     * chip sunk below its track).
+     */
+    val lifted: Color,
 ) {
-    /** Pure black: sheets sit barely above the black desk, so they get a hairline edge. */
+    /** Pure black: sheets sit close to the black desk, so they get a hairline edge. */
     val flat: Boolean get() = isDark && desk == Color(0xFF000000)
+
+    /** A menu over a sheet: white with a shadow on light; in the dark, raised (with a hairline). */
+    val menu: Color get() = if (isDark) raised else sheet
+
+    /** These colours as seen inside a floating surface: its body ([elevated]) is the sheet. */
+    fun floating(): StackColors = if (elevated == sheet) this else copy(sheet = elevated)
 
     companion object {
         val Light = StackColors(
@@ -71,33 +89,42 @@ data class StackColors(
             track = Color(0xFFD6DCE0),
             danger = Color(0xFFB3261E),
             isDark = false,
+            elevated = Color(0xFFFFFFFF),
+            lifted = Color(0xFFFFFFFF),
         )
+
+        // Dark: elevation is lightness. Each surface sits a clear step above the one below it —
+        // desk → sheet → elevated (floating) → raised (rows, fields, tracks) → lifted (chips on a
+        // track) — so cards, sheets and controls read as layers without shadows.
         val Dark = StackColors(
-            desk = Color(0xFF0F1215),
-            sheet = Color(0xFF1A1E22),
-            raised = Color(0xFF23282D),
+            desk = Color(0xFF0E1114),
+            sheet = Color(0xFF1B1F23),
+            raised = Color(0xFF2F353B),
             ink = Color(0xFFEEF1F3),
-            onInk = Color(0xFF0F1215),
+            onInk = Color(0xFF0E1114),
             body = Color(0xFFC9CFD4),
             muted = Color(0xFF9AA3AB),
             faint = Color(0xFF8C959D),
-            rule = Color(0xFF2A2F34),
-            track = Color(0xFF3A4046),
+            rule = Color(0xFF2E3439),
+            track = Color(0xFF454C53),
             danger = Color(0xFFF2B8B5),
             isDark = true,
+            elevated = Color(0xFF252A2F),
+            lifted = Color(0xFF3B4248),
         )
 
-        /** Pure black: the desk goes black; sheets keep a faint step so they still read as sheets. */
-        // Pure black: the desk (behind everything) is #000 so an OLED panel is off there; sheets and
-        // cards sit just above it, enough to read as surfaces, with a hairline at their edge, and
-        // raised controls (chips, fields, tracks) stand out clearly on both.
+        // Pure black: the desk (behind everything) is #000 so an OLED panel is off there. Sheets and
+        // cards sit a visible step above it (with a hairline at their edge), floating sheets and
+        // dialogs a step above those, and raised controls (chips, fields, tracks) clearly above all.
         val Black = Dark.copy(
             desk = Color(0xFF000000),
-            sheet = Color(0xFF0C0D0F),
-            raised = Color(0xFF1C1F23),
+            sheet = Color(0xFF111316),
+            raised = Color(0xFF272B30),
             onInk = Color(0xFF000000),
-            rule = Color(0xFF2A2E33),
-            track = Color(0xFF3A4046),
+            rule = Color(0xFF2C3136),
+            track = Color(0xFF41474E),
+            elevated = Color(0xFF1C2024),
+            lifted = Color(0xFF33383E),
         )
 
         internal fun forMode(mode: YomuThemeMode): StackColors = when (mode) {

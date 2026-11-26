@@ -33,6 +33,25 @@ class YomuThemeTest {
     }
 
     @Test
+    fun darkSurfacesStepUpWithElevation() {
+        for (stack in listOf(StackColors.Dark, StackColors.Black)) {
+            val ladder = listOf(stack.desk, stack.sheet, stack.elevated, stack.raised, stack.lifted)
+            ladder.zipWithNext().forEach { (below, above) ->
+                // Each layer visibly lighter than the one under it (shadows don't show in the dark).
+                assertTrue("$above over $below", contrast(above, below) >= 1.12)
+            }
+            for (surface in listOf(stack.elevated, stack.raised)) {
+                assertTrue("muted on $surface", contrast(stack.muted, surface) >= 4.5)
+                assertTrue("ink on $surface", contrast(stack.ink, surface) >= 7.0)
+            }
+            assertEquals(stack.elevated, stack.floating().sheet)
+        }
+        // Light floats on shadows and the dim: a floating surface is the sheet itself.
+        assertTrue(StackColors.Light.floating() === StackColors.Light)
+        assertTrue(StackColors.Light.lifted.luminance() >= StackColors.Light.raised.luminance())
+    }
+
+    @Test
     fun themesMapStackTokensOntoMaterialRoles() {
         for (stack in all) {
             val scheme = stack.toColorScheme()
