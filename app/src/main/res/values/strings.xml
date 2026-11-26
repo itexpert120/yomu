@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">Open Reader</string>
+
+    <!-- Launcher quick actions (long-press the app icon). -->
+    <string name="shortcut_continue_short">Continue</string>
+    <string name="shortcut_continue_long">Continue %1$s</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search library</string>
+    <string name="shortcut_import_short">Import</string>
+    <string name="shortcut_import_long">Import books</string>
+    <string name="shortcut_statistics_short">Statistics</string>
+    <string name="shortcut_statistics_long">Reading statistics</string>
 </resources>

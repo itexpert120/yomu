@@ -18,6 +18,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -110,8 +111,17 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
 ) {
     val motionEnabled = yomuAnimationsEnabled()
     // Settled at the page's first frame: only a page that is opening runs the motion.
-    val active = remember { entrance != null && motionEnabled && transition.currentState == EnterExitState.PreEnter }
     val fromLibrary = entrance == ReaderEntrance.Library
+    // From the library the motion is the page's own (it doesn't move with navigation), so it only
+    // needs to know this page is new — navigation's transition can already be over by its first
+    // frame. A page restored after a configuration change doesn't replay it.
+    val firstShown = rememberSaveable { mutableStateOf(true) }
+    val active = remember {
+        entrance != null &&
+            motionEnabled &&
+            (transition.currentState == EnterExitState.PreEnter || (fromLibrary && firstShown.value))
+    }
+    LaunchedEffect(Unit) { firstShown.value = false }
     val scheme = MaterialTheme.motionScheme
     val sheetSpring = rememberSheetSpring()
     val effects = remember(scheme) { scheme.defaultEffectsSpec<Float>() }
@@ -124,6 +134,11 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         if (active && state == EnterExitState.PreEnter) 0f else 1f
     }
     val pageIn = remember { Animatable(if (active) 0f else 1f) }
+    // From the library: the library dims on its own clock as soon as the reader is on its way.
+    val libraryDim = remember { Animatable(if (active && fromLibrary) 0f else 1f) }
+    if (active && fromLibrary) {
+        LaunchedEffect(Unit) { libraryDim.animateTo(1f, scheme.defaultEffectsSpec()) }
+    }
     var rising by remember { mutableStateOf(active) }
     // The entrance has finished: the page is fully in and its move has settled. Until then the
     // reader leaves the window (system bars) alone, and from the library the library stays drawn,
@@ -173,22 +188,24 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
             .drawBehind {
                 // From the library: it dims as the reader comes in, and stays dimmed under it until
                 // the page has fully arrived (it is opaque by then; the library stops drawing).
-                if (active && fromLibrary && !arrived) drawRect(Color.Black, alpha = SheetDim * rise.value.coerceIn(0f, 1f))
+                if (active && fromLibrary && !arrived) drawRect(Color.Black, alpha = SheetDim * libraryDim.value.coerceIn(0f, 1f))
             }
             .graphicsLayer {
                 val r = rise.value.coerceIn(0f, 1f)
                 val s = square.value.coerceIn(0f, 1f)
+                if (active && fromLibrary) {
+                    // From the library: no sheet travelling the whole screen up from the bottom; the
+                    // page itself rises a little as it fades in, once its first page is laid out. It
+                    // follows the page's own fade, not navigation's transition, which has often ended
+                    // before a slower book's first page is ready (the page then only faded in).
+                    clip = false
+                    translationY = libraryRisePx * (1f - pageIn.value.coerceIn(0f, 1f))
+                    return@graphicsLayer
+                }
                 if (!active || (r >= 1f && s >= 1f)) {
                     clip = false
                     translationY = 0f
                     alpha = 1f
-                    return@graphicsLayer
-                }
-                if (fromLibrary) {
-                    // From the library: no sheet travelling the whole screen up from the bottom; the
-                    // page itself rises a little as it fades in, once its first page is laid out.
-                    clip = false
-                    translationY = libraryRisePx * (1f - pageIn.value.coerceIn(0f, 1f))
                     return@graphicsLayer
                 }
                 shape = RisingSheetShape(top = sheetTopPx * (1f - r), corner = cornerPx * (1f - s))

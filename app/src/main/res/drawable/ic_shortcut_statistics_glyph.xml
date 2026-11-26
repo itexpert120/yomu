@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "monitoring" (weight 300, as StackIcons.Monitoring) centred in an adaptive icon's
+     108dp canvas: the glyph of the "statistics" launcher shortcut, also its monochrome layer. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.041667"
+        android:scaleY="0.041667"
+        android:translateX="34"
+        android:translateY="34">
+        <group android:translateY="960">
+            <path
+                android:fillColor="@color/yomu_splash_mark"
+                android:pathData="M130-130v-65.77l60-60V-130h-60Zm160 0v-225.77l60-60V-130h-60Zm160 0v-285.77l60 61V-130h-60Zm160 0v-224.77l60-60V-130h-60Zm160 0v-385.77l60-60V-130h-60ZM130-351.23v-84.54l270-270 160 160 270-270v84.54l-270 270-160-160-270 270Z" />
+        </group>
+    </group>
+</vector>

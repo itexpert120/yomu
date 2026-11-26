@@ -67,6 +67,13 @@ const SYSTEM_COLORS = `
 `
 
 /**
+ * A font file's absolute URL on this page's origin. The reading CSS goes into chapter documents,
+ * which are blob: URLs: a path like "/assets/fonts/Lora-Regular.ttf" can't be resolved against
+ * one, so the face failed to load and the text fell back to the default serif.
+ */
+const fontURL = src => new URL(src, location.href).href
+
+/**
  * The page's CSS. foliate's rendering keeps the book's own layout; on top of it the reader's
  * settings force what the reader chose:
  *   colors { page, ink, link, dark } — forced over the book's (null: follow the system scheme)
@@ -92,7 +99,7 @@ const readerCSS = s => {
     ` : SYSTEM_COLORS
     const faces = (s.font?.faces ?? []).map(f => `
         @font-face { font-family: "${s.font.family}"; font-style: ${f.style ?? 'normal'};
-            font-weight: ${f.weight ?? 'normal'}; src: url("${f.src}"); }`).join('')
+            font-weight: ${f.weight ?? 'normal'}; src: url("${fontURL(f.src)}"); }`).join('')
     const font = s.font ? `
         body, body *:not(code):not(pre):not(kbd):not(samp):not(tt) {
             font-family: "${s.font.family}", serif !important;
@@ -1492,7 +1499,7 @@ const within = (promise, ms) => Promise.race([promise, new Promise(resolve => se
  * and foliate re-anchors: the page visibly shifts after it shows.
  */
 const preloadFonts = s => within(Promise.all((s.font?.faces ?? []).map(f =>
-    new FontFace(s.font.family, `url("${f.src}")`, { style: f.style ?? 'normal', weight: f.weight ?? 'normal' })
+    new FontFace(s.font.family, `url("${fontURL(f.src)}")`, { style: f.style ?? 'normal', weight: f.weight ?? 'normal' })
         .load().catch(() => null))), 1500)
 
 /** Waits until the shown chapter's fonts are in and foliate has re-laid it out. */

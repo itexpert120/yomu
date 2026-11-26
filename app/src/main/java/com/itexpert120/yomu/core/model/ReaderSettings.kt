@@ -30,8 +30,8 @@ enum class ReaderFont(val displayName: String, val cssFamily: String) {
 /**
  * A user-installed custom reading font (e.g. downloaded from Google Fonts). [family] is the CSS font
  * family the engine renders; [regularPath]/[italicPath] are absolute paths to the app-private font
- * files (woff2) the engine embeds as @font-face. When [ReaderSettings.customFont] is set it takes
- * precedence over the bundled [ReaderSettings.font].
+ * files (TrueType; woff2 from older installs) the engine loads as @font-face. When
+ * [ReaderSettings.customFont] is set it takes precedence over the bundled [ReaderSettings.font].
  */
 @Serializable
 data class CustomFontRef(
