@@ -121,6 +121,14 @@ const applyAlignmentEverywhere = () => {
     for (const { doc } of preview?.el?.getContents?.() ?? []) applyAlignment(doc)
 }
 
+/**
+ * Whether line art changes look on [s]'s page: always on a dark one (drawn light), and on a light
+ * one that isn't white (a sepia page, where its white showed as a box: it's multiplied into the
+ * page). On a white page it already looks as published, so nothing waits for it there.
+ */
+const pageTinted = s => !!s.colors && s.adaptPictures !== false
+    && (s.colors.dark || !/^#?f{6}$/i.test(s.colors.page ?? ''))
+
 const readerCSS = s => {
     const c = s.colors
     const colors = c ? `
@@ -169,12 +177,14 @@ const readerCSS = s => {
         [align="center"] { text-align: center; }
         [align="justify"] { text-align: justify; }
         h1, h2, h3, h4, h5, h6, hgroup { text-wrap: balance; }
-        ${c?.dark && s.adaptPictures !== false ? `
+        ${pageTinted(s) ? `
+        img[data-yomu-pending], image[data-yomu-pending] { visibility: hidden !important; }` : ''}
+        ${c && s.adaptPictures !== false ? (c.dark ? `
         img[data-yomu-ink], image[data-yomu-ink] {
             filter: invert(1) hue-rotate(180deg) !important;
             mix-blend-mode: screen;
-        }
-        img[data-yomu-pending], image[data-yomu-pending] { visibility: hidden !important; }` : ''}
+        }` : `
+        img[data-yomu-ink], image[data-yomu-ink] { mix-blend-mode: multiply; }`) : ''}
         pre { white-space: pre-wrap !important; }
         img, svg image { -webkit-touch-callout: none; -webkit-user-drag: none; }
         aside[epub|type~="endnote"],
@@ -701,12 +711,15 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
 })
 
 // --- Pictures on dark pages ---
-// On a dark reading theme, line art published black on white (ornaments, scene breaks, glyphs set
-// in the text, a handwritten note) glares as a white box. The app decides which pictures are line
+// Line art published black on white (ornaments, scene breaks, glyphs set in the text, a handwritten
+// note) shows its white as a box on any page that isn't white: glaring on a dark theme, a pale
+// rectangle on sepia. The app decides which pictures are line
 // art (PictureTone.kt: colourless with light corners; a few lines small and marked or mostly
 // two-tone, or bigger and nearly pure two-tone) from what the page measures of each one; line art
-// is marked data-yomu-ink and the page's CSS draws it inverted, screened onto the page colour, while
-// the theme is dark and "Adapt pictures to dark pages" is on. Illustrations, photos and anything in
+// is marked data-yomu-ink and the page's CSS takes it onto the page's own colour while "Adapt
+// pictures to dark pages" is on: on a dark page inverted and screened (its black becomes the page),
+// on a light one multiplied (its white becomes the page). Both blend against the page colour on
+// `html`: everything between is transparent (readerCSS), so nothing isolates them. Illustrations, photos and anything in
 // colour stay as published.
 //
 // Decisions are kept per picture file (its path in the EPUB, not the blob URL, which changes with
@@ -728,7 +741,7 @@ const sectionPicturePaths = new Map()
 // Section index -> those paths, once known (for marking synchronously).
 const knownPicturePaths = new Map()
 
-const adaptingPictures = () => settings.colors?.dark === true && settings.adaptPictures !== false
+const adaptingPictures = () => pageTinted(settings)
 
 /** The paths of section [index]'s pictures, in document order (from the section's own markup). */
 const picturePathsOf = index => {
