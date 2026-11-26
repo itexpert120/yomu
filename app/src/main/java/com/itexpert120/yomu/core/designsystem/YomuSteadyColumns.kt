@@ -12,11 +12,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -39,6 +42,24 @@ class YomuWidthMove(val fullExtra: () -> Int) {
      * drawing. Set by the container's content (the library); null when it has no sheet.
      */
     var sheet: (() -> YomuSheetEdge)? = null
+
+    /**
+     * While the container's visible end is moving (clipped short of its laid-out end), how far in
+     * px that visible end stands inside the laid-out one; 0 at rest. Read while drawing.
+     */
+    var endShift: () -> Float = { 0f }
+}
+
+/**
+ * Keeps an element that sits at its container's end edge (a title row's actions) at the
+ * container's visible end while that end moves ([YomuWidthMove.endShift]): it slides with the edge
+ * 1:1, in the draw phase, so a moving clip never cuts it off, and is back in its laid-out place at
+ * rest.
+ */
+fun Modifier.yomuFollowVisibleEnd(): Modifier = composed {
+    val move = LocalYomuWidthMove.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    graphicsLayer { translationX = move.endShift() * if (rtl) 1f else -1f }
 }
 
 /** A sheet's top (px from the container's top), its top-end corner radius and its end inset (px). */

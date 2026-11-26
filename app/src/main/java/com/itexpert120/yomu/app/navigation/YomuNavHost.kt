@@ -396,6 +396,9 @@ private fun LibraryLayer(
             // Always from the library's full width (px), never from the node's own (already
             // narrowed) size, or the pane's room would be taken off twice.
             fun edge(): Int = libraryVisibleEdge(fullPx, roomPx, pane.openness?.invoke() ?: 0f)
+            // While the pane moves, how far the visible end stands inside the (full) layout: what an
+            // end-aligned element shifts by to ride the moving edge (yomuFollowVisibleEnd).
+            widthMove.endShift = { if (moving) (laidOut[0] - edge()).coerceAtLeast(0).toFloat() else 0f }
             Box(
                 Modifier
                     .fillMaxSize()
