@@ -1,6 +1,7 @@
 package com.itexpert120.yomu.feature.reader
 
 import com.itexpert120.yomu.core.reader.ReaderLocator
+import kotlin.math.roundToInt
 
 /**
  * "Back to where you were": the places the reader jumped away from (contents, search, a bookmark or
@@ -87,7 +88,8 @@ internal class JumpHistory(
 
 /**
  * The Back chip's label for returning to [origin]: its printed page when the book has them ("Back
- * to p. 112"), else its chapter ("Back to Chapter 3").
+ * to p. 112"), else its chapter ("Back to Chapter 3"); a place no chapter names (front matter the
+ * engine can't title) by how far into the book it is ("Back to the beginning", "Back to 42%").
  */
 internal fun jumpBackLabel(origin: ReaderLocator, chapterTitle: String?): String {
     val page = origin.pageLabel?.substringBefore('–')?.trim()?.takeIf { it.isNotEmpty() }
@@ -95,6 +97,9 @@ internal fun jumpBackLabel(origin: ReaderLocator, chapterTitle: String?): String
     return when {
         page != null -> "Back to p. $page"
         chapter != null -> "Back to $chapter"
-        else -> "Back to where you were"
+        else -> {
+            val percent = ((origin.bookProgress ?: 0.0) * 100).roundToInt()
+            if (percent < 1) "Back to the beginning" else "Back to $percent%"
+        }
     }
 }

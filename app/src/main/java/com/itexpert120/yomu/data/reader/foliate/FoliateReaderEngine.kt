@@ -490,7 +490,9 @@ private class FoliateReaderSession(
         val fraction = event.optDouble("fraction", 0.0).takeUnless { it.isNaN() } ?: 0.0
         val total = event.optDouble("total").takeUnless { it.isNaN() }
         val cfi = event.optString("cfi").takeIf { it.isNotEmpty() && it != "null" }
-        val title = event.optString("title").takeIf { it.isNotEmpty() && it != "null" }
+        // The contents entry's label; for a section the contents don't list, its own heading.
+        val title = (event.optString("title").takeIf { it.isNotEmpty() && it != "null" })
+            ?: event.optString("heading").takeIf { it.isNotBlank() && it != "null" }
         val pageLabel = event.optString("pageLabel").takeIf { it.isNotEmpty() && it != "null" }
         if (event.optBoolean("scrolled")) {
             position.onScrollMeasured(href, event.optDouble("measured", fraction).takeUnless { it.isNaN() } ?: fraction)

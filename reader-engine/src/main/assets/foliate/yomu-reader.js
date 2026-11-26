@@ -545,6 +545,9 @@ const reportLocation = detail => {
         columns: perScreen,
         scrolled,
         title: detail.tocItem?.label ?? null,
+        // A section the contents don't list (a title page, the book's own contents page) by its
+        // own heading, so it can still be named.
+        heading: detail.tocItem?.label ? null : sectionHeading(detail.section?.current),
     })
 }
 
@@ -552,6 +555,15 @@ const reportLocation = detail => {
  * The printed page(s) on screen, from the book's page list: the page the screen starts on, and
  * across a spread the one it ends on too ("112–113"). Null when the book has no page list.
  */
+/** Section [index]'s first heading, else its document title; null when it has neither. */
+const sectionHeading = index => {
+    const doc = view.renderer?.getContents()?.find(c => c.index === index)?.doc
+    if (!doc) return null
+    const text = el => el?.textContent?.replace(/\s+/g, ' ').trim()
+    const heading = text(doc.querySelector('h1, h2, h3')) || text(doc.querySelector('title'))
+    return heading ? heading.slice(0, 80) : null
+}
+
 const printedPages = (detail, perScreen) => {
     const start = detail.pageItem?.label?.trim()
     if (!start) return null
