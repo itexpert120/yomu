@@ -23,6 +23,16 @@ const MIME = {
     JS: /\/(x-)?(javascript|ecmascript)/,
 }
 
+// Open Reader: the media type of a linked resource from its extension, for files missing from the
+// manifest; null for anything that isn't a plain resource (chapters stay manifest-only).
+const RESOURCE_TYPES = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+    avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml', css: 'text/css',
+    ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2',
+    mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', mp4: 'video/mp4', webm: 'video/webm',
+}
+const guessResourceType = path => RESOURCE_TYPES[path.split('?')[0].split('.').pop()?.toLowerCase()] ?? null
+
 // https://www.w3.org/TR/epub-33/#sec-reserved-prefixes
 const PREFIX = {
     a11y: 'http://www.idpf.org/epub/vocab/package/a11y/#',
@@ -786,8 +796,15 @@ class Loader {
     async loadHref(href, base, parents = []) {
         if (isExternal(href)) return href
         const path = resolveURL(href, base)
-        const item = this.manifest.find(item => item.href === path)
-        if (!item) return href
+        let item = this.manifest.find(item => item.href === path)
+        // Open Reader: a picture, font, stylesheet or media file the manifest forgot (common in
+        // hand-made books) is still loaded from the book, as other readers do; left as is, its
+        // relative link resolved against the chapter's blob: URL and showed as broken.
+        if (!item) {
+            const mediaType = guessResourceType(path)
+            if (!mediaType) return href
+            item = { href: path, mediaType }
+        }
         return this.loadItem(item, parents.concat(base))
     }
     async loadReplaced(item, parents = []) {

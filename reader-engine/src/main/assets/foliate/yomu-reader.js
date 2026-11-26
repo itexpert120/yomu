@@ -26,16 +26,27 @@ const bookUrl = name => '/book/' + name.split('/').map(encodeURIComponent).join(
 
 const makeLoader = async () => {
     const sizes = await (await fetch('/book/.sizes')).json()
-    const exists = name => Object.hasOwn(sizes, name)
+    // foliate decodes links with decodeURI, which leaves reserved characters escaped: a file named
+    // "In short, my life.jpg" arrives as "In short%2C my life.jpg". Fall back to the fully decoded name.
+    const entryName = name => {
+        if (Object.hasOwn(sizes, name)) return name
+        try {
+            const decoded = decodeURIComponent(name)
+            return Object.hasOwn(sizes, decoded) ? decoded : null
+        } catch {
+            return null
+        }
+    }
     const get = async name => {
-        if (!exists(name)) return null
-        const res = await fetch(bookUrl(name))
+        const entry = entryName(name)
+        if (entry == null) return null
+        const res = await fetch(bookUrl(entry))
         return res.ok ? res : null
     }
     return {
         loadText: async name => (await get(name))?.text() ?? null,
         loadBlob: async name => (await get(name))?.blob() ?? null,
-        getSize: name => sizes[name] ?? 0,
+        getSize: name => sizes[entryName(name) ?? name] ?? 0,
     }
 }
 
