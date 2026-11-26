@@ -403,6 +403,7 @@ private fun LibraryLayer(
                         val full = constraints.maxWidth
                         // Read the pane only when it is still: a moving pane never re-lays out the library.
                         val width = if (moving && laidOut[0] > 0) laidOut[0] else edge(full)
+                        if (width != laidOut[0]) widthMove.generation++
                         laidOut[0] = width
                         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
                         layout(full, placeable.height) { placeable.placeRelative(0, 0) }
