@@ -119,7 +119,8 @@ const getVisibleRange = (doc, start, end, mapRect) => {
         }
         return FILTER_SKIP
     }
-    const walker = doc.createTreeWalker(doc.body, filter, { acceptNode })
+    // Open Reader: a section without a <body> (an SVG-only page) walks from its root element.
+    const walker = doc.createTreeWalker(doc.body ?? doc.documentElement, filter, { acceptNode })
     const nodes = []
     for (let node = walker.nextNode(); node; node = walker.nextNode())
         nodes.push(node)
@@ -289,7 +290,8 @@ class View {
         })
     }
     render(layout) {
-        if (!layout) return
+        // Open Reader: not once the frame's document is gone (a section being replaced).
+        if (!layout || !this.document) return
         this.#column = layout.flow !== 'scrolled'
         this.#layout = layout
         if (this.#column) this.columnize(layout)
@@ -1157,11 +1159,13 @@ export class Paginator extends HTMLElement {
         } else $style.textContent = styles
 
         // NOTE: needs `requestAnimationFrame` in Chromium
-        requestAnimationFrame(() =>
-            this.#background.style.background = getBackground(this.#view.document))
+        // Open Reader: the view may be gone by the next frame (a preview dropped, a section replaced).
+        requestAnimationFrame(() => {
+            if (this.#view) this.#background.style.background = getBackground(this.#view.document)
+        })
 
         // needed because the resize observer doesn't work in Firefox
-        this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
+        this.#view?.document?.fonts?.ready?.then(() => this.#view?.expand())
     }
     focusView() {
         this.#view.document.defaultView.focus()
