@@ -22,6 +22,9 @@ fun LibraryRoute(
     onOpenDetails: (String) -> Unit,
     onSelectionModeChange: (Boolean) -> Unit = {},
     onHaveSyncWords: (() -> Unit)? = null,
+    // Opens search or the import picker once; [onEntryActionHandled] then clears it.
+    entryAction: LibraryEntryAction? = null,
+    onEntryActionHandled: () -> Unit = {},
 ) {
     val viewModel: LibraryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -54,6 +57,25 @@ fun LibraryRoute(
             viewModel.onImport(uris)
         }
     }
+    fun openImportPicker() = safLauncher.launch(
+        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/epub+zip"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        },
+    )
+
+    // Once the library has its books, so search opens over the real shelf.
+    LaunchedEffect(entryAction, state.isLoading) {
+        val action = entryAction ?: return@LaunchedEffect
+        if (state.isLoading) return@LaunchedEffect
+        viewModel.onExitSelection()
+        when (action) {
+            LibraryEntryAction.Search -> viewModel.onOpenSearch()
+            LibraryEntryAction.Import -> openImportPicker()
+        }
+        onEntryActionHandled()
+    }
 
     LibraryScreen(
         onHaveSyncWords = onHaveSyncWords,
@@ -85,14 +107,9 @@ fun LibraryRoute(
         onSetSelectedStatus = viewModel::onSetSelectedStatus,
         onRememberSearch = viewModel::onRememberSearch,
         onForgetSearch = viewModel::onForgetSearch,
-        onImport = {
-            safLauncher.launch(
-                Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "application/epub+zip"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                },
-            )
-        },
+        onImport = ::openImportPicker,
     )
 }
+
+/** What the library was opened to do from outside it (a launcher quick action). */
+enum class LibraryEntryAction { Search, Import }

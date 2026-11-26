@@ -1109,7 +1109,7 @@ private class ReadiumReaderSession(
         // Declared at weight 400; the browser synthesizes bold for headings (no bold file is fetched).
         sb.append(
             "@font-face{font-family:'${ref.family}';font-style:normal;font-weight:400;" +
-                "src:url(data:font/woff2;base64,$regularB64) format('woff2');}",
+                "src:url(data:${fontMime(ref.regularPath)};base64,$regularB64) format('${fontFormat(ref.regularPath)}');}",
         )
         ref.italicPath
             ?.let { runCatching { File(it).readBytes() }.getOrNull() }
@@ -1117,11 +1117,16 @@ private class ReadiumReaderSession(
                 val italicB64 = Base64.encodeToString(italic, Base64.NO_WRAP)
                 sb.append(
                     "@font-face{font-family:'${ref.family}';font-style:italic;font-weight:400;" +
-                        "src:url(data:font/woff2;base64,$italicB64) format('woff2');}",
+                        "src:url(data:${fontMime(ref.italicPath)};base64,$italicB64) format('${fontFormat(ref.italicPath)}');}",
                 )
             }
         return sb.toString()
     }
+
+    // Installed fonts are TrueType; ones installed by earlier versions may still be woff2.
+    private fun fontMime(path: String?): String = if (path.orEmpty().endsWith(".woff2", ignoreCase = true)) "font/woff2" else "font/ttf"
+
+    private fun fontFormat(path: String?): String = if (path.orEmpty().endsWith(".woff2", ignoreCase = true)) "woff2" else "truetype"
 
     // Concatenated rather than a trimIndent() template: the CSS payload can be megabytes long.
     private fun customFontInjectJs(css: String): String = buildString(

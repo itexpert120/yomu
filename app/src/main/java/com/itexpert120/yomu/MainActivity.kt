@@ -20,6 +20,7 @@ import com.itexpert120.yomu.app.YomuApp
 import com.itexpert120.yomu.app.YomuSplashTheme
 import com.itexpert120.yomu.app.enableYomuEdgeToEdge
 import com.itexpert120.yomu.app.preferNativeRefreshRate
+import com.itexpert120.yomu.app.shortcuts.AppShortcut
 import com.itexpert120.yomu.app.toSplashTheme
 import com.itexpert120.yomu.app.updateYomuSystemBarIcons
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
@@ -61,7 +62,7 @@ class MainActivity : FragmentActivity() {
         }
         enableYomuEdgeToEdge()
         preferNativeRefreshRate()
-        // Cold start from an external "Open with"/share.
+        // Cold start from an external "Open with"/share, or a launcher quick action.
         if (savedInstanceState == null) handleExternalIntent(intent)
         setContent {
             YomuApp(
@@ -108,8 +109,15 @@ class MainActivity : FragmentActivity() {
         handleExternalIntent(intent)
     }
 
-    /** Pulls an EPUB URI out of an ACTION_VIEW (intent.data) or ACTION_SEND (EXTRA_STREAM) intent. */
+    /**
+     * A launcher quick action ([AppShortcut]), or an EPUB URI out of an ACTION_VIEW (intent.data) or
+     * ACTION_SEND (EXTRA_STREAM) intent.
+     */
     private fun handleExternalIntent(intent: Intent?) {
+        AppShortcut.parse(intent?.action, intent?.getStringExtra(AppShortcut.EXTRA_BOOK_ID))?.let { shortcut ->
+            externalOpenViewModel.onShortcut(shortcut)
+            return
+        }
         val uri = intent.extractEpubUri() ?: return
         externalOpenViewModel.onExternalUri(uri)
     }

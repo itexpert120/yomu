@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static launcher quick actions; "Continue <book>" is added at runtime (ContinueReadingShortcut).
+     MainActivity routes the actions (AppShortcuts). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutId="search"
+        android:shortcutLongLabel="@string/shortcut_search_long"
+        android:shortcutShortLabel="@string/shortcut_search_short">
+        <intent
+            android:action="com.itexpert120.yomu.shortcut.SEARCH"
+            android:targetClass="com.itexpert120.yomu.MainActivity"
+            android:targetPackage="com.itexpert120.yomu" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_import"
+        android:shortcutId="import"
+        android:shortcutLongLabel="@string/shortcut_import_long"
+        android:shortcutShortLabel="@string/shortcut_import_short">
+        <intent
+            android:action="com.itexpert120.yomu.shortcut.IMPORT"
+            android:targetClass="com.itexpert120.yomu.MainActivity"
+            android:targetPackage="com.itexpert120.yomu" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_statistics"
+        android:shortcutId="statistics"
+        android:shortcutLongLabel="@string/shortcut_statistics_long"
+        android:shortcutShortLabel="@string/shortcut_statistics_short">
+        <intent
+            android:action="com.itexpert120.yomu.shortcut.STATISTICS"
+            android:targetClass="com.itexpert120.yomu.MainActivity"
+            android:targetPackage="com.itexpert120.yomu" />
+    </shortcut>
+</shortcuts>

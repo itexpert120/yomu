@@ -4,12 +4,16 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itexpert120.yomu.app.shortcuts.AppShortcut
+import com.itexpert120.yomu.core.model.BookId
+import com.itexpert120.yomu.data.books.BookRepository
 import com.itexpert120.yomu.domain.imports.ImportBooksUseCase
 import com.itexpert120.yomu.domain.imports.ImportResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -19,10 +23,15 @@ import javax.inject.Inject
  * Handles EPUBs opened from outside the app (file-manager "Open with", or a WhatsApp/Gmail share).
  * The Activity feeds the incoming [Uri] here; the import runs off the main thread (in the use case)
  * and acknowledged pending requests drive navigation to the imported (or already-present) book.
+ *
+ * Also the launcher's quick actions ([AppShortcut]): "Continue" joins the same pending opens once
+ * the book is known to be in the library (a pinned shortcut can outlive its book); the others wait
+ * in [shortcut] until the nav host has shown them.
  */
 @HiltViewModel
 class ExternalOpenViewModel @Inject constructor(
     private val importBooks: ImportBooksUseCase,
+    private val books: BookRepository,
     private val savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -38,6 +47,29 @@ class ExternalOpenViewModel @Inject constructor(
     val pendingBooks = opens.state
     fun acknowledgeOpen(bookId: String) = opens.acknowledge(bookId)
     private val importMutex = Mutex()
+
+    private val _shortcut = MutableStateFlow(savedState.get<String>(KEY_SHORTCUT)?.let(AppShortcut::decode))
+
+    /** A launcher quick action other than Continue, until the nav host has shown it. */
+    val shortcut: StateFlow<AppShortcut?> = _shortcut.asStateFlow()
+
+    /** Called by the Activity for a launcher quick action, cold (onCreate) or warm (onNewIntent). */
+    fun onShortcut(shortcut: AppShortcut) {
+        if (shortcut is AppShortcut.Continue) {
+            viewModelScope.launch {
+                if (books.observeBook(BookId(shortcut.bookId)).first() != null) opens.add(shortcut.bookId)
+            }
+        } else {
+            setShortcut(shortcut)
+        }
+    }
+
+    fun consumeShortcut() = setShortcut(null)
+
+    private fun setShortcut(shortcut: AppShortcut?) {
+        _shortcut.value = shortcut
+        savedState[KEY_SHORTCUT] = shortcut?.encode()
+    }
 
     init {
         savedState.get<List<String>>("incomingUris").orEmpty().forEach { importUri(Uri.parse(it)) }
@@ -77,5 +109,9 @@ class ExternalOpenViewModel @Inject constructor(
 
     fun clearError() {
         _error.value = null
+    }
+
+    private companion object {
+        const val KEY_SHORTCUT = "shortcut"
     }
 }
