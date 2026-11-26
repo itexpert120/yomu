@@ -16,12 +16,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.YomuTheme
+import com.itexpert120.yomu.core.designsystem.yomuSheetCorner
 
 /** How far below the status bar the phone book sheet starts: the library shows above it. */
 val BookSheetTopGap = 50.dp
 
-/** The book sheet's top corners. */
+/** The book sheet's top corners where the display reports none (see [rememberBookSheetCorner]). */
 val BookSheetCorner = 32.dp
+
+/** The book sheet's top corners: the app's sheet corner, echoing the display's bottom corners. */
+@Composable
+fun rememberBookSheetCorner(): Dp = yomuSheetCorner()
 
 /**
  * How far the book info scrolls up off the sheet as Resume turns the sheet into the page, and how
@@ -71,9 +76,10 @@ val LocalBookSheetHold = staticCompositionLocalOf<BookSheetHold?> { null }
 @Composable
 fun Modifier.bookPaneEdge(): Modifier {
     val rule = YomuTheme.stack.rule
+    val corner = rememberBookSheetCorner()
     return drawBehind {
         val w = 1.dp.toPx()
-        val r = BookSheetCorner.toPx()
+        val r = corner.toPx()
         val rtl = layoutDirection == LayoutDirection.Rtl
         val path = Path().apply {
             if (!rtl) {

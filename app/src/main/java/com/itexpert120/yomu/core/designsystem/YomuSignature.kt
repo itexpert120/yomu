@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -331,7 +332,9 @@ fun YomuNotice(
         YomuNoticeTone.Error -> stack.danger
         else -> stack.muted
     }
-    val shape = YomuShapeTokens.tile
+    // A floating notice sits about 16dp above the bottom edge: concentric with the display's corner.
+    val floatingCorner = yomuConcentricCorner(gap = 16.dp, minimum = 16.dp)
+    val shape = if (tone == YomuNoticeTone.Floating) RoundedCornerShape(floatingCorner) else YomuShapeTokens.tile
     Column(
         modifier = modifier
             .then(if (floating) Modifier.dropShadow(shape, NoticeShadow) else Modifier)

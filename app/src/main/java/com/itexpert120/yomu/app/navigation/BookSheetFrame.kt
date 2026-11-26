@@ -24,7 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -32,6 +34,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.LayoutDirection
 import com.itexpert120.yomu.core.designsystem.YomuMotion
+import com.itexpert120.yomu.core.designsystem.YomuSheetEdge
 import com.itexpert120.yomu.core.designsystem.rememberSettlingSpatialSpring
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.feature.bookdetails.BookSheetHold
@@ -48,6 +51,38 @@ import kotlin.math.roundToInt
  * open ([openness], 0..1). Both in px of the same window.
  */
 internal fun libraryVisibleEdge(fullPx: Int, roomPx: Float, openness: Float): Int = (fullPx - (roomPx * openness.coerceIn(0f, 1f)).roundToInt()).coerceIn(0, fullPx)
+
+/**
+ * The library's clip while a book pane moves: everything up to [visible] px from its start edge,
+ * except that the sheet ([sheet], when there is one) ends [YomuSheetEdge.endInset] short of that
+ * edge with its rounded top-end corner — exactly as the sheet itself ends at rest — so the corner
+ * stays round through the move and nothing changes when it settles. The area above the sheet
+ * (the pile, on the desk) is cut straight. Mirrored under RTL.
+ */
+internal fun libraryClipPath(width: Float, height: Float, visible: Float, sheet: YomuSheetEdge?, rtl: Boolean): Path {
+    fun x(value: Float) = if (rtl) width - value else value
+    val path = Path()
+    if (sheet == null) {
+        path.addRect(Rect(x(0f).coerceAtMost(x(visible)), 0f, x(0f).coerceAtLeast(x(visible)), height))
+        return path
+    }
+    val top = sheet.top.coerceIn(0f, height)
+    val sheetEnd = (visible - sheet.endInset).coerceAtLeast(0f)
+    val r = sheet.radius.coerceIn(0f, minOf(sheetEnd, height - top).coerceAtLeast(0f))
+    path.moveTo(x(0f), 0f)
+    path.lineTo(x(visible), 0f)
+    path.lineTo(x(visible), top)
+    path.lineTo(x(sheetEnd - r), top)
+    if (r > 0f) {
+        // The sheet's top-end corner, a quarter circle from its top edge down to its end edge.
+        val left = if (rtl) x(sheetEnd) else sheetEnd - 2 * r
+        path.arcTo(Rect(left, top, left + 2 * r, top + 2 * r), if (rtl) 270f else 270f, if (rtl) -90f else 90f, false)
+    }
+    path.lineTo(x(sheetEnd), height)
+    path.lineTo(x(0f), height)
+    path.close()
+    return path
+}
 
 /** Behind an open book the library dims to 80% (spec: black at 20%, never blur). */
 internal const val SheetDim = 0.2f

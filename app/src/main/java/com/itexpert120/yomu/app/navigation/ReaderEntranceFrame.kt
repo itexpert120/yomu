@@ -35,9 +35,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
-import com.itexpert120.yomu.feature.bookdetails.BookSheetCorner
 import com.itexpert120.yomu.feature.bookdetails.BookSheetResumeScroll
 import com.itexpert120.yomu.feature.bookdetails.bookSheetTop
+import com.itexpert120.yomu.feature.bookdetails.rememberBookSheetCorner
 import com.itexpert120.yomu.feature.reader.LocalReaderOpeningRise
 import com.itexpert120.yomu.feature.reader.LocalReaderWindowReady
 import kotlinx.coroutines.flow.Flow
@@ -174,7 +174,7 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
     val sheetTopPx = with(density) {
         bookSheetTop(WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()).toPx()
     }
-    val cornerPx = with(density) { BookSheetCorner.toPx() }
+    val cornerPx = with(density) { rememberBookSheetCorner().toPx() }
     val libraryRisePx = with(density) { LibraryEntranceRise.toPx() }
     val sheetColor = MaterialTheme.colorScheme.surface
 

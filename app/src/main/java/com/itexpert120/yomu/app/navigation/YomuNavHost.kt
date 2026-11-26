@@ -24,7 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -423,11 +423,9 @@ private fun LibraryLayer(
                         // Moving: this node is the library laid out at full width, from the start
                         // edge; the visible part is the first [visible] px, up to the pane's edge.
                         val visible = edge().toFloat().coerceAtMost(size.width)
-                        if (layoutDirection == LayoutDirection.Rtl) {
-                            clipRect(left = size.width - visible) { this@drawWithContent.drawContent() }
-                        } else {
-                            clipRect(right = visible) { this@drawWithContent.drawContent() }
-                        }
+                        // The sheet keeps its rounded top-end corner at the moving edge, as at rest.
+                        val path = libraryClipPath(size.width, size.height, visible, widthMove.sheet?.invoke(), layoutDirection == LayoutDirection.Rtl)
+                        clipPath(path) { this@drawWithContent.drawContent() }
                     }
                     .then(if (shown && (homeOnTop || besidePane)) Modifier else Modifier.clearAndSetSemantics { }),
             ) {
