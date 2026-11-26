@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.app.navigation.LocalYomuNavigationBarShown
+import com.itexpert120.yomu.core.designsystem.LocalYomuWidthMove
 import com.itexpert120.yomu.core.designsystem.StackCompactHeader
 import com.itexpert120.yomu.core.designsystem.StackCompactHeaderHeight
 import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
@@ -84,6 +85,7 @@ import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughEnter
 import com.itexpert120.yomu.core.designsystem.yomuFadeThroughExit
+import com.itexpert120.yomu.core.designsystem.yomuGlidePlacement
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import com.itexpert120.yomu.core.model.ManualStatus
 import com.itexpert120.yomu.core.model.SortMode
@@ -208,23 +210,32 @@ fun LibraryScreen(
 
     YomuAppSurface {
         // One width class from the measured width (a navigation rail beside the library is already
-        // accounted for) drives the gutters, grid and list, so their edges line up.
-        val widthClass = YomuWidthClass.fromWidth(maxWidth)
+        // accounted for) drives the gutters, grid and list, so their edges line up. Beside a book
+        // pane the library is narrowed (LocalYomuWidthMove): while it stays in the same class it
+        // keeps every decision of its full width — gutter, sheet margins, insets, grid density — so
+        // opening and closing a pane only changes how many covers fit in a row.
+        val fullExtra = with(LocalDensity.current) { LocalYomuWidthMove.current.fullExtra().toDp() }
+        val designWidth = (maxWidth + fullExtra).let {
+            if (YomuWidthClass.fromWidth(it).isWide == YomuWidthClass.fromWidth(maxWidth).isWide) it else maxWidth
+        }
+        val widthClass = YomuWidthClass.fromWidth(designWidth)
         val gutter = if (widthClass.isWide) 32.dp else 24.dp
         // The boards: a phone's pile has its info at the far edge; a tall (portrait) tablet the same,
         // larger; a wide landscape column the info right beside the pile.
         val pileLayout = when {
             !widthClass.isWide -> PileLayout.Phone
-            maxHeight > maxWidth * 1.25f -> PileLayout.Tall
+            maxHeight > designWidth * 1.25f -> PileLayout.Tall
             else -> PileLayout.Beside
         }
         // On tablets the shelf sheet stands 16dp off the rail (and off the far edge in portrait).
         val sheetStart = if (widthClass.isWide) 16.dp else 0.dp
         val sheetEnd = if (pileLayout == PileLayout.Tall) 16.dp else 0.dp
         val sheetWidth = maxWidth - sheetStart - sheetEnd
+        val designSheetWidth = designWidth - sheetStart - sheetEnd
         // Capped content is centred inside the sheet: its leading edge is 24dp in until the cap bites.
-        val gridInset = ((sheetWidth - YomuContentMaxWidth) / 2).coerceAtLeast(24.dp)
-        val listInset = ((sheetWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(24.dp)
+        // (From the full width, so the gutter is the same beside a pane.)
+        val gridInset = ((designSheetWidth - YomuContentMaxWidth) / 2).coerceAtLeast(24.dp)
+        val listInset = ((designSheetWidth - YomuReadableMaxWidth) / 2).coerceAtLeast(24.dp)
         val headerInset = if (state.viewMode == LibraryViewMode.List) listInset else gridInset
         // Over the navigation bar the content already ends above the gesture area; without it (rail,
         // selection toolbar, search) the last row must clear that area, and the toolbar too.
@@ -268,7 +279,7 @@ fun LibraryScreen(
                     spec = grid,
                     contentPadding = PaddingValues(
                         start = grid.inset,
-                        end = grid.inset,
+                        end = (grid.inset - fullExtra).coerceAtLeast(minOf(grid.inset, 24.dp)),
                         top = grid.top,
                         bottom = contentBottom,
                     ),
@@ -299,7 +310,7 @@ fun LibraryScreen(
                 onEditTabs = { showManageCollections = true },
                 horizontalInset = headerInset,
                 gap = if (widthClass.isWide) 26.dp else 22.dp,
-                modifier = Modifier.padding(top = if (widthClass.isWide) 4.dp else 6.dp),
+                modifier = Modifier.yomuGlidePlacement().padding(top = if (widthClass.isWide) 4.dp else 6.dp),
                 trailing = trailing,
             )
             LibraryTabPager(
@@ -635,7 +646,7 @@ private fun StackedLibrary(
                     onResume = onOpenReader,
                     layout = pileLayout,
                     gutter = gutter,
-                    modifier = Modifier.padding(top = pileLayout.topGap),
+                    modifier = Modifier.yomuGlidePlacement().padding(top = pileLayout.topGap),
                 )
             }
             val pileBelow = showPile || content == ShelfContent.Loading
