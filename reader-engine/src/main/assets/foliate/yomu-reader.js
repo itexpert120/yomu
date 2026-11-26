@@ -249,6 +249,13 @@ addEventListener('resize', () => {
 })
 
 const configure = renderer => {
+    // A fixed-layout book (foliate's FixedLayout) has its pages as published: no flow, margins,
+    // columns or reader styles to set.
+    if (typeof renderer.setStyles !== 'function') {
+        if (settings.animated === false) renderer.removeAttribute('animated')
+        else renderer.setAttribute('animated', '')
+        return
+    }
     const scrolled = settings.flow === 'scrolled'
     renderer.setAttribute('flow', scrolled ? 'scrolled' : 'paginated')
     renderer.setAttribute('margin', scrolled ? SCROLLED_MARGIN : PAGED_MARGIN)
@@ -368,7 +375,8 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
         // A picture opens wherever it is: in a spread a right-hand page's pictures lie almost all in
         // the outer third, where a tap would otherwise turn the page and they could never be opened.
         // The chapter frame is wider than the screen and scrolled from outside, so use screen x.
-        const image = imageAt(e.target)
+        // Not on a fixed-layout page, which is often all picture: there a tap turns it.
+        const image = view.isFixedLayout ? null : imageAt(e.target)
         if (image) openImage(image)
         else onPageTap(e.screenX)
     })
@@ -380,7 +388,8 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
  * as the book reads, so a right-to-left book turns back on the right) and the middle is the app's
  * menu. Scrolled, or with tap turns off, any tap is the menu.
  */
-const tapsTurn = () => settings.flow !== 'scrolled' && settings.tapTurns !== false
+// A fixed-layout book only pages, whatever the layout setting says.
+const tapsTurn = () => (settings.flow !== 'scrolled' || view.isFixedLayout) && settings.tapTurns !== false
 const onPageTap = x => {
     const paged = tapsTurn()
     // foliate's own click listener (which finds a tapped highlight) runs after the chapter's, so

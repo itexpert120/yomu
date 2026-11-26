@@ -14,10 +14,13 @@ const getViewport = (doc, viewport) => {
     // get `viewport` `meta` element
     const meta = parseViewport(doc.querySelector('meta[name="viewport"]')
         ?.getAttribute('content'))
-    if (meta) return Object.fromEntries(meta)
+    // Open Reader: only a viewport with a size in numbers. An image straight in the spine opens as
+    // the browser's own image document, whose viewport is "width=device-width": no size at all.
+    const sized = meta && Object.fromEntries(meta)
+    if (sized && !isNaN(parseFloat(sized.width)) && !isNaN(parseFloat(sized.height))) return sized
 
     // fallback to book's viewport
-    if (typeof viewport === 'string') return parseViewport(viewport)
+    if (typeof viewport === 'string') return Object.fromEntries(parseViewport(viewport))
     if (viewport?.width && viewport.height) return viewport
 
     // if no viewport (possibly with image directly in spine), get image size
