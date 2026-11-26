@@ -18,6 +18,9 @@ object ReaderPublicationCacheCodec {
         // TOCs cached before non-ASCII anchors were repaired stored those rows as unjumpable with an
         // encoded `#` (`%23`) in the href; treat them as a miss so the TOC is re-extracted.
         if (toc.any { it.locatorJson == null && "%23" in it.resourceHref }) return null
+        // TOCs cached before anchor entries were measured have every section of a file starting at
+        // 0, so the reader named the last of them; re-extract to measure them.
+        if (toc.any { it.startProgression == null && it.locatorJson?.contains("\"fragments\"") == true }) return null
         val weights = resourceWeightsJson
             ?.let { runCatching { json.decodeFromString<Map<String, Int>>(it) }.getOrNull() }
             ?.filterValues { it > 0 }

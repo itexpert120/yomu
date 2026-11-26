@@ -280,6 +280,7 @@ class ReadiumReaderEngine @Inject constructor(
                 }
                 val tableOfContents = cachedToc.await()
                     ?: async(Dispatchers.Default) { publication.flattenedTableOfContents() }.await()
+                        .withAnchorStarts(filePath)
                 val resourceWeights = weights.await()
                 ReaderOpenTrace.mark("reader.cache-prepared")
                 val tocItems = tableOfContents.map { it.item }
@@ -301,7 +302,7 @@ class ReadiumReaderEngine @Inject constructor(
     override suspend fun tableOfContents(filePath: String): List<ReaderTocItem>? {
         val publication = openPublication(filePath) ?: return null
         return try {
-            publication.flattenedTableOfContents().map { it.item }
+            publication.flattenedTableOfContents().withAnchorStarts(filePath).map { it.item }
         } finally {
             runCatching { publication.close() }
         }

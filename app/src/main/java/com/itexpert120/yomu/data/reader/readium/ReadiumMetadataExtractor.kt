@@ -57,7 +57,9 @@ class ReadiumMetadataExtractor @Inject constructor(
             }
         return try {
             val metadata = publication.metadata
-            val tableOfContents = publication.flattenedTableOfContents().map { it.item }
+            val tableOfContents = publication.flattenedTableOfContents()
+                .withAnchorStarts(file.absolutePath)
+                .map { it.item }
             ExtractedMetadata(
                 title = metadata.title,
                 author = metadata.authors.mapNotNull { it.name }.joinToString(", ")

@@ -143,6 +143,10 @@ data class ReaderTocItem(
     // Raw resource href for matching old caches and locators. [id] additionally includes a fragment
     // when needed so two TOC sections in one XHTML resource remain independently addressable.
     val resourceHref: String = id,
+    // Where an entry that targets an anchor inside its resource (`ch.xhtml#part3`) starts, as the
+    // share of the resource's text before it (0..1), measured when the contents are indexed. Null
+    // for entries at a resource's start, and in contents cached before this was measured.
+    val startProgression: Double? = null,
 )
 
 /**

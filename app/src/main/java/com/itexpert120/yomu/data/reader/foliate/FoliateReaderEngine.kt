@@ -385,7 +385,7 @@ private class FoliateReaderSession(
                 id = item.id,
                 title = item.title,
                 resourceIndex = index,
-                startProgression = progression ?: 0.0,
+                startProgression = item.startProgression ?: progression ?: 0.0,
                 target = json,
             )
         },
