@@ -5,3 +5,6 @@ expand(), which also measures content overflowing a zero-height box and its touc
 after a drag, a touch that moves less than 8px not counting as a drag, and horizontal paged layout, whose
 pages scroll edge to edge across the whole width with the side margins as column gaps (all marked
 "Open Reader:"). PDF, MOBI, FB2, CBZ, OPDS and the demo UI are left out.
+
+Also epub.js loadHref (marked "Open Reader:"): pictures, fonts, stylesheets and media the manifest
+forgot are still loaded from the book.
