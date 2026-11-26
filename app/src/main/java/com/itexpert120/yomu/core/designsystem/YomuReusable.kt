@@ -113,7 +113,7 @@ fun YomuBottomSheet(
     showScrollEdgeShadow: Boolean = true,
     content: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
 ) {
-    if (!visible) return
+    if (!visible || LocalYomuSheetsHeld.current) return
     val windowSize = LocalWindowInfo.current.containerSize
     val density = LocalDensity.current
     val side = YomuWidthClass.fromWidth(with(density) { windowSize.width.toDp() }).isWide
@@ -136,6 +136,14 @@ fun YomuBottomSheet(
         }
     }
 }
+
+/**
+ * True while the screen that owns these sheets is covered by another page (e.g. the reader while
+ * the font library it opened is on top): its sheets stay open in its state but aren't shown —
+ * a sheet is its own window and would otherwise sit over the page in front, taking its back
+ * presses. They rise again when the screen is back in front.
+ */
+val LocalYomuSheetsHeld = staticCompositionLocalOf { false }
 
 /** Whether a sheet's pinned header draws the scroll-edge rule. */
 internal val LocalYomuSheetRule = staticCompositionLocalOf { true }

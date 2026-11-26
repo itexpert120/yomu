@@ -4,8 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,11 +44,11 @@ import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuDesignTheme
+import com.itexpert120.yomu.core.designsystem.YomuPageStack
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
-import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.feature.settings.SettingsCaptionStyle
 import com.itexpert120.yomu.feature.settings.SettingsRow
 import com.itexpert120.yomu.feature.settings.SettingsSubpage
@@ -74,13 +72,9 @@ internal fun AboutPane(onBack: (() -> Unit)?, diagnostics: @Composable (onBack: 
     var pageName by rememberSaveable { mutableStateOf(AboutPage.Home.name) }
     val page = AboutPage.valueOf(pageName)
     val context = LocalContext.current
-    BackHandler(enabled = page != AboutPage.Home) { pageName = AboutPage.Home.name }
-    AnimatedContent(
-        targetState = page,
-        transitionSpec = { yomuContentSwap(forward = targetState != AboutPage.Home) },
-        label = "aboutPage",
-    ) { current ->
-        val home = { pageName = AboutPage.Home.name }
+    val home = { pageName = AboutPage.Home.name }
+    // Its pages push and leave with the app's one back slide (gesture, key and back button alike).
+    YomuPageStack(page = page, root = AboutPage.Home, onBack = home) { current ->
         when (current) {
             AboutPage.Home -> AboutScreen(
                 onBack = onBack,
