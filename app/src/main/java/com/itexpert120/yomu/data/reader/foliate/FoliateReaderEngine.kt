@@ -438,6 +438,9 @@ private class FoliateReaderSession(
         }
         reader = created
         readerActivity = activity
+        // With the open, so the first page shows its highlights (the page draws each chapter's as
+        // its overlay is made).
+        drawHighlights()
         return created
     }
 
@@ -466,7 +469,6 @@ private class FoliateReaderSession(
             "first-page" -> {
                 ReaderOpenTrace.mark("reader.first-page")
                 _renderState.value = ReaderRenderState.Ready(_currentLocator.value?.href)
-                drawHighlights()
                 drawSearchHits()
             }
             "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
@@ -793,7 +795,7 @@ private class FoliateReaderSession(
 
     override fun applyHighlights(highlights: List<ReaderHighlight>) {
         this.highlights = highlights
-        if (_renderState.value is ReaderRenderState.Ready) drawHighlights()
+        drawHighlights()
     }
 
     // Highlights made in this engine carry a CFI; the Readium engine's carry their text, which the

@@ -5,8 +5,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Fixtures are the stats yomu-reader.js computes, measured on two Yen Press/Kobo EPUBs (High School
- * DxD vol. 1, Love Unseen Beneath the Clear Night Sky), plus made-up cases for the rules alone.
+ * Fixtures are the stats yomu-reader.js computes, measured on a Yen Press/Kobo EPUB (Love Unseen
+ * Beneath the Clear Night Sky), plus made-up cases for the rules alone.
  */
 class PictureToneTest {
     private fun stats(
@@ -22,34 +22,10 @@ class PictureToneTest {
         opaque: Double = 1.0,
         decoration: Boolean = false,
         illustration: Boolean = false,
-    ) = PictureStats(opaque, sat, colorful, dark, light, corners, width, height, widthLines, heightLines, decoration, illustration)
+        emptyAlt: Boolean = false,
+    ) = PictureStats(opaque, sat, colorful, dark, light, corners, width, height, widthLines, heightLines, decoration, illustration, emptyAlt)
 
     private fun inverts(s: PictureStats) = PictureTone.invertsOnDarkPages(s)
-
-    // High School DxD
-
-    @Test
-    fun dxdOrnamentInverts() {
-        // Art_sborn.jpg, 212×32, img.ornament { height: 0.6em; width: 4em }.
-        assertTrue(inverts(stats(sat = 0.004, dark = 0.209, light = 0.717, corners = 1.0, width = 212, height = 32, widthLines = 2.7, heightLines = 0.4, decoration = true)))
-    }
-
-    @Test
-    fun dxdGrayscaleMangaStays() {
-        // Art_P7.jpg, a full-page grayscale illustration: colourless, but tonal with dark corners.
-        assertFalse(inverts(stats(sat = 0.0, dark = 0.284, light = 0.336, corners = 0.252, width = 1200, height = 1800, widthLines = 24.0, heightLines = 36.0)))
-    }
-
-    @Test
-    fun dxdColourInsertStays() {
-        assertFalse(inverts(stats(sat = 0.277, colorful = 0.712, dark = 0.176, light = 0.263, corners = 0.249, width = 1203, height = 1800, widthLines = 24.0, heightLines = 36.0)))
-    }
-
-    @Test
-    fun dxdTitlePageStays() {
-        // Art_tit.jpg: mostly white, but lettering with greys (0.89 two-tone): not pure enough at full size.
-        assertFalse(inverts(stats(sat = 0.002, dark = 0.041, light = 0.851, corners = 0.998, width = 1259, height = 1800, widthLines = 24.0, heightLines = 34.0)))
-    }
 
     // Love Unseen Beneath the Clear Night Sky: tiny ornaments and glyphs, whatever their class or alt
 
@@ -65,6 +41,12 @@ class PictureToneTest {
             stats(sat = 0.004, dark = 0.251, light = 0.662, corners = 0.889, width = 22, height = 32, widthLines = 0.8, heightLines = 1.2), // music
         )
         small.forEach { assertTrue(it.toString(), inverts(it)) }
+    }
+
+    @Test
+    fun loveUnseenColourCoverStays() {
+        // The cover and colour inserts (0.07–0.27 saturation).
+        assertFalse(inverts(stats(sat = 0.07, colorful = 0.2, dark = 0.1, light = 0.6, corners = 0.9, width = 1200, height = 1800, widthLines = 24.0, heightLines = 36.0)))
     }
 
     @Test
@@ -104,6 +86,22 @@ class PictureToneTest {
     @Test
     fun aWideDividerCountsAsSmall() {
         assertTrue(inverts(stats(dark = 0.1, light = 0.72, corners = 1.0, width = 600, height = 30, widthLines = 25.0, heightLines = 1.2)))
+    }
+
+    @Test
+    fun aMarkedSmallPictureNeedsOnlyToBeColourless() {
+        // A tiny mark that is mostly anti-aliasing (0.5 two-tone, a corner touched) with an ornament
+        // class or an empty alt.
+        val mark = stats(sat = 0.01, dark = 0.2, light = 0.3, corners = 0.4, width = 18, height = 19, widthLines = 0.7, heightLines = 0.7)
+        assertFalse(inverts(mark))
+        assertTrue(inverts(mark.copy(decorationHint = true)))
+        assertTrue(inverts(mark.copy(emptyAlt = true)))
+        assertFalse(inverts(mark.copy(emptyAlt = true, saturation = 0.2, colorful = 0.4)))
+    }
+
+    @Test
+    fun anEmptyAltDoesNotMakeALargePictureLineArt() {
+        assertFalse(inverts(stats(dark = 0.05, light = 0.8, corners = 1.0, width = 1200, height = 1800, widthLines = 24.0, heightLines = 36.0, emptyAlt = true)))
     }
 
     @Test

@@ -29,6 +29,8 @@ data class PictureStats(
     val decorationHint: Boolean = false,
     /** The markup calls it an illustration or cover (epub:type, a captioned figure). */
     val illustrationHint: Boolean = false,
+    /** An `img` with an empty `alt`: the markup says there's nothing to describe. */
+    val emptyAlt: Boolean = false,
 )
 
 /**
@@ -39,8 +41,10 @@ data class PictureStats(
  *
  * Size is the strongest signal, as publishers name their classes every which way and `alt` says
  * little: a picture no bigger than a few lines (an ornament, a scene break, a glyph set in the text)
- * needs only to be colourless, light-cornered and mostly near-black or near-white; a bigger one must
- * be almost purely two-tone (a handwritten note, a page of lettering), which then reads like text.
+ * that's colourless is line art when the markup marks it (a decoration class, an empty `alt`), and
+ * otherwise when its corners are light and it's mostly near-black or near-white (tiny marks are
+ * mostly anti-aliasing, so not by much); a bigger one must be almost purely two-tone (a handwritten
+ * note, a page of lettering), which then reads like text.
  */
 object PictureTone {
     // Colour: any meaningful amount keeps the picture as it is.
@@ -60,8 +64,7 @@ object PictureTone {
     private const val LARGE_CORNERS = 0.9
 
     // Share of near-black and near-white pixels: tiny anti-aliased marks never reach 0.85.
-    private const val SMALL_TWO_TONE = 0.70
-    private const val SMALL_TWO_TONE_HINTED = 0.65
+    private const val SMALL_TWO_TONE = 0.60
     private const val LARGE_TWO_TONE = 0.96
     private const val LARGE_TWO_TONE_HINTED = 0.90
 
@@ -76,7 +79,7 @@ object PictureTone {
         if (opaque < MOSTLY_CLEAR && dark < light) return false
         val twoTone = dark + light
         if (isSmall()) {
-            corners >= SMALL_CORNERS && twoTone >= (if (decorationHint) SMALL_TWO_TONE_HINTED else SMALL_TWO_TONE)
+            decorationHint || emptyAlt || (corners >= SMALL_CORNERS && twoTone >= SMALL_TWO_TONE)
         } else {
             corners >= LARGE_CORNERS && twoTone >= (if (decorationHint) LARGE_TWO_TONE_HINTED else LARGE_TWO_TONE)
         }

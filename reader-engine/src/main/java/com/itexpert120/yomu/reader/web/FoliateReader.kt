@@ -141,6 +141,8 @@ class FoliateReader(
         }
         val url = Uri.parse("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/foliate/yomu-reader.html").buildUpon()
             .apply { pageParams.forEach { (key, value) -> appendQueryParameter(key, value) } }
+            // Debug builds: the page logs what it decides (pictures on dark pages) to the console.
+            .apply { if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) appendQueryParameter("debug", "1") }
             .build()
         webView.loadUrl(url.toString())
     }
@@ -297,6 +299,7 @@ class FoliateReader(
                     renderedHeightLines = s.getDouble("renderedHeightLines"),
                     decorationHint = s.optBoolean("decorationHint"),
                     illustrationHint = s.optBoolean("illustrationHint"),
+                    emptyAlt = s.optBoolean("emptyAlt"),
                 ),
             )
         }.getOrDefault(false)

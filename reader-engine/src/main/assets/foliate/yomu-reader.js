@@ -173,7 +173,8 @@ const readerCSS = s => {
         img[data-yomu-ink], image[data-yomu-ink] {
             filter: invert(1) hue-rotate(180deg) !important;
             mix-blend-mode: screen;
-        }` : ''}
+        }
+        img[data-yomu-pending], image[data-yomu-pending] { visibility: hidden !important; }` : ''}
         pre { white-space: pre-wrap !important; }
         img, svg image { -webkit-touch-callout: none; -webkit-user-drag: none; }
         aside[epub|type~="endnote"],
@@ -359,11 +360,11 @@ const previewElement = () => {
     el.bookDir = view.book.dir
     el.sections = view.book.sections
     // As foliate's view does for its own renderer: the book's language and direction, unless set.
-    el.addEventListener('load', ({ detail: { doc } }) => {
+    el.addEventListener('load', ({ detail: { doc, index } }) => {
         doc.documentElement.lang ||= view.language?.canonical ?? ''
         if (!view.language?.isCJK) doc.documentElement.dir ||= view.language?.direction ?? ''
         applyAlignment(doc)
-        adaptPictures(doc)
+        markPictures(doc, index)
     })
     // The section's highlights too, so none appears only once the reader's own page takes over.
     el.addEventListener('create-overlayer', ({ detail: { doc, index, attach } }) => {
@@ -400,6 +401,8 @@ const preparePreview = forward => {
             await el.goTo({ index, anchor: forward ? 0 : 1 })
             const doc = el.getContents()?.[0]?.doc
             if (doc?.fonts) await within(doc.fonts.ready, 1500)
+            // Its pictures marked before it can slide in (see markPictures).
+            await within(picturesMarked(doc), PICTURES_BUDGET_MS * 3)
             await nextFrame()
             await nextFrame()
             if (preview === p) p.ready = true
@@ -480,7 +483,7 @@ const followCrossing = detail => {
     if (p?.holding) {
         // foliate has laid the section out where the preview shows it: swap once it has settled.
         if (index === p.index && r.page >= 1 && r.page <= r.pages - 2) {
-            settled().then(() => {
+            Promise.all([settled(), within(picturesOnPage(), PICTURES_BUDGET_MS)]).then(() => {
                 if (preview !== p || !p.holding) return
                 releasePreview(p)
                 // Ready for a turn straight back.
@@ -694,25 +697,56 @@ const anchorTextHighlights = (index, doc) => textHighlights.flatMap(h => {
 // 'load' comes before the chapter's overlay is made (create-overlay), which then draws these.
 view.addEventListener('load', ({ detail: { doc, index } }) => {
     for (const h of anchorTextHighlights(index, doc)) highlights.set(h.cfi, h)
-    adaptPictures(doc)
+    markPictures(doc, index)
 })
 
 // --- Pictures on dark pages ---
 // On a dark reading theme, line art published black on white (ornaments, scene breaks, glyphs set
-// in the text, a handwritten note) glares as a white box. Each picture is measured once (its own
-// pixels, up to SAMPLE_MAX on the long side), off the critical path, and the app decides
-// (PictureTone.kt: colourless, light corners, nearly all near-black or near-white; strictly so
-// unless it's a few lines small); line art is marked data-yomu-ink and the page's CSS draws it
-// inverted, screened onto the page colour, while the theme is dark and "Adapt pictures to dark
-// pages" is on. Illustrations, photos and anything in colour stay as published.
+// in the text, a handwritten note) glares as a white box. The app decides which pictures are line
+// art (PictureTone.kt: colourless with light corners; a few lines small and marked or mostly
+// two-tone, or bigger and nearly pure two-tone) from what the page measures of each one; line art
+// is marked data-yomu-ink and the page's CSS draws it inverted, screened onto the page colour, while
+// the theme is dark and "Adapt pictures to dark pages" is on. Illustrations, photos and anything in
+// colour stay as published.
+//
+// Decisions are kept per picture file (its path in the EPUB, not the blob URL, which changes with
+// every load), so a section's pictures are marked as it loads, before it's shown: a section seen
+// before, or laid out ahead by the crossing preview, shows its ornaments inverted from its first
+// frame. A picture not decided yet stays hidden until it is (it's measured at its own size, which
+// for an ornament takes a moment), so it never shows un-inverted; the first page and a crossing
+// wait PICTURES_BUDGET_MS for decisions before showing.
 
 const SAMPLE_MAX = 256
-// Class or id words publishers use for decorations (only loosen the measure; never override colour).
-const DECORATION = /orn|sborn|scene|break|divider|decor|fleuron|dinkus|separator/i
-// Picture URL -> Promise<boolean>: whether it's line art. The same ornament is decided once.
-const pictureTones = new Map()
+const PENDING_MAX_MS = 3000
+// Class or id words publishers use for decorations.
+const DECORATION = /orn|sborn|scene|break|divider|decor|fleuron|dinkus|separator|music/i
+const debugPictures = params.has('debug')
+// Picture path in the EPUB -> whether it's line art (true / false), once decided.
+const pathTones = new Map()
+// Section index -> Promise of its pictures' paths, in document order.
+const sectionPicturePaths = new Map()
+// Section index -> those paths, once known (for marking synchronously).
+const knownPicturePaths = new Map()
 
 const adaptingPictures = () => settings.colors?.dark === true && settings.adaptPictures !== false
+
+/** The paths of section [index]'s pictures, in document order (from the section's own markup). */
+const picturePathsOf = index => {
+    let paths = sectionPicturePaths.get(index)
+    if (!paths) {
+        const section = view.book?.sections?.[index]
+        paths = (async () => {
+            const doc = await section.createDocument()
+            return [...doc.querySelectorAll('img, image')].map(el => {
+                const src = el.getAttribute('src') || el.getAttribute('href') || el.getAttributeNS(XLINK_NS, 'href')
+                return src ? section.resolveHref(src) : null
+            })
+        })().catch(() => [])
+        paths.then(list => knownPicturePaths.set(index, list))
+        sectionPicturePaths.set(index, paths)
+    }
+    return paths
+}
 
 const markupHints = el => {
     let decoration = false, illustration = false
@@ -723,7 +757,11 @@ const markupHints = el => {
         if (DECORATION.test(names) || /\b(presentation|decorative|separator)\b/i.test(types)) decoration = true
     }
     if (el.closest?.('figure')?.querySelector('figcaption')) illustration = true
-    return { decorationHint: decoration, illustrationHint: illustration }
+    return {
+        decorationHint: decoration,
+        illustrationHint: illustration,
+        emptyAlt: el.localName === 'img' && el.getAttribute('alt')?.trim() === '',
+    }
 }
 
 const lineHeightAt = el => {
@@ -731,14 +769,23 @@ const lineHeightAt = el => {
     return parseFloat(style.lineHeight) || (parseFloat(style.fontSize) || 16) * 1.5
 }
 
-/** PictureTone's stats for picture [el] (see PictureTone.kt), or null when it can't be read. */
-const pictureStats = async el => {
+/** Picture [el]'s pixels decoded, or null when they can't be (tried twice). */
+const decodedPicture = async el => {
     const src = imageSource(el)
     if (!src) return null
     const img = el.localName === 'img' ? el : Object.assign(new Image(), { src })
-    if (!img.complete || !img.naturalWidth) await img.decode().catch(() => {})
+    for (let attempt = 0; attempt < 2 && !(img.complete && img.naturalWidth); attempt++) {
+        await img.decode().catch(() => nextFrame())
+    }
+    return img.naturalWidth && img.naturalHeight ? img : null
+}
+
+/** PictureTone's stats for picture [el] (see PictureTone.kt), or null when it can't be read. */
+const pictureStats = async el => {
+    const img = await decodedPicture(el)
+    if (!img) return null
     const w = img.naturalWidth, h = img.naturalHeight
-    if (!w || !h) return null
+    // Small pictures at their own size: scaled down, their thin lines would blur into greys.
     const scale = Math.min(1, SAMPLE_MAX / Math.max(w, h))
     const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale))
     const canvas = document.createElement('canvas')
@@ -783,32 +830,65 @@ const pictureStats = async el => {
     }
 }
 
-const isLineArt = el => {
-    const src = imageSource(el)
-    if (!src) return Promise.resolve(false)
-    let tone = pictureTones.get(src)
-    if (!tone) {
-        tone = pictureStats(el)
-            .then(stats => !!stats && host?.pictureTone?.(JSON.stringify(stats)) === true)
-            .catch(() => false)
-        pictureTones.set(src, tone)
-    }
-    return tone
+/** Decides picture [el] (at [path]); null when it couldn't be measured (try again next time). */
+const decidePicture = async (el, path) => {
+    const stats = await pictureStats(el)
+    const ink = stats ? host?.pictureTone?.(JSON.stringify(stats)) === true : null
+    if (debugPictures) console.debug('picture', path, ink, JSON.stringify(stats))
+    if (ink != null && path) pathTones.set(path, ink)
+    return ink
 }
 
-/** Marks [doc]'s line art, when the page is dark and adapting pictures is on; off the critical path. */
-const adaptPictures = doc => {
-    if (!adaptingPictures() || !doc?.querySelectorAll) return
-    const run = () => {
-        for (const el of doc.querySelectorAll('img, svg image')) {
-            if (el.hasAttribute('data-yomu-ink')) continue
-            isLineArt(el).then(ink => {
-                if (ink) el.setAttribute('data-yomu-ink', '')
-            })
+const showDecided = (el, ink) => {
+    el.toggleAttribute('data-yomu-ink', ink === true)
+    el.removeAttribute('data-yomu-pending')
+}
+
+// How long the first page, or a crossing, waits for pictures to be decided before showing anyway
+// (what's still undecided then stays hidden until it is).
+const PICTURES_BUDGET_MS = 100
+// Document -> Promise, settled once its pictures are marked.
+const docPictures = new WeakMap()
+// Only a dark page waits: on a light one nothing is hidden or changed.
+const picturesMarked = doc => (adaptingPictures() && doc && docPictures.get(doc)) || Promise.resolve()
+const picturesOnPage = () => Promise.all((view.renderer?.getContents() ?? []).map(({ doc }) => picturesMarked(doc)))
+
+/**
+ * Marks section [index]'s pictures in [doc] (call it from the section's `load`, before it's shown):
+ * the decided ones straight away; on a dark page the rest are hidden until measured and decided.
+ * On a light page they're decided too, unhidden, so turning the page dark later is instant.
+ */
+const markPictures = (doc, index) => {
+    if (settings.adaptPictures === false || !doc?.querySelectorAll) return Promise.resolve()
+    const pictures = [...doc.querySelectorAll('img, svg image')]
+    if (!pictures.length) return Promise.resolve()
+    const hide = adaptingPictures()
+    const paths = knownPicturePaths.get(index)
+    const undecided = []
+    pictures.forEach((el, i) => {
+        const tone = paths ? pathTones.get(paths[i]) : undefined
+        if (tone === undefined) {
+            if (hide) el.setAttribute('data-yomu-pending', '')
+            undecided.push([el, i])
+        } else {
+            showDecided(el, tone)
         }
-    }
-    if (globalThis.requestIdleCallback) requestIdleCallback(run, { timeout: 1500 })
-    else setTimeout(run, 200)
+    })
+    if (!undecided.length) return Promise.resolve()
+    // Never left hidden for good: what can't be decided shows as published.
+    const timer = setTimeout(() => undecided.forEach(([el]) => el.removeAttribute('data-yomu-pending')), PENDING_MAX_MS)
+    const work = picturePathsOf(index).then(async list => {
+        // Measured once laid out (their size on the page counts).
+        await nextFrame()
+        await Promise.all(undecided.map(async ([el, i]) => {
+            const path = list[i] ?? null
+            const known = path ? pathTones.get(path) : undefined
+            showDecided(el, known !== undefined ? known : await decidePicture(el, path))
+        }))
+        clearTimeout(timer)
+    }).catch(() => {})
+    docPictures.set(doc, work)
+    return work
 }
 
 /**
@@ -816,7 +896,9 @@ const adaptPictures = doc => {
  * [{ id, index, text, color, style, note }] for one positioned by its text. `style` names an
  * Overlayer drawing (highlight / underline / squiggly / strikethrough); `note` is true when it has one.
  */
-globalThis.yomuSetHighlights = list => {
+globalThis.yomuSetHighlights = async list => {
+    // Their chapters are resolved against the book, which may still be loading.
+    await loadBook()
     textHighlights = list.filter(h => !h.cfi && h.text?.highlight)
     const next = new Map(list.filter(h => h.cfi).map(h => [h.cfi, h]))
     for (const { index, doc } of view.renderer?.getContents() ?? []) {
@@ -1521,14 +1603,16 @@ const showScrollbar = () => {
 }
 
 globalThis.yomuApplySettings = async next => {
-    await preloadFonts(next)
+    // A new reading font is loaded first, so the restyle lands with it; otherwise (a theme, an
+    // alignment) it all lands in this task, in one frame.
+    if (JSON.stringify(next.font) !== JSON.stringify(settings.font)) await preloadFonts(next)
     settings = next
     applyPageColor()
     if (view.renderer) configure(view.renderer)
     applyAlignmentEverywhere()
     dropPreview()
     // Turned dark (or adapting turned on): mark what's already on the page.
-    for (const { doc } of view.renderer?.getContents() ?? []) adaptPictures(doc)
+    for (const { doc, index } of view.renderer?.getContents() ?? []) markPictures(doc, index)
 }
 
 /** Forgets the laid-out preview (the settings or the page size changed); the next relocate makes another. */
@@ -1699,8 +1783,10 @@ const open = async ({ start, settings: initial }) => {
         report('error', { message: 'start: ' + String(e?.stack ?? e) })
         await view.renderer.goTo({ index: start?.index ?? 0, anchor: 0 })
     }
-    // Reveal only the final layout: no reflow after the page shows.
+    // Reveal only the final layout: no reflow after the page shows, and pictures already as they'll
+    // stay (decided within the budget; any still undecided stay hidden until they are).
     await settled()
+    await within(picturesOnPage(), PICTURES_BUDGET_MS)
     shown = true
     if (view.lastLocation) reportLocation(view.lastLocation)
 }
