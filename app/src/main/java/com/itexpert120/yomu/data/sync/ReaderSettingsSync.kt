@@ -29,6 +29,7 @@ internal object ReaderSettingsSync {
             CUSTOM_FONT,
             "textAlign",
             "tapNavigation",
+            "adaptPictures",
             "showFooter",
             "footerShowBattery",
             "footerShowClock",

@@ -438,6 +438,9 @@ private class FoliateReaderSession(
         }
         reader = created
         readerActivity = activity
+        // With the open, so the first page shows its highlights (the page draws each chapter's as
+        // its overlay is made).
+        drawHighlights()
         return created
     }
 
@@ -466,7 +469,6 @@ private class FoliateReaderSession(
             "first-page" -> {
                 ReaderOpenTrace.mark("reader.first-page")
                 _renderState.value = ReaderRenderState.Ready(_currentLocator.value?.href)
-                drawHighlights()
                 drawSearchHits()
             }
             "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
@@ -490,7 +492,9 @@ private class FoliateReaderSession(
         val fraction = event.optDouble("fraction", 0.0).takeUnless { it.isNaN() } ?: 0.0
         val total = event.optDouble("total").takeUnless { it.isNaN() }
         val cfi = event.optString("cfi").takeIf { it.isNotEmpty() && it != "null" }
-        val title = event.optString("title").takeIf { it.isNotEmpty() && it != "null" }
+        // The contents entry's label; for a section the contents don't list, its own heading.
+        val title = (event.optString("title").takeIf { it.isNotEmpty() && it != "null" })
+            ?: event.optString("heading").takeIf { it.isNotBlank() && it != "null" }
         val pageLabel = event.optString("pageLabel").takeIf { it.isNotEmpty() && it != "null" }
         if (event.optBoolean("scrolled")) {
             position.onScrollMeasured(href, event.optDouble("measured", fraction).takeUnless { it.isNaN() } ?: fraction)
@@ -687,6 +691,7 @@ private class FoliateReaderSession(
             .put("tapTurns", settings.tapNavigation)
             .put("showScrollbar", settings.showScrollbar)
             .put("spread", settings.twoPageSpread)
+            .put("adaptPictures", settings.adaptPictures)
             .put("animated", ValueAnimator.areAnimatorsEnabled())
     }
 
@@ -790,7 +795,7 @@ private class FoliateReaderSession(
 
     override fun applyHighlights(highlights: List<ReaderHighlight>) {
         this.highlights = highlights
-        if (_renderState.value is ReaderRenderState.Ready) drawHighlights()
+        drawHighlights()
     }
 
     // Highlights made in this engine carry a CFI; the Readium engine's carry their text, which the

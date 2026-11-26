@@ -92,6 +92,8 @@ class JumpHistoryTest {
         assertEquals("Back to p. 112", jumpBackLabel(at("x", pageLabel = "112–113", chapter = "Chapter 3"), null))
         assertEquals("Back to Chapter 3", jumpBackLabel(at("x", chapter = "Chapter 3"), null))
         assertEquals("Back to Prologue", jumpBackLabel(at("x"), "Prologue"))
-        assertEquals("Back to where you were", jumpBackLabel(at("x"), null))
+        // Never an empty "where you were": a place no chapter names says how far in it is.
+        assertEquals("Back to the beginning", jumpBackLabel(at("x"), null))
+        assertEquals("Back to 42%", jumpBackLabel(at("x").copy(bookProgress = 0.42), null))
     }
 }
