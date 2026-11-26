@@ -26,16 +26,27 @@ const bookUrl = name => '/book/' + name.split('/').map(encodeURIComponent).join(
 
 const makeLoader = async () => {
     const sizes = await (await fetch('/book/.sizes')).json()
-    const exists = name => Object.hasOwn(sizes, name)
+    // foliate decodes links with decodeURI, which leaves reserved characters escaped: a file named
+    // "In short, my life.jpg" arrives as "In short%2C my life.jpg". Fall back to the fully decoded name.
+    const entryName = name => {
+        if (Object.hasOwn(sizes, name)) return name
+        try {
+            const decoded = decodeURIComponent(name)
+            return Object.hasOwn(sizes, decoded) ? decoded : null
+        } catch {
+            return null
+        }
+    }
     const get = async name => {
-        if (!exists(name)) return null
-        const res = await fetch(bookUrl(name))
+        const entry = entryName(name)
+        if (entry == null) return null
+        const res = await fetch(bookUrl(entry))
         return res.ok ? res : null
     }
     return {
         loadText: async name => (await get(name))?.text() ?? null,
         loadBlob: async name => (await get(name))?.blob() ?? null,
-        getSize: name => sizes[name] ?? 0,
+        getSize: name => sizes[entryName(name) ?? name] ?? 0,
     }
 }
 
@@ -81,6 +92,35 @@ const fontURL = src => new URL(src, location.href).href
  *   fontScale, lineHeight (null: 1.5, the book may override), paragraphSpacing (em, null: book's)
  *   align: 'publisher' | 'start' | 'justify'
  */
+// The reader's Left / Justify setting only swaps body text between left-aligned and justified:
+// centred and right-aligned text (titles, "Chapter 1" labels, signatures) keeps the book's own
+// alignment, and Auto leaves everything to the book. CSS can't do this — a rule on <p> beats the
+// alignment it would inherit from a centred block — so it is applied per element after layout.
+const ALIGNED = 'p, li, blockquote, dd'
+const applyAlignment = doc => {
+    if (!doc?.body) return
+    for (const el of doc.querySelectorAll('[data-yomu-align]')) {
+        el.style.removeProperty('text-align')
+        el.removeAttribute('data-yomu-align')
+    }
+    const mode = settings.align
+    if (mode !== 'start' && mode !== 'justify') return
+    const view = doc.defaultView
+    for (const el of doc.querySelectorAll(ALIGNED)) {
+        const current = view.getComputedStyle(el).textAlign
+        const swap = mode === 'start'
+            ? current === 'justify'
+            : current === 'start' || current === 'left'
+        if (!swap) continue
+        el.style.setProperty('text-align', mode === 'start' ? 'start' : 'justify', 'important')
+        el.setAttribute('data-yomu-align', '')
+    }
+}
+const applyAlignmentEverywhere = () => {
+    for (const { doc } of view.renderer?.getContents() ?? []) applyAlignment(doc)
+    for (const { doc } of preview?.el?.getContents?.() ?? []) applyAlignment(doc)
+}
+
 const readerCSS = s => {
     const c = s.colors
     const colors = c ? `
@@ -106,7 +146,6 @@ const readerCSS = s => {
         }` : ''
     const lineHeight = s.lineHeight ?? 1.5
     const lineImportant = s.lineHeight != null ? '!important' : ''
-    const align = s.align === 'start' ? 'start !important' : 'justify'
     const hyphens = s.align === 'start' ? 'manual' : 'auto'
     return `
         @namespace epub "http://www.idpf.org/2007/ops";
@@ -122,7 +161,6 @@ const readerCSS = s => {
         ${font}
         p, li, blockquote, dd {
             line-height: ${lineHeight} ${lineImportant};
-            text-align: ${align};
             hyphens: ${hyphens};
         }
         ${s.paragraphSpacing != null ? `p { margin-top: 0 !important; margin-bottom: ${s.paragraphSpacing}em !important; }` : ''}
@@ -324,6 +362,7 @@ const previewElement = () => {
     el.addEventListener('load', ({ detail: { doc } }) => {
         doc.documentElement.lang ||= view.language?.canonical ?? ''
         if (!view.language?.isCJK) doc.documentElement.dir ||= view.language?.direction ?? ''
+        applyAlignment(doc)
         adaptPictures(doc)
     })
     // The section's highlights too, so none appears only once the reader's own page takes over.
@@ -1456,6 +1495,7 @@ const listenForPulls = target => {
 // Below a short chapter the touches land on this page rather than the chapter's.
 listenForPulls(document)
 view.addEventListener('load', ({ detail: { doc } }) => listenForPulls(doc))
+view.addEventListener('load', ({ detail: { doc } }) => applyAlignment(doc))
 
 // The chapter scrolls inside foliate's (closed) shadow root, out of reach of the WebView's own
 // scrollbar, so the page draws one: shown while scrolling, faded out shortly after.
@@ -1485,6 +1525,7 @@ globalThis.yomuApplySettings = async next => {
     settings = next
     applyPageColor()
     if (view.renderer) configure(view.renderer)
+    applyAlignmentEverywhere()
     dropPreview()
     // Turned dark (or adapting turned on): mark what's already on the page.
     for (const { doc } of view.renderer?.getContents() ?? []) adaptPictures(doc)

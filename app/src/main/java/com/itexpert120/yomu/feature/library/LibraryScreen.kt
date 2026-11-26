@@ -40,6 +40,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -76,6 +77,7 @@ import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
 import com.itexpert120.yomu.core.designsystem.YomuContentMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
+import com.itexpert120.yomu.core.designsystem.YomuSheetEdge
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.stackHeaderProgress
@@ -596,6 +598,18 @@ private fun StackedLibrary(
         label = "libraryFlat",
     )
     val sheetRadius = with(density) { 32.dp.toPx() }
+    // The sheet's top-end corner, for the clip at a book pane's moving edge (LibraryLayer).
+    val widthMove = LocalYomuWidthMove.current
+    val sheetEndPx = with(density) { sheetEnd.toPx() }
+    DisposableEffect(widthMove, sheetEndPx) {
+        val sheet = {
+            val top = sheetTop.value + sheetLift.floatValue
+            val remaining = top - collapsedTop
+            YomuSheetEdge(top, sheetRadius * (remaining / sheetRadius).coerceIn(0f, 1f) * (1f - flatness.value), sheetEndPx)
+        }
+        widthMove.sheet = sheet
+        onDispose { if (widthMove.sheet === sheet) widthMove.sheet = null }
+    }
     val deskHeightDp = with(density) { deskHeight.toDp() }
     val sheetHeight = if (flat) sheetHeightCap - deskHeightDp else sheetHeightCap - statusTop - StackCompactHeaderHeight
     val showPile = content == ShelfContent.Shelf && !flat && state.pile.isNotEmpty()

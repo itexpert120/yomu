@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,7 +32,18 @@ class YomuWidthMove(val fullExtra: () -> Int) {
 
     /** Bumped each time the container is laid out at a new width. */
     var generation = 0
+
+    /**
+     * Where the container's sheet stands, for a clip at its moving edge to round the sheet's
+     * top-end corner as the sheet itself does: [YomuSheetEdge] in the container's px, read while
+     * drawing. Set by the container's content (the library); null when it has no sheet.
+     */
+    var sheet: (() -> YomuSheetEdge)? = null
 }
+
+/** A sheet's top (px from the container's top), its top-end corner radius and its end inset (px). */
+@Immutable
+data class YomuSheetEdge(val top: Float, val radius: Float, val endInset: Float)
 
 val LocalYomuWidthMove = staticCompositionLocalOf { YomuWidthMove { 0 } }
 

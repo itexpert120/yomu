@@ -369,9 +369,10 @@ private fun TocListItem(
     val stack = YomuTheme.stack
     val progress = entry.percent?.coerceIn(0f, 1f) ?: 0f
     val volume = entry.children > 0
-    // The board's "you are here" card: a raised inset on the gutter with its content 14dp inside.
+    // The board's "you are here" card: a raised inset reaching 14dp past the gutter, so the
+    // number and title stay in the same column as every other row's.
     val card = entry.current && !selectionMode
-    val highlightInset = if (card) 0.dp else 10.dp
+    val highlightInset = if (card) 14.dp else 10.dp
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -405,14 +406,8 @@ private fun TocListItem(
             )
             .heightIn(min = TocRowMinHeight)
             .padding(
-                start = if (card) gutter + 14.dp else gutter,
-                end = if (volume) {
-                    gutter - 12.dp
-                } else if (card) {
-                    gutter + 14.dp
-                } else {
-                    gutter
-                },
+                start = gutter,
+                end = if (volume) gutter - 12.dp else gutter,
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -456,6 +451,11 @@ private fun TocListItem(
                 selectionMode -> SelectionBox(selected = entry.selected)
 
                 volume -> Unit
+
+                // The chapter being read shows how far into it you are, never a "read" tick.
+                entry.current -> if (progress > 0f) {
+                    Text(text = "${(progress * 100).toInt()}%", style = NumberStyle, color = stack.ink)
+                }
 
                 entry.read -> Icon(
                     imageVector = StackIcons.Check,

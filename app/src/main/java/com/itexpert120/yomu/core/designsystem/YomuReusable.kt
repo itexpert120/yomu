@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -226,6 +227,9 @@ private fun BoxScope.BottomSheetPanel(
     val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
     // Tall content is capped at 60% of the window and scrolls inside the sheet.
     val maxHeight = windowHeight * 0.6f
+    // The sheet's top corners echo the display's bottom corners (32dp where it reports none).
+    val corner = yomuSheetCorner()
+    val sheetShape = remember(corner) { RoundedCornerShape(topStart = corner, topEnd = corner) }
     Column(
         modifier = Modifier
             .align(Alignment.BottomCenter)
@@ -235,10 +239,10 @@ private fun BoxScope.BottomSheetPanel(
             .padding(top = SheetTopClearance)
             .onSizeChanged { motion.extentPx = it.height.toFloat() }
             .graphicsLayer { translationY = size.height * motion.travel }
-            .clip(SheetShape)
+            .clip(sheetShape)
             .background(MaterialTheme.colorScheme.surface)
             // Pure black: the sheet is as black as the dimmed page, so a hairline marks its edge.
-            .then(if (YomuTheme.stack.flat) Modifier.border(1.dp, YomuTheme.stack.rule, SheetShape) else Modifier)
+            .then(if (YomuTheme.stack.flat) Modifier.border(1.dp, YomuTheme.stack.rule, sheetShape) else Modifier)
             .nestedScroll(motion.connection)
             .draggable(
                 orientation = Orientation.Vertical,
@@ -274,7 +278,7 @@ private fun BoxScope.BottomSheetPanel(
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
     ) {
         val inset = if (scrollable) 0.dp else navigationBarBottom() + YomuTheme.space.md
-        CompositionLocalProvider(LocalYomuSheetBottomInset provides inset) { content() }
+        CompositionLocalProvider(LocalYomuSheetBottomInset provides inset, LocalContentColor provides MaterialTheme.colorScheme.onSurface) { content() }
     }
 }
 
@@ -295,6 +299,10 @@ private fun BoxScope.SideSheetPanel(
     val rule = YomuTheme.stack.rule
     // +1 when "toward the end edge" is +x.
     val towardEdge = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
+    // Its leading corners: 32, or the display's own corner where that is rounder.
+    val display = rememberDisplayCornerRadii()
+    val leading = maxOf(SideSheetCorner, display?.let { maxOf(it.top, it.bottom) } ?: SideSheetCorner)
+    val SideSheetShape = remember(leading) { RoundedCornerShape(topStart = leading, bottomStart = leading) }
     Column(
         modifier = Modifier
             .align(Alignment.CenterEnd)
@@ -332,7 +340,7 @@ private fun BoxScope.SideSheetPanel(
         verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xxs),
     ) {
         val inset = if (scrollable) 0.dp else systemBarBottom() + YomuTheme.space.lg
-        CompositionLocalProvider(LocalYomuSheetBottomInset provides inset) { content() }
+        CompositionLocalProvider(LocalYomuSheetBottomInset provides inset, LocalContentColor provides MaterialTheme.colorScheme.onSurface) { content() }
     }
 }
 
@@ -342,11 +350,9 @@ private fun systemBarBottom(): Dp = WindowInsets.systemBars.asPaddingValues().ca
 /** How far below the status bar a sheet at its tallest still leaves the screen showing. */
 private val SheetTopClearance = 24.dp
 
-private val SheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-
 /** Stack's side sheet: at most 420 wide, rounded 32 on its leading edge only. */
 private val SideSheetMaxWidth = 420.dp
-private val SideSheetShape = RoundedCornerShape(topStart = 32.dp, bottomStart = 32.dp)
+private val SideSheetCorner = 32.dp
 private val SideSheetGutter = 28.dp
 
 // The board's 44dp from the window's top edge: the status bar's 24 plus this.
