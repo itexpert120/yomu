@@ -123,8 +123,6 @@ private enum class BookDetailsContentState { Loading, Missing, Ready }
 /** Wide windows without the library beside the book: the sheet starts just under the status bar. */
 private val WideSheetTopGap = 24.dp
 
-private val SheetCorner = BookSheetCorner
-
 /** Width from which the book is a pane beside the library (spec: medium and up). */
 private val PaneMinWindowWidth = 600.dp
 
@@ -190,6 +188,8 @@ fun BookDetailsScreen(
     onAnnotationAction: (AnnotationTransferAction) -> Unit = {},
 ) {
     var showCover by remember { mutableStateOf(false) }
+    // The sheet's (and pane's) corner, echoing the display's (32dp where it reports none).
+    val SheetCorner = rememberBookSheetCorner()
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showTimeline by remember { mutableStateOf(false) }
     var showOrganize by remember { mutableStateOf(false) }
@@ -420,7 +420,7 @@ private fun PhoneSheet(
     drag.hold = hold
     val surface = MaterialTheme.colorScheme.surface
     val topPx = with(density) { top.toPx() }
-    val cornerPx = with(density) { SheetCorner.toPx() }
+    val cornerPx = with(density) { rememberBookSheetCorner().toPx() }
     val scrollPx = with(density) { BookSheetResumeScroll.toPx() }
     Box(
         modifier = Modifier
