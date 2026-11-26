@@ -16,6 +16,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuBottomSheet
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
@@ -182,6 +184,9 @@ private fun ViewTiles(selected: LibraryViewMode, onSelect: (LibraryViewMode) -> 
                     maxLines = 1,
                     softWrap = false,
                     textAlign = TextAlign.Center,
+                    // "Comfortable" in a quarter of a phone's width, at a larger system text size,
+                    // clipped: it shrinks to fit instead.
+                    autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = StackType.Caption.fontSize, stepSize = 0.5.sp),
                 )
             }
         }

@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itexpert120.yomu.core.designsystem.LocalYomuSheetBottomInset
@@ -217,7 +218,7 @@ private fun SheetSection(title: String) {
 }
 
 /**
- * Brightness: the slider, or "Same as the system" while "Auto" is on — both in the one line, so
+ * Brightness: the slider, or "Follows the system" while "Auto" is on — both in the one line, so
  * switching never moves the rest of the sheet.
  */
 @Composable
@@ -231,7 +232,7 @@ private fun BrightnessLine(
     ReaderSettingLine("Brightness") {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (s.useSystemBrightness) {
-                Text("Same as the system", color = stack.muted, style = StackType.BodySmall, maxLines = 1)
+                Text("Follows the system", color = stack.muted, style = StackType.BodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else {
                 ReaderChromeSlider(
                     fraction = s.brightness,
