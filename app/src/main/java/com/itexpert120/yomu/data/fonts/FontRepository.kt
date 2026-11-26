@@ -3,6 +3,7 @@ package com.itexpert120.yomu.data.fonts
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.app.di.ApplicationScope
 import com.itexpert120.yomu.core.model.CuratedFont
 import com.itexpert120.yomu.core.model.CustomFontRef
@@ -14,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -27,12 +29,16 @@ import javax.inject.Singleton
 
 /**
  * Installs custom reading fonts from Google Fonts. Fetches the family's CSS from the key-less Google
- * Fonts API, downloads the (small) latin-subset woff2 for the regular + italic faces into app-private
- * storage, and records them in a DataStore registry. Plain [HttpURLConnection] off the main thread,
- * matching the dictionary's no-extra-networking-library approach.
+ * Fonts API, downloads the TrueType files for the regular + italic faces into app-private storage,
+ * and records them in a DataStore registry. Plain [HttpURLConnection] off the main thread, matching
+ * the dictionary's no-extra-networking-library approach.
  *
- * The downloaded files are embedded as @font-face data URLs by the reader engine (Readium can only
- * serve fonts from bundled assets, not app-private files), so the engine never needs the file served.
+ * TrueType, not woff2: the reader page could draw woff2, but Android's own font loading can't, so the
+ * font chips (each named in its own face) fell back to the UI font. Fonts installed as woff2 by
+ * earlier versions are fetched again as TrueType once ([upgradeWoff2]); until then they still read.
+ *
+ * The foliate reader page serves the files on its own origin (`/userfonts/<file>`); Readium embeds
+ * them as @font-face data URLs (it can only serve fonts from bundled assets, not app-private files).
  */
 @Singleton
 class FontRepository @Inject constructor(
@@ -46,7 +52,17 @@ class FontRepository @Inject constructor(
 
     init {
         // A failed repair keeps its retirement journal and is retried by the next operation.
-        scope.launch { runCatching { installation.recover() } }
+        scope.launch {
+            runCatching { installation.recover() }
+            upgradeWoff2()
+        }
+    }
+
+    /** Re-installs fonts saved as woff2 (see the class note); one that fails stays as it is. */
+    private suspend fun upgradeWoff2() {
+        val legacy = runCatching { installed.first() }.getOrDefault(emptyList())
+            .filter { it.regularPath.endsWith(".woff2", ignoreCase = true) }
+        legacy.forEach { install(it.family) }
     }
 
     @Volatile
@@ -89,14 +105,14 @@ class FontRepository @Inject constructor(
         var italicPath: String? = null
         runCatching {
             val css = fetchCss(family)
-            val faces = parseLatinFaces(css)
+            val faces = parseFaces(css)
             val regularUrl = faces[FontStyle.NORMAL]
                 ?: faces.values.firstOrNull()
                 ?: error("No usable font face for \"$family\"")
             val slug = UUID.randomUUID().toString()
-            regularPath = fileStorage.saveFont("$slug-regular.woff2", httpGetBytes(regularUrl))
+            regularPath = fileStorage.saveFont("$slug-regular.${fontExtension(regularUrl)}", httpGetBytes(regularUrl))
             italicPath = faces[FontStyle.ITALIC]?.let { url ->
-                runCatching { fileStorage.saveFont("$slug-italic.woff2", httpGetBytes(url)) }.getOrNull()
+                runCatching { fileStorage.saveFont("$slug-italic.${fontExtension(url)}", httpGetBytes(url)) }.getOrNull()
             }
             val ref = CustomFontRef(family = family, regularPath = requireNotNull(regularPath), italicPath = italicPath)
             installation.publish(ref)
@@ -120,8 +136,8 @@ class FontRepository @Inject constructor(
         val url = "$CSS_ENDPOINT?family=$encoded:ital@0;1&display=swap"
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            // A desktop browser UA so Google serves compact woff2 (vs legacy ttf for unknown agents).
-            setRequestProperty("User-Agent", DESKTOP_UA)
+            // A plain (non-browser) agent: Google serves TrueType to agents it doesn't know.
+            setRequestProperty("User-Agent", USER_AGENT)
             connectTimeout = TIMEOUT_MS
             readTimeout = TIMEOUT_MS
         }
@@ -141,7 +157,7 @@ class FontRepository @Inject constructor(
     private fun httpGetBytes(url: String): ByteArray {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            setRequestProperty("User-Agent", DESKTOP_UA)
+            setRequestProperty("User-Agent", USER_AGENT)
             connectTimeout = TIMEOUT_MS
             readTimeout = TIMEOUT_MS
         }
@@ -153,33 +169,6 @@ class FontRepository @Inject constructor(
         } finally {
             runCatching { connection.disconnect() }
         }
-    }
-
-    private enum class FontStyle { NORMAL, ITALIC }
-
-    /**
-     * Picks the latin-subset woff2 URL for each style from a Google Fonts css2 response. Each style
-     * has several subset blocks (latin, latin-ext, cyrillic, …); the latin one is identified by its
-     * unicode-range covering basic latin (U+0000-00FF) and is all we need for the reading UI.
-     */
-    private fun parseLatinFaces(css: String): Map<FontStyle, String> {
-        val result = mutableMapOf<FontStyle, String>()
-        val latinStyles = mutableSetOf<FontStyle>()
-        FONT_FACE.findAll(css).forEach { match ->
-            val block = match.groupValues[1]
-            val style = if (STYLE_ITALIC.containsMatchIn(block)) FontStyle.ITALIC else FontStyle.NORMAL
-            val src = SRC_URL.find(block)?.groupValues?.get(1) ?: return@forEach
-            val isLatin = UNICODE_RANGE.find(block)?.groupValues?.get(1)?.contains("U+0000") == true
-            // Latin block wins for a style; otherwise keep the first block seen as a fallback.
-            when {
-                isLatin -> {
-                    result[style] = src
-                    latinStyles += style
-                }
-                style !in latinStyles && style !in result -> result[style] = src
-            }
-        }
-        return result
     }
 
     private fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
@@ -196,18 +185,49 @@ class FontRepository @Inject constructor(
         return output.toByteArray()
     }
 
-    private companion object {
-        const val CSS_ENDPOINT = "https://fonts.googleapis.com/css2"
-        const val TIMEOUT_MS = 12_000
-        const val MAX_CSS_BYTES = 256 * 1024
-        const val MAX_FONT_BYTES = 10 * 1024 * 1024
-        const val DESKTOP_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    internal companion object {
+        internal enum class FontStyle { NORMAL, ITALIC }
 
-        val FONT_FACE = Regex("@font-face\\s*\\{([^}]*)\\}")
-        val STYLE_ITALIC = Regex("font-style:\\s*italic")
-        val UNICODE_RANGE = Regex("unicode-range:\\s*([^;]*)")
-        val SRC_URL = Regex("src:\\s*url\\((https://[^)]+)\\)")
+        /**
+         * Picks the font URL for each style from a Google Fonts css2 response. TrueType responses carry
+         * one block per style; browser (woff2) responses split each style into subset blocks (latin,
+         * latin-ext, cyrillic, …), where the latin one (its unicode-range covers U+0000-00FF) wins.
+         */
+        internal fun parseFaces(css: String): Map<FontStyle, String> {
+            val result = mutableMapOf<FontStyle, String>()
+            val latinStyles = mutableSetOf<FontStyle>()
+            FONT_FACE.findAll(css).forEach { match ->
+                val block = match.groupValues[1]
+                val style = if (STYLE_ITALIC.containsMatchIn(block)) FontStyle.ITALIC else FontStyle.NORMAL
+                val src = SRC_URL.find(block)?.groupValues?.get(1) ?: return@forEach
+                val isLatin = UNICODE_RANGE.find(block)?.groupValues?.get(1)?.contains("U+0000") == true
+                // Latin block wins for a style; otherwise keep the first block seen as a fallback.
+                when {
+                    isLatin -> {
+                        result[style] = src
+                        latinStyles += style
+                    }
+                    style !in latinStyles && style !in result -> result[style] = src
+                }
+            }
+            return result
+        }
+
+        /** The file extension for a font URL (Google serves TrueType, or woff2 to browsers). */
+        internal fun fontExtension(url: String): String = url.substringBefore('?').substringAfterLast('.', "").lowercase()
+            .takeIf { it in FONT_EXTENSIONS } ?: "ttf"
+
+        private val FONT_EXTENSIONS = setOf("ttf", "otf", "woff", "woff2")
+
+        private const val CSS_ENDPOINT = "https://fonts.googleapis.com/css2"
+        private const val TIMEOUT_MS = 12_000
+        private const val MAX_CSS_BYTES = 256 * 1024
+        private const val MAX_FONT_BYTES = 10 * 1024 * 1024
+        private val USER_AGENT = "OpenReader/${BuildConfig.VERSION_NAME} (Android)"
+
+        private val FONT_FACE = Regex("@font-face\\s*\\{([^}]*)\\}")
+        private val STYLE_ITALIC = Regex("font-style:\\s*italic")
+        private val UNICODE_RANGE = Regex("unicode-range:\\s*([^;]*)")
+        private val SRC_URL = Regex("src:\\s*url\\((https://[^)]+)\\)")
     }
 }

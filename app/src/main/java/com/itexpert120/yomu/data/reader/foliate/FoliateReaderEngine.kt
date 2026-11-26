@@ -641,40 +641,21 @@ private class FoliateReaderSession(
         }
     }
 
-    private fun userFonts(settings: ReaderSettings): Map<String, File> {
-        val custom = settings.customFont ?: return emptyMap()
-        return buildMap {
-            put("regular", File(custom.regularPath))
-            custom.italicPath?.let { put("italic", File(it)) }
-        }
-    }
+    private fun userFonts(settings: ReaderSettings): Map<String, File> = FoliateFont.of(settings).userFiles
 
     private fun settingsJson(settings: ReaderSettings): JSONObject {
         val palette = settings.colorPalette
-        val custom = settings.customFont
-        val font = if (custom != null) {
-            JSONObject()
-                .put("family", custom.family)
-                .put(
-                    "faces",
-                    JSONArray().apply {
-                        put(JSONObject().put("src", "/userfonts/regular"))
-                        if (custom.italicPath != null) put(JSONObject().put("src", "/userfonts/italic").put("style", "italic"))
-                    },
-                )
-        } else {
-            val family = settings.font.cssFamily
-            JSONObject()
-                .put("family", family)
-                .put(
-                    "faces",
-                    JSONArray().apply {
-                        put(JSONObject().put("src", "/assets/fonts/$family-Regular.ttf"))
-                        put(JSONObject().put("src", "/assets/fonts/$family-Italic.ttf").put("style", "italic"))
-                        if (family == "Cardo") put(JSONObject().put("src", "/assets/fonts/Cardo-Bold.ttf").put("weight", "bold"))
-                    },
-                )
-        }
+        val reading = FoliateFont.of(settings)
+        val font = JSONObject()
+            .put("family", reading.family)
+            .put(
+                "faces",
+                JSONArray().apply {
+                    reading.faces.forEach { face ->
+                        put(JSONObject().put("src", face.src).put("style", face.style).put("weight", face.weight))
+                    }
+                },
+            )
         return JSONObject()
             .put("flow", if (settings.layout == ReaderLayout.Scroll) "scrolled" else "paginated")
             .put(
