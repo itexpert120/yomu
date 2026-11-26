@@ -92,6 +92,35 @@ const fontURL = src => new URL(src, location.href).href
  *   fontScale, lineHeight (null: 1.5, the book may override), paragraphSpacing (em, null: book's)
  *   align: 'publisher' | 'start' | 'justify'
  */
+// The reader's Left / Justify setting only swaps body text between left-aligned and justified:
+// centred and right-aligned text (titles, "Chapter 1" labels, signatures) keeps the book's own
+// alignment, and Auto leaves everything to the book. CSS can't do this — a rule on <p> beats the
+// alignment it would inherit from a centred block — so it is applied per element after layout.
+const ALIGNED = 'p, li, blockquote, dd'
+const applyAlignment = doc => {
+    if (!doc?.body) return
+    for (const el of doc.querySelectorAll('[data-yomu-align]')) {
+        el.style.removeProperty('text-align')
+        el.removeAttribute('data-yomu-align')
+    }
+    const mode = settings.align
+    if (mode !== 'start' && mode !== 'justify') return
+    const view = doc.defaultView
+    for (const el of doc.querySelectorAll(ALIGNED)) {
+        const current = view.getComputedStyle(el).textAlign
+        const swap = mode === 'start'
+            ? current === 'justify'
+            : current === 'start' || current === 'left'
+        if (!swap) continue
+        el.style.setProperty('text-align', mode === 'start' ? 'start' : 'justify', 'important')
+        el.setAttribute('data-yomu-align', '')
+    }
+}
+const applyAlignmentEverywhere = () => {
+    for (const { doc } of view.renderer?.getContents() ?? []) applyAlignment(doc)
+    for (const { doc } of preview?.el?.getContents?.() ?? []) applyAlignment(doc)
+}
+
 const readerCSS = s => {
     const c = s.colors
     const colors = c ? `
@@ -117,7 +146,6 @@ const readerCSS = s => {
         }` : ''
     const lineHeight = s.lineHeight ?? 1.5
     const lineImportant = s.lineHeight != null ? '!important' : ''
-    const align = s.align === 'start' ? 'start !important' : 'justify'
     const hyphens = s.align === 'start' ? 'manual' : 'auto'
     return `
         @namespace epub "http://www.idpf.org/2007/ops";
@@ -133,7 +161,6 @@ const readerCSS = s => {
         ${font}
         p, li, blockquote, dd {
             line-height: ${lineHeight} ${lineImportant};
-            text-align: ${align};
             hyphens: ${hyphens};
         }
         ${s.paragraphSpacing != null ? `p { margin-top: 0 !important; margin-bottom: ${s.paragraphSpacing}em !important; }` : ''}
@@ -330,6 +357,7 @@ const previewElement = () => {
     el.addEventListener('load', ({ detail: { doc } }) => {
         doc.documentElement.lang ||= view.language?.canonical ?? ''
         if (!view.language?.isCJK) doc.documentElement.dir ||= view.language?.direction ?? ''
+        applyAlignment(doc)
     })
     // The section's highlights too, so none appears only once the reader's own page takes over.
     el.addEventListener('create-overlayer', ({ detail: { doc, index, attach } }) => {
@@ -1334,6 +1362,7 @@ const listenForPulls = target => {
 // Below a short chapter the touches land on this page rather than the chapter's.
 listenForPulls(document)
 view.addEventListener('load', ({ detail: { doc } }) => listenForPulls(doc))
+view.addEventListener('load', ({ detail: { doc } }) => applyAlignment(doc))
 
 // The chapter scrolls inside foliate's (closed) shadow root, out of reach of the WebView's own
 // scrollbar, so the page draws one: shown while scrolling, faded out shortly after.
@@ -1363,6 +1392,7 @@ globalThis.yomuApplySettings = async next => {
     settings = next
     applyPageColor()
     if (view.renderer) configure(view.renderer)
+    applyAlignmentEverywhere()
     dropPreview()
 }
 
