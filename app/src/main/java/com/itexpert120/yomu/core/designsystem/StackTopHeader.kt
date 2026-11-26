@@ -215,7 +215,8 @@ fun StackTitleRow(
         }
         if (actions != null) {
             Row(
-                modifier = Modifier.heightIn(min = StackTitleRowHeight),
+                // Beside a moving book pane the actions ride the library's visible end edge.
+                modifier = Modifier.yomuFollowVisibleEnd().heightIn(min = StackTitleRowHeight),
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions,
             )
@@ -282,7 +283,7 @@ fun StackCompactHeader(
                             .weight(1f)
                             .semantics { heading() },
                     )
-                    if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+                    if (actions != null) Row(Modifier.yomuFollowVisibleEnd(), verticalAlignment = Alignment.CenterVertically, content = actions)
                 }
             }
         }
