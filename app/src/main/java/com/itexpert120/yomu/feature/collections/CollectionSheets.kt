@@ -5,6 +5,7 @@ package com.itexpert120.yomu.feature.collections
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +81,7 @@ import com.itexpert120.yomu.data.collections.LibraryTabKeys
 import com.itexpert120.yomu.data.collections.Membership
 import com.itexpert120.yomu.data.collections.OrganizeCollection
 import com.itexpert120.yomu.data.collections.StatusChoice
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -333,7 +337,10 @@ private fun ShelfRows(
     val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val animate = yomuAnimationsEnabled()
     var dragging by remember { mutableStateOf<String?>(null) }
-    val dragOffset = remember { Animatable(0f) }
+    // The dragged row's offset from its place: follows the finger synchronously (no coroutine per
+    // move, which let it lag and reorder), and glides home on the spring once let go.
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var settle by remember { mutableStateOf<Job?>(null) }
     val shifts = remember { mutableMapOf<String, Animatable<Float, AnimationVector1D>>() }
     var rowHeight by remember { mutableIntStateOf(0) }
 
@@ -375,31 +382,34 @@ private fun ShelfRows(
             dragged = dragging == key,
             offset = {
                 when (key) {
-                    dragging -> dragOffset.value
+                    dragging -> dragOffset
                     else -> shifts[key]?.value ?: 0f
                 }
             },
             onMeasured = { rowHeight = it },
             onDragStart = {
+                settle?.cancel()
                 dragging = key
-                scope.launch { dragOffset.snapTo(0f) }
+                dragOffset = 0f
             },
             onDrag = { delta ->
-                scope.launch {
-                    var offset = dragOffset.value + delta
-                    val half = rowHeight / 2f
-                    if (rowHeight > 0) {
-                        if (offset > half && step(key, down = true)) offset -= rowHeight
-                        if (offset < -half && step(key, down = false)) offset += rowHeight
-                    }
-                    dragOffset.snapTo(offset)
+                var offset = dragOffset + delta
+                val half = rowHeight / 2f
+                if (rowHeight > 0) {
+                    // Past half a neighbour, swap: the row's place moves a row on, so its offset
+                    // from that place shrinks by the same amount (it stays under the finger).
+                    while (offset > half && step(key, down = true)) offset -= rowHeight
+                    while (offset < -half && step(key, down = false)) offset += rowHeight
                 }
+                dragOffset = offset
             },
             onDragEnd = {
                 onReorder(order)
-                scope.launch {
-                    if (animate) dragOffset.animateTo(0f, spatial) else dragOffset.snapTo(0f)
-                    dragging = null
+                val from = dragOffset
+                settle = scope.launch {
+                    if (animate) animate(from, 0f, animationSpec = spatial) { value, _ -> dragOffset = value }
+                    dragOffset = 0f
+                    if (dragging == key) dragging = null
                 }
             },
             onMoveUp = if (canUp) ({ if (step(key, down = false)) onReorder(order) }) else null,
@@ -409,11 +419,13 @@ private fun ShelfRows(
         )
     }
 
-    order.filter { groupOf(it) < 2 }.forEach { key -> Entry(key) }
+    // Keyed, so a row keeps its composition (and the drag in its handle) as it moves; by position,
+    // the first swap handed the finger's slot to another row and cancelled the drag.
+    order.filter { groupOf(it) < 2 }.forEach { key -> key(key) { Entry(key) } }
     val collections = order.filter { groupOf(it) == 2 }
     if (collections.isNotEmpty()) {
         YomuSectionLabel("Your collections", modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
-        collections.forEach { key -> Entry(key) }
+        collections.forEach { key -> key(key) { Entry(key) } }
     }
 }
 
