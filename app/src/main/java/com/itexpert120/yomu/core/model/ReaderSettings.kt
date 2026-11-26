@@ -102,6 +102,8 @@ data class ReaderSettings(
     // Layout "Auto": scroll on a phone held upright, paged everywhere else (a phone on its side, a
     // tablet, an open foldable). Picking Scroll or Paged turns it off and [layout] is used as is.
     val layoutFollowsScreen: Boolean = true,
+    // On a dark theme, line art published black on white (ornaments, scene breaks) is drawn light.
+    val adaptPictures: Boolean = true,
 ) {
     /** These settings with [layout] resolved for the screen when it follows the screen. */
     fun forScreen(phonePortrait: Boolean): ReaderSettings = if (layoutFollowsScreen) {

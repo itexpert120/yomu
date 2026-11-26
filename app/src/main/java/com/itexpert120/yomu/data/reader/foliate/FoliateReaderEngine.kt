@@ -689,6 +689,7 @@ private class FoliateReaderSession(
             .put("tapTurns", settings.tapNavigation)
             .put("showScrollbar", settings.showScrollbar)
             .put("spread", settings.twoPageSpread)
+            .put("adaptPictures", settings.adaptPictures)
             .put("animated", ValueAnimator.areAnimatorsEnabled())
     }
 

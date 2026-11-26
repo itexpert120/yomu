@@ -658,6 +658,7 @@ private object ChromeIcons {
     val Scrollbar = StackIcons.Height
     val Immersive = StackIcons.Fullscreen
     val TwoPages = StackIcons.MenuBook
+    val AdaptPictures = StackIcons.Image
     val TapTurn = StackIcons.TouchApp
 }
 
@@ -840,6 +841,20 @@ internal fun ReaderChromeToggles(
                 enabled = settings.layout == ReaderLayout.Paged,
             )
         }
+        // Dark themes only: light line art (ornaments, scene breaks) drawn light on the dark page.
+        YomuSettingRow(
+            title = "Adapt pictures to dark pages",
+            position = YomuSettingPosition.Middle,
+            subtitle = "Draw black-on-white ornaments and line art light",
+            enabled = !settings.isLightBackground,
+            leadingContent = { ChromeRowIcon(ChromeIcons.AdaptPictures) },
+        ) {
+            YomuTogglePill(
+                checked = settings.adaptPictures,
+                onCheckedChange = { onUpdateSettings(settings.copy(adaptPictures = it)) },
+                enabled = !settings.isLightBackground,
+            )
+        }
         YomuSettingRow(
             title = "Immersive",
             position = YomuSettingPosition.Last,
@@ -923,6 +938,9 @@ private fun CompactChromeToggles(
             }
             ToggleChip("Two pages", settings.twoPageSpread, settings.layout == ReaderLayout.Paged) {
                 onUpdateSettings(settings.copy(twoPageSpread = it))
+            }
+            ToggleChip("Adapt pictures to dark pages", settings.adaptPictures, !settings.isLightBackground) {
+                onUpdateSettings(settings.copy(adaptPictures = it))
             }
             ToggleChip("Immersive", settings.immersiveChrome) {
                 onUpdateSettings(settings.copy(immersiveChrome = it))

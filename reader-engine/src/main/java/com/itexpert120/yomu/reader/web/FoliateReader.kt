@@ -278,6 +278,28 @@ class FoliateReader(
         fun event(name: String, json: String) {
             main.post { onPageEvent(name, json) }
         }
+
+        /** Whether the picture the page measured ([json]: `pictureStats`) is line art to invert on dark pages. */
+        @JavascriptInterface
+        fun pictureTone(json: String): Boolean = runCatching {
+            val s = JSONObject(json)
+            PictureTone.invertsOnDarkPages(
+                PictureStats(
+                    opaque = s.getDouble("opaque"),
+                    saturation = s.getDouble("saturation"),
+                    colorful = s.getDouble("colorful"),
+                    dark = s.getDouble("dark"),
+                    light = s.getDouble("light"),
+                    corners = s.getDouble("corners"),
+                    naturalWidth = s.getInt("naturalWidth"),
+                    naturalHeight = s.getInt("naturalHeight"),
+                    renderedWidthLines = s.getDouble("renderedWidthLines"),
+                    renderedHeightLines = s.getDouble("renderedHeightLines"),
+                    decorationHint = s.optBoolean("decorationHint"),
+                    illustrationHint = s.optBoolean("illustrationHint"),
+                ),
+            )
+        }.getOrDefault(false)
     }
 
     /** Serves `/userfonts/<name>` from [userFonts]. */

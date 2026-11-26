@@ -131,6 +131,11 @@ const readerCSS = s => {
         [align="center"] { text-align: center; }
         [align="justify"] { text-align: justify; }
         h1, h2, h3, h4, h5, h6, hgroup { text-wrap: balance; }
+        ${c?.dark && s.adaptPictures !== false ? `
+        img[data-yomu-ink], image[data-yomu-ink] {
+            filter: invert(1) hue-rotate(180deg) !important;
+            mix-blend-mode: screen;
+        }` : ''}
         pre { white-space: pre-wrap !important; }
         img, svg image { -webkit-touch-callout: none; -webkit-user-drag: none; }
         aside[epub|type~="endnote"],
@@ -319,6 +324,7 @@ const previewElement = () => {
     el.addEventListener('load', ({ detail: { doc } }) => {
         doc.documentElement.lang ||= view.language?.canonical ?? ''
         if (!view.language?.isCJK) doc.documentElement.dir ||= view.language?.direction ?? ''
+        adaptPictures(doc)
     })
     // The section's highlights too, so none appears only once the reader's own page takes over.
     el.addEventListener('create-overlayer', ({ detail: { doc, index, attach } }) => {
@@ -649,7 +655,122 @@ const anchorTextHighlights = (index, doc) => textHighlights.flatMap(h => {
 // 'load' comes before the chapter's overlay is made (create-overlay), which then draws these.
 view.addEventListener('load', ({ detail: { doc, index } }) => {
     for (const h of anchorTextHighlights(index, doc)) highlights.set(h.cfi, h)
+    adaptPictures(doc)
 })
+
+// --- Pictures on dark pages ---
+// On a dark reading theme, line art published black on white (ornaments, scene breaks, glyphs set
+// in the text, a handwritten note) glares as a white box. Each picture is measured once (its own
+// pixels, up to SAMPLE_MAX on the long side), off the critical path, and the app decides
+// (PictureTone.kt: colourless, light corners, nearly all near-black or near-white; strictly so
+// unless it's a few lines small); line art is marked data-yomu-ink and the page's CSS draws it
+// inverted, screened onto the page colour, while the theme is dark and "Adapt pictures to dark
+// pages" is on. Illustrations, photos and anything in colour stay as published.
+
+const SAMPLE_MAX = 256
+// Class or id words publishers use for decorations (only loosen the measure; never override colour).
+const DECORATION = /orn|sborn|scene|break|divider|decor|fleuron|dinkus|separator/i
+// Picture URL -> Promise<boolean>: whether it's line art. The same ornament is decided once.
+const pictureTones = new Map()
+
+const adaptingPictures = () => settings.colors?.dark === true && settings.adaptPictures !== false
+
+const markupHints = el => {
+    let decoration = false, illustration = false
+    for (let n = el, depth = 0; n?.nodeType === Node.ELEMENT_NODE && depth < 5; n = n.parentElement, depth++) {
+        const names = `${n.getAttribute('class') ?? ''} ${n.id ?? ''}`
+        const types = `${n.getAttributeNS(OPS, 'type') ?? ''} ${n.getAttribute('role') ?? ''}`
+        if (/\b(cover|illustration|doc-cover)\b/i.test(types) || /cover/i.test(names)) illustration = true
+        if (DECORATION.test(names) || /\b(presentation|decorative|separator)\b/i.test(types)) decoration = true
+    }
+    if (el.closest?.('figure')?.querySelector('figcaption')) illustration = true
+    return { decorationHint: decoration, illustrationHint: illustration }
+}
+
+const lineHeightAt = el => {
+    const style = el.ownerDocument.defaultView.getComputedStyle(el.parentElement ?? el)
+    return parseFloat(style.lineHeight) || (parseFloat(style.fontSize) || 16) * 1.5
+}
+
+/** PictureTone's stats for picture [el] (see PictureTone.kt), or null when it can't be read. */
+const pictureStats = async el => {
+    const src = imageSource(el)
+    if (!src) return null
+    const img = el.localName === 'img' ? el : Object.assign(new Image(), { src })
+    if (!img.complete || !img.naturalWidth) await img.decode().catch(() => {})
+    const w = img.naturalWidth, h = img.naturalHeight
+    if (!w || !h) return null
+    const scale = Math.min(1, SAMPLE_MAX / Math.max(w, h))
+    const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = cw
+    canvas.height = ch
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    context.drawImage(img, 0, 0, cw, ch)
+    const data = context.getImageData(0, 0, cw, ch).data
+    const k = Math.max(2, Math.round(Math.min(cw, ch) * 0.12))
+    let opaque = 0, chromaSum = 0, colorful = 0, dark = 0, light = 0, corner = 0, cornerLight = 0
+    for (let y = 0, i = 0; y < ch; y++) {
+        for (let x = 0; x < cw; x++, i += 4) {
+            const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255, a = data[i + 3] / 255
+            const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            const chroma = Math.max(r, g, b) - Math.min(r, g, b)
+            if ((x < k || x >= cw - k) && (y < k || y >= ch - k)) {
+                corner++
+                if (a < 0.5 || lum > 0.8) cornerLight++
+            }
+            if (a < 0.5) continue
+            opaque++
+            chromaSum += chroma
+            if (chroma > 0.15) colorful++
+            if (lum < 0.2) dark++
+            else if (lum > 0.8) light++
+        }
+    }
+    const rect = el.getBoundingClientRect()
+    const line = lineHeightAt(el)
+    return {
+        opaque: opaque / (cw * ch),
+        saturation: opaque ? chromaSum / opaque : 0,
+        colorful: opaque ? colorful / opaque : 0,
+        dark: opaque ? dark / opaque : 0,
+        light: opaque ? light / opaque : 0,
+        corners: corner ? cornerLight / corner : 0,
+        naturalWidth: w,
+        naturalHeight: h,
+        renderedWidthLines: rect.width / line,
+        renderedHeightLines: rect.height / line,
+        ...markupHints(el),
+    }
+}
+
+const isLineArt = el => {
+    const src = imageSource(el)
+    if (!src) return Promise.resolve(false)
+    let tone = pictureTones.get(src)
+    if (!tone) {
+        tone = pictureStats(el)
+            .then(stats => !!stats && host?.pictureTone?.(JSON.stringify(stats)) === true)
+            .catch(() => false)
+        pictureTones.set(src, tone)
+    }
+    return tone
+}
+
+/** Marks [doc]'s line art, when the page is dark and adapting pictures is on; off the critical path. */
+const adaptPictures = doc => {
+    if (!adaptingPictures() || !doc?.querySelectorAll) return
+    const run = () => {
+        for (const el of doc.querySelectorAll('img, svg image')) {
+            if (el.hasAttribute('data-yomu-ink')) continue
+            isLineArt(el).then(ink => {
+                if (ink) el.setAttribute('data-yomu-ink', '')
+            })
+        }
+    }
+    if (globalThis.requestIdleCallback) requestIdleCallback(run, { timeout: 1500 })
+    else setTimeout(run, 200)
+}
 
 /**
  * Replaces the drawn highlights with [list]: [{ id, cfi, color, style, note }], or
@@ -1365,6 +1486,8 @@ globalThis.yomuApplySettings = async next => {
     applyPageColor()
     if (view.renderer) configure(view.renderer)
     dropPreview()
+    // Turned dark (or adapting turned on): mark what's already on the page.
+    for (const { doc } of view.renderer?.getContents() ?? []) adaptPictures(doc)
 }
 
 /** Forgets the laid-out preview (the settings or the page size changed); the next relocate makes another. */
