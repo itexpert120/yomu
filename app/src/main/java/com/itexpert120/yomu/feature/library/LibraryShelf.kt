@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
+import com.itexpert120.yomu.core.designsystem.yomuSteadyAdaptiveCells
 import com.itexpert120.yomu.core.model.LibraryPreferences
 import com.itexpert120.yomu.core.model.LibraryViewMode
 import kotlinx.coroutines.flow.drop
@@ -108,7 +109,8 @@ internal fun LibraryGrid(
         // Automatic (0): adaptive, so covers stay a comfortable size — 3 columns on a phone, 4–6
         // on a tablet. A positive value forces that exact column count.
         columns = if (columns <= LibraryPreferences.AUTO_COLUMNS) {
-            GridCells.Adaptive(minSize = spec.autoMinSize)
+            // Holds its count while the library's width moves beside a book pane.
+            yomuSteadyAdaptiveCells(minSize = spec.autoMinSize)
         } else {
             GridCells.Fixed(columns)
         },

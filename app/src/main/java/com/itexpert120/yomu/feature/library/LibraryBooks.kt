@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -46,6 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import com.itexpert120.yomu.core.designsystem.InstrumentSansCondensed
 import com.itexpert120.yomu.core.designsystem.YomuBookCoverAspectRatio
 import com.itexpert120.yomu.core.designsystem.YomuShapeTokens
@@ -323,8 +327,18 @@ internal fun BookCoverImage(
             .background(book.coverColors.firstOrNull() ?: YomuTheme.stack.raised),
     ) {
         if (book.coverImagePath != null) {
+            // Decoded at one fixed size (not the layout's), so a cell growing or shrinking — a
+            // book pane opening beside the library — never re-requests or re-decodes its cover.
+            val context = LocalPlatformContext.current
+            val decode = with(LocalDensity.current) { CoverDecodeWidth.roundToPx() }
+            val request = remember(book.coverImagePath, decode) {
+                ImageRequest.Builder(context)
+                    .data(File(book.coverImagePath))
+                    .size(decode, (decode / YomuBookCoverAspectRatio).toInt())
+                    .build()
+            }
             AsyncImage(
-                model = File(book.coverImagePath),
+                model = request,
                 contentDescription = book.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -371,3 +385,6 @@ private fun rememberRowContainer(selected: Boolean): State<Color> = animateColor
     animationSpec = if (yomuAnimationsEnabled()) MaterialTheme.motionScheme.fastEffectsSpec() else snap(),
     label = "rowContainer",
 )
+
+/** The width every library cover decodes at: the largest a cover is drawn (the tablet pile). */
+private val CoverDecodeWidth = 180.dp
