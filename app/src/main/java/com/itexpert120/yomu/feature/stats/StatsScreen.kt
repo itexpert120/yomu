@@ -74,6 +74,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.rememberStackHeaderFling
 import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.BookReadingTime
@@ -262,7 +263,7 @@ private fun PhoneStats(
                     edge = { headerBottom + (pinnedBottom - headerBottom) * sheetArrived() },
                     strength = headerProgress,
                 )
-                .verticalScroll(scroll),
+                .verticalScroll(scroll, flingBehavior = rememberStackHeaderFling(scroll)),
         ) {
             Column(
                 Modifier

@@ -63,6 +63,7 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.rememberStackHeaderFling
 import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuPressable
@@ -149,7 +150,7 @@ internal fun SettingsScreen(
                 .fillMaxSize()
                 .stackPinnedEdgeFade(edge = { headerBottom }, strength = headerProgress)
                 .background(stack.sheet)
-                .verticalScroll(scroll),
+                .verticalScroll(scroll, flingBehavior = rememberStackHeaderFling(scroll)),
         ) {
             Column(
                 Modifier
