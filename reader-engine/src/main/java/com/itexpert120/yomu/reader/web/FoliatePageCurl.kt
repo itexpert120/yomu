@@ -13,7 +13,9 @@ import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.VelocityTracker
+import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.FrameLayout
 import androidx.annotation.RequiresApi
@@ -84,8 +86,30 @@ internal class FoliatePageCurl(
             active = false
             onUnavailable()
         }
-        container.addView(surface, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // The curl covers the whole window, not just the page's view: the reader paints its page
+        // colour (and the footer) beyond the WebView, and a curl cut off at the view's edges showed it.
+        webView.addOnAttachStateChangeListener(
+            object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    if (surface.parent != null) return
+                    (webView.rootView as? ViewGroup)?.addView(surface, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    cancelAll()
+                    (surface.parent as? ViewGroup)?.removeView(surface)
+                }
+            },
+        )
         webView.setOnTouchListener { _, event -> onTouch(event) }
+    }
+
+    /** The area the curl covers (the window), and where the page's view sits in it. */
+    private val area: View get() = webView.rootView
+
+    private fun pageOffset(): Pair<Float, Float> {
+        val location = IntArray(2).also(webView::getLocationInWindow)
+        return location[0].toFloat() to location[1].toFloat()
     }
 
     /** `turn-mode` from the page. */
@@ -143,12 +167,12 @@ internal class FoliatePageCurl(
             return
         }
         val window = container.context.findActivity()?.window
-        val width = webView.width
-        val height = webView.height
+        val width = area.width
+        val height = area.height
         if (window == null || width == 0 || height == 0 || !webView.isAttachedToWindow) return finishCapture(null)
         val target = staging?.takeIf { it.width == width && it.height == height }
             ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { staging = it }
-        val location = IntArray(2).also(webView::getLocationInWindow)
+        val location = IntArray(2).also(area::getLocationInWindow)
         capturing = true
         val asked = SystemClock.uptimeMillis()
         runCatching {
@@ -204,8 +228,8 @@ internal class FoliatePageCurl(
         startX: Float,
         startY: Float,
     ) {
-        val width = webView.width.toFloat()
-        val height = webView.height.toFloat()
+        val width = area.width.toFloat()
+        val height = area.height.toFloat()
         private val single = !spread
 
         // Canonical coordinates (see CurlShape): the leaf hinged on the left and turning leftward.
@@ -466,6 +490,10 @@ internal class FoliatePageCurl(
     // region Gesture
 
     private var downX = 0f
+
+    // Where the page's view sits in the window (touches are in the view's terms, the curl in the window's).
+    private var offX = 0f
+    private var offY = 0f
     private var downY = 0f
     private var downAt = 0L
     private var dragging = false
@@ -482,6 +510,10 @@ internal class FoliatePageCurl(
             MotionEvent.ACTION_DOWN -> {
                 downX = event.x
                 downY = event.y
+                pageOffset().let { (x, y) ->
+                    offX = x
+                    offY = y
+                }
                 downAt = event.eventTime
                 dragging = false
                 selecting = false
@@ -528,18 +560,18 @@ internal class FoliatePageCurl(
                     val leftward = dx < 0
                     val dir = if (leftward != rtl) 1 else -1
                     log("curl-drag dx=$dx downX=$downX x=${event.x} rtl=$rtl spread=$spread dir=$dir")
-                    val startX = downX
-                    val startY = downY
+                    val startX = downX + offX
+                    val startY = downY + offY
                     withSnapshot(freshFor = DRAG_SNAPSHOT_MAX_AGE_MS) { shot ->
                         if (!dragging || shot == null || turn != null || !active) return@withSnapshot
                         val t = Turn(dir, shot, byTap = false, startX = startX, startY = startY)
                         turn = t
                         dragTurn = t
                         t.start()
-                        t.drag(lastX, lastY)
+                        t.drag(lastX + offX, lastY + offY)
                     }
                 }
-                dragTurn?.drag(event.x, event.y)
+                dragTurn?.drag(event.x + offX, event.y + offY)
                 return true
             }
 

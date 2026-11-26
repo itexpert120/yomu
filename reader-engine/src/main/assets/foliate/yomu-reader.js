@@ -365,9 +365,11 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
             longPressed = false
             return
         }
+        // A picture opens wherever it is: in a spread a right-hand page's pictures lie almost all in
+        // the outer third, where a tap would otherwise turn the page and they could never be opened.
         // The chapter frame is wider than the screen and scrolled from outside, so use screen x.
         const image = imageAt(e.target)
-        if (image && !turnsPageAt(e.screenX)) openImage(image)
+        if (image) openImage(image)
         else onPageTap(e.screenX)
     })
     listenForLongPresses(doc)
@@ -379,8 +381,6 @@ view.addEventListener('load', ({ detail: { doc, index } }) => {
  * menu. Scrolled, or with tap turns off, any tap is the menu.
  */
 const tapsTurn = () => settings.flow !== 'scrolled' && settings.tapTurns !== false
-/** Whether a tap at [x] turns the page (an outer third, paged) rather than being the menu's. */
-const turnsPageAt = x => tapsTurn() && (x < innerWidth / 3 || x > innerWidth * 2 / 3)
 const onPageTap = x => {
     const paged = tapsTurn()
     // foliate's own click listener (which finds a tapped highlight) runs after the chapter's, so
