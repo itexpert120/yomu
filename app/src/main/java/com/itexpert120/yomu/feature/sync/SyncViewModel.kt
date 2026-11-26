@@ -48,9 +48,15 @@ class SyncViewModel @Inject constructor(
 ) : ViewModel() {
     private val local = MutableStateFlow(SyncUiState(available = sync.available))
 
+    // Seeded with what is already known, so the page's first frame is the right one (sync on or off),
+    // not "off" for a frame while the stored setting is read again.
     val state: StateFlow<SyncUiState> = combine(local, sync.enabled, sync.status) { ui, enabled, status ->
         ui.copy(enabled = enabled, status = status)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), local.value)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        local.value.copy(enabled = sync.enabledNow.value ?: false, status = sync.status.value),
+    )
 
     init {
         viewModelScope.launch { sync.prepare() }
