@@ -658,6 +658,7 @@ private object ChromeIcons {
     val Scrollbar = StackIcons.Height
     val Immersive = StackIcons.Fullscreen
     val TwoPages = StackIcons.MenuBook
+    val TapTurn = StackIcons.TouchApp
 }
 
 @Composable
@@ -813,6 +814,19 @@ internal fun ReaderChromeToggles(
                 enabled = settings.layout == ReaderLayout.Scroll,
             )
         }
+        // Paged only: a tap on the page's outer thirds turns it; off, any tap shows the controls.
+        YomuSettingRow(
+            title = "Tap the edges to turn pages",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.layout == ReaderLayout.Paged,
+            leadingContent = { ChromeRowIcon(ChromeIcons.TapTurn) },
+        ) {
+            YomuTogglePill(
+                checked = settings.tapNavigation,
+                onCheckedChange = { onUpdateSettings(settings.copy(tapNavigation = it)) },
+                enabled = settings.layout == ReaderLayout.Paged,
+            )
+        }
         // Spreads only exist in paged mode, on a landscape window wide enough for two pages.
         YomuSettingRow(
             title = "Two pages in landscape",
@@ -903,6 +917,9 @@ private fun CompactChromeToggles(
             // The scrollbar only exists in scroll mode (a native WebView scroll).
             ToggleChip("Scrollbar", settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
                 onUpdateSettings(settings.copy(showScrollbar = it))
+            }
+            ToggleChip("Tap to turn", settings.tapNavigation, settings.layout == ReaderLayout.Paged) {
+                onUpdateSettings(settings.copy(tapNavigation = it))
             }
             ToggleChip("Two pages", settings.twoPageSpread, settings.layout == ReaderLayout.Paged) {
                 onUpdateSettings(settings.copy(twoPageSpread = it))

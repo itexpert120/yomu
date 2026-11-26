@@ -115,6 +115,7 @@ ICONS = [
     ("Share", "share", OUTLINED, False),
     ("SortByAlpha", "sort_by_alpha", OUTLINED, False),
     ("SwipeVertical", "swipe_vertical", OUTLINED, False),
+    ("TouchApp", "touch_app", OUTLINED, False),
     ("Sync", "sync", OUTLINED, False),
     ("SyncDisabled", "sync_disabled", OUTLINED, False),
     ("SystemUpdate", "system_update", OUTLINED, False),
