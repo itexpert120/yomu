@@ -13,6 +13,9 @@ sealed interface ReaderAction {
     /** A centre tap on the page: shows or hides the reader menu. */
     data object ToggleChrome : ReaderAction
 
+    /** The controls step aside (a page curl began). */
+    data object HideControls : ReaderAction
+
     // Display sheet (controls + display settings) and the custom-theme sheet it leads to.
     data object OpenDisplay : ReaderAction
     data object CloseDisplay : ReaderAction
@@ -55,6 +58,9 @@ sealed interface ReaderAction {
 
     /** "Back to p. 112": returns to where the reader was before the last jump. */
     data object JumpBack : ReaderAction
+
+    /** The × on the "Back to" pill: drops the offer. */
+    data object DismissJumpBack : ReaderAction
 
     // The picture viewer (a picture opened from the page).
     data object CloseImageViewer : ReaderAction
@@ -121,6 +127,7 @@ data class ReaderChromeState(
  */
 internal fun reduceChrome(state: ReaderChromeState, action: ReaderAction): ReaderChromeState = when (action) {
     ReaderAction.ToggleChrome -> state.copy(controlsVisible = !state.controlsVisible)
+    ReaderAction.HideControls -> state.copy(controlsVisible = false)
 
     ReaderAction.OpenDisplay -> state.copy(displaySheetVisible = true, controlsVisible = false)
     ReaderAction.CloseDisplay -> state.copy(displaySheetVisible = false)
@@ -179,6 +186,7 @@ internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when 
     is ReaderAction.JumpToSearchResult -> navigateTo(locatorJson)
     is ReaderAction.GoToPage -> navigateTo(locatorJson)
     ReaderAction.JumpBack -> ReadingExperienceAction.JumpBack
+    ReaderAction.DismissJumpBack -> ReadingExperienceAction.DismissJumpBack
     ReaderAction.CloseImageViewer -> ReadingExperienceAction.CloseImage
     ReaderAction.SaveImage -> ReadingExperienceAction.SaveImage
     ReaderAction.ShareImage -> ReadingExperienceAction.ShareImage
@@ -212,6 +220,7 @@ internal fun ReaderAction.toExperienceAction(): ReadingExperienceAction? = when 
     ReaderAction.Back,
     ReaderAction.OpenFontLibrary,
     ReaderAction.ToggleChrome,
+    ReaderAction.HideControls,
     ReaderAction.OpenDisplay,
     ReaderAction.CloseDisplay,
     ReaderAction.OpenCustomTheme,

@@ -252,11 +252,82 @@ const configure = renderer => {
     const scrolled = settings.flow === 'scrolled'
     renderer.setAttribute('flow', scrolled ? 'scrolled' : 'paginated')
     renderer.setAttribute('margin', scrolled ? SCROLLED_MARGIN : PAGED_MARGIN)
-    // foliate's slide, unless the system has animations off.
-    if (settings.animated === false) renderer.removeAttribute('animated')
-    else renderer.setAttribute('animated', '')
     configureColumns(renderer)
+    applyTurnMode(renderer)
     renderer.setStyles(readerCSS(settings))
+}
+
+// --- Page curl ---
+// With `pageTurn: "curl"` the app draws the turns (FoliatePageCurl.kt): it owns horizontal drags
+// (foliate's swipe is off: `no-swipe`), taps in the outer thirds are reported to it (`tap`), and it
+// has the page jump without any animation (yomuJump) under its curl, snapshotting the page before
+// and after. Only horizontal, reflowable pages curl; anything else keeps foliate's slide.
+
+// Set if the app finds it can't draw the curl here after all (yomuDisableCurl).
+let curlUnavailable = false
+const curlActive = () => !curlUnavailable && settings.pageTurn === 'curl' && settings.animated !== false && horizontalPages()
+/** Whether turns slide here (foliate's own animation): not while the app curls them. */
+const slides = () => settings.animated !== false && !curlActive()
+
+let turnMode = null
+const applyTurnMode = (renderer = view.renderer) => {
+    if (!renderer) return
+    const curl = !curlUnavailable && settings.pageTurn === 'curl' && settings.animated !== false && settings.flow !== 'scrolled' &&
+        (renderer !== view.renderer || !view.renderer.getContents?.()?.length || horizontalPages())
+    if (curl) {
+        renderer.removeAttribute('animated')
+        renderer.setAttribute('no-swipe', '')
+    } else {
+        renderer.removeAttribute('no-swipe')
+        // foliate's slide, unless the system has animations off.
+        if (settings.animated === false) renderer.removeAttribute('animated')
+        else renderer.setAttribute('animated', '')
+    }
+    if (renderer !== view.renderer || !view.renderer.getContents?.()?.length) return
+    const mode = {
+        curl: curlActive(),
+        columns: columns(),
+        rtl: view.book?.dir === 'rtl',
+        page: settings.colors?.page ?? '#ffffff',
+        dark: settings.colors?.dark === true,
+    }
+    const key = JSON.stringify(mode)
+    if (key === turnMode) return
+    turnMode = key
+    report('turn-mode', mode)
+}
+
+globalThis.yomuDisableCurl = () => {
+    curlUnavailable = true
+    applyTurnMode()
+}
+
+/** Jumps one page [dir] (reading order) with no animation; reports `jumped` once it's on screen. */
+globalThis.yomuJump = async (dir, id) => {
+    const r = view.renderer
+    const edge = !r || !horizontalPages() ||
+        (dir > 0 ? r.page >= r.pages - 2 && adjacentIndex(1) == null : r.page <= 1 && adjacentIndex(-1) == null)
+    if (edge) return report('jumped', { id, moved: false })
+    const moved = new Promise(resolve => {
+        const on = () => {
+            clearTimeout(timer)
+            view.removeEventListener('relocate', on)
+            resolve(true)
+        }
+        const timer = setTimeout(() => {
+            view.removeEventListener('relocate', on)
+            resolve(false)
+        }, CROSSING_TIMEOUT_MS)
+        view.addEventListener('relocate', on)
+    })
+    if (dir > 0) view.next()
+    else view.prev()
+    const ok = await moved
+    // At a section's end the first stop is foliate's blank padding page, which the preview already
+    // covers (holdPreview); the app retakes its snapshot when the section itself settles.
+    await nextFrame()
+    await nextFrame()
+    report('jumped', { id, moved: ok })
 }
 
 /** How many pages show side by side: 2 in a spread, else 1. */
@@ -317,6 +388,12 @@ const onPageTap = x => {
     highlightTapped = false
     setTimeout(() => {
         if (highlightTapped) return
+        const side = !paged ? 0 : x < innerWidth / 3 ? -1 : x > innerWidth * 2 / 3 ? 1 : 0
+        if (side && curlActive()) {
+            // The app curls it: left turns back in a left-to-right book, forward in a right-to-left one.
+            report('tap', { dir: side * (view.book?.dir === 'rtl' ? -1 : 1) })
+            return
+        }
         if (paged && x < innerWidth / 3) view.goLeft()
         else if (paged && x > innerWidth * 2 / 3) view.goRight()
         else report('center-tap')
@@ -331,10 +408,17 @@ document.addEventListener('click', e => {
 // Positions count only once the start position is on screen: before its chapter loads, foliate
 // reports from its empty frame (one page, no progress).
 let shown = false
+let settledSeq = 0
 view.addEventListener('relocate', ({ detail }) => {
     if (!shown) return
     followCrossing(detail)
     reportLocation(detail)
+    applyTurnMode()
+    // Painted: the app may snapshot it (the page under a running curl).
+    const seq = ++settledSeq
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (seq === settledSeq) report('settled', { seq })
+    }))
 })
 
 // --- Paged: turning into the adjacent section ---
@@ -521,7 +605,7 @@ const followCrossing = detail => {
 }
 
 const beginCrossing = (dir, from) => {
-    if (settings.animated === false) return
+    if (!slides()) return
     const shift = dir * (view.book?.dir === 'rtl' ? -1 : 1) * innerWidth
     const c = { from, shift }
     c.timer = setTimeout(() => {
@@ -1811,6 +1895,9 @@ const open = async ({ start, settings: initial }) => {
     await settled()
     await within(picturesOnPage(), PICTURES_BUDGET_MS)
     shown = true
+    // Tell the app how pages turn here now: the first page's relocate came before `shown` and
+    // reported nothing, and until the app hears it neither the curl nor foliate's swipe would turn.
+    applyTurnMode()
     if (view.lastLocation) reportLocation(view.lastLocation)
 }
 

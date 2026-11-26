@@ -1,5 +1,6 @@
 package com.itexpert120.yomu.feature.reader
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -658,6 +660,7 @@ private object ChromeIcons {
     val Scrollbar = StackIcons.Height
     val Immersive = StackIcons.Fullscreen
     val TwoPages = StackIcons.MenuBook
+    val PageCurl = StackIcons.AutoStories
     val AdaptPictures = StackIcons.Image
     val TapTurn = StackIcons.TouchApp
 }
@@ -841,6 +844,21 @@ internal fun ReaderChromeToggles(
                 enabled = settings.layout == ReaderLayout.Paged,
             )
         }
+        // Paged turns: a paper page curling under the finger, or a slide (Auto: curl on a tablet).
+        val curlEnabled = settings.layout == ReaderLayout.Paged && Build.VERSION.SDK_INT >= ReaderSettings.PAGE_CURL_MIN_SDK
+        YomuSettingRow(
+            title = "Curl pages like paper",
+            position = YomuSettingPosition.Middle,
+            subtitle = if (Build.VERSION.SDK_INT < ReaderSettings.PAGE_CURL_MIN_SDK) "Needs Android 13 or later" else "Off: pages slide",
+            enabled = curlEnabled,
+            leadingContent = { ChromeRowIcon(ChromeIcons.PageCurl) },
+        ) {
+            YomuTogglePill(
+                checked = curlEnabled && settings.curlsPages(largeScreen()),
+                onCheckedChange = { onUpdateSettings(settings.copy(pageCurl = it)) },
+                enabled = curlEnabled,
+            )
+        }
         // Dark themes only: light line art (ornaments, scene breaks) drawn light on the dark page.
         YomuSettingRow(
             title = "Adapt pictures to dark pages",
@@ -939,6 +957,10 @@ private fun CompactChromeToggles(
             ToggleChip("Two pages", settings.twoPageSpread, settings.layout == ReaderLayout.Paged) {
                 onUpdateSettings(settings.copy(twoPageSpread = it))
             }
+            val curlEnabled = settings.layout == ReaderLayout.Paged && Build.VERSION.SDK_INT >= ReaderSettings.PAGE_CURL_MIN_SDK
+            ToggleChip("Page curl", curlEnabled && settings.curlsPages(largeScreen()), curlEnabled) {
+                onUpdateSettings(settings.copy(pageCurl = it))
+            }
             ToggleChip("Adapt pictures to dark pages", settings.adaptPictures, !settings.isLightBackground) {
                 onUpdateSettings(settings.copy(adaptPictures = it))
             }
@@ -966,3 +988,7 @@ private fun ToggleChip(
 }
 
 // endregion
+
+/** A tablet or foldable (smallest width ≥ 600dp): where Auto settings take their larger-screen side. */
+@Composable
+private fun largeScreen(): Boolean = LocalConfiguration.current.smallestScreenWidthDp >= 600

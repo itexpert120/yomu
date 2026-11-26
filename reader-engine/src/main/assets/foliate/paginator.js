@@ -873,6 +873,8 @@ export class Paginator extends HTMLElement {
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
         if (this.scrolled || state.pinched) return
+        // Open Reader: the app draws the turns (its page curl) and owns horizontal drags.
+        if (this.hasAttribute('no-swipe')) return
         if (e.touches.length > 1) {
             if (this.#touchScrolled) e.preventDefault()
             return

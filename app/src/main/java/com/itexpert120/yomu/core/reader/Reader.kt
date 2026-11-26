@@ -125,6 +125,7 @@ class ReaderImage(
 private val NoPages: StateFlow<List<ReaderPageTarget>> = MutableStateFlow(emptyList<ReaderPageTarget>()).asStateFlow()
 private val NoLocators: SharedFlow<ReaderLocator> = MutableSharedFlow<ReaderLocator>().asSharedFlow()
 private val NoImages: SharedFlow<ReaderImage> = MutableSharedFlow<ReaderImage>().asSharedFlow()
+private val NoUnits: SharedFlow<Unit> = MutableSharedFlow<Unit>().asSharedFlow()
 
 /**
  * A flattened TOC entry. [id] identifies a logical section, including its fragment when present;
@@ -261,6 +262,18 @@ interface ReaderSession : ReaderNavigator {
 
     /** Emits an image the reader opened from the page (a tap on it, or a long press). */
     val images: SharedFlow<ReaderImage> get() = NoImages
+
+    /**
+     * Emits as a page turn the engine draws itself (the page curl) begins: the reader's controls
+     * get out of the way, as they would be curled along with the page.
+     */
+    val pageTurnStarts: SharedFlow<Unit> get() = NoUnits
+
+    /**
+     * Whether the reader's controls are over the page. A page turn the engine draws from snapshots
+     * would carry them along, so while they show it first asks them away ([pageTurnStarts]).
+     */
+    fun setControlsShown(shown: Boolean) {}
 
     /** Applies reading preferences (layout/theme/font/size). Safe to call before/after hosting. */
     fun applySettings(settings: ReaderSettings)

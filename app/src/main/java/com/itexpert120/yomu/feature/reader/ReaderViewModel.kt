@@ -80,6 +80,7 @@ class ReaderViewModel @Inject constructor(
             readingExperience.events.collect { event ->
                 when (event) {
                     ReadingExperienceEvent.ToggleChrome -> onAction(ReaderAction.ToggleChrome)
+                    ReadingExperienceEvent.HideControls -> onAction(ReaderAction.HideControls)
                     is ReadingExperienceEvent.SearchInBook -> onAction(ReaderAction.SearchInBook(event.text))
                 }
             }
@@ -88,7 +89,10 @@ class ReaderViewModel @Inject constructor(
     }
 
     fun onAction(action: ReaderAction) {
+        val before = _state.value.chrome.controlsVisible
         _state.update { it.copy(chrome = reduceChrome(it.chrome, action)) }
+        val after = _state.value.chrome.controlsVisible
+        if (after != before) readingExperience.setControlsShown(after)
         when (action) {
             is ReaderAction.ApplyCustomTheme -> applyCustomTheme(action.theme)
             is ReaderAction.SaveCustomTheme -> saveCustomTheme(action.name)

@@ -99,12 +99,19 @@ data class ReaderSettings(
     val immersiveChrome: Boolean = false,
     // Paged mode on a wide landscape window (tablet, open foldable) shows two pages side by side.
     val twoPageSpread: Boolean = true,
+    // Paged turns as a paper page curling under the finger (true) or a slide (false). Null is Auto:
+    // the curl on a tablet or foldable, the slide on a phone. The curl needs Android 13
+    // ([PAGE_CURL_MIN_SDK]); below that pages slide whatever this says.
+    val pageCurl: Boolean? = null,
     // Layout "Auto": scroll on a phone held upright, paged everywhere else (a phone on its side, a
     // tablet, an open foldable). Picking Scroll or Paged turns it off and [layout] is used as is.
     val layoutFollowsScreen: Boolean = true,
     // On a dark theme, line art published black on white (ornaments, scene breaks) is drawn light.
     val adaptPictures: Boolean = true,
 ) {
+    /** Whether paged turns curl, with Auto resolved for a [largeScreen] (smallest width ≥ 600dp) or a phone. */
+    fun curlsPages(largeScreen: Boolean): Boolean = pageCurl ?: largeScreen
+
     /** These settings with [layout] resolved for the screen when it follows the screen. */
     fun forScreen(phonePortrait: Boolean): ReaderSettings = if (layoutFollowsScreen) {
         copy(layout = if (phonePortrait) ReaderLayout.Scroll else ReaderLayout.Paged)
@@ -156,6 +163,9 @@ data class ReaderSettings(
         get() = relativeLuminance(backgroundArgb) >= 0.45
 
     companion object {
+        /** The page curl is an AGSL shader: Android 13 and up. */
+        const val PAGE_CURL_MIN_SDK = 33
+
         // Stack's reading themes: Paper, Sepia, Night and Black (page / text / muted / rule).
         val LIGHT_PALETTE = ReaderColorPalette(
             backgroundArgb = 0xFFFFFFFF,

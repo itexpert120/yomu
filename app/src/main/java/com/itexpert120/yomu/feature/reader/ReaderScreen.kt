@@ -549,6 +549,7 @@ fun ReaderScreen(
                         label = reading.jumpBack,
                         colors = chromeColors,
                         onClick = { onAction(ReaderAction.JumpBack) },
+                        onDismiss = { onAction(ReaderAction.DismissJumpBack) },
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = (if (chromeShown) fullTop else pagedSafeTop) + 12.dp, start = 24.dp, end = 24.dp),

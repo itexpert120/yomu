@@ -40,6 +40,7 @@ import com.itexpert120.yomu.data.reader.ReadingPosition
 import com.itexpert120.yomu.data.reader.readium.ReadiumReaderEngine
 import com.itexpert120.yomu.reader.epub.EpubBook
 import com.itexpert120.yomu.reader.web.FoliateReader
+import com.itexpert120.yomu.reader.web.PageCurlSupport
 import com.itexpert120.yomu.reader.web.SearchText
 import com.itexpert120.yomu.reader.web.SelectionAction
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -333,6 +334,14 @@ private class FoliateReaderSession(
 
     private val _centerTaps = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val centerTaps: SharedFlow<Unit> = _centerTaps.asSharedFlow()
+    private val _pageTurnStarts = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val pageTurnStarts: SharedFlow<Unit> = _pageTurnStarts.asSharedFlow()
+    private var controlsShown = false
+
+    override fun setControlsShown(shown: Boolean) {
+        controlsShown = shown
+        reader?.controlsShown = shown
+    }
 
     private val _selections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 1)
     override val selections: SharedFlow<ReaderSelection> = _selections.asSharedFlow()
@@ -423,6 +432,7 @@ private class FoliateReaderSession(
         // The book itself loads now; only showing it waits for the page's size.
         created.preload(book.file)
         created.onEvent = ::onPageEvent
+        created.controlsShown = controlsShown
         created.onRendererGone = ::onRendererGone
         created.isLookupPhrase = isLookupPhrase
         created.onSelection = ::onSelection
@@ -474,6 +484,7 @@ private class FoliateReaderSession(
             "highlight-tap" -> JSONObject(json).optString("id").takeIf { it.isNotEmpty() }?.let(_highlightTaps::tryEmit)
             "relocate" -> onRelocate(JSONObject(json))
             "center-tap" -> _centerTaps.tryEmit(Unit)
+            "curl-start" -> _pageTurnStarts.tryEmit(Unit)
             "footnote" -> JSONObject(json).optString("html").takeIf { it.isNotBlank() }?.let(_footnotes::tryEmit)
             // Emitted before the page moves, so the current position is the one left.
             "link-jump" -> _currentLocator.value?.let(_linkJumps::tryEmit)
@@ -691,6 +702,8 @@ private class FoliateReaderSession(
             .put("tapTurns", settings.tapNavigation)
             .put("showScrollbar", settings.showScrollbar)
             .put("spread", settings.twoPageSpread)
+            // A tablet or foldable curls by default, a phone slides (see ReaderSettings.pageCurl).
+            .put("pageTurn", if (PageCurlSupport.supported && settings.curlsPages(android.content.res.Resources.getSystem().configuration.smallestScreenWidthDp >= 600)) "curl" else "slide")
             .put("adaptPictures", settings.adaptPictures)
             .put("animated", ValueAnimator.areAnimatorsEnabled())
     }

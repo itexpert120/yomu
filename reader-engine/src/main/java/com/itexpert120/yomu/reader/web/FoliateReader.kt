@@ -7,6 +7,7 @@ import android.content.MutableContextWrapper
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -122,8 +123,30 @@ class FoliateReader(
         addJavascriptInterface(Bridge(), "YomuHost")
     }
 
+    /** The app's controls are over the page: a curl would carry them along, so it asks them away first. */
+    var controlsShown: Boolean = false
+        set(value) {
+            field = value
+            curl?.controlsShown = value
+        }
+
     /** The reader's view: the WebView with the native page-turn layer over it. */
     val view: FrameLayout = FrameLayout(contextWrapper).apply { addView(webView) }
+
+    // The page curl (API 33+: it's an AGSL shader). The page uses it when its settings ask for
+    // `pageTurn: "curl"`; otherwise turns are foliate's own slide.
+    private val curl: FoliatePageCurl? = if (Build.VERSION.SDK_INT >= 33) {
+        FoliatePageCurl(
+            view,
+            webView,
+            jump = { dir, id -> call("globalThis.yomuJump?.($dir,$id)") },
+            onUnavailable = { call("globalThis.yomuDisableCurl?.()") },
+            onTurnStart = { onEvent("curl-start", "{}") },
+            log = { Log.i(TAG, it) },
+        )
+    } else {
+        null
+    }
 
     // The page's own safe area (see updateSafeArea), last sent, in px.
     private var safeArea: Pair<Int, Int>? = null
@@ -247,6 +270,7 @@ class FoliateReader(
     fun prev() = call("document.querySelector('foliate-view')?.prev()")
 
     override fun close() {
+        curl?.release()
         (view.parent as? ViewGroup)?.removeView(view)
         webView.destroy()
         zip?.close()
@@ -260,6 +284,14 @@ class FoliateReader(
                 pendingCalls.forEach { webView.evaluateJavascript(it, null) }
                 pendingCalls.clear()
             }
+
+            "turn-mode" -> curl?.onTurnMode(JSONObject(json))
+
+            "settled" -> curl?.onSettled()
+
+            "jumped" -> JSONObject(json).let { curl?.onJumped(it.getInt("id"), it.optBoolean("moved")) }
+
+            "tap" -> curl?.tap(JSONObject(json).optInt("dir"))
         }
         onEvent(name, json)
     }

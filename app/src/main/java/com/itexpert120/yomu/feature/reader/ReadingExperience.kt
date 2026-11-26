@@ -161,6 +161,9 @@ data class SyncOfferUi(val device: String?, val percent: Int, val locatorJson: S
 internal sealed interface ReadingExperienceEvent {
     data object ToggleChrome : ReadingExperienceEvent
 
+    /** A page curl began: the controls step aside. */
+    data object HideControls : ReadingExperienceEvent
+
     /** "Search in book" from the selection menu: the reader opens its search sheet on [text]. */
     data class SearchInBook(val text: String) : ReadingExperienceEvent
 }
@@ -184,6 +187,7 @@ internal sealed interface ReadingExperienceAction {
     data object AcceptSyncOffer : ReadingExperienceAction
     data object DismissSyncOffer : ReadingExperienceAction
     data object JumpBack : ReadingExperienceAction
+    data object DismissJumpBack : ReadingExperienceAction
     data object CloseImage : ReadingExperienceAction
     data object SaveImage : ReadingExperienceAction
     data object ShareImage : ReadingExperienceAction
@@ -335,6 +339,14 @@ internal class ReadingExperience(
     private var lastChapterTitle: String? = null
     private var session: ReaderSession? = null
 
+    // Whether the reader's controls are over the page (told to every session as it opens).
+    private var controlsShown = false
+
+    fun setControlsShown(shown: Boolean) {
+        controlsShown = shown
+        session?.setControlsShown(shown)
+    }
+
     // The engine locator a portable locator was captured for, and that portable locator.
     private var portableLocator: Pair<String, String>? = null
     private var portableJob: Job? = null
@@ -429,6 +441,7 @@ internal class ReadingExperience(
             is ReadingExperienceAction.DeleteHighlight -> deleteHighlight(action.id)
             is ReadingExperienceAction.SetEditingHighlightColor -> setEditingHighlightColor(action.colorArgb)
             ReadingExperienceAction.JumpBack -> jumpBack()
+            ReadingExperienceAction.DismissJumpBack -> dismissJumpBack()
             ReadingExperienceAction.CloseImage -> {
                 imageJob?.cancel()
                 _state.update { it.copy(viewedImage = null, imageMessage = null) }
@@ -482,6 +495,12 @@ internal class ReadingExperience(
             jumps.clear()
             _state.update { it.copy(jumpBack = null) }
         }
+    }
+
+    private fun dismissJumpBack() {
+        jumpBackJob?.cancel()
+        jumps.clear()
+        _state.update { it.copy(jumpBack = null) }
     }
 
     private fun jumpBack() {
@@ -605,6 +624,7 @@ internal class ReadingExperience(
         val opened = openedResult.session
         ReaderOpenTrace.mark("reader.session-created")
         session = opened
+        opened.setControlsShown(controlsShown)
         opened.applyHighlights(_state.value.highlights)
         if (foreground) opened.onForegroundResumed()
 
@@ -675,6 +695,9 @@ internal class ReadingExperience(
                 }
                 launch {
                     opened.centerTaps.collect { _events.tryEmit(ReadingExperienceEvent.ToggleChrome) }
+                }
+                launch {
+                    opened.pageTurnStarts.collect { _events.tryEmit(ReadingExperienceEvent.HideControls) }
                 }
                 launch {
                     opened.selections.collect(::onSelection)
@@ -1234,7 +1257,7 @@ internal class ReadingExperience(
         const val READY_TIMEOUT_MS = 8_000L
 
         // How long "Back to …" stays on offer without being taken or read past.
-        const val JUMP_BACK_TIMEOUT_MS = 20_000L
+        const val JUMP_BACK_TIMEOUT_MS = 8_000L
         const val IMAGE_MESSAGE_MS = 2_500L
     }
 }
