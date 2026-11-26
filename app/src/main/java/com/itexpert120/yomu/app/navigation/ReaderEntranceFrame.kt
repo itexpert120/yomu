@@ -134,11 +134,9 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         if (active && state == EnterExitState.PreEnter) 0f else 1f
     }
     val pageIn = remember { Animatable(if (active) 0f else 1f) }
-    // From the library: the library dims on its own clock as soon as the reader is on its way.
+    // From the library: the library dims together with the page's rise and fade, once its first
+    // page is ready — dimming first and then waiting for the page read as a stop midway.
     val libraryDim = remember { Animatable(if (active && fromLibrary) 0f else 1f) }
-    if (active && fromLibrary) {
-        LaunchedEffect(Unit) { libraryDim.animateTo(1f, scheme.defaultEffectsSpec()) }
-    }
     var rising by remember { mutableStateOf(active) }
     // The entrance has finished: the page is fully in and its move has settled. Until then the
     // reader leaves the window (system bars) alone, and from the library the library stays drawn,
@@ -162,6 +160,7 @@ internal fun AnimatedContentScope.ReaderEntranceFrame(
         }
         launch {
             awaitFirstPage(pageReady, OpeningGraceMillis)
+            if (fromLibrary) launch { libraryDim.animateTo(1f, scheme.slowEffectsSpec()) }
             pageIn.animateTo(1f, if (fromLibrary) scheme.slowEffectsSpec() else effects)
             snapshotFlow { transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible }.first { it }
             arrived = true

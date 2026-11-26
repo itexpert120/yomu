@@ -8,11 +8,14 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -388,11 +391,17 @@ fun ReaderScreen(
                 )
 
                 // Until the first page paints, cover the WebView with an opaque "Opening…" scrim.
-                // The top bar is drawn after it, so Back stays usable during a slow open.
-                if (reading.loading) {
+                // The top bar is drawn after it, so Back stays usable during a slow open. It fades
+                // away once the page is ready, so a slow book's first page comes in instead of popping.
+                AnimatedVisibility(
+                    visible = reading.loading,
+                    modifier = Modifier.matchParentSize(),
+                    enter = EnterTransition.None,
+                    exit = if (yomuAnimationsEnabled()) fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()) else ExitTransition.None,
+                ) {
                     Box(
                         modifier = Modifier
-                            .matchParentSize()
+                            .fillMaxSize()
                             .background(background),
                     ) {
                         openingContent(Modifier.align(Alignment.Center), chromeColors)
