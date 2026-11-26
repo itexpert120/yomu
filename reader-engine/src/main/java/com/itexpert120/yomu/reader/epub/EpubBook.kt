@@ -101,8 +101,12 @@ class EpubBook private constructor(
 
         internal fun newParser(text: String): XmlPullParser = Xml.newPullParser().apply {
             setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-            setInput(text.reader())
+            // A UTF-8 byte-order mark (or stray whitespace) before "<?xml" is common in the wild —
+            // e.g. Calibre-made books' container.xml — and the pull parser rejects the whole file.
+            setInput(withoutLeadingJunk(text).reader())
         }
+
+        internal fun withoutLeadingJunk(text: String): String = text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
 
         private fun String.localName() = substringAfter(':')
     }
