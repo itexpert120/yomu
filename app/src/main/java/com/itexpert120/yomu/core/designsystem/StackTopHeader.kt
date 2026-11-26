@@ -2,6 +2,7 @@
 
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -18,11 +19,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -40,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /*
  * The top of Stack's three top-level screens (Library, Statistics, Settings): one title row, so the
@@ -58,6 +63,26 @@ val StackTitleRowTopWide: Dp = 16.dp
 
 /** Minimum height of the large title row (its actions are 48dp targets). */
 val StackTitleRowHeight: Dp = 48.dp
+
+/**
+ * Keeps a top-level screen's header from resting half-collapsed: whenever [scroll] comes to rest
+ * inside the header's fade (0 < value < [fadeDistance]) it settles to the nearer end on the default
+ * spatial spring, so the large title and the compact header are never both partly shown at rest.
+ */
+@Composable
+fun StackHeaderSnap(scroll: ScrollState, fadeDistance: Dp = StackHeaderFadeDistance) {
+    val fade = with(LocalDensity.current) { fadeDistance.toPx() }
+    val spec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    LaunchedEffect(scroll, fade) {
+        snapshotFlow { scroll.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) return@collect
+            val value = scroll.value
+            if (value > 0 && value < fade) {
+                scroll.animateScrollTo(if (value < fade / 2f) 0 else fade.roundToInt(), spec)
+            }
+        }
+    }
+}
 
 /** Height of the compact header's row under the status bar. */
 val StackCompactHeaderHeight: Dp = 52.dp
