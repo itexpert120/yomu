@@ -9,38 +9,44 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 
 /**
- * A container whose width is moving (the library narrowing beside a book pane): [moving] while it
- * moves, and [lag] — how much wider (+) or narrower (−), in px, it was when the move began than it
- * is now. Read while measuring. Provided by whoever moves the width; 0 / not moving by default.
+ * A container laid out narrower than it can be (the library beside a book pane): [fullExtra] is
+ * how many px wider its full width is than its current layout, read while measuring. Provided by
+ * whoever narrows it; 0 by default.
  */
 @Immutable
-class YomuWidthMove(val moving: Boolean, val lag: () -> Int)
+class YomuWidthMove(val fullExtra: () -> Int)
 
-val LocalYomuWidthMove = staticCompositionLocalOf { YomuWidthMove(moving = false) { 0 } }
+val LocalYomuWidthMove = staticCompositionLocalOf { YomuWidthMove { 0 } }
 
 /**
- * Adaptive grid columns ([GridCells.Adaptive] of [minSize]) that hold still while their container's
- * width is moving ([LocalYomuWidthMove]): the column count stays the one for the width the move
- * began at, so the cells just grow or shrink with the width — no item jumps to another column
- * mid-move — and it changes once, when the move ends, where keyed items' placement animation
- * glides them to their new places. At rest it is exactly [GridCells.Adaptive].
+ * Adaptive grid columns of at least [minSize] whose cells never change size when their container
+ * is narrowed ([LocalYomuWidthMove]): the cell width is the one [GridCells.Adaptive] gives at the
+ * container's full width, and a narrower layout just fits fewer of those cells. So opening a book
+ * pane beside the library only ever changes how many covers fit in a row — keyed covers glide to
+ * their new places by translation — never their size. At full width it is [GridCells.Adaptive].
  */
 @Composable
 fun yomuSteadyAdaptiveCells(minSize: Dp): GridCells {
     val move = LocalYomuWidthMove.current
-    // A new instance whenever the move starts or ends, so the grid re-counts its columns then.
-    return remember(minSize, move) { SteadyAdaptiveCells(minSize, if (move.moving) move.lag else NoLag) }
+    return remember(minSize, move) { SteadyAdaptiveCells(minSize, move.fullExtra) }
 }
 
-private val NoLag: () -> Int = { 0 }
-
-private class SteadyAdaptiveCells(private val minSize: Dp, private val lag: () -> Int) : GridCells {
-    override fun Density.calculateCrossAxisCellSizes(availableSize: Int, spacing: Int): List<Int> {
-        val basis = (availableSize + lag()).coerceAtLeast(0)
-        val count = ((basis + spacing) / (minSize.roundToPx() + spacing)).coerceAtLeast(1)
-        val withoutSpacing = (availableSize - spacing * (count - 1)).coerceAtLeast(0)
-        val slot = withoutSpacing / count
-        val remainder = withoutSpacing % count
-        return List(count) { slot + if (it < remainder) 1 else 0 }
+/** The cell sizes for [available] px (of which [fullExtra] more at full width), [spacing] apart. */
+internal fun steadyCellSizes(available: Int, fullExtra: Int, minSizePx: Int, spacing: Int): List<Int> {
+    val full = available + fullExtra.coerceAtLeast(0)
+    val fullCount = ((full + spacing) / (minSizePx + spacing)).coerceAtLeast(1)
+    val cell = ((full - spacing * (fullCount - 1)) / fullCount).coerceAtLeast(1)
+    if (fullExtra <= 0) {
+        // Full width: exactly Adaptive, the leftover pixels spread over the first cells.
+        val withoutSpacing = (available - spacing * (fullCount - 1)).coerceAtLeast(0)
+        val slot = withoutSpacing / fullCount
+        val remainder = withoutSpacing % fullCount
+        return List(fullCount) { slot + if (it < remainder) 1 else 0 }
     }
+    val count = ((available + spacing) / (cell + spacing)).coerceAtLeast(1)
+    return List(count) { cell.coerceAtMost(available) }
+}
+
+private class SteadyAdaptiveCells(private val minSize: Dp, private val fullExtra: () -> Int) : GridCells {
+    override fun Density.calculateCrossAxisCellSizes(availableSize: Int, spacing: Int): List<Int> = steadyCellSizes(availableSize, fullExtra(), minSize.roundToPx(), spacing)
 }

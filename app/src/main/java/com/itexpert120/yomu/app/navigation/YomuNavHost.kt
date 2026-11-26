@@ -24,10 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -382,25 +384,38 @@ private fun LibraryLayer(
         val desk = YomuTheme.stack.desk
         BoxWithConstraints(Modifier.fillMaxSize().drawBehind { if (shown) drawRect(desk) }) {
             // Beside a pane the library ends the board's gap (16dp, as its sheet keeps from the rail)
-            // short of it. Its edge follows the pane's every frame (read while laying out); while the
-            // pane moves, the grid keeps its column count (cells resize) and re-counts once at the end.
+            // short of it. Nothing in it changes size while the pane moves: it keeps the layout it
+            // had when the move began and is clipped at its moving edge, which follows the pane's
+            // edge every frame (a back gesture scrubbing it 1:1) — covered as the pane comes in,
+            // the desk showing as it goes — so the move costs a redraw, not a layout. It is laid out
+            // once when the move ends: the grid's covers keep their size and glide to their new
+            // places (yomuSteadyAdaptiveCells); the pile and the tabs take their new places.
             val roomPx = with(density) { (bookPaneWidth(maxWidth) + BookPaneGap).toPx() }
-            val widths = remember { IntArray(2) } // [settled, current]
+            val fullPx = constraints.maxWidth
+            val laidOut = remember { IntArray(1) }
             val moving by remember(pane) { derivedStateOf { pane.openness != null && pane.moving() } }
-            val widthMove = remember(moving) { YomuWidthMove(moving) { widths[0] - widths[1] } }
+            val widthMove = remember(fullPx) { YomuWidthMove { (fullPx - laidOut[0]).coerceAtLeast(0) } }
+            fun edge(full: Int): Int = (full - (roomPx * (pane.openness?.invoke() ?: 0f)).roundToInt()).coerceIn(0, full)
             Box(
                 Modifier
                     .fillMaxSize()
                     .layout { measurable, constraints ->
                         val full = constraints.maxWidth
-                        val open = pane.openness?.invoke() ?: 0f
-                        val width = (full - (roomPx * open).roundToInt()).coerceIn(0, full)
-                        widths[1] = width
-                        if (!moving) widths[0] = width
+                        // Read the pane only when it is still: a moving pane never re-lays out the library.
+                        val width = if (moving && laidOut[0] > 0) laidOut[0] else edge(full)
+                        laidOut[0] = width
                         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
                         layout(full, placeable.height) { placeable.placeRelative(0, 0) }
                     }
-                    .drawWithContent { if (shown) drawContent() }
+                    .drawWithContent {
+                        if (!shown) return@drawWithContent
+                        val visible = edge(size.width.roundToInt()).toFloat()
+                        if (layoutDirection == LayoutDirection.Rtl) {
+                            clipRect(left = size.width - visible) { this@drawWithContent.drawContent() }
+                        } else {
+                            clipRect(right = visible) { this@drawWithContent.drawContent() }
+                        }
+                    }
                     .then(if (shown && (homeOnTop || besidePane)) Modifier else Modifier.clearAndSetSemantics { }),
             ) {
                 CompositionLocalProvider(LocalYomuWidthMove provides widthMove) { content() }
