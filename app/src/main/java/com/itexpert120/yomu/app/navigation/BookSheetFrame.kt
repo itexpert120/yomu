@@ -40,6 +40,14 @@ import com.itexpert120.yomu.feature.bookdetails.LocalBookSheetHold
 import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
 import com.itexpert120.yomu.feature.bookdetails.bookPaneWidth
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+/**
+ * How far (px, from its start edge) the library beside a book pane is visible: its full width
+ * [fullPx] less [roomPx] (the pane's width and the desk gap before it) by how far the pane is
+ * open ([openness], 0..1). Both in px of the same window.
+ */
+internal fun libraryVisibleEdge(fullPx: Int, roomPx: Float, openness: Float): Int = (fullPx - (roomPx * openness.coerceIn(0f, 1f)).roundToInt()).coerceIn(0, fullPx)
 
 /** Behind an open book the library dims to 80% (spec: black at 20%, never blur). */
 internal const val SheetDim = 0.2f

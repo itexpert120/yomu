@@ -77,7 +77,6 @@ import com.itexpert120.yomu.feature.sync.SyncRoute
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @Composable
 fun YomuNavHost(
@@ -393,7 +392,10 @@ private fun LibraryLayer(
             val laidOut = remember { IntArray(1) }
             val moving by remember(pane) { derivedStateOf { pane.openness != null && pane.moving() } }
             val widthMove = remember(fullPx) { YomuWidthMove { (fullPx - laidOut[0]).coerceAtLeast(0) } }
-            fun edge(full: Int): Int = (full - (roomPx * (pane.openness?.invoke() ?: 0f)).roundToInt()).coerceIn(0, full)
+
+            // Always from the library's full width (px), never from the node's own (already
+            // narrowed) size, or the pane's room would be taken off twice.
+            fun edge(): Int = libraryVisibleEdge(fullPx, roomPx, pane.openness?.invoke() ?: 0f)
             Box(
                 Modifier
                     .fillMaxSize()
@@ -405,7 +407,7 @@ private fun LibraryLayer(
                         // it is wide at once, the extra columns arriving under the pane, so the clip
                         // edge uncovers sheet and covers as the pane leaves, never desk. The pane is
                         // never read while it moves, so the move itself never re-lays out the library.
-                        val width = if (moving) full else edge(full)
+                        val width = if (moving) full else edge().coerceAtMost(full)
                         if (width != laidOut[0]) widthMove.generation++
                         laidOut[0] = width
                         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
@@ -413,7 +415,14 @@ private fun LibraryLayer(
                     }
                     .drawWithContent {
                         if (!shown) return@drawWithContent
-                        val visible = edge(size.width.roundToInt()).toFloat()
+                        // At rest the library is laid out to exactly the room beside the pane: no clip.
+                        if (!moving) {
+                            drawContent()
+                            return@drawWithContent
+                        }
+                        // Moving: this node is the library laid out at full width, from the start
+                        // edge; the visible part is the first [visible] px, up to the pane's edge.
+                        val visible = edge().toFloat().coerceAtMost(size.width)
                         if (layoutDirection == LayoutDirection.Rtl) {
                             clipRect(left = size.width - visible) { this@drawWithContent.drawContent() }
                         } else {
