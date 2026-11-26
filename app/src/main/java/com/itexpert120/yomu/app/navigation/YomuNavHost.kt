@@ -106,6 +106,15 @@ fun YomuNavHost(
         if (navController.currentBackStackEntry === entry) {
             // Already reading it (say, the launcher's Continue while its reader is open): stay.
             val reading = entry.destination.hasRoute<Reader>() && entry.toRoute<Reader>().bookId == bookId
+            // A reader anywhere below (say, under the font library it opened) counts too.
+            val inReader = navController.currentBackStack.value.any { it.destination.hasRoute<Reader>() }
+            if (inReader && !reading) {
+                // Another book's reader: close it first, and open this book once the screen under it
+                // has settled (this effect runs again then, the request still pending). One reader at
+                // a time: opened over or in place of another, the new page could hang unshown.
+                navController.popBackStack<Reader>(inclusive = true)
+                return@LaunchedEffect
+            }
             if (!reading) navigateToReader(Reader(bookId), "external")
             externalOpenViewModel.acknowledgeOpen(bookId)
         }

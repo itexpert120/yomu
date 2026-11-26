@@ -49,9 +49,13 @@
             android:name=".app.devgallery.DevGalleryActivity"
             android:exported="false"
             android:theme="@style/Theme.Yomu" />
+        <!-- singleTask: one instance, so every Continue shortcut, "Open with" and share reaches it
+             through onNewIntent. Standard mode stacked a new MainActivity (a whole second reader)
+             per intent, or, when the task's root was an equal intent, dropped the intent. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Yomu.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
