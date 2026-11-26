@@ -20,8 +20,10 @@ import androidx.annotation.RequiresApi
  * (PixelCopy of the window never includes it), so the page the turn goes to can be captured the
  * moment it is laid out, under the curl.
  *
- * Frames are drawn on a render thread of their own, paced by its Choreographer: the main thread
- * only hands over the latest [CurlFrame] ([show]), so a busy page never holds the curl back.
+ * Frames are drawn on a render thread of their own, paced by its Choreographer. The main thread
+ * hands over frames as the finger moves ([show]); a settling turn runs entirely here ([animate]),
+ * ticked on this thread's own vsync, so a busy main thread (the page reporting where it is, the
+ * reader updating) never costs the curl a frame.
  */
 @RequiresApi(33)
 internal class PageCurlSurface(context: Context) :
@@ -29,6 +31,18 @@ internal class PageCurlSurface(context: Context) :
     SurfaceHolder.Callback {
     private val thread = HandlerThread("PageCurl", Process.THREAD_PRIORITY_DISPLAY).apply { start() }
     private val handler = Handler(thread.looper)
+
+    // Snapshots go to the GPU on a thread of their own: a 16 MB upload on the render thread held
+    // the curl's frames back for 2–3 vsyncs just as a drag began.
+    private val uploadThread = HandlerThread("PageCurlUpload", Process.THREAD_PRIORITY_DISPLAY).apply { start() }
+    private val uploadHandler = Handler(uploadThread.looper)
+
+    // Debug builds: per-turn render timings (render thread only).
+    private val measuring = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    private var statFrames = 0
+    private var statTotalNs = 0L
+    private var statMaxNs = 0L
+    private var statSlow = 0
 
     // Render thread only.
     private var choreographer: Choreographer? = null
@@ -38,21 +52,22 @@ internal class PageCurlSurface(context: Context) :
     private var scheduled = false
     private var shown: CurlFrame? = null
     private var hasSurface = false
+    private var frame: CurlFrame? = null
+    private var frameSeq = 0L
+    private var dirty = false
+    private var warmed = false
+
+    // A running animation: called each vsync with the frame time, it gives the frame to draw, or
+    // null once it has finished.
+    private var ticker: ((Long) -> CurlFrame?)? = null
 
     /** Called (main thread) if the curl can't be drawn here: the page should turn its own way. */
     var onUnavailable: () -> Unit = {}
 
-    @Volatile
-    private var latest: CurlFrame? = null
-
     // Frames handed over so far; a listener fires once a frame at least as new as its own is drawn.
-    @Volatile
-    private var latestSeq = 0L
+    private var shownSeq = 0L
 
-    @Volatile
-    private var dirty = false
-
-    // Main thread: called once a posted frame (or the clearing frame) is on screen.
+    // Called (main thread) once a posted frame (or the clearing frame) is on screen.
     private val drawnListeners = ArrayList<Pair<Long, () -> Unit>>()
 
     init {
@@ -73,13 +88,30 @@ internal class PageCurlSurface(context: Context) :
 
     /** Draws [frame] on the next vsync (the newest one wins); null clears the curl away. */
     fun show(frame: CurlFrame?, onDrawn: (() -> Unit)? = null) {
-        synchronized(drawnListeners) {
-            latest = frame
-            latestSeq += 1
-            if (onDrawn != null) drawnListeners += latestSeq to onDrawn
+        val seq = synchronized(drawnListeners) {
+            shownSeq += 1
+            if (onDrawn != null) drawnListeners += shownSeq to onDrawn
+            shownSeq
         }
-        dirty = true
-        handler.post { schedule() }
+        // In order with [animate]: a clearing frame also ends any animation.
+        handler.post {
+            this.frame = frame
+            frameSeq = seq
+            if (frame == null) ticker = null
+            dirty = true
+            schedule()
+        }
+    }
+
+    /**
+     * Runs [tick] on the render thread every vsync, drawing the frame it returns, until it returns
+     * null (or a clearing [show] ends it).
+     */
+    fun animate(tick: (frameTimeNanos: Long) -> CurlFrame?) {
+        handler.post {
+            ticker = tick
+            schedule()
+        }
     }
 
     /** Recycles [bitmaps] once no frame on the render thread can still be drawing them. */
@@ -96,8 +128,10 @@ internal class PageCurlSurface(context: Context) :
 
     /** Copies [source] to an immutable GPU bitmap on the render thread, then hands it to [then] (main thread). */
     fun upload(source: Bitmap, then: (Bitmap?) -> Unit) {
-        handler.post {
+        uploadHandler.post {
+            val started = System.nanoTime()
             val copy = runCatching { source.copy(Bitmap.Config.HARDWARE, false) }.getOrNull()
+            if (measuring) Log.i(TAG, "curl-upload ${(System.nanoTime() - started) / 1_000_000} ms")
             post { then(copy) }
         }
     }
@@ -106,19 +140,31 @@ internal class PageCurlSurface(context: Context) :
         if (scheduled) return
         val c = choreographer ?: return
         scheduled = true
-        c.postFrameCallback { draw() }
+        c.postFrameCallback { draw(it) }
     }
 
-    private fun draw() {
+    private fun draw(frameTimeNanos: Long) {
         scheduled = false
+        ticker?.let { tick ->
+            val next = tick(frameTimeNanos)
+            if (next == null) {
+                ticker = null
+            } else {
+                frame = next
+                dirty = true
+            }
+        }
+        if (ticker != null) schedule()
         if (!dirty) return
         dirty = false
-        val (frame, seq) = synchronized(drawnListeners) { latest to latestSeq }
+        val frame = frame
+        val seq = frameSeq
         if (!hasSurface) {
             notifyDrawn(seq)
             return
         }
         val surface = holder.surface
+        val started = System.nanoTime()
         val canvas = if (surface.isValid) runCatching { surface.lockHardwareCanvas() }.getOrNull() else null
         if (canvas == null) {
             notifyDrawn(seq)
@@ -126,6 +172,7 @@ internal class PageCurlSurface(context: Context) :
         }
         try {
             canvas.drawPaint(clear)
+            warmUp(canvas)
             val shader = curl
             if (frame != null && shader != null) {
                 shader.update(frame)
@@ -135,8 +182,40 @@ internal class PageCurlSurface(context: Context) :
         } finally {
             surface.unlockCanvasAndPost(canvas)
         }
+        if (measuring) record(frame, System.nanoTime() - started)
         shown = frame
         notifyDrawn(seq)
+    }
+
+    /**
+     * The first draw with the curl's shader compiles its GPU pipeline (~50 ms): do that with the
+     * first clearing frame, one invisible pixel, instead of on a turn's first frame.
+     */
+    private fun warmUp(canvas: android.graphics.Canvas) {
+        val shader = curl ?: return
+        if (warmed) return
+        warmed = true
+        shader.update(CurlFrame(1f, 1f, CurlShape(0f, 1f, 1f, 1f, 1f, 1f, 1f), mirror = false, front = null, frontLive = false, back = null, backIsNextPage = false, still = null, stillEverywhere = false, underLive = false, under = null, paper = 0, dark = false))
+        val dot = Paint().apply {
+            this.shader = shader.shader
+            alpha = 1
+        }
+        canvas.drawRect(0f, 0f, 1f, 1f, dot)
+    }
+
+    private fun record(frame: CurlFrame?, ns: Long) {
+        if (frame != null) {
+            statFrames++
+            statTotalNs += ns
+            statMaxNs = maxOf(statMaxNs, ns)
+            if (ns > 12_000_000L) statSlow++
+        } else if (statFrames > 0) {
+            Log.i(TAG, "curl-render frames=$statFrames avg=${"%.1f".format(statTotalNs / 1e6 / statFrames)} ms max=${"%.1f".format(statMaxNs / 1e6)} ms over12ms=$statSlow")
+            statFrames = 0
+            statTotalNs = 0L
+            statMaxNs = 0L
+            statSlow = 0
+        }
     }
 
     private fun notifyDrawn(seq: Long) {
@@ -177,6 +256,7 @@ internal class PageCurlSurface(context: Context) :
     fun release() {
         holder.removeCallback(this)
         handler.post { thread.quitSafely() }
+        uploadThread.quitSafely()
     }
 
     private companion object {

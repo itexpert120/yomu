@@ -9,7 +9,6 @@ import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.VelocityTracker
@@ -51,7 +50,6 @@ internal class FoliatePageCurl(
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val surface = PageCurlSurface(container.context)
-    private val choreographer = Choreographer.getInstance()
 
     // From the page (`turn-mode`): whether turns are the curl's, and how the page is laid out.
     private var active = false
@@ -71,6 +69,8 @@ internal class FoliatePageCurl(
     /** The app's controls are over the page: the first touch only asks them away. */
     var controlsShown = false
 
+    // Read by a settling turn on the curl's render thread.
+    @Volatile
     private var turn: Turn? = null
     private var queuedTap = 0
     private val jumpWaiters = HashMap<Int, (Boolean) -> Unit>()
@@ -126,8 +126,9 @@ internal class FoliatePageCurl(
     fun onSettled() {
         val t = turn ?: return
         // The page a turn goes to can settle again after the jump (a chapter finishing its load
-        // under the preview): snapshot it again.
-        if (t.jumped == true) t.captureTarget()
+        // under the preview): snapshot it again. The jump's own page settles at the same moment
+        // as `jumped`, already snapshotted for it; each snapshot is a full-screen GPU upload.
+        if (t.jumped == true && SystemClock.uptimeMillis() - t.jumpedAt > SETTLE_AFTER_JUMP_MS) t.captureTarget()
     }
 
     /** foliate finished a jump asked for with [id]. */
@@ -244,8 +245,11 @@ internal class FoliatePageCurl(
         val grip = CurlGrip(hinge, leafWidth, height, canonX(startX), if (byTap) height else startY, fromTurned)
 
         /** The page the turn goes to, once laid out under the overlay. */
+        @Volatile
         var target: Bitmap? = null
             private set
+
+        @Volatile
         var jumped: Boolean? = null
             private set
         private val onJump = ArrayList<(Boolean) -> Unit>()
@@ -256,7 +260,9 @@ internal class FoliatePageCurl(
         private var vx = 0f
         private var vy = 0f
 
-        // The settle animation: toward (tx, ty), or along the tap path by [tapT].
+        // The settle animation, ticked on the curl's render thread: toward (tx, ty), or along the
+        // tap path by [tapT]. Set up here before it starts; from then the render thread owns it.
+        @Volatile
         private var animating = false
         private var commit = false
         private var tx = 0f
@@ -289,8 +295,13 @@ internal class FoliatePageCurl(
             if (byTap) whenJumped { moved -> if (moved) settle(true, 0f, 0f) else finish(committed = false) }
         }
 
+        /** When the jump was reported done. */
+        var jumpedAt = 0L
+            private set
+
         private fun onJumped(moved: Boolean) {
             jumped = moved
+            jumpedAt = SystemClock.uptimeMillis()
             if (moved) captureTarget()
             redraw()
             val waiting = onJump.toList()
@@ -304,15 +315,14 @@ internal class FoliatePageCurl(
         }
 
         fun captureTarget() {
-            // Two frames: the page the jump went to is on screen.
+            // The page reports `jumped` once the new page has painted; one more frame for it to be
+            // on screen.
             webView.postOnAnimation {
-                webView.postOnAnimation {
-                    if (turn !== this) return@postOnAnimation
-                    withSnapshot(freshFor = 0L) { shot ->
-                        if (turn !== this || shot == null) return@withSnapshot
-                        target = shot
-                        redraw()
-                    }
+                if (turn !== this) return@postOnAnimation
+                withSnapshot(freshFor = 0L) { shot ->
+                    if (turn !== this || shot == null) return@withSnapshot
+                    target = shot
+                    redraw()
                 }
             }
         }
@@ -354,7 +364,7 @@ internal class FoliatePageCurl(
             }
             animating = true
             lastFrameNanos = 0L
-            choreographer.postFrameCallback(::step)
+            surface.animate(::tick)
             log("curl dir=$dir tap=$byTap commit=$commits")
         }
 
@@ -377,8 +387,9 @@ internal class FoliatePageCurl(
             return true
         }
 
-        private fun step(frameNanos: Long) {
-            if (!animating || turn !== this) return
+        /** One vsync of the settle, on the render thread: the frame to draw, or null once it's over. */
+        private fun tick(frameNanos: Long): CurlFrame? {
+            if (!animating || turn !== this) return null
             val dt = if (lastFrameNanos == 0L) 1f / 120f else ((frameNanos - lastFrameNanos) / 1e9f).coerceIn(1f / 240f, 1f / 30f)
             lastFrameNanos = frameNanos
             val damping = 2f * DAMPING_RATIO * sqrt(stiffness)
@@ -422,12 +433,10 @@ internal class FoliatePageCurl(
                     px = tx
                     py = ty
                 }
-                redraw()
-                finish(commit)
-            } else {
-                redraw()
-                choreographer.postFrameCallback(::step)
+                val committed = commit
+                main.post { finish(committed) }
             }
+            return frame()
         }
 
         /** Takes the overlay off once the live page shows what it shows. */
@@ -628,6 +637,9 @@ internal class FoliatePageCurl(
     private companion object {
         /** A snapshot older than this is retaken before a drag's turn (it's taken on every touch-down). */
         const val DRAG_SNAPSHOT_MAX_AGE_MS = 1_500L
+
+        /** A `settled` this soon after `jumped` is the jump's own page, already snapshotted. */
+        const val SETTLE_AFTER_JUMP_MS = 400L
         const val TAP_SNAPSHOT_MAX_AGE_MS = 1_500L
 
         // Springs (stiffness in 1/s²): a drag's settle carries the finger's speed; a tap's sweep is
