@@ -50,6 +50,7 @@ import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import androidx.savedstate.compose.LocalSavedStateRegistryOwner
 import com.itexpert120.yomu.app.AppViewModel
 import com.itexpert120.yomu.app.ExternalOpenViewModel
+import com.itexpert120.yomu.app.shortcuts.AppShortcut
 import com.itexpert120.yomu.core.designsystem.YomuMotion
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.reader.ReaderOpenTrace
@@ -59,6 +60,7 @@ import com.itexpert120.yomu.feature.bookdetails.BookDetailsRoute
 import com.itexpert120.yomu.feature.bookdetails.bookPaneBesideLibrary
 import com.itexpert120.yomu.feature.bookdetails.bookPaneWidth
 import com.itexpert120.yomu.feature.bookedit.EditBookRoute
+import com.itexpert120.yomu.feature.library.LibraryEntryAction
 import com.itexpert120.yomu.feature.library.LibraryRoute
 import com.itexpert120.yomu.feature.reader.FontLibraryRoute
 import com.itexpert120.yomu.feature.reader.ReaderDefaultsRoute
@@ -97,9 +99,29 @@ fun YomuNavHost(
         val entry = navigationEntry ?: return@LaunchedEffect
         entry.lifecycle.currentStateFlow.first { it == Lifecycle.State.RESUMED }
         if (navController.currentBackStackEntry === entry) {
-            navigateToReader(Reader(bookId), "external")
+            // Already reading it (say, the launcher's Continue while its reader is open): stay.
+            val reading = entry.destination.hasRoute<Reader>() && entry.toRoute<Reader>().bookId == bookId
+            if (!reading) navigateToReader(Reader(bookId), "external")
             externalOpenViewModel.acknowledgeOpen(bookId)
         }
+    }
+
+    // A launcher quick action (Search library, Import books, Statistics) acts on the top-level
+    // screens: what is open over them closes first, then the shell takes it (homeShortcut).
+    val shortcut by externalOpenViewModel.shortcut.collectAsStateWithLifecycle()
+    var homeShortcut by remember { mutableStateOf<AppShortcut?>(null) }
+    LaunchedEffect(shortcut, navigationEntry) {
+        val request = shortcut ?: return@LaunchedEffect
+        val entry = navigationEntry ?: return@LaunchedEffect
+        entry.lifecycle.currentStateFlow.first { it == Lifecycle.State.RESUMED }
+        if (navController.currentBackStackEntry !== entry) return@LaunchedEffect
+        if (!entry.destination.hasRoute<Home>()) {
+            // Runs again once Home is on top.
+            navController.popBackStack<Home>(inclusive = false)
+            return@LaunchedEffect
+        }
+        homeShortcut = request
+        externalOpenViewModel.consumeShortcut()
     }
 
     val transitions = rememberYomuScreenTransitions()
@@ -297,6 +319,8 @@ fun YomuNavHost(
                 onLeaveLibrary = {
                     navController.currentBackStackEntry?.takeIf { it.destination.hasRoute<BookDetails>() }?.let(::popWhenSettled)
                 },
+                shortcut = homeShortcut,
+                onShortcutShown = { homeShortcut = null },
             )
         }
     }
@@ -389,12 +413,31 @@ private fun TopLevelNavigationShell(
     onOpenReaderDefaults: () -> Unit,
     onOpenSync: () -> Unit,
     onLeaveLibrary: () -> Unit,
+    shortcut: AppShortcut? = null,
+    onShortcutShown: () -> Unit = {},
 ) {
     var selected by rememberSaveable { mutableStateOf(YomuTopLevelDestination.Library) }
     fun select(destination: YomuTopLevelDestination) {
         if (destination == selected) return
         selected = destination
         onLeaveLibrary()
+    }
+
+    // A launcher quick action: Statistics is its tab; search and import are the library's to show.
+    LaunchedEffect(shortcut) {
+        when (shortcut) {
+            AppShortcut.Statistics -> {
+                select(YomuTopLevelDestination.Statistics)
+                onShortcutShown()
+            }
+            AppShortcut.SearchLibrary, AppShortcut.ImportBooks -> select(YomuTopLevelDestination.Library)
+            is AppShortcut.Continue, null -> Unit
+        }
+    }
+    val libraryAction = when (shortcut) {
+        AppShortcut.SearchLibrary -> LibraryEntryAction.Search
+        AppShortcut.ImportBooks -> LibraryEntryAction.Import
+        else -> null
     }
 
     var librarySelecting by remember { mutableStateOf(false) }
@@ -414,6 +457,8 @@ private fun TopLevelNavigationShell(
                     onOpenDetails = onOpenDetails,
                     onSelectionModeChange = { librarySelecting = it },
                     onHaveSyncWords = onOpenSync,
+                    entryAction = libraryAction,
+                    onEntryActionHandled = onShortcutShown,
                 )
                 YomuTopLevelDestination.Statistics -> StatsRoute(
                     onBack = null,

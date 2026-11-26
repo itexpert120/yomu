@@ -323,6 +323,9 @@ class LibraryViewModel @Inject constructor(
         if (it.active) SearchState() else it.copy(active = true)
     }
 
+    /** Opens search (the launcher's "Search library"); an open search stays as it is. */
+    fun onOpenSearch() = search.update { it.copy(active = true) }
+
     fun onSearchQueryChange(query: String) = search.update { it.copy(query = query) }
 
     /** The query was submitted or led to a book: keep it among the recent searches. */

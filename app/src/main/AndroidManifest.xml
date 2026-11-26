@@ -60,6 +60,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Launcher quick actions: Search library, Import books, Statistics (+ a dynamic
+                 "Continue <book>"). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
             <!-- Open an EPUB declared with the correct mime type (file managers, document apps). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
