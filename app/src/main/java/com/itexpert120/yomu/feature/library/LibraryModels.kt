@@ -47,7 +47,25 @@ fun Book.toLibraryBook(): LibraryBook = LibraryBook(
     shelf = shelfStatus,
 )
 
-private fun String.lastNameKey(): String = trim().substringAfterLast(' ').uppercase()
+private fun String.lastNameKey(): String = authorSurname(this).uppercase()
+
+/**
+ * The first author's surname, for the generated cover and the Author sort: "Ichiei Ishibumi and
+ * Miyama-Zero" → "Ishibumi", "Natsume, Sōseki" (surname first) → "Natsume", "Charles Curry, Erle
+ * Clippinger" → "Curry", "W3C® (MIT, ERCIM, Keio)" → "W3C®". Blank for an unknown author.
+ */
+internal fun authorSurname(author: String): String {
+    val name = author.replace(Regex("""\s*[(\[][^)\]]*[)\]]"""), "").trim()
+    if (name.isEmpty() || name.equals(UNKNOWN_AUTHOR, ignoreCase = true)) return ""
+    val first = name.split(Regex("""\s+(?:and|&)\s+|;|\s+et\s+|、""")).first().trim()
+    val beforeComma = first.substringBefore(',').trim()
+    // "Natsume, Sōseki": one word before the comma is a surname written first.
+    if (',' in first && ' ' !in beforeComma) return beforeComma
+    return beforeComma.substringAfterLast(' ').trim(',', '.', ' ')
+}
+
+/** What an import stores when the book names no author (`ImportBooksUseCase`). */
+internal const val UNKNOWN_AUTHOR = "Unknown author"
 
 /** The books shown under one tab, already searched and sorted. */
 data class LibraryPage(val key: String, val books: List<LibraryBook>) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.itexpert120.yomu.core.reader.ReaderPublicationCache
 import com.itexpert120.yomu.core.reader.ReaderTocItem
+import com.itexpert120.yomu.data.reader.readOpfNames
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.readium.r2.shared.publication.services.cover
 import org.readium.r2.shared.util.asset.AssetRetriever
@@ -60,9 +61,15 @@ class ReadiumMetadataExtractor @Inject constructor(
             val tableOfContents = publication.flattenedTableOfContents()
                 .withAnchorStarts(file.absolutePath)
                 .map { it.item }
+            // The names as the publisher wrote them, not an alternate script Readium may prefer.
+            val own = readOpfNames(file)
             ExtractedMetadata(
-                title = metadata.title,
-                author = metadata.authors.mapNotNull { it.name }.joinToString(", ")
+                title = own?.title ?: metadata.title,
+                // The same person can be listed twice (dc:creator and a dcterms:creator meta).
+                author = (own?.creators?.takeIf { it.isNotEmpty() } ?: metadata.authors.map { it.name.trim() })
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .joinToString(", ")
                     .ifBlank { null },
                 description = metadata.description,
                 language = metadata.languages.firstOrNull(),
