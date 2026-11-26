@@ -345,11 +345,12 @@ internal fun BoxScope.ReaderControlsPanel(
                     ReaderPanelAction("Marks", onMarks, colors.muted, description = "Bookmarks") {
                         Icon(StackIcons.Bookmarks, contentDescription = null, tint = colors.muted)
                     }
-                    ReaderPanelAction("Display", onDisplay, colors.ink) {
+                    // Same weight and colour as the other three: none of them is the "main" action.
+                    ReaderPanelAction("Display", onDisplay, colors.muted) {
                         Text(
                             text = "Aa",
-                            color = colors.ink,
-                            style = StackType.Heading.copy(fontSize = 20.sp, lineHeight = 24.sp),
+                            color = colors.muted,
+                            style = StackType.Heading.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal),
                         )
                     }
                 }
