@@ -384,12 +384,10 @@ private fun LibraryLayer(
         val desk = YomuTheme.stack.desk
         BoxWithConstraints(Modifier.fillMaxSize().drawBehind { if (shown) drawRect(desk) }) {
             // Beside a pane the library ends the board's gap (16dp, as its sheet keeps from the rail)
-            // short of it. Nothing in it changes size while the pane moves: it keeps the layout it
-            // had when the move began and is clipped at its moving edge, which follows the pane's
-            // edge every frame (a back gesture scrubbing it 1:1) — covered as the pane comes in,
-            // the desk showing as it goes — so the move costs a redraw, not a layout. It is laid out
-            // once when the move ends: the grid's covers keep their size and glide to their new
-            // places (yomuSteadyAdaptiveCells); the pile and the tabs take their new places.
+            // short of it. Its visible edge is a clip that follows the pane's edge every frame (a back
+            // gesture scrubbing it 1:1); nothing in it changes size, and with its gutter and cell size
+            // held (LibraryScreen, yomuSteadyAdaptiveCells) a relayout only changes how many covers
+            // fit in a row — the covers in view keep their places.
             val roomPx = with(density) { (bookPaneWidth(maxWidth) + BookPaneGap).toPx() }
             val fullPx = constraints.maxWidth
             val laidOut = remember { IntArray(1) }
@@ -401,8 +399,13 @@ private fun LibraryLayer(
                     .fillMaxSize()
                     .layout { measurable, constraints ->
                         val full = constraints.maxWidth
-                        // Read the pane only when it is still: a moving pane never re-lays out the library.
-                        val width = if (moving && laidOut[0] > 0) laidOut[0] else edge(full)
+                        // While the pane moves the library is laid out at its full width (the wider of
+                        // the move's two ends): opening, it keeps that layout under the incoming pane
+                        // until it settles narrow; closing — and from a back gesture's first frame —
+                        // it is wide at once, the extra columns arriving under the pane, so the clip
+                        // edge uncovers sheet and covers as the pane leaves, never desk. The pane is
+                        // never read while it moves, so the move itself never re-lays out the library.
+                        val width = if (moving) full else edge(full)
                         if (width != laidOut[0]) widthMove.generation++
                         laidOut[0] = width
                         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
