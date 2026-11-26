@@ -306,7 +306,7 @@ fun YomuNavHost(
         }
         // Composed after the NavHost (its graph is set by then, and the library's back handlers keep
         // their place after the NavHost's), drawn beneath it.
-        LibraryLayer(navController, bookPane, readerEntrance) {
+        LibraryLayer(navController, bookPane, readerEntrance, backMotion) {
             TopLevelNavigationShell(
                 appViewModel = appViewModel,
                 onOpenReader = ::navigateToReader,
@@ -341,6 +341,7 @@ private fun LibraryLayer(
     navController: NavHostController,
     pane: BookPaneSpace,
     readerEntrance: ReaderEntranceSpace,
+    backMotion: BackMotion,
     content: @Composable () -> Unit,
 ) {
     val current by navController.currentBackStackEntryAsState()
@@ -348,7 +349,12 @@ private fun LibraryLayer(
     val home = remember(current) { runCatching { navController.getBackStackEntry<Home>() }.getOrNull() } ?: return
     val top = current?.destination
     val homeOnTop = top?.hasRoute<Home>() == true
-    val shown = readerEntrance.libraryUnder || visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
+    // A back from a page straight over Home uncovers it from the gesture's first frame (Navigation
+    // only lists Home among the visible entries once the pop has happened).
+    val backToHome = backMotion.backInProgress && navController.previousBackStackEntry?.destination?.hasRoute<Home>() == true
+    val shown = backToHome ||
+        readerEntrance.libraryUnder ||
+        visible.any { it.destination.hasRoute<Home>() || it.destination.hasRoute<BookDetails>() }
     val besidePane = top?.hasRoute<BookDetails>() == true && pane.narrow
     val back = rememberNavigationEventDispatcherOwner(enabled = homeOnTop)
     val density = LocalDensity.current

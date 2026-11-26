@@ -2,7 +2,17 @@
 
 package com.itexpert120.yomu.core.designsystem
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.animateTo
+import androidx.compose.animation.core.calculateTargetValue
+import androidx.compose.animation.rememberSplineBasedDecay
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,11 +28,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -40,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /*
  * The top of Stack's three top-level screens (Library, Statistics, Settings): one title row, so the
@@ -58,6 +72,91 @@ val StackTitleRowTopWide: Dp = 16.dp
 
 /** Minimum height of the large title row (its actions are 48dp targets). */
 val StackTitleRowHeight: Dp = 48.dp
+
+/**
+ * Where a top-level header's move comes to rest: a move whose natural landing ([projected]) falls
+ * strictly between the two detents [low] and [high] settles on the nearer one; anything else lands
+ * where it would (null). Shared by the scroll-driven headers (Settings, Statistics) and the
+ * library's sheet lift, so all three snap alike.
+ */
+fun stackSnapRest(projected: Float, low: Float, high: Float): Float? {
+    if (high <= low || projected <= low || projected >= high) return null
+    return if (projected - low < high - projected) low else high
+}
+
+/**
+ * A fling for a top-level screen's scroll whose header collapses over its first [fadeDistance]:
+ * a fling (or a plain release, at zero speed) that would come to rest inside that range carries
+ * on, from its own speed, to the nearer end on the default spatial spring — it never stops
+ * mid-way and corrects. Any other fling decays as usual.
+ */
+@Composable
+fun rememberStackHeaderFling(fadeDistance: Dp = StackHeaderFadeDistance): FlingBehavior {
+    val fade = with(LocalDensity.current) { fadeDistance.toPx() }
+    val decay = rememberSplineBasedDecay<Float>()
+    val spring = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    return remember(fade, decay, spring) { StackHeaderFling(fade, decay, spring) }
+}
+
+private class StackHeaderFling(
+    private val fade: Float,
+    private val decay: DecayAnimationSpec<Float>,
+    private val spring: AnimationSpec<Float>,
+) : FlingBehavior {
+    // The scroll position isn't passed in, so it is tracked from where scrolling starts: a
+    // ScrollScope only scrolls by deltas. [ScrollState] callers pass it through [position].
+    var position: () -> Float = { Float.NaN }
+
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        val start = position()
+        val target = if (start.isNaN()) null else stackSnapRest(decay.calculateTargetValue(start, initialVelocity), 0f, fade)
+        var last = if (start.isNaN()) 0f else start
+        var left = initialVelocity
+        if (target != null) {
+            AnimationState(last, initialVelocity).animateTo(target, spring, sequentialAnimation = false) {
+                scrollBy(value - last)
+                last = value
+            }
+            return 0f
+        }
+        AnimationState(last, initialVelocity).animateDecay(decay) {
+            val delta = value - last
+            val used = scrollBy(delta)
+            last = value
+            left = velocity
+            if (kotlin.math.abs(delta - used) > 0.5f) cancelAnimation()
+        }
+        return left
+    }
+}
+
+/** [rememberStackHeaderFling] for a [ScrollState]-driven screen. */
+@Composable
+fun rememberStackHeaderFling(scroll: ScrollState, fadeDistance: Dp = StackHeaderFadeDistance): FlingBehavior {
+    val fling = rememberStackHeaderFling(fadeDistance) as StackHeaderFling
+    fling.position = { scroll.value.toFloat() }
+    return fling
+}
+
+/**
+ * Keeps a top-level screen's header from resting half-collapsed: whenever [scroll] comes to rest
+ * inside the header's fade (0 < value < [fadeDistance]) it settles to the nearer end on the default
+ * spatial spring, so the large title and the compact header are never both partly shown at rest.
+ */
+@Composable
+fun StackHeaderSnap(scroll: ScrollState, fadeDistance: Dp = StackHeaderFadeDistance) {
+    val fade = with(LocalDensity.current) { fadeDistance.toPx() }
+    val spec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    LaunchedEffect(scroll, fade) {
+        snapshotFlow { scroll.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) return@collect
+            val value = scroll.value
+            if (value > 0 && value < fade) {
+                scroll.animateScrollTo(if (value < fade / 2f) 0 else fade.roundToInt(), spec)
+            }
+        }
+    }
+}
 
 /** Height of the compact header's row under the status bar. */
 val StackCompactHeaderHeight: Dp = 52.dp

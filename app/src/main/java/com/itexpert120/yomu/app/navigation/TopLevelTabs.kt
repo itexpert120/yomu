@@ -1,6 +1,5 @@
 package com.itexpert120.yomu.app.navigation
 
-import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Box
@@ -130,11 +129,11 @@ internal fun TopLevelTabs(
         library.alpha.snapTo(1f)
         library.shift.snapTo(0f)
         var width = 0f
-        var direction = if (rtl) -1f else 1f
+        // Always toward the end edge, whichever edge the finger pulled from.
+        val direction = if (rtl) -1f else 1f
         try {
             events.collect { event ->
                 width = leaving.width
-                direction = if (event.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
                 if (animate) leaving.shift.snapTo(width * event.progress * direction)
             }
             width = leaving.width

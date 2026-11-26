@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -67,6 +68,10 @@ internal class BackMotion {
     // A forward move is still animating; a back gesture can't be previewed until it settles.
     var opening by mutableStateOf(false)
 
+    // A back is running (from its first gesture frame, or a tap's pop) until a forward move or a
+    // cancelled gesture's return to rest: whatever lies under the leaving page must be drawn.
+    var backInProgress by mutableStateOf(false)
+
     // Pops the top page; called once a back taken during [opening] has been let go.
     var popSettled: () -> Unit = {}
 
@@ -77,6 +82,7 @@ internal class BackMotion {
         popping = false
         tapPop = false
         gestureInFlight = false
+        backInProgress = false
         if (changesEntry) opening = true
     }
 
@@ -92,6 +98,7 @@ internal class BackMotion {
             return false
         }
         popping = true
+        backInProgress = true
         if (!gestureInFlight) {
             tapPop = true
             swipeEdge = if (rtl) NavigationEvent.EDGE_RIGHT else NavigationEvent.EDGE_LEFT
@@ -105,6 +112,7 @@ internal class BackMotion {
         popping = motionEnabled
         tapPop = false
         gestureInFlight = true
+        backInProgress = true
         recordEdge(swipeEdge)
     }
 }
@@ -192,20 +200,29 @@ internal fun AnimatedContentScope.BackPreviewFrame(
             earlyBack = false
         }
     }
+    // A page that has finished arriving ends the opening, however its entries were reported.
+    val arrived = !leaving && transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
+    LaunchedEffect(arrived) { if (arrived) motion.opening = false }
+    // Every back leaves toward the end edge (right, or left under RTL), whichever edge the finger
+    // pulled from: one direction, for gestures, the back key and close buttons alike.
+    val towardStart = LocalLayoutDirection.current == LayoutDirection.Rtl
     val desk = YomuTheme.stack.desk
     fun sliding(): Boolean = slides && leaving && motion.popping && clock.value > 0f
     Box(
         modifier = Modifier
             .graphicsLayer {
                 val t = clock.value
-                if (t <= 0f && motion.released) motion.gestureInFlight = false
+                if (t <= 0f && motion.released && motion.gestureInFlight) {
+                    // A cancelled gesture has retraced to rest.
+                    motion.gestureInFlight = false
+                    if (leaving || !motion.popping) motion.backInProgress = false
+                }
                 if (!sliding()) {
                     translationX = 0f
                     return@graphicsLayer
                 }
                 val x = slide.position(t, dragging = !motion.released, tap = motion.tapPop)
-                val towardLeft = motion.swipeEdge == NavigationEvent.EDGE_RIGHT
-                translationX = size.width * x * if (towardLeft) -1f else 1f
+                translationX = size.width * x * if (towardStart) -1f else 1f
             }
             // The page slides as one opaque sheet of desk, whatever it draws itself.
             .drawBehind { if (sliding()) drawRect(desk) }

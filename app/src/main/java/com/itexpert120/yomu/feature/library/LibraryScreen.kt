@@ -7,8 +7,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateTo
+import androidx.compose.animation.core.calculateTargetValue
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +66,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.itexpert120.yomu.app.navigation.LocalYomuNavigationBarShown
 import com.itexpert120.yomu.core.designsystem.StackCompactHeader
@@ -72,6 +78,7 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.stackHeaderProgress
+import com.itexpert120.yomu.core.designsystem.stackSnapRest
 import com.itexpert120.yomu.core.designsystem.yomuAnimationsEnabled
 import com.itexpert120.yomu.core.designsystem.yomuChromeEnter
 import com.itexpert120.yomu.core.designsystem.yomuChromeExit
@@ -502,8 +509,52 @@ private fun StackedLibrary(
         val target = deskHeight.toFloat()
         if (sheetTop.value == 0f || !animate) sheetTop.snapTo(target) else sheetTop.animateTo(target, glide)
     }
-    val sheetScroll = remember(travel) {
+    // The lift has two rests — the pile shown (0) and the sheet pinned under the compact header
+    // (-travel). A release or fling that would leave it between them carries on, from its own
+    // speed, to the nearer one on the spatial spring (stackSnapRest); a fling past the pin hands its
+    // remaining speed to the grid, and one that ends in the grid's top carries the sheet down.
+    val liftDecay = rememberSplineBasedDecay<Float>()
+    val sheetScroll = remember(travel, liftDecay, glide, animate) {
+        suspend fun settleLift(velocity: Float): Float {
+            val start = sheetLift.floatValue
+            if (travel <= 0f) return velocity
+            val projected = liftDecay.calculateTargetValue(start, velocity)
+            val rest = stackSnapRest(projected, -travel, 0f)
+            if (rest != null) {
+                if (animate) {
+                    AnimationState(start, velocity).animateTo(rest, glide, sequentialAnimation = false) { sheetLift.floatValue = value }
+                } else {
+                    sheetLift.floatValue = rest
+                }
+                return 0f
+            }
+            // Lands past an end: decay to it, and give back whatever speed is left there.
+            var left = velocity
+            AnimationState(start, velocity).animateDecay(liftDecay) {
+                val clamped = value.coerceIn(-travel, 0f)
+                sheetLift.floatValue = clamped
+                left = velocity
+                if (clamped != value) cancelAnimation()
+            }
+            return left
+        }
         object : NestedScrollConnection {
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val lift = sheetLift.floatValue
+                // Pinned and flung up, or resting with the pile shown and flung down: the grid's.
+                if (lift <= -travel && available.y <= 0f) return Velocity.Zero
+                if (lift >= 0f && available.y >= 0f) return Velocity.Zero
+                val left = settleLift(available.y)
+                return Velocity(0f, available.y - left)
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // The grid reached its top still moving down: the sheet comes down with it.
+                if (available.y <= 0f || sheetLift.floatValue >= 0f) return Velocity.Zero
+                val left = settleLift(available.y)
+                return Velocity(0f, available.y - left)
+            }
+
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (available.y >= 0f) return Offset.Zero
                 val next = (sheetLift.floatValue + available.y).coerceAtLeast(-travel)

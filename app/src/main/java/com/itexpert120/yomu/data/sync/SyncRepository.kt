@@ -21,9 +21,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,6 +66,12 @@ class SyncRepository @Inject internal constructor(
     val available: Boolean get() = transport.available
 
     val enabled: Flow<Boolean> = secrets.present
+
+    /**
+     * [enabled], kept warm from the repository's creation so a screen opening later knows it on its
+     * first frame (null only until the stored secret has been read once).
+     */
+    val enabledNow: StateFlow<Boolean?> = secrets.present.stateIn(scope, SharingStarted.Eagerly, null)
     val status: StateFlow<SyncStatus> = engine.status
 
     init {

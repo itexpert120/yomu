@@ -54,6 +54,7 @@ import com.itexpert120.yomu.BuildConfig
 import com.itexpert120.yomu.core.designsystem.StackCompactHeader
 import com.itexpert120.yomu.core.designsystem.StackCompactHeaderHeight
 import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
+import com.itexpert120.yomu.core.designsystem.StackHeaderSnap
 import com.itexpert120.yomu.core.designsystem.StackTitleRow
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuConnectedChoiceGroup
@@ -62,6 +63,7 @@ import com.itexpert120.yomu.core.designsystem.YomuReadableMaxWidth
 import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.rememberStackHeaderFling
 import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
 import com.itexpert120.yomu.core.designsystem.yomuContentSwap
 import com.itexpert120.yomu.core.designsystem.yomuPressable
@@ -131,6 +133,7 @@ internal fun SettingsScreen(
     val sheetRadius = with(density) { 32.dp.toPx() }
     // All read in layer/draw blocks, so scrolling never recomposes the list.
     val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
+    StackHeaderSnap(scroll)
     val sheetTop = { (deskHeight - scroll.value).toFloat() }
     Box(
         Modifier
@@ -147,7 +150,7 @@ internal fun SettingsScreen(
                 .fillMaxSize()
                 .stackPinnedEdgeFade(edge = { headerBottom }, strength = headerProgress)
                 .background(stack.sheet)
-                .verticalScroll(scroll),
+                .verticalScroll(scroll, flingBehavior = rememberStackHeaderFling(scroll)),
         ) {
             Column(
                 Modifier

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -293,29 +297,35 @@ internal fun ReaderFontPicker(
     gutter: Dp,
     modifier: Modifier = Modifier,
 ) {
-    FlowRow(
+    // One row that scrolls sideways, however many fonts are installed; it opens on the chosen one.
+    val selectedIndex = remember(settings.font, settings.customFont, customFonts) {
+        settings.customFont?.let { chosen -> ReaderFont.entries.size + customFonts.indexOfFirst { it.family == chosen.family }.coerceAtLeast(0) }
+            ?: ReaderFont.entries.indexOf(settings.font)
+    }
+    val rowState = rememberLazyListState(initialFirstVisibleItemIndex = (selectedIndex - 1).coerceAtLeast(0))
+    LazyRow(
+        state = rowState,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = gutter)
             .selectableGroup(),
+        contentPadding = PaddingValues(horizontal = gutter),
         horizontalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
-        verticalArrangement = Arrangement.spacedBy(YomuTheme.space.xs),
     ) {
-        ReaderFont.entries.forEach { font ->
+        items(ReaderFont.entries) { font ->
             FontChip(
                 font = font,
                 selected = settings.customFont == null && settings.font == font,
                 onClick = { onUpdateSettings(settings.copy(font = font, customFont = null)) },
             )
         }
-        customFonts.forEach { custom ->
+        items(customFonts) { custom ->
             CustomFontChip(
                 font = custom,
                 selected = settings.customFont?.family == custom.family,
                 onClick = { onUpdateSettings(settings.copy(customFont = custom)) },
             )
         }
-        if (onGetFonts != null) GetFontsChip(onClick = onGetFonts)
+        if (onGetFonts != null) item { GetFontsChip(onClick = onGetFonts) }
     }
 }
 
@@ -400,8 +410,8 @@ internal fun ReaderLayoutLine(settings: ReaderSettings, onUpdateSettings: (Reade
         YomuConnectedChoiceGroup(
             options = LayoutChoice.entries,
             selected = if (settings.layoutFollowsScreen) LayoutChoice.Auto else LayoutChoice.of(settings.layout),
+            // Words only: three options with icons don't fit the control's width on a phone.
             label = { it.name },
-            icon = { it.icon },
             onSelect = { choice ->
                 onUpdateSettings(
                     when (choice) {
@@ -630,13 +640,6 @@ private enum class LayoutChoice {
     }
 }
 
-private val LayoutChoice.icon: ImageVector
-    get() = when (this) {
-        LayoutChoice.Auto -> StackIcons.AutoMode
-        LayoutChoice.Scroll -> StackIcons.SwipeVertical
-        LayoutChoice.Paged -> StackIcons.AutoStories
-    }
-
 // endregion
 
 // region On the page
@@ -655,6 +658,7 @@ private object ChromeIcons {
     val Scrollbar = StackIcons.Height
     val Immersive = StackIcons.Fullscreen
     val TwoPages = StackIcons.MenuBook
+    val TapTurn = StackIcons.TouchApp
 }
 
 @Composable
@@ -810,6 +814,19 @@ internal fun ReaderChromeToggles(
                 enabled = settings.layout == ReaderLayout.Scroll,
             )
         }
+        // Paged only: a tap on the page's outer thirds turns it; off, any tap shows the controls.
+        YomuSettingRow(
+            title = "Tap the edges to turn pages",
+            position = YomuSettingPosition.Middle,
+            enabled = settings.layout == ReaderLayout.Paged,
+            leadingContent = { ChromeRowIcon(ChromeIcons.TapTurn) },
+        ) {
+            YomuTogglePill(
+                checked = settings.tapNavigation,
+                onCheckedChange = { onUpdateSettings(settings.copy(tapNavigation = it)) },
+                enabled = settings.layout == ReaderLayout.Paged,
+            )
+        }
         // Spreads only exist in paged mode, on a landscape window wide enough for two pages.
         YomuSettingRow(
             title = "Two pages in landscape",
@@ -900,6 +917,9 @@ private fun CompactChromeToggles(
             // The scrollbar only exists in scroll mode (a native WebView scroll).
             ToggleChip("Scrollbar", settings.showScrollbar, settings.layout == ReaderLayout.Scroll) {
                 onUpdateSettings(settings.copy(showScrollbar = it))
+            }
+            ToggleChip("Tap to turn", settings.tapNavigation, settings.layout == ReaderLayout.Paged) {
+                onUpdateSettings(settings.copy(tapNavigation = it))
             }
             ToggleChip("Two pages", settings.twoPageSpread, settings.layout == ReaderLayout.Paged) {
                 onUpdateSettings(settings.copy(twoPageSpread = it))

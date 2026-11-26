@@ -63,6 +63,7 @@ import com.itexpert120.yomu.app.navigation.LocalYomuNavigationBarShown
 import com.itexpert120.yomu.core.designsystem.StackCompactHeader
 import com.itexpert120.yomu.core.designsystem.StackCompactHeaderHeight
 import com.itexpert120.yomu.core.designsystem.StackHeaderFadeDistance
+import com.itexpert120.yomu.core.designsystem.StackHeaderSnap
 import com.itexpert120.yomu.core.designsystem.StackTitleRow
 import com.itexpert120.yomu.core.designsystem.StackType
 import com.itexpert120.yomu.core.designsystem.YomuAppSurface
@@ -73,6 +74,7 @@ import com.itexpert120.yomu.core.designsystem.YomuTheme
 import com.itexpert120.yomu.core.designsystem.YomuThemeMode
 import com.itexpert120.yomu.core.designsystem.YomuWidthClass
 import com.itexpert120.yomu.core.designsystem.icons.StackIcons
+import com.itexpert120.yomu.core.designsystem.rememberStackHeaderFling
 import com.itexpert120.yomu.core.designsystem.stackPinnedEdgeFade
 import com.itexpert120.yomu.core.designsystem.yomuScrollEdgeRule
 import com.itexpert120.yomu.core.model.BookReadingTime
@@ -240,6 +242,7 @@ private fun PhoneStats(
     val cornerRadius = { sheetRadius * ((sheetTop() - headerBottom) / sheetRadius).coerceIn(0f, 1f) }
     // The compact header comes in as the large title scrolls up under it.
     val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
+    StackHeaderSnap(scroll)
 
     val pager = rememberStatsPeriodPager(state.trend, period)
     // How far the sheet has arrived under the pinned period line (0 -> 1 over its first 28dp).
@@ -260,7 +263,7 @@ private fun PhoneStats(
                     edge = { headerBottom + (pinnedBottom - headerBottom) * sheetArrived() },
                     strength = headerProgress,
                 )
-                .verticalScroll(scroll),
+                .verticalScroll(scroll, flingBehavior = rememberStackHeaderFling(scroll)),
         ) {
             Column(
                 Modifier
@@ -387,6 +390,7 @@ private fun WideStats(
     val scroll = rememberScrollState()
     val headerFade = with(LocalDensity.current) { StackHeaderFadeDistance.toPx() }
     val headerProgress = { (scroll.value / headerFade).coerceIn(0f, 1f) }
+    StackHeaderSnap(scroll)
     WidePanes(
         dashboardScroll = scroll,
         dashboardHeader = {
