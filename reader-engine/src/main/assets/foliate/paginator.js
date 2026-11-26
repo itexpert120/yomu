@@ -447,6 +447,8 @@ export class Paginator extends HTMLElement {
     #top
     #background
     #container
+    // Open Reader: the box the text is laid out in when pages scroll edge to edge (see #beforeRender).
+    #textBox
     #header
     #footer
     #view
@@ -524,6 +526,17 @@ export class Paginator extends HTMLElement {
             grid-row: 2;
             overflow: hidden;
         }
+        /* Open Reader: paged, the pages scroll across the whole width (edge to edge), so a turn slides
+           them off the screen's edges; the text keeps its box, measured by #text-box. */
+        #top.edge #container {
+            grid-column: 1 / -1;
+        }
+        #text-box {
+            grid-column: 2 / 5;
+            grid-row: 2;
+            visibility: hidden;
+            pointer-events: none;
+        }
         :host([flow="scrolled"]) #container {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
@@ -560,6 +573,7 @@ export class Paginator extends HTMLElement {
         <div id="top">
             <div id="background" part="filter"></div>
             <div id="header"></div>
+            <div id="text-box"></div>
             <div id="container"></div>
             <div id="footer"></div>
         </div>
@@ -568,6 +582,7 @@ export class Paginator extends HTMLElement {
         this.#top = this.#root.getElementById('top')
         this.#background = this.#root.getElementById('background')
         this.#container = this.#root.getElementById('container')
+        this.#textBox = this.#root.getElementById('text-box')
         this.#header = this.#root.getElementById('header')
         this.#footer = this.#root.getElementById('footer')
 
@@ -695,13 +710,17 @@ export class Paginator extends HTMLElement {
         this.#vertical = vertical
         this.#rtl = rtl
         this.#top.classList.toggle('vertical', vertical)
+        // Open Reader: horizontal pages scroll edge to edge (see #top.edge).
+        const edge = !vertical && this.getAttribute('flow') !== 'scrolled'
+        this.#top.classList.toggle('edge', edge)
 
         // set background to `doc` background
         // this is needed because the iframe does not fill the whole element
         this.#background.style.background = background
 
         const { width, height } = this.#container.getBoundingClientRect()
-        const size = vertical ? height : width
+        // Open Reader: edge to edge, the columns are still sized for the text's box, not the screen.
+        const size = vertical ? height : edge ? this.#textBox.getBoundingClientRect().width : width
 
         const style = getComputedStyle(this.#top)
         const maxInlineSize = parseFloat(style.getPropertyValue('--_max-inline-size'))
@@ -746,6 +765,11 @@ export class Paginator extends HTMLElement {
 
         const divisor = Math.min(maxColumnCount, Math.ceil(size / maxInlineSize))
         const columnWidth = (size / divisor) - gap
+        // Open Reader: a page spans the whole width; the room beside its columns becomes their gaps,
+        // half a gap at each screen edge and a whole one between columns and between pages. The
+        // columns keep their width (so line breaks and page counts don't change): a single page keeps
+        // its margins exactly; a spread's outer margins narrow and its gutter widens by the same room.
+        const pageGap = edge ? width / divisor - columnWidth : gap
         this.setAttribute('dir', rtl ? 'rtl' : 'ltr')
 
         const marginalDivisor = vertical
@@ -765,7 +789,7 @@ export class Paginator extends HTMLElement {
         this.#header.replaceChildren(...heads)
         this.#footer.replaceChildren(...feet)
 
-        return { height, width, margin, gap, columnWidth }
+        return { height, width, margin, gap: pageGap, columnWidth }
     }
     render() {
         if (!this.#view) return
@@ -857,6 +881,9 @@ export class Paginator extends HTMLElement {
         const touch = e.changedTouches[0]
         const x = touch.screenX, y = touch.screenY
         const dx = state.x - x, dy = state.y - y
+        // Open Reader: a tap's few pixels of wobble aren't a drag: below this the page doesn't
+        // move, so the tap's own turn isn't started from a nudged page (or snapped by its speed).
+        if (!this.#touchScrolled && Math.hypot(dx, dy) < 8) return
         const dt = e.timeStamp - state.t
         state.x = x
         state.y = y
