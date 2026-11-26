@@ -181,6 +181,7 @@ const configureColumns = renderer => {
 }
 addEventListener('resize', () => {
     if (view.renderer) configureColumns(view.renderer)
+    dropPreview()
 })
 
 const configure = renderer => {
@@ -274,34 +275,185 @@ view.addEventListener('relocate', ({ detail }) => {
 
 // --- Paged: turning into the adjacent section ---
 // foliate turns a page by sliding its columns; at a section's last (or first) page the turn slides
-// on to the blank padding page past the text and then swaps the section in, which used to pop in
-// where the slide left off. Here the swap happens off-screen: once the outgoing page has slid away,
-// the page is moved a screen over (the padding page is blank, so nothing visibly moves), the next
-// section loads and lays out there, and then slides in from the side the turn came from at
-// foliate's speed and easing, so the crossing reads as one turn. Animations off: an instant swap.
+// on to the blank padding page past the text, then loads the next section in place. Loaded only
+// then, it arrived a beat after the old page had gone, on a blank page.
+//
+// So the adjacent section is laid out ahead in a second, hidden paginator (the preview), with the
+// reader's settings and the same box: the next one while the reader is on a section's last pages,
+// the previous one (at its end) on its first pages. As the outgoing page slides away (foliate's
+// slide, a tap's or the finger's) the preview follows it in from the same side, its offset bound to
+// the outgoing scroll position, so the two move as one turn. Once it covers the page, it stays there
+// while foliate loads the same section underneath, and steps aside once that has laid out: being the
+// same layout, nothing changes on screen. A turn that would cross before the preview is ready waits
+// for it (up to PREVIEW_WAIT_MS), the outgoing page staying put; past that it falls back to sliding
+// the section in once loaded. RTL books turn the other way; with animations off the turn is a cut
+// straight to the preview.
 
 const TURN_MS = 300
 // foliate's page-turn curve (easeOutQuad).
 const EASE_TURN = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
 // A crossing that hasn't arrived by then (it failed, or went nowhere) puts the page back.
 const CROSSING_TIMEOUT_MS = 2500
-let crossing = null // { from, shift, timer }
+// How long a turn waits for the preview before crossing without it.
+const PREVIEW_WAIT_MS = 1500
+let crossing = null // { from, shift, timer }: the fallback crossing, without a preview
 let lastSection = null
+
+// { el, from, index, forward, ready, loading, holding }: the preview of the section after (forward)
+// or before section `from`.
+let preview = null
+
+const currentIndex = () => view.renderer?.getContents()?.[0]?.index
+const horizontalPages = () => {
+    const r = view.renderer
+    return r && !r.scrolled && r.scrollProp === 'scrollLeft'
+}
+
+const previewElement = () => {
+    if (preview?.el) return preview.el
+    const el = document.createElement('foliate-paginator')
+    el.id = 'yomu-preview'
+    el.bookDir = view.book.dir
+    el.sections = view.book.sections
+    // As foliate's view does for its own renderer: the book's language and direction, unless set.
+    el.addEventListener('load', ({ detail: { doc } }) => {
+        doc.documentElement.lang ||= view.language?.canonical ?? ''
+        if (!view.language?.isCJK) doc.documentElement.dir ||= view.language?.direction ?? ''
+    })
+    // The section's highlights too, so none appears only once the reader's own page takes over.
+    el.addEventListener('create-overlayer', ({ detail: { doc, index, attach } }) => {
+        const overlayer = new Overlayer()
+        attach(overlayer)
+        for (const h of highlights.values()) {
+            if (h.index !== index) continue
+            try {
+                overlayer.add(h.cfi, view.resolveNavigation(h.cfi).anchor(doc), drawHighlight, { style: h.style, color: h.color, note: h.note })
+            } catch {
+                // One that doesn't resolve here is drawn once the page takes over.
+            }
+        }
+    })
+    // Above the reader's page, under the app's own overlays.
+    view.after(el)
+    configure(el)
+    return el
+}
+
+/** Lays out the section after (or before) the one being read in the preview, if it isn't already. */
+const preparePreview = forward => {
+    if (!horizontalPages() || preview?.holding) return null
+    const from = currentIndex()
+    const index = from == null ? null : adjacentIndex(forward ? 1 : -1)
+    if (index == null) return null
+    if (preview && preview.from === from && preview.index === index) return preview
+    const el = previewElement()
+    const p = { el, from, index, forward, ready: false, holding: false }
+    preview = p
+    hidePreview()
+    p.loading = (async () => {
+        try {
+            await el.goTo({ index, anchor: forward ? 0 : 1 })
+            const doc = el.getContents()?.[0]?.doc
+            if (doc?.fonts) await within(doc.fonts.ready, 1500)
+            await nextFrame()
+            await nextFrame()
+            if (preview === p) p.ready = true
+        } catch (e) {
+            report('error', { message: 'preview: ' + String(e?.stack ?? e) })
+        }
+    })()
+    return p
+}
+
+/** Prepares what the next turn may cross into: near a section's end the next, near its start the previous. */
+const prepareAdjacent = () => {
+    const r = view.renderer
+    if (!horizontalPages() || !(r.pages > 2)) return
+    if (r.page >= r.pages - 3) preparePreview(true)
+    else if (r.page <= 2) preparePreview(false)
+}
+
+const hidePreview = () => {
+    const el = preview?.el
+    if (!el) return
+    el.style.visibility = 'hidden'
+    el.style.transform = ''
+}
+
+/**
+ * Keeps the preview beside the outgoing page as it slides (a turn, a swipe, a snap back): fully off
+ * screen while the reader's page is on text, fully on once it is on the blank padding page.
+ */
+const followTurn = () => {
+    const p = preview
+    const r = view.renderer
+    if (!p?.ready || p.holding || crossing || !horizontalPages() || currentIndex() !== p.from) return
+    const size = r.size
+    if (!(size > 0) || !(r.pages > 2)) return
+    // How far the turn into the padding page has gone, 0..1.
+    const progress = Math.min(1, Math.max(0, p.forward
+        ? (r.start - (r.pages - 2) * size) / size
+        : (size - r.start) / size))
+    if (progress <= 0.001) {
+        hidePreview()
+        return
+    }
+    // Forward, the next page comes in from the right (from the left in a right-to-left book).
+    const side = (p.forward ? 1 : -1) * (view.book?.dir === 'rtl' ? -1 : 1)
+    if (progress >= 0.999) {
+        holdPreview(p.forward)
+        return
+    }
+    p.el.style.transform = `translateX(${side * (1 - progress) * size}px)`
+    p.el.style.visibility = 'visible'
+}
+
+/** The turn has reached the padding page: the preview covers it until foliate has the section. */
+const holdPreview = forward => {
+    const p = preview
+    if (!p?.ready || p.forward !== forward || currentIndex() !== p.from) return false
+    p.holding = true
+    p.el.style.transform = ''
+    p.el.style.visibility = 'visible'
+    p.timer = setTimeout(() => {
+        // The section never came: show the reader's page again.
+        if (preview === p && p.holding) releasePreview(p)
+    }, CROSSING_TIMEOUT_MS)
+    return true
+}
+
+const releasePreview = p => {
+    clearTimeout(p.timer)
+    p.holding = false
+    hidePreview()
+}
 
 const followCrossing = detail => {
     const r = view.renderer
     const index = detail.section?.current
-    if (crossing) {
+    const p = preview
+    if (p?.holding) {
+        // foliate has laid the section out where the preview shows it: swap once it has settled.
+        if (index === p.index && r.page >= 1 && r.page <= r.pages - 2) {
+            settled().then(() => {
+                if (preview !== p || !p.holding) return
+                releasePreview(p)
+                // Ready for a turn straight back.
+                prepareAdjacent()
+            })
+        }
+    } else if (crossing) {
         if (index !== crossing.from && r.page >= 1 && r.page <= r.pages - 2) finishCrossing(crossing)
     } else if (!r.scrolled && index === lastSection && r.pages > 2 && (r.page <= 0 || r.page >= r.pages - 1)) {
-        beginCrossing(r.page <= 0 ? -1 : 1, index)
+        const forward = r.page > 0
+        if (!holdPreview(forward)) beginCrossing(forward ? 1 : -1, index)
     }
     lastSection = index
+    if (!preview?.holding && !crossing) prepareAdjacent()
 }
 
 const beginCrossing = (dir, from) => {
     if (settings.animated === false) return
-    // Forward, the next page comes in from the right (from the left in a right-to-left book).
     const shift = dir * (view.book?.dir === 'rtl' ? -1 : 1) * innerWidth
     const c = { from, shift }
     c.timer = setTimeout(() => {
@@ -321,6 +473,42 @@ const finishCrossing = async c => {
     crossing = null
     view.style.transform = ''
     view.animate([{ transform: `translateX(${c.shift}px)` }, { transform: 'translateX(0)' }], { duration: TURN_MS, easing: EASE_TURN })
+}
+
+/** Waits (a while at most) for the preview a turn [forward] from here would cross into. */
+const awaitPreview = async forward => {
+    const p = preparePreview(forward)
+    if (!p || p.ready) return
+    await within(p.loading, PREVIEW_WAIT_MS)
+}
+
+/**
+ * Turns that would cross into the adjacent section wait for its preview first, so the incoming
+ * page can follow the outgoing one: a tap or key at a section's last (or first) page, and a swipe
+ * released past it.
+ */
+const guardTurns = renderer => {
+    const atLast = () => renderer.page >= renderer.pages - 2
+    const atFirst = () => renderer.page <= 1
+    const next = renderer.next.bind(renderer)
+    const prev = renderer.prev.bind(renderer)
+    const snap = renderer.snap.bind(renderer)
+    renderer.next = async distance => {
+        if (horizontalPages() && atLast()) await awaitPreview(true)
+        return next(distance)
+    }
+    renderer.prev = async distance => {
+        if (horizontalPages() && atFirst()) await awaitPreview(false)
+        return prev(distance)
+    }
+    renderer.snap = async (vx, vy) => {
+        if (horizontalPages() && renderer.pages > 2) {
+            const size = renderer.size
+            if (renderer.start > (renderer.pages - 2) * size + 1) await awaitPreview(true)
+            else if (renderer.start < size - 1) await awaitPreview(false)
+        }
+        return snap(vx, vy)
+    }
 }
 
 const reportLocation = detail => {
@@ -1164,6 +1352,20 @@ globalThis.yomuApplySettings = async next => {
     settings = next
     applyPageColor()
     if (view.renderer) configure(view.renderer)
+    dropPreview()
+}
+
+/** Forgets the laid-out preview (the settings or the page size changed); the next relocate makes another. */
+const dropPreview = () => {
+    const p = preview
+    if (!p || p.holding) return
+    preview = null
+    try {
+        p.el.destroy()
+    } catch {
+        // It never loaded a section.
+    }
+    p.el.remove()
 }
 
 const commonPrefix = (a, b) => {
@@ -1276,6 +1478,8 @@ const loadBook = () => bookLoad ??= (async () => {
     }
     await view.open(book)
     view.renderer.addEventListener('scroll', showScrollbar)
+    view.renderer.addEventListener('scroll', followTurn)
+    if (typeof view.renderer.snap === 'function') guardTurns(view.renderer)
     report('view-open')
     const pages = pageList(book)
     if (pages.length) report('page-list', { pages })

@@ -52,3 +52,10 @@ foliate-view, .yomu-stand-in {
 .yomu-stand-in {
     pointer-events: none;
 }
+/* The adjacent section laid out ahead, shown only while a page turn crosses into it. */
+#yomu-preview {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
