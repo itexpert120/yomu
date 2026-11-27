@@ -309,8 +309,20 @@ globalThis.yomuDisableCurl = () => {
     applyTurnMode()
 }
 
+// foliate drops a turn asked for while one is still under way: a turn holds its lock until it is
+// over and 100 ms more without animation (all of a section's load when it crosses), so a jump
+// right after another (a drag let go back where it began, a swipe while the next section loads)
+// silently did nothing, and the curl ended on the page it had left. Jumps wait their turn.
+let lastJump = Promise.resolve()
+
 /** Jumps one page [dir] (reading order) with no animation; reports `jumped` once it's on screen. */
-globalThis.yomuJump = async (dir, id) => {
+globalThis.yomuJump = (dir, id) => {
+    const run = lastJump.then(() => jumpOnce(dir, id))
+    lastJump = run.catch(() => {})
+    return run
+}
+
+const jumpOnce = async (dir, id) => {
     const r = view.renderer
     const edge = !r || !horizontalPages() ||
         (dir > 0 ? r.page >= r.pages - 2 && adjacentIndex(1) == null : r.page <= 1 && adjacentIndex(-1) == null)
@@ -327,14 +339,15 @@ globalThis.yomuJump = async (dir, id) => {
         }, CROSSING_TIMEOUT_MS)
         view.addEventListener('relocate', on)
     })
-    if (dir > 0) view.next()
-    else view.prev()
+    const turn = (dir > 0 ? view.next() : view.prev()).catch(() => {})
     const ok = await moved
     // At a section's end the first stop is foliate's blank padding page, which the preview already
     // covers (holdPreview); the app retakes its snapshot when the section itself settles.
     await nextFrame()
     await nextFrame()
     report('jumped', { id, moved: ok })
+    // The next jump goes once foliate takes turns again (a load that hangs doesn't hold it forever).
+    await within(turn, CROSSING_TIMEOUT_MS)
 }
 
 /** How many pages show side by side: 2 in a spread, else 1. */
