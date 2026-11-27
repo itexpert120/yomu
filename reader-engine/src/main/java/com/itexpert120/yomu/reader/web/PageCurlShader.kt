@@ -140,6 +140,10 @@ internal class PageCurlShader {
             }
 
             half4 main(float2 fragCoord) {
+                // On a dark page shading can't show (black stays black however much it is darkened),
+                // so the leaf is drawn with light instead: the paper lifted toward it, a sheen along
+                // the roll, a fine light edge. Most on pure black, less as the page gets lighter.
+                float night = dark > 0.5 ? 1.0 - clamp(dot(float3(paper.rgb), float3(0.2126, 0.7152, 0.0722)) / 0.5, 0.0, 0.6) : 0.0;
                 float2 p = mirror > 0.5 ? float2(size.x - fragCoord.x, fragCoord.y) : fragCoord;
                 bool inStill = stillMode > 1.5 || (stillMode > 0.5 && p.x < hinge);
                 // Underneath: the page beside the leaf, else the page the turn goes to — its snapshot
@@ -155,6 +159,7 @@ internal class PageCurlShader {
                 // The paper rising into the curl, or lying flat.
                 float sLow = d;
                 float lowLight = 1.0;
+                float lowLift = 0.0;
                 bool low = d < R;
                 if (d >= 0.0 && low) {
                     float th = asin(clamp(d / R, 0.0, 1.0));
@@ -162,11 +167,14 @@ internal class PageCurlShader {
                     // Rising away from the light, the inside of the curl deepens into its crease
                     // (gently on a dark page, which has little light to lose).
                     lowLight = 1.0 - (dark > 0.5 ? 0.28 : 0.4) * (1.0 - pow(cos(th), 1.4));
+                    // On a dark page the rising paper catches light toward the roll instead.
+                    lowLift = night * 0.07 * pow(sin(th), 1.5);
                 }
                 if (low) {
                     float2 q = p + (sLow - d) * normal;
                     float cover = clamp(0.5 - leafSdf(q), 0.0, 1.0);
-                    half4 lowColor = (frontLive > 0.5 && d < 0.0 && frontReady < 0.5) ? half4(0.0) : half4(frontAt(q).rgb * half(lowLight), 1.0);
+                    half4 lowColor = (frontLive > 0.5 && d < 0.0 && frontReady < 0.5) ? half4(0.0)
+                        : half4(half3(clamp(float3(frontAt(q).rgb) * lowLight + lowLift, 0.0, 1.0)), 1.0);
                     color = mix(color, lowColor, half(cover));
                 }
 
@@ -211,9 +219,15 @@ internal class PageCurlShader {
                 if (d < R) {
                     float cover = clamp(0.5 - topSdf, 0.0, 1.0);
                     half4 topColor = backAt(qTop);
-                    // The paper's own edge reads as a fine darker line.
-                    float rimLine = 1.0 - 0.1 * clamp(1.0 + topSdf / 1.5, 0.0, 1.0);
-                    float3 lit = float3(topColor.rgb) * topLight * rimLine + gloss * (dark > 0.5 ? 0.1 : 0.04);
+                    // The paper's own edge reads as a fine line: darker on a light page, lighter on a
+                    // dark one.
+                    float edge = clamp(1.0 + topSdf / 1.5, 0.0, 1.0);
+                    float rimLine = 1.0 - 0.1 * edge * (1.0 - night);
+                    // A dark page's turned-back paper is lifted toward the light, most where it faces
+                    // up, with a sheen along the top of the roll.
+                    float sheen = d >= 0.0 ? exp(-pow((d / R - 0.35) / 0.3, 2.0)) : 0.0;
+                    float lift = night * (0.05 + 0.03 * pow(z, 2.0) + 0.06 * sheen + 0.12 * edge);
+                    float3 lit = float3(topColor.rgb) * topLight * rimLine + gloss * (dark > 0.5 ? 0.1 : 0.04) + lift;
                     topColor = half4(half3(clamp(lit, 0.0, 1.0)), 1.0);
                     color = mix(color, topColor, half(cover));
                 }
