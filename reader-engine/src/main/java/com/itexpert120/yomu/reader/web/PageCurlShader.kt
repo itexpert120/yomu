@@ -5,6 +5,7 @@ import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import androidx.annotation.RequiresApi
+import kotlin.math.PI
 
 /**
  * The page curl as one fragment shader over the page's area (see [CurlShape] for the model). Every
@@ -74,6 +75,20 @@ internal class PageCurlShader {
         val lift = (s.distance / (s.leafWidth * 0.08f)).coerceIn(0f, 1f) *
             ((1f - s.progress) / 0.08f).coerceIn(0f, 1f)
         shader.setFloatUniform("shadowAmount", lift)
+        // Outside the band where the curl draws anything (its roll, the paper turned back over the
+        // page, their shadows), a pixel is only the page beside or under it: the shader returns that
+        // at once there instead of working the whole curl out for every pixel of the window.
+        val r = maxOf(s.radius, 0.0001f)
+        val shadowTail = if (lift > 0f) (16f + r * 1.3f) * SHADOW_TAIL_FALLOFFS else 0f
+        shader.setFloatUniform("plainBeyond", r + shadowTail + 2f)
+        // The paper turned back over the page reaches down to where the leaf's farthest free-edge
+        // corner lands; its contact shadow a little past that.
+        val freeX = s.hinge + s.leafWidth
+        val reach = maxOf(
+            (freeX - s.axisX) * s.normalX + (0f - s.axisY) * s.normalY,
+            (freeX - s.axisX) * s.normalX + (s.height - s.axisY) * s.normalY,
+        )
+        shader.setFloatUniform("plainBefore", minOf(0f, PI.toFloat() * r - reach - (2f + r * 0.08f) * CONTACT_FALLOFFS - 2f))
     }
 
     private inline fun bind(name: String, bitmap: Bitmap?, bound: Bitmap?, remember: (Bitmap?) -> Unit) {
@@ -90,6 +105,11 @@ internal class PageCurlShader {
     }
 
     private companion object {
+        // How many of their own falloffs the cast and contact shadows are followed for: past that
+        // they darken the page by less than one step of 255.
+        const val SHADOW_TAIL_FALLOFFS = 5.2f
+        const val CONTACT_FALLOFFS = 5.3f
+
         val SOURCE = """
             uniform shader front;
             uniform shader back;
@@ -112,6 +132,8 @@ internal class PageCurlShader {
             layout(color) uniform half4 paper;
             uniform float dark;
             uniform float shadowAmount;
+            uniform float plainBefore;
+            uniform float plainBeyond;
 
             const float PI = 3.14159265;
 
@@ -156,13 +178,24 @@ internal class PageCurlShader {
                 float R = max(radius, 0.0001);
                 float d = dot(p - axis, normal);
 
+                // Past the curl and its shadow: only the page underneath.
+                if (d >= plainBeyond) return color;
+                // Before the paper turned back over the page reaches: the leaf lying flat.
+                if (d < plainBefore) {
+                    float flatCover = clamp(0.5 - leafSdf(p), 0.0, 1.0);
+                    half4 flatColor = (frontLive > 0.5 && frontReady < 0.5) ? half4(0.0) : frontAt(p);
+                    return mix(color, flatColor, half(flatCover));
+                }
+
+                // The angle round the roll, for a point over it.
+                float th = (d >= 0.0 && d < R) ? asin(clamp(d / R, 0.0, 1.0)) : 0.0;
+
                 // The paper rising into the curl, or lying flat.
                 float sLow = d;
                 float lowLight = 1.0;
                 float lowLift = 0.0;
                 bool low = d < R;
                 if (d >= 0.0 && low) {
-                    float th = asin(clamp(d / R, 0.0, 1.0));
                     sLow = R * th;
                     // Rising away from the light, the inside of the curl deepens into its crease
                     // (gently on a dark page, which has little light to lose).
@@ -187,7 +220,6 @@ internal class PageCurlShader {
                 if (d < 0.0) {
                     sTop = PI * R - d;
                 } else {
-                    float th = asin(clamp(d / R, 0.0, 1.0));
                     sTop = R * (PI - th);
                     z = cos(th);
                 }
