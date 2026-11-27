@@ -28,6 +28,8 @@ internal data class CurlShape(
     /** Where that point is now. */
     val pointX: Float,
     val pointY: Float,
+    /** How loosely the paper rolls, as a share of the usual radius (a fast sweep rolls looser). */
+    val looseness: Float = 1f,
 ) {
     /** The fold's normal, pointing at the lifted paper (toward the free edge), and its length. */
     val distance: Float = hypot(cornerX - pointX, cornerY - pointY)
@@ -42,7 +44,7 @@ internal data class CurlShape(
      * page that has landed on the other side, so both ends of a turn are perfectly flat.
      */
     val radius: Float = run {
-        val max = leafWidth * MAX_RADIUS_FRACTION
+        val max = leafWidth * MAX_RADIUS_FRACTION * looseness
         val ramp = leafWidth * RADIUS_RAMP_FRACTION
         val lifted = (distance / ramp).coerceIn(0f, 1f)
         val landing = (hypot(pointX - turnedX, pointY - cornerY) / ramp).coerceIn(0f, 1f)

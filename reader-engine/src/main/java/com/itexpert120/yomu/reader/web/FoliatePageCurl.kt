@@ -20,6 +20,8 @@ import android.widget.FrameLayout
 import androidx.annotation.RequiresApi
 import org.json.JSONObject
 import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
@@ -306,6 +308,16 @@ internal class FoliatePageCurl(
         private var tapV = 0f
         private var stiffness = DRAG_STIFFNESS
         private var lastFrameNanos = 0L
+
+        // How loosely the paper rolls: a page swept fast bellies out, one eased over rolls tight.
+        // Follows the point's speed (smoothed), written by drags on the main thread and by the
+        // settle on the render thread, never both at once.
+        @Volatile
+        private var looseness = if (byTap) TAP_LOOSENESS else 1f
+        private var lastDragAt = 0L
+        private var lastPx = 0f
+        private var lastPy = 0f
+        private var dragSpeed = 0f
         private var finished = false
         private val startedAt = SystemClock.uptimeMillis()
 
@@ -382,7 +394,25 @@ internal class FoliatePageCurl(
                 px = nx
                 py = ny
             }
+            val now = SystemClock.uptimeMillis()
+            val dt = (now - lastDragAt) / 1000f
+            if (lastDragAt != 0L && dt > 0.004f) {
+                val speed = hypot(px - lastPx, py - lastPy) / dt
+                // A pause between moves reads as the finger slowing down.
+                dragSpeed += (speed - dragSpeed) * min(1f, dt * DRAG_SPEED_RESPONSE)
+            }
+            if (lastDragAt == 0L || dt > 0.004f) {
+                lastDragAt = now
+                lastPx = px
+                lastPy = py
+            }
+            looseness = loosenessFor(dragSpeed)
             redraw()
+        }
+
+        private fun loosenessFor(speed: Float): Float {
+            val pagesPerSecond = speed / leafWidth
+            return MIN_LOOSENESS + (MAX_LOOSENESS - MIN_LOOSENESS) * smoothstep((pagesPerSecond - 0.3f) / 2.2f)
         }
 
         /** Let go with the finger's velocity (view px/s). */
@@ -403,7 +433,9 @@ internal class FoliatePageCurl(
                 ty = y
                 vx = velocityX
                 vy = velocityY
-                stiffness = DRAG_STIFFNESS
+                // A flick lands quickly; a page let go gently settles gently.
+                val pagesPerSecond = hypot(velocityX, velocityY) / leafWidth
+                stiffness = DRAG_STIFFNESS * (1f + FLICK_STIFFENING * smoothstep((pagesPerSecond - 0.5f) / 2.5f))
             }
             animating = true
             lastFrameNanos = 0L
@@ -464,6 +496,8 @@ internal class FoliatePageCurl(
                 val (cx, cy) = grip.constrain(px, py)
                 px = cx
                 py = cy
+                // The roll eases toward what its speed now asks for (it never jumps).
+                looseness += (loosenessFor(hypot(vx, vy)) - looseness) * min(1f, dt * LOOSENESS_RESPONSE)
                 abs(px - tx) < 0.5f && abs(py - ty) < 0.5f && abs(vx) < 30f && abs(vy) < 30f
             }
             if (done) {
@@ -521,7 +555,7 @@ internal class FoliatePageCurl(
         }
 
         private fun frame(): CurlFrame {
-            val shape = CurlShape(hinge, leafWidth, height, grip.cornerX, grip.cornerY, px, py)
+            val shape = CurlShape(hinge, leafWidth, height, grip.cornerX, grip.cornerY, px, py, looseness)
             val underLive = jumped == true
             return when {
                 single && !fromTurned -> CurlFrame(width, height, shape, mirror, front = shot, frontLive = false, back = null, backIsNextPage = false, still = null, stillEverywhere = false, underLive = underLive, under = target, paper = paper, dark = dark)
@@ -697,5 +731,22 @@ internal class FoliatePageCurl(
         const val DRAG_STIFFNESS = 260f
         const val TAP_STIFFNESS = 190f
         const val DAMPING_RATIO = 0.96f
+
+        /** How much stiffer the settle gets for a flick (a fling of 3 page widths a second or more). */
+        const val FLICK_STIFFENING = 1.4f
+
+        // The roll's looseness (a share of its usual radius): eased over slowly, swept fast.
+        const val MIN_LOOSENESS = 0.82f
+        const val MAX_LOOSENESS = 1.5f
+        const val TAP_LOOSENESS = 1.1f
+
+        // How quickly (1/s) the smoothed drag speed, and the settle's roll, follow the speed now.
+        const val DRAG_SPEED_RESPONSE = 14f
+        const val LOOSENESS_RESPONSE = 10f
+
+        fun smoothstep(t: Float): Float {
+            val x = t.coerceIn(0f, 1f)
+            return x * x * (3 - 2 * x)
+        }
     }
 }
