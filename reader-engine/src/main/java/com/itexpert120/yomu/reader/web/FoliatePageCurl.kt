@@ -63,6 +63,7 @@ internal class FoliatePageCurl(
     private var currentAt = 0L
     private var staging: Bitmap? = null
     private var capturing = false
+    private var capturingAt = 0L
     private var captureAgain = false
     private val captureWaiters = ArrayList<(Bitmap?) -> Unit>()
 
@@ -156,8 +157,12 @@ internal class FoliatePageCurl(
 
     private fun withSnapshot(freshFor: Long, then: (Bitmap?) -> Unit) {
         val shot = current
-        if (shot != null && !capturing && SystemClock.uptimeMillis() - currentAt <= freshFor) return then(shot)
+        val now = SystemClock.uptimeMillis()
+        if (shot != null && !capturing && now - currentAt <= freshFor) return then(shot)
         captureWaiters += then
+        // A snapshot already under way is fresh enough (a drag starting just after its touch-down
+        // asked for one): wait for it instead of taking and uploading the whole window again.
+        if (capturing && now - capturingAt <= freshFor) return
         capture()
     }
 
@@ -176,6 +181,7 @@ internal class FoliatePageCurl(
         val location = IntArray(2).also(area::getLocationInWindow)
         capturing = true
         val asked = SystemClock.uptimeMillis()
+        capturingAt = asked
         runCatching {
             PixelCopy.request(window, Rect(location[0], location[1], location[0] + width, location[1] + height), target, { result ->
                 if (result != PixelCopy.SUCCESS) {
