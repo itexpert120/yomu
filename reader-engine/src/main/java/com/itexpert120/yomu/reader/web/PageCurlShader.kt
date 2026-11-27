@@ -6,6 +6,7 @@ import android.graphics.RuntimeShader
 import android.graphics.Shader
 import androidx.annotation.RequiresApi
 import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * The page curl as one fragment shader over the page's area (see [CurlShape] for the model). Every
@@ -75,6 +76,12 @@ internal class PageCurlShader {
         val lift = (s.distance / (s.leafWidth * 0.08f)).coerceIn(0f, 1f) *
             ((1f - s.progress) / 0.08f).coerceIn(0f, 1f)
         shader.setFloatUniform("shadowAmount", lift)
+        // Paper held at one height leads there and trails above and below it: the fold bends back
+        // away from the grip (most mid-turn, none at either end, so a page at rest lies flat).
+        val corner = s.cornerY <= 0f || s.cornerY >= s.height
+        val bend = s.leafWidth * (if (corner) CORNER_BEND else MIDDLE_BEND) * sin(PI.toFloat() * s.progress)
+        shader.setFloatUniform("bend", bend)
+        shader.setFloatUniform("grabY", s.cornerY)
         // Outside the band where the curl draws anything (its roll, the paper turned back over the
         // page, their shadows), a pixel is only the page beside or under it: the shader returns that
         // at once there instead of working the whole curl out for every pixel of the window.
@@ -110,6 +117,11 @@ internal class PageCurlShader {
         const val SHADOW_TAIL_FALLOFFS = 5.2f
         const val CONTACT_FALLOFFS = 5.3f
 
+        // How far the fold trails at the page's height away from the grip (squared share of the
+        // height), as a share of the leaf's width mid-turn: held mid-edge, and by a corner.
+        const val MIDDLE_BEND = 0.32f
+        const val CORNER_BEND = 0.1f
+
         val SOURCE = """
             uniform shader front;
             uniform shader back;
@@ -134,6 +146,8 @@ internal class PageCurlShader {
             uniform float shadowAmount;
             uniform float plainBefore;
             uniform float plainBeyond;
+            uniform float bend;
+            uniform float grabY;
 
             const float PI = 3.14159265;
 
@@ -176,7 +190,9 @@ internal class PageCurlShader {
                     : (underReady > 0.5 ? half4(0.0) : paper);
 
                 float R = max(radius, 0.0001);
-                float d = dot(p - axis, normal);
+                // Distance past the fold, which bends back away from the grip's height.
+                float dy = (p.y - grabY) / size.y;
+                float d = dot(p - axis, normal) - bend * dy * dy;
 
                 // Past the curl and its shadow: only the page underneath.
                 if (d >= plainBeyond) return color;
