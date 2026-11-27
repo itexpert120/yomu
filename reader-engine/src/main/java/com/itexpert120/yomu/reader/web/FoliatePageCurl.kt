@@ -182,9 +182,11 @@ internal class FoliatePageCurl(
                     capturing = false
                     return@request finishCapture(null)
                 }
+                val print = fingerprint(target)
                 surface.upload(target) { hw ->
                     capturing = false
                     if (hw != null) {
+                        prints[hw] = print
                         adopt(hw)
                         currentAt = asked
                     }
@@ -206,6 +208,33 @@ internal class FoliatePageCurl(
         val waiting = captureWaiters.toList()
         captureWaiters.clear()
         waiting.forEach { it(shot) }
+    }
+
+    // A coarse sample of each snapshot's pixels, to tell whether two snapshots show the same page.
+    private val prints = java.util.WeakHashMap<Bitmap, IntArray>()
+
+    private fun fingerprint(bitmap: Bitmap): IntArray {
+        val out = IntArray(PRINT_COLUMNS * PRINT_ROWS)
+        val w = bitmap.width
+        val h = bitmap.height
+        for (row in 0 until PRINT_ROWS) {
+            val y = ((row + 0.5f) * h / PRINT_ROWS).toInt().coerceIn(0, h - 1)
+            for (column in 0 until PRINT_COLUMNS) {
+                val x = ((column + 0.5f) * w / PRINT_COLUMNS).toInt().coerceIn(0, w - 1)
+                out[row * PRINT_COLUMNS + column] = bitmap.getPixel(x, y)
+            }
+        }
+        return out
+    }
+
+    /** Whether [a] and [b] show the same page (a clock ticking in the footer aside). */
+    private fun samePage(a: Bitmap, b: Bitmap): Boolean {
+        val pa = prints[a] ?: return false
+        val pb = prints[b] ?: return false
+        if (pa.size != pb.size) return false
+        var differing = 0
+        for (i in pa.indices) if (pa[i] != pb[i]) differing++
+        return differing <= pa.size / 200
     }
 
     // endregion
@@ -314,13 +343,21 @@ internal class FoliatePageCurl(
             if (done != null) block(done) else onJump += block
         }
 
-        fun captureTarget() {
+        fun captureTarget(since: Long = SystemClock.uptimeMillis()) {
             // The page reports `jumped` once the new page has painted; one more frame for it to be
             // on screen.
             webView.postOnAnimation {
                 if (turn !== this) return@postOnAnimation
                 withSnapshot(freshFor = 0L) { shot ->
                     if (turn !== this || shot == null) return@withSnapshot
+                    // The WebView puts a page on screen some frames after the page has drawn it, more
+                    // when it brings a large picture: a snapshot taken before that is still the page
+                    // the turn left, and the curl ended on it before the live page showed. The page
+                    // moved, so until the window shows something else, look again.
+                    if (samePage(shot, this.shot) && SystemClock.uptimeMillis() - since < STALE_TARGET_MS) {
+                        captureTarget(since)
+                        return@withSnapshot
+                    }
                     target = shot
                     redraw()
                 }
@@ -641,6 +678,13 @@ internal class FoliatePageCurl(
         /** A `settled` this soon after `jumped` is the jump's own page, already snapshotted. */
         const val SETTLE_AFTER_JUMP_MS = 400L
         const val TAP_SNAPSHOT_MAX_AGE_MS = 1_500L
+
+        /** How long the page it went to may still look like the page a turn left before it's taken as is. */
+        const val STALE_TARGET_MS = 600L
+
+        // The snapshot fingerprint's grid.
+        const val PRINT_COLUMNS = 40
+        const val PRINT_ROWS = 64
 
         // Springs (stiffness in 1/s²): a drag's settle carries the finger's speed; a tap's sweep is
         // a little softer, so it reads as a page turned, not snapped.
